@@ -25,3 +25,6 @@ uploads/
 # Build output
 dist/
 build/
+
+# Password Generator utility
+/src/utils/password_generator.js
