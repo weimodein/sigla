@@ -55,3 +55,22 @@ router.post("/admins", roleMiddleware("super_admin"), createAdmin);
 router.delete("/admins/:id", roleMiddleware("super_admin"), deleteAdmin);
 
 module.exports = router;
+// ```
+
+// ---
+
+// **Test in Postman** — first login as an admin to get the JWT token, then use it as `Bearer <token>` in the Authorization header:
+// ```
+// GET    /api/users                  → list all users
+// GET    /api/users/stats            → counts for dashboard
+// GET    /api/users/pending          → pending approvals
+// GET    /api/users/deactivated      → deactivated list
+// GET    /api/users/:id              → single user
+// PATCH  /api/users/:id/approve      → approve pending user
+// PATCH  /api/users/:id/deactivate   → deactivate active user
+// PATCH  /api/users/:id/reactivate   → reactivate deactivated user
+// PUT    /api/users/:id              → edit user info
+// DELETE /api/users/:id              → delete deactivated user
+// GET    /api/users/admins/list      → super admin only
+// POST   /api/users/admins           → super admin only
+// DELETE /api/users/admins/:id       → super admin only
