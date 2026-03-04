@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from app.routers import model   
 
 load_dotenv()
 
@@ -17,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Include routers ───────────────────────────────────────────
+app.include_router(model.router)
 
 # ── Health check ──────────────────────────────────────────────
 @app.get("/")
