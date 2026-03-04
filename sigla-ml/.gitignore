@@ -1,7 +1,29 @@
-venv/
+# Environment
+.env
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 *.pth
-.env
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+env/
+
+# Models and datasets (too large for git)
 models/
 datasets/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
