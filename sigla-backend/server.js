@@ -10,7 +10,7 @@ const cors = require("cors");
 const authRoutes = require("./src/routes/authRoutes.js");
 const userRoutes = require("./src/routes/userRoutes.js");
 const wordRoutes = require("./src/routes/wordRoutes.js");
-// const modelRoutes = require("./src/routes/modelRoutes.js");
+const modelRoutes = require("./src/routes/modelRoutes.js");
 
 // application setup
 const app = express();
@@ -22,7 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/words", wordRoutes);
-// app.use("/api/models", modelRoutes);
+app.use("/api/models", modelRoutes);
 
 // database connection
 connectDB();
