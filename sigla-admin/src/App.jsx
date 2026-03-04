@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import Layout from "./components/Layout.jsx";
 
 // Pages
 import Login from "./pages/auth/Login.jsx";
@@ -18,12 +19,14 @@ const App = () => {
           {/* Public */}
           <Route path="/login" element={<Login />} />
 
-          {/* Protected — admin + super_admin */}
+          {/* Protected — with sidebar layout */}
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <Layout>
+                  <Dashboard />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -31,7 +34,9 @@ const App = () => {
             path="/users"
             element={
               <ProtectedRoute>
-                <ManageUsers />
+                <Layout>
+                  <ManageUsers />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -39,7 +44,9 @@ const App = () => {
             path="/words"
             element={
               <ProtectedRoute>
-                <ManageWords />
+                <Layout>
+                  <ManageWords />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -47,7 +54,9 @@ const App = () => {
             path="/model"
             element={
               <ProtectedRoute>
-                <ManageModel />
+                <Layout>
+                  <ManageModel />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -55,15 +64,15 @@ const App = () => {
             path="/settings"
             element={
               <ProtectedRoute>
-                <Settings />
+                <Layout>
+                  <Settings />
+                </Layout>
               </ProtectedRoute>
             }
           />
 
-          {/* Redirect root to dashboard */}
+          {/* Redirects */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-          {/* Catch all */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AuthProvider>
