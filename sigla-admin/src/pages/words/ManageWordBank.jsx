@@ -2,14 +2,31 @@ import { useState, useEffect } from "react";
 import {
   getAllWords,
   getWordStats,
-  getWordById,
   approveWord,
   rejectWord,
   updateWord,
   deleteWord,
   getWordSamples,
+  approveSample,
+  rejectSample,
+  approveAllSamplesByUser,
+  rejectAllSamplesByUser,
+  approveSubmission,
+  rejectSubmission,
+  lockWord,
+  unlockWord,
 } from "../../api/wordApi.js";
-import { BookOpen, CheckCircle, XCircle, Clock, Search, X } from "lucide-react";
+import {
+  BookOpen,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Search,
+  X,
+  Lock,
+  Unlock,
+  Image,
+} from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
@@ -25,8 +42,8 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
 );
 
 // ── Badge ─────────────────────────────────────────────────────
-const Badge = ({ value, type = "status" }) => {
-  const statusStyles = {
+const Badge = ({ value }) => {
+  const styles = {
     pending: "bg-yellow-100 text-yellow-700",
     approved: "bg-green-100 text-green-700",
     rejected: "bg-red-100 text-red-700",
@@ -37,7 +54,7 @@ const Badge = ({ value, type = "status" }) => {
   };
   return (
     <span
-      className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusStyles[value] || "bg-gray-100 text-gray-600"}`}
+      className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[value] || "bg-gray-100 text-gray-600"}`}
     >
       {value}
     </span>
@@ -45,9 +62,11 @@ const Badge = ({ value, type = "status" }) => {
 };
 
 // ── Modal ─────────────────────────────────────────────────────
-const Modal = ({ title, onClose, children }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
-    <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+const Modal = ({ title, onClose, children, wide = false }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4 py-6 overflow-y-auto">
+    <div
+      className={`bg-white rounded-2xl shadow-xl w-full ${wide ? "max-w-4xl" : "max-w-lg"} p-6`}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-gray-800">{title}</h3>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -73,24 +92,14 @@ const ManageWordBank = () => {
   const [actionLoading, setActionLoading] = useState(false);
 
   // Modal state
-  const [viewModal, setViewModal] = useState(null);
+  const [galleryModal, setGalleryModal] = useState(null); // word object
   const [editModal, setEditModal] = useState(null);
   const [rejectModal, setRejectModal] = useState(null);
   const [samples, setSamples] = useState([]);
-
-  // Edit form
-  const [editForm, setEditForm] = useState({
-    label: "",
-    description: "",
-    hands_count: 1,
-    sign_type: "FSL",
-    category: "word",
-  });
-
-  // Reject reason
+  const [samplesLoading, setSamplesLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  // ── Fetch data ──────────────────────────────────────────────
+  // ── Fetch ───────────────────────────────────────────────────
   const fetchStats = async () => {
     try {
       const data = await getWordStats();
@@ -109,7 +118,6 @@ const ManageWordBank = () => {
       if (search) params.search = search;
       if (filterSign) params.sign_type = filterSign;
       if (filterCat) params.category = filterCat;
-
       const data = await getAllWords(params);
       setWords(data.words);
     } catch (err) {
@@ -130,34 +138,160 @@ const ManageWordBank = () => {
     setSuccess(msg);
     setTimeout(() => setSuccess(""), 3000);
   };
+  const showError = (msg) => {
+    setError(msg);
+    setTimeout(() => setError(""), 4000);
+  };
 
-  // ── View word details + samples ───────────────────────────
-  const handleView = async (word) => {
-    setViewModal(word);
+  // ── Open image gallery ──────────────────────────────────────
+  const handleOpenGallery = async (word) => {
+    setGalleryModal(word);
+    setSamplesLoading(true);
+    setSamples([]);
     try {
       const data = await getWordSamples(word.id);
       setSamples(data.samples || []);
     } catch {
       setSamples([]);
+    } finally {
+      setSamplesLoading(false);
     }
   };
 
-  // ── Approve ───────────────────────────────────────────────
-  const handleApprove = async (id) => {
-    setActionLoading(true);
+  // ── Per-sample approve/reject ───────────────────────────────
+  const handleApproveSample = async (wordId, sampleId) => {
     try {
-      await approveWord(id);
-      showSuccess("Word approved and added to dictionary");
+      await approveSample(wordId, sampleId);
+      showSuccess("Sample approved");
+      const data = await getWordSamples(wordId);
+      setSamples(data.samples || []);
       fetchStats();
       fetchWords();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to approve word");
+      showError(err.response?.data?.message || "Failed to approve sample");
+    }
+  };
+
+  const handleRejectSample = async (wordId, sampleId) => {
+    try {
+      await rejectSample(wordId, sampleId);
+      showSuccess("Sample rejected");
+      const data = await getWordSamples(wordId);
+      setSamples(data.samples || []);
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to reject sample");
+    }
+  };
+
+  // ── Per-user approve/reject all ─────────────────────────────
+  const handleApproveAllByUser = async (wordId, userId, username) => {
+    if (!window.confirm(`Approve all samples from ${username}?`)) return;
+    try {
+      await approveAllSamplesByUser(wordId, userId);
+      showSuccess(`All samples from ${username} approved`);
+      const data = await getWordSamples(wordId);
+      setSamples(data.samples || []);
+      fetchStats();
+      fetchWords();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to approve all by user");
+    }
+  };
+
+  const handleRejectAllByUser = async (wordId, userId, username) => {
+    if (!window.confirm(`Reject all samples from ${username}?`)) return;
+    try {
+      await rejectAllSamplesByUser(wordId, userId);
+      showSuccess(`All samples from ${username} rejected`);
+      const data = await getWordSamples(wordId);
+      setSamples(data.samples || []);
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to reject all by user");
+    }
+  };
+
+  // ── Submission level approve/reject ─────────────────────────
+  const handleApproveSubmission = async (wordId) => {
+    if (!window.confirm("Approve entire submission?")) return;
+    setActionLoading(true);
+    try {
+      await approveSubmission(wordId);
+      showSuccess("Submission approved");
+      setGalleryModal(null);
+      fetchStats();
+      fetchWords();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to approve submission");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // ── Reject ────────────────────────────────────────────────
+  const handleRejectSubmission = async (wordId) => {
+    if (!window.confirm("Reject entire submission? User will be notified."))
+      return;
+    setActionLoading(true);
+    try {
+      await rejectSubmission(wordId);
+      showSuccess("Submission rejected. User notified.");
+      setGalleryModal(null);
+      fetchStats();
+      fetchWords();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to reject submission");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ── Lock/Unlock ─────────────────────────────────────────────
+  const handleLock = async (id) => {
+    if (
+      !window.confirm(
+        "Lock this word? Users will no longer be able to submit samples for it.",
+      )
+    )
+      return;
+    setActionLoading(true);
+    try {
+      await lockWord(id);
+      showSuccess("Word locked. No further submissions allowed.");
+      fetchWords();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to lock word");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnlock = async (id) => {
+    setActionLoading(true);
+    try {
+      await unlockWord(id);
+      showSuccess("Word unlocked. Submissions are now allowed.");
+      fetchWords();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to unlock word");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ── Approve/Reject word ──────────────────────────────────────
+  const handleApprove = async (id) => {
+    setActionLoading(true);
+    try {
+      await approveWord(id);
+      showSuccess("Word approved and added to word bank");
+      fetchStats();
+      fetchWords();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to approve word");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleRejectOpen = (word) => {
     setRejectReason("");
     setRejectModal(word);
@@ -172,13 +306,21 @@ const ManageWordBank = () => {
       fetchStats();
       fetchWords();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to reject word");
+      showError(err.response?.data?.message || "Failed to reject word");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // ── Edit ──────────────────────────────────────────────────
+  // ── Edit ────────────────────────────────────────────────────
+  const [editForm, setEditForm] = useState({
+    label: "",
+    description: "",
+    hands_count: 1,
+    sign_type: "FSL",
+    category: "word",
+  });
+
   const handleEditOpen = (word) => {
     setEditForm({
       label: word.label || "",
@@ -198,29 +340,51 @@ const ManageWordBank = () => {
       setEditModal(null);
       fetchWords();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to update word");
+      showError(err.response?.data?.message || "Failed to update word");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // ── Delete ────────────────────────────────────────────────
+  // ── Delete ──────────────────────────────────────────────────
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this word? This cannot be undone.")) return;
+    if (
+      !window.confirm(
+        "Delete this word? All gesture samples will also be removed. This cannot be undone.",
+      )
+    )
+      return;
     setActionLoading(true);
     try {
       await deleteWord(id);
-      showSuccess("Word deleted successfully");
+      showSuccess("Word and all associated samples deleted");
       fetchStats();
       fetchWords();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete word");
+      showError(err.response?.data?.message || "Failed to delete word");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // ── Tabs ──────────────────────────────────────────────────
+  // ── Group samples by user ────────────────────────────────────
+  const groupSamplesByUser = (samples) => {
+    const groups = {};
+    samples.forEach((s) => {
+      const key = s.submitter?.id || "unknown";
+      if (!groups[key]) {
+        groups[key] = {
+          userId: s.submitter?.id,
+          username: s.submitter?.username || "Unknown",
+          samples: [],
+        };
+      }
+      groups[key].samples.push(s);
+    });
+    return Object.values(groups);
+  };
+
+  // ── Tabs ────────────────────────────────────────────────────
   const tabs = [
     { key: "all", label: "All Words" },
     { key: "pending", label: "Pending" },
@@ -228,12 +392,12 @@ const ManageWordBank = () => {
     { key: "rejected", label: "Rejected" },
   ];
 
-  // ── JSX ───────────────────────────────────────────────────
+  // ── JSX ─────────────────────────────────────────────────────
   return (
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Manage Words</h2>
+        <h2 className="text-2xl font-bold text-gray-800">Manage Word Bank</h2>
         <p className="text-gray-500 text-sm mt-1">
           Review and manage gesture word submissions
         </p>
@@ -272,10 +436,10 @@ const ManageWordBank = () => {
           color="bg-green-500"
         />
         <StatCard
-          title="Rejected"
-          value={stats?.rejected}
-          icon={XCircle}
-          color="bg-red-500"
+          title="Locked"
+          value={stats?.locked}
+          icon={Lock}
+          color="bg-gray-600"
         />
       </div>
 
@@ -286,11 +450,7 @@ const ManageWordBank = () => {
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition
-              ${
-                activeTab === tab.key
-                  ? "border-blue-900 text-blue-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
+              ${activeTab === tab.key ? "border-blue-900 text-blue-900" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             {tab.label}
           </button>
@@ -367,7 +527,19 @@ const ManageWordBank = () => {
                   >
                     <td className="px-4 py-3 text-gray-500">{word.id}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">
-                      {word.label}
+                      <div className="flex items-center gap-2">
+                        {word.label}
+                        {word.is_locked && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                            <Lock size={10} /> Locked
+                          </span>
+                        )}
+                        {word.is_active && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            Active
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <Badge value={word.sign_type} />
@@ -376,7 +548,10 @@ const ManageWordBank = () => {
                       <Badge value={word.category} />
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {word.total_samples}
+                      <span className="text-xs">
+                        {word.approved_sample_count || 0}/
+                        {word.total_samples || 0} approved
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <Badge value={word.status} />
@@ -386,12 +561,15 @@ const ManageWordBank = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2 flex-wrap">
+                        {/* Image gallery button */}
                         <button
-                          onClick={() => handleView(word)}
-                          className="text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 px-3 py-1 rounded-lg"
+                          onClick={() => handleOpenGallery(word)}
+                          className="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1 rounded-lg flex items-center gap-1"
                         >
-                          View
+                          <Image size={12} /> Gallery
                         </button>
+
+                        {/* Approve/Reject — pending words only */}
                         {word.status === "pending" && (
                           <>
                             <button
@@ -408,6 +586,24 @@ const ManageWordBank = () => {
                             </button>
                           </>
                         )}
+
+                        {/* Lock/Unlock */}
+                        {word.is_locked ? (
+                          <button
+                            onClick={() => handleUnlock(word.id)}
+                            className="text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 px-3 py-1 rounded-lg flex items-center gap-1"
+                          >
+                            <Unlock size={12} /> Unlock
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleLock(word.id)}
+                            className="text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 px-3 py-1 rounded-lg flex items-center gap-1"
+                          >
+                            <Lock size={12} /> Lock
+                          </button>
+                        )}
+
                         <button
                           onClick={() => handleEditOpen(word)}
                           className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded-lg"
@@ -430,64 +626,174 @@ const ManageWordBank = () => {
         )}
       </div>
 
-      {/* View Modal */}
-      {viewModal && (
+      {/* ── Image Gallery Modal ────────────────────────────── */}
+      {galleryModal && (
         <Modal
-          title={`Word: ${viewModal.label}`}
-          onClose={() => setViewModal(null)}
+          title={`Gesture Samples — ${galleryModal.label}`}
+          onClose={() => setGalleryModal(null)}
+          wide
         >
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-gray-500">Label</p>
-                <p className="font-medium">{viewModal.label}</p>
+          <div className="space-y-4">
+            {/* Submission level actions */}
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">
+                  {galleryModal.approved_sample_count || 0}
+                </span>{" "}
+                approved
+                {" / "}
+                <span className="font-medium">
+                  {galleryModal.total_samples || 0}
+                </span>{" "}
+                total samples
+                {galleryModal.is_active && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">
+                    Active in app
+                  </span>
+                )}
               </div>
-              <div>
-                <p className="text-xs text-gray-500">Status</p>
-                <Badge value={viewModal.status} />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Sign Type</p>
-                <Badge value={viewModal.sign_type} />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Category</p>
-                <Badge value={viewModal.category} />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Hands</p>
-                <p className="font-medium">{viewModal.hands_count}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Total Samples</p>
-                <p className="font-medium">{viewModal.total_samples}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleApproveSubmission(galleryModal.id)}
+                  disabled={actionLoading}
+                  className="text-xs bg-green-600 text-white hover:bg-green-700 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                >
+                  Approve Submission
+                </button>
+                <button
+                  onClick={() => handleRejectSubmission(galleryModal.id)}
+                  disabled={actionLoading}
+                  className="text-xs bg-red-600 text-white hover:bg-red-700 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                >
+                  Reject Submission
+                </button>
               </div>
             </div>
-            {viewModal.description && (
-              <div>
-                <p className="text-xs text-gray-500">Description</p>
-                <p className="text-gray-700">{viewModal.description}</p>
+
+            {samplesLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900" />
               </div>
-            )}
-            <div>
-              <p className="text-xs text-gray-500 mb-2">
-                Gesture Samples ({samples.length})
+            ) : samples.length === 0 ? (
+              <p className="text-center text-gray-400 text-sm py-8">
+                No gesture samples uploaded yet
               </p>
-              {samples.length === 0 ? (
-                <p className="text-gray-400 text-xs">No samples uploaded yet</p>
-              ) : (
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {samples.map((s) => (
-                    <div
-                      key={s.id}
-                      className="text-xs text-gray-600 bg-gray-50 px-3 py-2 rounded"
-                    >
-                      {s.sample_count} samples — uploaded by{" "}
-                      {s.submitter?.username || "unknown"}
+            ) : (
+              /* Group samples by user */
+              groupSamplesByUser(samples).map((group) => (
+                <div
+                  key={group.userId}
+                  className="border border-gray-200 rounded-xl overflow-hidden"
+                >
+                  {/* User header with approve/reject all */}
+                  <div className="flex items-center justify-between bg-gray-50 px-4 py-2.5">
+                    <div className="text-sm font-medium text-gray-700">
+                      {group.username}
+                      <span className="ml-2 text-xs text-gray-400">
+                        ({group.samples.length} samples)
+                      </span>
                     </div>
-                  ))}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() =>
+                          handleApproveAllByUser(
+                            galleryModal.id,
+                            group.userId,
+                            group.username,
+                          )
+                        }
+                        className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded"
+                      >
+                        Approve All
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleRejectAllByUser(
+                            galleryModal.id,
+                            group.userId,
+                            group.username,
+                          )
+                        }
+                        className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded"
+                      >
+                        Reject All
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sample images grid */}
+                  <div className="p-3 grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {group.samples.map((sample) => (
+                      <div key={sample.id} className="relative group">
+                        <img
+                          src={sample.file_url}
+                          alt={`sample-${sample.id}`}
+                          className={`w-full aspect-square object-cover rounded-lg border-2 ${
+                            sample.status === "approved"
+                              ? "border-green-400"
+                              : sample.status === "rejected"
+                                ? "border-red-400"
+                                : "border-gray-200"
+                          }`}
+                          onError={(e) => {
+                            e.target.src =
+                              "https://via.placeholder.com/80?text=No+Image";
+                          }}
+                        />
+                        {/* Status overlay */}
+                        <div
+                          className={`absolute top-1 right-1 w-3 h-3 rounded-full ${
+                            sample.status === "approved"
+                              ? "bg-green-500"
+                              : sample.status === "rejected"
+                                ? "bg-red-500"
+                                : "bg-yellow-400"
+                          }`}
+                        />
+                        {/* Hover actions */}
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 rounded-lg transition flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
+                          {sample.status !== "approved" && (
+                            <button
+                              onClick={() =>
+                                handleApproveSample(galleryModal.id, sample.id)
+                              }
+                              className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded"
+                            >
+                              ✓
+                            </button>
+                          )}
+                          {sample.status !== "rejected" && (
+                            <button
+                              onClick={() =>
+                                handleRejectSample(galleryModal.id, sample.id)
+                              }
+                              className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              )}
+              ))
+            )}
+
+            {/* Legend */}
+            <div className="flex gap-4 text-xs text-gray-500 pt-1">
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-green-500 inline-block" />{" "}
+                Approved
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />{" "}
+                Rejected
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" />{" "}
+                Pending
+              </span>
             </div>
           </div>
         </Modal>
@@ -497,19 +803,23 @@ const ManageWordBank = () => {
       {editModal && (
         <Modal title="Edit Word" onClose={() => setEditModal(null)}>
           <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Label
-              </label>
-              <input
-                type="text"
-                value={editForm.label}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, label: e.target.value })
-                }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              />
-            </div>
+            {[{ key: "label", label: "Label", type: "text" }].map(
+              ({ key, label, type }) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {label}
+                  </label>
+                  <input
+                    type={type}
+                    value={editForm[key]}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, [key]: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                  />
+                </div>
+              ),
+            )}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Description
@@ -533,7 +843,7 @@ const ManageWordBank = () => {
                   onChange={(e) =>
                     setEditForm({ ...editForm, sign_type: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none"
                 >
                   <option value="FSL">FSL</option>
                   <option value="ASL">ASL</option>
@@ -548,7 +858,7 @@ const ManageWordBank = () => {
                   onChange={(e) =>
                     setEditForm({ ...editForm, category: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none"
                 >
                   <option value="word">Word</option>
                   <option value="alphabet">Alphabet</option>
@@ -567,7 +877,7 @@ const ManageWordBank = () => {
                     hands_count: parseInt(e.target.value),
                   })
                 }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none"
               >
                 <option value={1}>1 Hand</option>
                 <option value={2}>2 Hands</option>
