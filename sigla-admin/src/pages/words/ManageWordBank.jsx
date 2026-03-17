@@ -60,7 +60,7 @@ const Modal = ({ title, onClose, children }) => (
 );
 
 // ── Main Component ────────────────────────────────────────────
-const ManageWords = () => {
+const ManageWordBank = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [stats, setStats] = useState(null);
   const [words, setWords] = useState([]);
@@ -629,4 +629,4 @@ const ManageWords = () => {
   );
 };
 
-export default ManageWords;
+export default ManageWordBank;
