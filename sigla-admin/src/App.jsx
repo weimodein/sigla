@@ -10,6 +10,7 @@ import ManageUsers from "./pages/users/ManageUsers.jsx";
 import ManageWordBank from "./pages/words/ManageWordBank.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
 import Settings from "./pages/settings/Settings.jsx";
+import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx"; // Placeholder for future implementation
 
 const App = () => {
   return (
@@ -66,6 +67,16 @@ const App = () => {
               <ProtectedRoute>
                 <Layout>
                   <Settings />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ReportsAnalytics />
                 </Layout>
               </ProtectedRoute>
             }
