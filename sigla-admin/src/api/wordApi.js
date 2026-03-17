@@ -39,3 +39,46 @@ export const getWordSamples = async (id) => {
   const response = await api.get(`/words/${id}/samples`);
   return response.data;
 };
+
+export const approveSample = (wordId, sampleId) =>
+  api.patch(`/words/${wordId}/samples/${sampleId}/approve`).then((r) => r.data);
+
+export const rejectSample = (wordId, sampleId) =>
+  api.patch(`/words/${wordId}/samples/${sampleId}/reject`).then((r) => r.data);
+
+export const approveAllSamplesByUser = (wordId, userId) =>
+  api
+    .patch(`/words/${wordId}/samples/user/${userId}/approve-all`)
+    .then((r) => r.data);
+
+export const rejectAllSamplesByUser = (wordId, userId) =>
+  api
+    .patch(`/words/${wordId}/samples/user/${userId}/reject-all`)
+    .then((r) => r.data);
+
+export const approveSubmission = (wordId) =>
+  api.patch(`/words/${wordId}/approve-submission`).then((r) => r.data);
+
+export const rejectSubmission = (wordId) =>
+  api.patch(`/words/${wordId}/reject-submission`).then((r) => r.data);
+
+export const lockWord = (id) =>
+  api.patch(`/words/${id}/lock`).then((r) => r.data);
+
+export const unlockWord = (id) =>
+  api.patch(`/words/${id}/unlock`).then((r) => r.data);
+
+export const submitWord = async (data) => {
+  const response = await api.post("/words", data);
+  return response.data;
+};
+
+export const uploadSamples = async (wordId, data) => {
+  const response = await api.post(`/words/${wordId}/samples`, data);
+  return response.data;
+};
+
+export const getUserSampleCount = async (wordId) => {
+  const response = await api.get(`/words/${wordId}/user-sample-count`);
+  return response.data;
+};
