@@ -5,16 +5,20 @@ import {
   getDeactivatedUsers,
   getUserStats,
   approveUser,
+  warnUser,
   deactivateUser,
   reactivateUser,
   deleteUser,
   updateUser,
-  getAllAdmins,
-  createAdmin,
-  deleteAdmin,
 } from "../../api/userApi.js";
-import { useAuth } from "../../context/AuthContext.jsx";
-import { Users, ClipboardList, UserX, Shield, Search, X } from "lucide-react";
+import {
+  Users,
+  ClipboardList,
+  UserX,
+  AlertTriangle,
+  Search,
+  X,
+} from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
@@ -29,18 +33,33 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
   </div>
 );
 
-// ── Badge ─────────────────────────────────────────────────────
-const Badge = ({ status }) => {
+// ── Status Badge ──────────────────────────────────────────────
+const StatusBadge = ({ status }) => {
   const styles = {
     active: "bg-green-100 text-green-700",
     pending: "bg-yellow-100 text-yellow-700",
     deactivated: "bg-red-100 text-red-700",
+    deleted: "bg-gray-100 text-gray-500",
   };
   return (
     <span
       className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-600"}`}
     >
       {status}
+    </span>
+  );
+};
+
+// ── Warning Badge ─────────────────────────────────────────────
+const WarningBadge = ({ count }) => {
+  if (!count || count === 0) return null;
+  const color =
+    count >= 2 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700";
+  return (
+    <span
+      className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${color}`}
+    >
+      ⚠ {count}/2
     </span>
   );
 };
@@ -62,21 +81,19 @@ const Modal = ({ title, onClose, children }) => (
 
 // ── Main Component ────────────────────────────────────────────
 const ManageUsers = () => {
-  const { isSuperAdmin } = useAuth();
-
   const [activeTab, setActiveTab] = useState("all");
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
-  const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Modal state
-  const [editModal, setEditModal] = useState(null); // user object
-  const [adminModal, setAdminModal] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [editModal, setEditModal] = useState(null);
+  const [warnModal, setWarnModal] = useState(null); // user object
+  const [warnReason, setWarnReason] = useState("");
 
   // Edit form
   const [editForm, setEditForm] = useState({
@@ -87,34 +104,13 @@ const ManageUsers = () => {
     gender: "",
   });
 
-  // Create admin form
-  const [adminForm, setAdminForm] = useState({
-    name: "",
-    username: "",
-    email: "",
-    password: "",
-  });
-
   // ── Fetch data ──────────────────────────────────────────────
-  const fetchData = async () => {
-    setLoading(true);
-    setError("");
+  const fetchStats = async () => {
     try {
-      const [statsData, allUsers] = await Promise.all([
-        getUserStats(),
-        getAllUsers({ search }),
-      ]);
-      setStats(statsData);
-      setUsers(allUsers.users);
-
-      if (isSuperAdmin) {
-        const adminsData = await getAllAdmins();
-        setAdmins(adminsData.admins);
-      }
+      const data = await getUserStats();
+      setStats(data);
     } catch (err) {
-      setError("Failed to load users");
-    } finally {
-      setLoading(false);
+      console.error("Failed to load stats");
     }
   };
 
@@ -131,9 +127,6 @@ const ManageUsers = () => {
       } else if (activeTab === "deactivated") {
         const data = await getDeactivatedUsers();
         setUsers(data.users);
-      } else if (activeTab === "admins") {
-        const data = await getAllAdmins();
-        setAdmins(data.admins);
       }
     } catch (err) {
       setError("Failed to load users");
@@ -143,7 +136,7 @@ const ManageUsers = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchStats();
   }, []);
   useEffect(() => {
     fetchTabData();
@@ -154,31 +147,73 @@ const ManageUsers = () => {
     setTimeout(() => setSuccess(""), 3000);
   };
 
+  const showError = (msg) => {
+    setError(msg);
+    setTimeout(() => setError(""), 4000);
+  };
+
   // ── Actions ─────────────────────────────────────────────────
   const handleApprove = async (id) => {
     setActionLoading(true);
     try {
       await approveUser(id);
       showSuccess("User approved successfully");
-      fetchData();
+      fetchStats();
       fetchTabData();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to approve user");
+      showError(err.response?.data?.message || "Failed to approve user");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDeactivate = async (id) => {
-    if (!window.confirm("Deactivate this user?")) return;
+  const handleWarnOpen = (user) => {
+    setWarnReason("");
+    setWarnModal(user);
+  };
+
+  const handleWarnSubmit = async () => {
+    setActionLoading(true);
+    try {
+      const res = await warnUser(warnModal.id, { reason: warnReason });
+      showSuccess(
+        `Warning issued. User now has ${res.warning_count}/2 warnings.`,
+      );
+      setWarnModal(null);
+      setWarnReason("");
+      fetchStats();
+      fetchTabData();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to issue warning");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeactivate = async (id, warningCount) => {
+    // Enforce 2-warning requirement on the frontend as well
+    if ((warningCount || 0) < 2) {
+      showError(
+        `User must have 2 warnings before being deactivated. Current: ${warningCount || 0}/2`,
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        "Deactivate this user? Their account will auto-reactivate after 30 days.",
+      )
+    )
+      return;
     setActionLoading(true);
     try {
       await deactivateUser(id);
-      showSuccess("User deactivated successfully");
-      fetchData();
+      showSuccess(
+        "User deactivated. Account will auto-reactivate after 30 days.",
+      );
+      fetchStats();
       fetchTabData();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to deactivate user");
+      showError(err.response?.data?.message || "Failed to deactivate user");
     } finally {
       setActionLoading(false);
     }
@@ -188,11 +223,11 @@ const ManageUsers = () => {
     setActionLoading(true);
     try {
       await reactivateUser(id);
-      showSuccess("User reactivated successfully");
-      fetchData();
+      showSuccess("User reactivated successfully. Warning count reset to 0.");
+      fetchStats();
       fetchTabData();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to reactivate user");
+      showError(err.response?.data?.message || "Failed to reactivate user");
     } finally {
       setActionLoading(false);
     }
@@ -204,11 +239,11 @@ const ManageUsers = () => {
     setActionLoading(true);
     try {
       await deleteUser(id);
-      showSuccess("User deleted successfully");
-      fetchData();
+      showSuccess("User permanently deleted");
+      fetchStats();
       fetchTabData();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete user");
+      showError(err.response?.data?.message || "Failed to delete user");
     } finally {
       setActionLoading(false);
     }
@@ -231,41 +266,9 @@ const ManageUsers = () => {
       await updateUser(editModal.id, editForm);
       showSuccess("User updated successfully");
       setEditModal(null);
-      fetchData();
       fetchTabData();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to update user");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleCreateAdmin = async () => {
-    setActionLoading(true);
-    try {
-      await createAdmin(adminForm);
-      showSuccess("Admin created successfully");
-      setAdminModal(false);
-      setAdminForm({ name: "", username: "", email: "", password: "" });
-      fetchData();
-      fetchTabData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to create admin");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleDeleteAdmin = async (id) => {
-    if (!window.confirm("Remove this admin?")) return;
-    setActionLoading(true);
-    try {
-      await deleteAdmin(id);
-      showSuccess("Admin removed successfully");
-      fetchData();
-      fetchTabData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to remove admin");
+      showError(err.response?.data?.message || "Failed to update user");
     } finally {
       setActionLoading(false);
     }
@@ -276,34 +279,53 @@ const ManageUsers = () => {
     { key: "all", label: "All Users" },
     { key: "pending", label: "Pending" },
     { key: "deactivated", label: "Deactivated" },
-    ...(isSuperAdmin ? [{ key: "admins", label: "Administrators" }] : []),
   ];
+
+  // ── Format reactivation date ──────────────────────────────────
+  const getReactivationDate = (deactivatedAt) => {
+    if (!deactivatedAt) return "—";
+    const date = new Date(deactivatedAt);
+    date.setDate(date.getDate() + 30);
+    return date.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
 
   // ── Render table rows ─────────────────────────────────────────
   const renderRows = () => {
-    const list = activeTab === "admins" ? admins : users;
-
-    if (list.length === 0) {
+    if (users.length === 0) {
       return (
         <tr>
-          <td colSpan={6} className="text-center py-8 text-gray-400 text-sm">
+          <td colSpan={7} className="text-center py-8 text-gray-400 text-sm">
             No records found
           </td>
         </tr>
       );
     }
 
-    return list.map((u) => (
+    return users.map((u) => (
       <tr key={u.id} className="border-t hover:bg-gray-50 text-sm">
         <td className="px-4 py-3 text-gray-500">{u.id}</td>
-        <td className="px-4 py-3 font-medium text-gray-800">{u.username}</td>
+        <td className="px-4 py-3 font-medium text-gray-800">
+          {u.username}
+          <WarningBadge count={u.warning_count} />
+        </td>
         <td className="px-4 py-3 text-gray-600">{u.name}</td>
         <td className="px-4 py-3 text-gray-600">{u.email}</td>
         <td className="px-4 py-3">
-          {activeTab !== "admins" && <Badge status={u.status} />}
+          <StatusBadge status={u.status} />
         </td>
+        {/* Reactivation date — only shown in deactivated tab */}
+        {activeTab === "deactivated" && (
+          <td className="px-4 py-3 text-xs text-gray-500">
+            Auto-reactivates: {getReactivationDate(u.deactivated_at)}
+          </td>
+        )}
         <td className="px-4 py-3">
           <div className="flex gap-2 flex-wrap">
+            {/* All Users tab */}
             {activeTab === "all" && (
               <>
                 <button
@@ -313,13 +335,33 @@ const ManageUsers = () => {
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDeactivate(u.id)}
-                  className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
+                  onClick={() => handleWarnOpen(u)}
+                  disabled={(u.warning_count || 0) >= 2}
+                  className="text-xs bg-orange-50 text-orange-700 hover:bg-orange-100 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={
+                    (u.warning_count || 0) >= 2
+                      ? "User already has 2 warnings"
+                      : "Issue a warning"
+                  }
+                >
+                  Warn
+                </button>
+                <button
+                  onClick={() => handleDeactivate(u.id, u.warning_count)}
+                  disabled={(u.warning_count || 0) < 2}
+                  className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={
+                    (u.warning_count || 0) < 2
+                      ? `User needs ${2 - (u.warning_count || 0)} more warning(s) before deactivation`
+                      : "Deactivate user"
+                  }
                 >
                   Deactivate
                 </button>
               </>
             )}
+
+            {/* Pending tab */}
             {activeTab === "pending" && (
               <>
                 <button
@@ -329,13 +371,15 @@ const ManageUsers = () => {
                   Approve
                 </button>
                 <button
-                  onClick={() => handleDeactivate(u.id)}
+                  onClick={() => handleDelete(u.id)}
                   className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
                 >
                   Deny
                 </button>
               </>
             )}
+
+            {/* Deactivated tab */}
             {activeTab === "deactivated" && (
               <>
                 <button
@@ -351,14 +395,6 @@ const ManageUsers = () => {
                   Delete
                 </button>
               </>
-            )}
-            {activeTab === "admins" && isSuperAdmin && (
-              <button
-                onClick={() => handleDeleteAdmin(u.id)}
-                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
-              >
-                Remove
-              </button>
             )}
           </div>
         </td>
@@ -377,14 +413,6 @@ const ManageUsers = () => {
             Manage user accounts and access
           </p>
         </div>
-        {isSuperAdmin && (
-          <button
-            onClick={() => setAdminModal(true)}
-            className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
-          >
-            + Create Admin
-          </button>
-        )}
       </div>
 
       {/* Alerts */}
@@ -420,10 +448,10 @@ const ManageUsers = () => {
           color="bg-red-500"
         />
         <StatCard
-          title="Administrators"
-          value={stats?.admins}
-          icon={Shield}
-          color="bg-purple-600"
+          title="Warned"
+          value={stats?.warned}
+          icon={AlertTriangle}
+          color="bg-orange-500"
         />
       </div>
 
@@ -474,6 +502,9 @@ const ManageUsers = () => {
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Status</th>
+                {activeTab === "deactivated" && (
+                  <th className="px-4 py-3">Auto-Reactivates</th>
+                )}
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
@@ -481,6 +512,51 @@ const ManageUsers = () => {
           </table>
         )}
       </div>
+
+      {/* Warn Modal */}
+      {warnModal && (
+        <Modal
+          title={`Issue Warning to ${warnModal.username}`}
+          onClose={() => setWarnModal(null)}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              This user currently has{" "}
+              <span className="font-semibold text-orange-600">
+                {warnModal.warning_count || 0}/2
+              </span>{" "}
+              warnings. After 2 warnings, the account can be deactivated.
+            </p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Reason <span className="text-gray-400">(optional)</span>
+              </label>
+              <textarea
+                value={warnReason}
+                onChange={(e) => setWarnReason(e.target.value)}
+                placeholder="Describe the reason for this warning..."
+                rows={3}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleWarnSubmit}
+                disabled={actionLoading}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+              >
+                {actionLoading ? "Issuing..." : "Issue Warning"}
+              </button>
+              <button
+                onClick={() => setWarnModal(null)}
+                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Edit User Modal */}
       {editModal && (
@@ -528,44 +604,6 @@ const ManageUsers = () => {
               </button>
               <button
                 onClick={() => setEditModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Create Admin Modal */}
-      {adminModal && (
-        <Modal title="Create Admin" onClose={() => setAdminModal(false)}>
-          <div className="space-y-3">
-            {["name", "username", "email", "password"].map((field) => (
-              <div key={field}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 capitalize">
-                  {field}
-                </label>
-                <input
-                  type={field === "password" ? "password" : "text"}
-                  value={adminForm[field]}
-                  onChange={(e) =>
-                    setAdminForm({ ...adminForm, [field]: e.target.value })
-                  }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-              </div>
-            ))}
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleCreateAdmin}
-                disabled={actionLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Creating..." : "Create Admin"}
-              </button>
-              <button
-                onClick={() => setAdminModal(false)}
                 className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancel

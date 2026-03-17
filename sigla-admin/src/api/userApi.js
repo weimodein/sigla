@@ -30,8 +30,13 @@ export const approveUser = async (id) => {
   return response.data;
 };
 
-export const deactivateUser = async (id) => {
-  const response = await api.patch(`/users/${id}/deactivate`);
+export const warnUser = async (id, data) => {
+  const response = await api.patch(`/users/${id}/warn`, data);
+  return response.data;
+};
+
+export const deactivateUser = async (id, data) => {
+  const response = await api.patch(`/users/${id}/deactivate`, data);
   return response.data;
 };
 
@@ -40,27 +45,12 @@ export const reactivateUser = async (id) => {
   return response.data;
 };
 
-export const deleteUser = async (id) => {
-  const response = await api.delete(`/users/${id}`);
+export const deleteUser = async (id, data) => {
+  const response = await api.delete(`/users/${id}`, { data });
   return response.data;
 };
 
 export const updateUser = async (id, data) => {
   const response = await api.put(`/users/${id}`, data);
-  return response.data;
-};
-
-export const getAllAdmins = async () => {
-  const response = await api.get("/users/admins/list");
-  return response.data;
-};
-
-export const createAdmin = async (data) => {
-  const response = await api.post("/users/admins", data);
-  return response.data;
-};
-
-export const deleteAdmin = async (id) => {
-  const response = await api.delete(`/users/admins/${id}`);
   return response.data;
 };
