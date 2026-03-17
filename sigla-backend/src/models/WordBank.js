@@ -1,8 +1,8 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/db.js");
 
-const Dictionary = sequelize.define(
-  "Dictionary",
+const WordBank = sequelize.define(
+  "WordBank",
   {
     id: {
       type: DataTypes.INTEGER,
@@ -45,11 +45,11 @@ const Dictionary = sequelize.define(
     },
   },
   {
-    tableName: "dictionary",
+    tableName: "word_bank",
     timestamps: true,
     createdAt: "created_at",
     updatedAt: "updated_at",
   },
 );
 
-module.exports = Dictionary;
+module.exports = WordBank;

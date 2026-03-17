@@ -5,7 +5,7 @@ const {
   User,
   Notification,
   ActivityLog,
-  Dictionary,
+  Word,
   sequelize,
 } = require("../models/index.js");
 
@@ -483,12 +483,12 @@ const approveSubmission = async (req, res) => {
         reviewed_at: new Date(),
       });
 
-      // Add to dictionary if not already there
-      const existing = await Dictionary.findOne({
+      // Add to word bank if not already there
+      const existing = await WordBank.findOne({
         where: { word_id: word.id },
       });
       if (!existing) {
-        await Dictionary.create({
+        await WordBank.create({
           word_id: word.id,
           label: word.label,
           description: word.description,
@@ -664,10 +664,10 @@ const approveWord = async (req, res) => {
       reviewed_at: new Date(),
     });
 
-    // Add to dictionary
-    const existing = await Dictionary.findOne({ where: { word_id: word.id } });
+    // Add to word bank if not already there
+    const existing = await WordBank.findOne({ where: { word_id: word.id } });
     if (!existing) {
-      await Dictionary.create({
+      await WordBank.create({
         word_id: word.id,
         label: word.label,
         description: word.description,
@@ -777,9 +777,9 @@ const updateWord = async (req, res) => {
       category: category || word.category,
     });
 
-    // Sync changes to dictionary if word is approved
+    // Sync changes to word bank if word is approved
     if (word.status === "approved") {
-      await Dictionary.update(
+      await WordBank.update(
         { label: updatedLabel, description, hands_count, sign_type, category },
         { where: { word_id: word.id } },
       );
@@ -801,7 +801,7 @@ const updateWord = async (req, res) => {
 };
 
 // ── DELETE /api/words/:id ─────────────────────────────────────
-// Admin deletes a word — cascades to gesture samples and dictionary
+// Admin deletes a word — cascades to gesture samples and word bank entry
 const deleteWord = async (req, res) => {
   try {
     const word = await Word.findOne({ where: { id: req.params.id } });
@@ -815,15 +815,15 @@ const deleteWord = async (req, res) => {
       action: "deleted_word",
       target_type: "word",
       target_id: word.id,
-      details: `Deleted word: ${word.label} — all associated gesture samples and dictionary entry removed`,
+      details: `Deleted word: ${word.label} — all associated gesture samples and word bank entry removed`,
     });
 
-    // Cascade deletes gesture_samples and dictionary entry via DB constraints
+    // Cascade deletes gesture_samples and word bank entry via DB constraints
     await word.destroy();
 
     return res.status(200).json({
       message:
-        "Word deleted successfully. All associated gesture samples and dictionary entry have been removed.",
+        "Word deleted successfully. All associated gesture samples and word bank entry have been removed.",
     });
   } catch (err) {
     console.error("Delete word error:", err);
