@@ -13,6 +13,15 @@ const {
   deleteWord,
   uploadSamples,
   getSamples,
+  approveSample,
+  rejectSample,
+  approveAllSamplesByUser,
+  rejectAllSamplesByUser,
+  approveSubmission,
+  rejectSubmission,
+  lockWord,
+  unlockWord,
+  getUserSampleCountForWord,
 } = require("../controllers/wordController.js");
 
 // All routes require login
@@ -28,7 +37,52 @@ router.post("/", roleMiddleware("user"), submitWord);
 router.post("/:id/samples", roleMiddleware("user"), uploadSamples);
 router.get("/:id/samples", roleMiddleware("admin", "super_admin"), getSamples);
 
-// ── Admin routes ──────────────────────────────────────────────
+// ── Sample review routes (admin only) ────────────────────────
+// IMPORTANT: specific /user/:userId routes must come BEFORE /:sampleId wildcard
+// otherwise Express matches "user" as a sampleId and the route is never reached
+router.patch(
+  "/:id/samples/user/:userId/approve-all",
+  roleMiddleware("admin", "super_admin"),
+  approveAllSamplesByUser,
+);
+router.patch(
+  "/:id/samples/user/:userId/reject-all",
+  roleMiddleware("admin", "super_admin"),
+  rejectAllSamplesByUser,
+);
+router.patch(
+  "/:id/samples/:sampleId/approve",
+  roleMiddleware("admin", "super_admin"),
+  approveSample,
+);
+router.patch(
+  "/:id/samples/:sampleId/reject",
+  roleMiddleware("admin", "super_admin"),
+  rejectSample,
+);
+
+// ── Submission level routes (admin only) ──────────────────────
+router.patch(
+  "/:id/approve-submission",
+  roleMiddleware("admin", "super_admin"),
+  approveSubmission,
+);
+router.patch(
+  "/:id/reject-submission",
+  roleMiddleware("admin", "super_admin"),
+  rejectSubmission,
+);
+router.patch("/:id/lock", roleMiddleware("admin", "super_admin"), lockWord);
+router.patch("/:id/unlock", roleMiddleware("admin", "super_admin"), unlockWord);
+
+// ── User + admin accessible ───────────────────────────────────
+router.get(
+  "/:id/user-sample-count",
+  roleMiddleware("admin", "super_admin", "user"),
+  getUserSampleCountForWord,
+);
+
+// ── Admin word management routes ──────────────────────────────
 router.patch(
   "/:id/approve",
   roleMiddleware("admin", "super_admin"),
@@ -39,21 +93,32 @@ router.put("/:id", roleMiddleware("admin", "super_admin"), updateWord);
 router.delete("/:id", roleMiddleware("admin", "super_admin"), deleteWord);
 
 module.exports = router;
-// ```
 
 // ---
 
-// **Test in Postman:**
-// ```
-// GET    /api/words?status=pending         → all pending words
-// GET    /api/words?sign_type=FSL          → FSL words only
-// GET    /api/words?sign_type=ASL          → ASL words only
-// GET    /api/words/stats                  → word counts
-// GET    /api/words/:id                    → single word
-// POST   /api/words                        → submit word (user token)
-// PATCH  /api/words/:id/approve            → approve (admin token)
-// PATCH  /api/words/:id/reject             → reject (admin token)
-// PUT    /api/words/:id                    → edit (admin token)
-// DELETE /api/words/:id                    → delete (admin token)
-// POST   /api/words/:id/samples            → upload samples (user token)
-// GET    /api/words/:id/samples            → get samples (admin token)
+// Test in Postman:
+//
+// GET    /api/words?status=pending                          → all pending words (admin)
+// GET    /api/words?sign_type=FSL                          → FSL words only (admin)
+// GET    /api/words/stats                                  → word counts (admin)
+// GET    /api/words/:id                                    → single word (user/admin)
+// POST   /api/words                                        → submit word (user)
+// PUT    /api/words/:id                                    → edit word (admin)
+// DELETE /api/words/:id                                    → delete word (admin)
+//
+// POST   /api/words/:id/samples                            → upload samples (user)
+// GET    /api/words/:id/samples                            → get all samples (admin)
+// GET    /api/words/:id/user-sample-count                  → check user sample count (user/admin)
+//
+// PATCH  /api/words/:id/samples/user/:userId/approve-all   → approve all from user (admin)
+// PATCH  /api/words/:id/samples/user/:userId/reject-all    → reject all from user (admin)
+// PATCH  /api/words/:id/samples/:sampleId/approve          → approve single sample (admin)
+// PATCH  /api/words/:id/samples/:sampleId/reject           → reject single sample (admin)
+//
+// PATCH  /api/words/:id/approve-submission                 → approve full submission (admin)
+// PATCH  /api/words/:id/reject-submission                  → reject full submission (admin)
+// PATCH  /api/words/:id/approve                            → manual word approval (admin)
+// PATCH  /api/words/:id/reject                             → manual word rejection (admin)
+//
+// PATCH  /api/words/:id/lock                               → lock word submissions (admin)
+// PATCH  /api/words/:id/unlock                             → unlock word submissions (admin)
