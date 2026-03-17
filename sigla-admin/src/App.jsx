@@ -42,7 +42,7 @@ const App = () => {
             }
           />
           <Route
-            path="/word_bank"
+            path="/words"
             element={
               <ProtectedRoute>
                 <Layout>
