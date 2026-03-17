@@ -13,10 +13,10 @@ import {
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Manage Users", path: "/users", icon: Users },
-  { label: "Manage Word Bank", path: "/words", icon: BookOpen },
+  { label: "Manage Word Bank", path: "/word_bank", icon: BookOpen },
   { label: "Manage Model", path: "/model", icon: Cpu },
   { label: "Reports", path: "/reports", icon: BarChart2 },
-  { label: "Settings", path: "/settings", icon: Settings },
+  { label: "Adminstrator Account", path: "/admin_account", icon: Settings },
 ];
 
 const Sidebar = () => {

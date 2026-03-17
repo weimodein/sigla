@@ -9,7 +9,7 @@ import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import ManageUsers from "./pages/users/ManageUsers.jsx";
 import ManageWordBank from "./pages/words/ManageWordBank.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
-import Settings from "./pages/settings/Settings.jsx";
+import AdministratorAccount from "./pages/adminaccount/AdministratorAccount.jsx";
 import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx"; // Placeholder for future implementation
 
 const App = () => {
@@ -42,7 +42,7 @@ const App = () => {
             }
           />
           <Route
-            path="/words"
+            path="/word_bank"
             element={
               <ProtectedRoute>
                 <Layout>
@@ -62,11 +62,11 @@ const App = () => {
             }
           />
           <Route
-            path="/settings"
+            path="/admin_account"
             element={
               <ProtectedRoute>
                 <Layout>
-                  <Settings />
+                  <AdministratorAccount />
                 </Layout>
               </ProtectedRoute>
             }
