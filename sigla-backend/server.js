@@ -10,11 +10,12 @@ const {
   runAutoReactivationJob,
 } = require("./src/controllers/userController.js");
 
-// routes
+// route imports
 const authRoutes = require("./src/routes/authRoutes.js");
 const userRoutes = require("./src/routes/userRoutes.js");
 const wordRoutes = require("./src/routes/wordRoutes.js");
 const modelRoutes = require("./src/routes/modelRoutes.js");
+const notificationRoutes = require("./src/routes/notificationRoutes.js");
 
 // application setup
 const app = express();
@@ -22,11 +23,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// routes
+// route setup
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/words", wordRoutes);
 app.use("/api/models", modelRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // database connection
 connectDB();
