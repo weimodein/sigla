@@ -28,69 +28,65 @@ const {
 router.use(authMiddleware);
 
 // ── Static routes first ───────────────────────────────────────
-router.get("/stats", roleMiddleware("admin", "super_admin"), getWordStats);
+router.get("/stats", roleMiddleware("admin"), getWordStats);
 
 // ── User routes ───────────────────────────────────────────────
-router.get("/", roleMiddleware("admin", "super_admin"), getAllWords);
-router.get("/:id", roleMiddleware("admin", "super_admin", "user"), getWordById);
+router.get("/", roleMiddleware("admin"), getAllWords);
+router.get("/:id", roleMiddleware("admin", "user"), getWordById);
 router.post("/", roleMiddleware("user"), submitWord);
 router.post("/:id/samples", roleMiddleware("user"), uploadSamples);
-router.get("/:id/samples", roleMiddleware("admin", "super_admin"), getSamples);
+router.get("/:id/samples", roleMiddleware("admin"), getSamples);
 
 // ── Sample review routes (admin only) ────────────────────────
 // IMPORTANT: specific /user/:userId routes must come BEFORE /:sampleId wildcard
 // otherwise Express matches "user" as a sampleId and the route is never reached
 router.patch(
   "/:id/samples/user/:userId/approve-all",
-  roleMiddleware("admin", "super_admin"),
+  roleMiddleware("admin"),
   approveAllSamplesByUser,
 );
 router.patch(
   "/:id/samples/user/:userId/reject-all",
-  roleMiddleware("admin", "super_admin"),
+  roleMiddleware("admin"),
   rejectAllSamplesByUser,
 );
 router.patch(
   "/:id/samples/:sampleId/approve",
-  roleMiddleware("admin", "super_admin"),
+  roleMiddleware("admin"),
   approveSample,
 );
 router.patch(
   "/:id/samples/:sampleId/reject",
-  roleMiddleware("admin", "super_admin"),
+  roleMiddleware("admin"),
   rejectSample,
 );
 
 // ── Submission level routes (admin only) ──────────────────────
 router.patch(
   "/:id/approve-submission",
-  roleMiddleware("admin", "super_admin"),
+  roleMiddleware("admin"),
   approveSubmission,
 );
 router.patch(
   "/:id/reject-submission",
-  roleMiddleware("admin", "super_admin"),
+  roleMiddleware("admin"),
   rejectSubmission,
 );
-router.patch("/:id/lock", roleMiddleware("admin", "super_admin"), lockWord);
-router.patch("/:id/unlock", roleMiddleware("admin", "super_admin"), unlockWord);
+router.patch("/:id/lock", roleMiddleware("admin"), lockWord);
+router.patch("/:id/unlock", roleMiddleware("admin"), unlockWord);
 
 // ── User + admin accessible ───────────────────────────────────
 router.get(
   "/:id/user-sample-count",
-  roleMiddleware("admin", "super_admin", "user"),
+  roleMiddleware("admin", "user"),
   getUserSampleCountForWord,
 );
 
 // ── Admin word management routes ──────────────────────────────
-router.patch(
-  "/:id/approve",
-  roleMiddleware("admin", "super_admin"),
-  approveWord,
-);
-router.patch("/:id/reject", roleMiddleware("admin", "super_admin"), rejectWord);
-router.put("/:id", roleMiddleware("admin", "super_admin"), updateWord);
-router.delete("/:id", roleMiddleware("admin", "super_admin"), deleteWord);
+router.patch("/:id/approve", roleMiddleware("admin"), approveWord);
+router.patch("/:id/reject", roleMiddleware("admin"), rejectWord);
+router.put("/:id", roleMiddleware("admin"), updateWord);
+router.delete("/:id", roleMiddleware("admin"), deleteWord);
 
 module.exports = router;
 
