@@ -1,32 +1,61 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { forgotPassword, resetPassword } from "../../api/authApi.js";
+import {
+  forgotPassword,
+  verifyResetCode,
+  resetPassword,
+  resendCode,
+} from "../../api/authApi.js";
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  // ── Form state ────────────────────────────────────────────
-  const [step, setStep] = useState("login"); // login | forgot | reset
+  // step: login | forgot | verify | reset
+  const [step, setStep] = useState("login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const [username, setUsername] = useState("");
+  // Login fields
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+
+  // Forgot/reset fields
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirm, setConfirm] = useState("");
 
-  // ── Login handler ─────────────────────────────────────────
+  // Resend cooldown
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  const startCooldown = () => {
+    setResendCooldown(60);
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const clearMessages = () => {
+    setError("");
+    setSuccess("");
+  };
+
+  // ── Login ─────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
+    clearMessages();
     setLoading(true);
     try {
-      await login(username, password);
+      await login(identifier, password);
       navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Login failed");
@@ -35,15 +64,16 @@ const Login = () => {
     }
   };
 
-  // ── Forgot password handler ───────────────────────────────
+  // ── Forgot password — send code ───────────────────────────
   const handleForgot = async (e) => {
     e.preventDefault();
-    setError("");
+    clearMessages();
     setLoading(true);
     try {
       await forgotPassword(email);
-      setSuccess("Verification code sent to your email.");
-      setStep("reset");
+      setSuccess("Verification code sent to your email. Valid for 5 minutes.");
+      setStep("verify");
+      startCooldown();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to send code");
     } finally {
@@ -51,24 +81,60 @@ const Login = () => {
     }
   };
 
-  // ── Reset password handler ────────────────────────────────
+  // ── Verify reset code ─────────────────────────────────────
+  const handleVerify = async (e) => {
+    e.preventDefault();
+    clearMessages();
+    if (code.length !== 6) {
+      setError("Please enter the 6-digit verification code");
+      return;
+    }
+    setLoading(true);
+    try {
+      await verifyResetCode(email, code);
+      setSuccess("Code verified. Please set your new password.");
+      setStep("reset");
+    } catch (err) {
+      setError(err.response?.data?.message || "Invalid or expired code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Resend code ───────────────────────────────────────────
+  const handleResend = async () => {
+    if (resendCooldown > 0) return;
+    clearMessages();
+    try {
+      await resendCode(email, "password_reset");
+      setSuccess("New verification code sent.");
+      startCooldown();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to resend code");
+    }
+  };
+
+  // ── Reset password ────────────────────────────────────────
   const handleReset = async (e) => {
     e.preventDefault();
-    setError("");
-
+    clearMessages();
     if (newPass !== confirm) {
       setError("Passwords do not match");
       return;
     }
-
+    if (newPass.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
     setLoading(true);
     try {
-      await resetPassword(email, code, newPass);
+      await resetPassword(email, newPass);
       setSuccess("Password reset successfully. You can now log in.");
       setStep("login");
       setCode("");
       setNewPass("");
       setConfirm("");
+      setEmail("");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to reset password");
     } finally {
@@ -80,13 +146,13 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
-        {/* Logo / Title */}
+        {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-900">SIGLA</h1>
           <p className="text-gray-500 text-sm mt-1">Admin Panel</p>
         </div>
 
-        {/* Error / Success messages */}
+        {/* Alerts */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
             {error}
@@ -103,18 +169,17 @@ const Login = () => {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Username
+                Username or Email
               </label>
               <input
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
-                placeholder="Enter your username"
+                placeholder="Enter your username or email"
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password
@@ -128,7 +193,6 @@ const Login = () => {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-
             <button
               type="submit"
               disabled={loading}
@@ -136,12 +200,10 @@ const Login = () => {
             >
               {loading ? "Logging in..." : "Login"}
             </button>
-
             <p
               onClick={() => {
                 setStep("forgot");
-                setError("");
-                setSuccess("");
+                clearMessages();
               }}
               className="text-center text-sm text-blue-900 hover:underline cursor-pointer mt-2"
             >
@@ -150,13 +212,13 @@ const Login = () => {
           </form>
         )}
 
-        {/* ── Forgot Password Form ── */}
+        {/* ── Forgot Password — Enter Email ── */}
         {step === "forgot" && (
           <form onSubmit={handleForgot} className="space-y-4">
             <p className="text-sm text-gray-600 mb-2">
-              Enter your email address and we'll send you a verification code.
+              Enter your email address and we will send you a 6-digit
+              verification code.
             </p>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email Address
@@ -170,7 +232,6 @@ const Login = () => {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-
             <button
               type="submit"
               disabled={loading}
@@ -178,12 +239,10 @@ const Login = () => {
             >
               {loading ? "Sending..." : "Send Verification Code"}
             </button>
-
             <p
               onClick={() => {
                 setStep("login");
-                setError("");
-                setSuccess("");
+                clearMessages();
               }}
               className="text-center text-sm text-blue-900 hover:underline cursor-pointer"
             >
@@ -192,14 +251,13 @@ const Login = () => {
           </form>
         )}
 
-        {/* ── Reset Password Form ── */}
-        {step === "reset" && (
-          <form onSubmit={handleReset} className="space-y-4">
+        {/* ── Verify Code ── */}
+        {step === "verify" && (
+          <form onSubmit={handleVerify} className="space-y-4">
             <p className="text-sm text-gray-600 mb-2">
-              Enter the verification code sent to <strong>{email}</strong> and
-              set a new password.
+              Enter the 6-digit code sent to <strong>{email}</strong>. The code
+              is valid for 5 minutes. You have a maximum of 5 attempts.
             </p>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Verification Code
@@ -207,14 +265,52 @@ const Login = () => {
               <input
                 type="text"
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
                 required
-                maxLength={4}
-                placeholder="Enter 4-digit code"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                maxLength={6}
+                placeholder="Enter 6-digit code"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 tracking-widest text-center text-lg"
               />
             </div>
+            <button
+              type="submit"
+              disabled={loading || code.length !== 6}
+              className="w-full bg-blue-900 hover:bg-blue-800 text-white font-semibold py-2 rounded-lg text-sm transition disabled:opacity-50"
+            >
+              {loading ? "Verifying..." : "Verify Code"}
+            </button>
+            <div className="flex items-center justify-between text-sm">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendCooldown > 0}
+                className="text-blue-900 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
+              >
+                {resendCooldown > 0
+                  ? `Resend in ${resendCooldown}s`
+                  : "Resend code"}
+              </button>
+              <p
+                onClick={() => {
+                  setStep("login");
+                  clearMessages();
+                }}
+                className="text-blue-900 hover:underline cursor-pointer"
+              >
+                Back to login
+              </p>
+            </div>
+          </form>
+        )}
 
+        {/* ── Reset Password ── */}
+        {step === "reset" && (
+          <form onSubmit={handleReset} className="space-y-4">
+            <p className="text-sm text-gray-600 mb-2">
+              Set a new password for <strong>{email}</strong>.
+            </p>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 New Password
@@ -228,7 +324,6 @@ const Login = () => {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Confirm Password
@@ -242,7 +337,6 @@ const Login = () => {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-
             <button
               type="submit"
               disabled={loading}
@@ -250,12 +344,10 @@ const Login = () => {
             >
               {loading ? "Resetting..." : "Reset Password"}
             </button>
-
             <p
               onClick={() => {
                 setStep("login");
-                setError("");
-                setSuccess("");
+                clearMessages();
               }}
               className="text-center text-sm text-blue-900 hover:underline cursor-pointer"
             >
@@ -269,13 +361,3 @@ const Login = () => {
 };
 
 export default Login;
-// ```
-
-// ---
-
-// After saving, visit `http://localhost:5173` — it should redirect to `/login` and show a clean login form with SIGLA branding.
-
-// Try logging in with your admin account:
-// ```
-// username: admin01
-// password: password

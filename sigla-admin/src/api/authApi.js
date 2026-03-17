@@ -27,8 +27,11 @@ api.interceptors.response.use(
   },
 );
 
-export const login = async (username, password) => {
-  const response = await api.post("/auth/login", { username, password });
+// ── Auth endpoints ────────────────────────────────────────────
+
+// Login accepts email OR username via identifier field
+export const login = async (identifier, password) => {
+  const response = await api.post("/auth/login", { identifier, password });
   return response.data;
 };
 
@@ -42,12 +45,20 @@ export const forgotPassword = async (email) => {
   return response.data;
 };
 
-export const resetPassword = async (email, code, password) => {
-  const response = await api.post("/auth/reset-password", {
-    email,
-    code,
-    password,
-  });
+// Step 1 — verify the 6-digit reset code
+export const verifyResetCode = async (email, code) => {
+  const response = await api.post("/auth/verify-reset-code", { email, code });
+  return response.data;
+};
+
+// Step 2 — set the new password after code is verified
+export const resetPassword = async (email, password) => {
+  const response = await api.post("/auth/reset-password", { email, password });
+  return response.data;
+};
+
+export const resendCode = async (email, type) => {
+  const response = await api.post("/auth/resend-code", { email, type });
   return response.data;
 };
 

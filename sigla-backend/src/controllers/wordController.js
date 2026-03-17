@@ -5,7 +5,6 @@ const {
   User,
   Notification,
   ActivityLog,
-  Word,
   sequelize,
 } = require("../models/index.js");
 
