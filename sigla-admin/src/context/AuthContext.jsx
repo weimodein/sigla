@@ -15,11 +15,9 @@ export const AuthProvider = ({ children }) => {
 
       if (token && saved) {
         try {
-          // Verify token is still valid by calling /auth/me
           const data = await getMe();
           setUser(data.user);
         } catch (err) {
-          // Token expired or invalid — clear storage
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           setUser(null);
@@ -33,10 +31,10 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ── Login ─────────────────────────────────────────────────
-  const login = async (username, password) => {
-    const data = await loginApi(username, password);
+  const login = async (identifier, password) => {
+    const data = await loginApi(identifier, password);
 
-    // Only allow admin and super_admin to access admin panel
+    // Only allow admin to access admin panel
     if (data.user.role === "user") {
       throw new Error("Access denied. Admin accounts only.");
     }
@@ -56,8 +54,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Helpers ───────────────────────────────────────────────
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
-  const isSuperAdmin = user?.role === "super_admin";
+  const isAdmin = user?.role === "admin";
   const isLoggedIn = !!user;
 
   return (
@@ -68,7 +65,6 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         isAdmin,
-        isSuperAdmin,
         isLoggedIn,
       }}
     >
