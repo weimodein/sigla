@@ -6,7 +6,9 @@ const { connectDB } = require("./src/config/db.js");
 const express = require("express");
 const cors = require("cors");
 const cron = require("node-cron");
-const { runAutoReactivationJob } = require("./controllers/userController.js");
+const {
+  runAutoReactivationJob,
+} = require("./src/controllers/userController.js");
 
 // routes
 const authRoutes = require("./src/routes/authRoutes.js");
@@ -29,12 +31,12 @@ app.use("/api/models", modelRoutes);
 // database connection
 connectDB();
 
-// server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port: ${PORT}`));
-
-// Run auto reactivation every day at midnight
+// auto reactivation job — runs every day at midnight
 cron.schedule("0 0 * * *", () => {
   console.log("Running auto reactivation job...");
   runAutoReactivationJob();
 });
+
+// server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port: ${PORT}`));
