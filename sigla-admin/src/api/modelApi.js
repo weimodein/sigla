@@ -5,6 +5,9 @@ export const getAllModels = async () => {
   return response.data;
 };
 
+// Alias used by ReportsAnalytics.jsx
+export const getModelVersions = getAllModels;
+
 export const getModelStats = async () => {
   const response = await api.get("/models/stats");
   return response.data;
@@ -42,11 +45,5 @@ export const revertModel = async (model_id) => {
 
 export const deleteModel = async (id) => {
   const response = await api.delete(`/models/${id}`);
-  return response.data;
-};
-
-// Admin-specific endpoints
-export const getModelVersions = async () => {
-  const response = await api.get("/models");
   return response.data;
 };
