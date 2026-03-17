@@ -9,6 +9,8 @@ const {
   forgotPassword,
   resetPassword,
   getMe,
+  resendCode,
+  verifyResetCode,
 } = require("../controllers/authController.js");
 
 // Public routes
@@ -18,6 +20,8 @@ router.post("/set-password", setPassword);
 router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+router.post("/resend-code", resendCode); // New route to resend verification code
+router.post("/verify-reset-code", verifyResetCode); // New route to verify reset code
 
 // Protected route
 router.get("/me", authMiddleware, getMe);
