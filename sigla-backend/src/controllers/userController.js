@@ -6,16 +6,17 @@ const {
   UserSetting,
   ActivityLog,
   Notification,
+  Word,
+  GestureSample,
 } = require("../models/index.js");
 
 // ── GET /api/users ────────────────────────────────────────────
-// Admin: get all users with pagination and filters
 const getAllUsers = async (req, res) => {
   try {
     const { status, search, page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
 
-    const where = { role_id: 3 }; // normal users only
+    const where = { role_id: 3 };
 
     if (status) where.status = status;
     if (search) {
@@ -48,7 +49,6 @@ const getAllUsers = async (req, res) => {
 };
 
 // ── GET /api/users/pending ────────────────────────────────────
-// Admin: get all pending user registration requests
 const getPendingUsers = async (req, res) => {
   try {
     const users = await User.findAll({
@@ -65,13 +65,12 @@ const getPendingUsers = async (req, res) => {
 };
 
 // ── GET /api/users/deactivated ────────────────────────────────
-// Admin: get all deactivated users
 const getDeactivatedUsers = async (req, res) => {
   try {
     const users = await User.findAll({
       where: { status: "deactivated", role_id: 3 },
       attributes: { exclude: ["password"] },
-      order: [["updated_at", "DESC"]],
+      order: [["deactivated_at", "DESC"]],
     });
 
     return res.status(200).json({ users });
@@ -82,17 +81,21 @@ const getDeactivatedUsers = async (req, res) => {
 };
 
 // ── GET /api/users/stats ──────────────────────────────────────
-// Admin: get user counts for dashboard
 const getUserStats = async (req, res) => {
   try {
-    const [total, pending, deactivated, admins] = await Promise.all([
-      User.count({ where: { role_id: 3 } }),
-      User.count({ where: { role_id: 3, status: "pending" } }),
-      User.count({ where: { role_id: 3, status: "deactivated" } }),
-      User.count({ where: { role_id: { [Op.in]: [1, 2] } } }),
-    ]);
+    const [total, pending, active, deactivated, warned, deleted] =
+      await Promise.all([
+        User.count({ where: { role_id: 3 } }),
+        User.count({ where: { role_id: 3, status: "pending" } }),
+        User.count({ where: { role_id: 3, status: "active" } }),
+        User.count({ where: { role_id: 3, status: "deactivated" } }),
+        User.count({ where: { role_id: 3, warning_count: { [Op.gt]: 0 } } }),
+        User.count({ where: { role_id: 3, status: "deleted" } }),
+      ]);
 
-    return res.status(200).json({ total, pending, deactivated, admins });
+    return res
+      .status(200)
+      .json({ total, pending, active, deactivated, warned, deleted });
   } catch (err) {
     console.error("Get user stats error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -100,7 +103,6 @@ const getUserStats = async (req, res) => {
 };
 
 // ── GET /api/users/:id ────────────────────────────────────────
-// Admin: get a single user by ID
 const getUserById = async (req, res) => {
   try {
     const user = await User.findOne({
@@ -121,7 +123,6 @@ const getUserById = async (req, res) => {
 };
 
 // ── PATCH /api/users/:id/approve ─────────────────────────────
-// Admin: approve a pending user registration
 const approveUser = async (req, res) => {
   try {
     const user = await User.findOne({
@@ -134,15 +135,15 @@ const approveUser = async (req, res) => {
 
     await user.update({ status: "active" });
 
-    // Notify user
     await Notification.create({
       user_id: user.id,
       title: "Account Approved",
       message: "Your account has been approved. You can now log in to SIGLA.",
       type: "general",
+      is_read: false,
+      delivered: false,
     });
 
-    // Log activity
     await ActivityLog.create({
       user_id: req.user.id,
       action: "approved_user",
@@ -158,10 +159,62 @@ const approveUser = async (req, res) => {
   }
 };
 
+// ── PATCH /api/users/:id/warn ─────────────────────────────────
+// Admin issues a warning — increments warning_count
+// After 2 warnings, deactivate button becomes available
+const warnUser = async (req, res) => {
+  try {
+    const { reason } = req.body;
+
+    const user = await User.findOne({
+      where: { id: req.params.id, role_id: 3, status: "active" },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Active user not found" });
+    }
+
+    const newWarningCount = (user.warning_count || 0) + 1;
+    await user.update({ warning_count: newWarningCount });
+
+    // Notify user of warning
+    await Notification.create({
+      user_id: user.id,
+      title: `Warning ${newWarningCount} of 2`,
+      message: reason
+        ? `You have received a warning from the administrator. Reason: ${reason}. Warning ${newWarningCount} of 2 — receiving 2 warnings will result in account suspension.`
+        : `You have received a warning from the administrator. Warning ${newWarningCount} of 2 — receiving 2 warnings will result in account suspension.`,
+      type: "warning",
+      is_read: false,
+      delivered: false,
+    });
+
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: "warned_user",
+      target_type: "user",
+      target_id: user.id,
+      details: `Issued warning ${newWarningCount}/2 to ${user.username}. Reason: ${reason || "No reason provided"}`,
+    });
+
+    return res.status(200).json({
+      message: `Warning issued. User now has ${newWarningCount}/2 warnings.`,
+      warning_count: newWarningCount,
+      can_deactivate: newWarningCount >= 2,
+    });
+  } catch (err) {
+    console.error("Warn user error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ── PATCH /api/users/:id/deactivate ──────────────────────────
-// Admin: deactivate an active user
+// Admin deactivates user — only allowed after 2 warnings
+// Sets deactivated_at for 30-day auto reactivation
 const deactivateUser = async (req, res) => {
   try {
+    const { reason } = req.body;
+
     const user = await User.findOne({
       where: { id: req.params.id, status: "active", role_id: 3 },
     });
@@ -170,27 +223,44 @@ const deactivateUser = async (req, res) => {
       return res.status(404).json({ message: "Active user not found" });
     }
 
-    await user.update({ status: "deactivated" });
+    // Enforce 2-warning requirement before deactivation
+    if ((user.warning_count || 0) < 2) {
+      return res.status(400).json({
+        message: `User must have at least 2 warnings before being deactivated. Current warnings: ${user.warning_count || 0}/2`,
+        warning_count: user.warning_count || 0,
+      });
+    }
 
-    // Notify user
-    await Notification.create({
-      user_id: user.id,
-      title: "Account Deactivated",
-      message:
-        "Your account has been deactivated. Please contact support for assistance.",
-      type: "general",
+    await user.update({
+      status: "deactivated",
+      deactivated_at: new Date(),
     });
 
-    // Log activity
+    // Notify user — account suspended for 30 days
+    await Notification.create({
+      user_id: user.id,
+      title: "Account Suspended",
+      message: reason
+        ? `Your account has been suspended. Reason: ${reason}. Your account will be automatically reactivated after 30 days.`
+        : "Your account has been suspended due to violations of the system's terms and conditions. Your account will be automatically reactivated after 30 days.",
+      type: "warning",
+      is_read: false,
+      delivered: false,
+    });
+
     await ActivityLog.create({
       user_id: req.user.id,
       action: "deactivated_user",
       target_type: "user",
       target_id: user.id,
-      details: `Deactivated account for ${user.username}`,
+      details: `Deactivated account for ${user.username}. Will auto-reactivate on ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toDateString()}. Reason: ${reason || "No reason provided"}`,
     });
 
-    return res.status(200).json({ message: "User deactivated successfully" });
+    return res.status(200).json({
+      message:
+        "User deactivated successfully. Account will auto-reactivate after 30 days.",
+      reactivates_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
   } catch (err) {
     console.error("Deactivate user error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -198,7 +268,8 @@ const deactivateUser = async (req, res) => {
 };
 
 // ── PATCH /api/users/:id/reactivate ──────────────────────────
-// Admin: reactivate a deactivated user
+// Admin manually reactivates a deactivated user
+// Resets warning_count to 0 so user starts fresh
 const reactivateUser = async (req, res) => {
   try {
     const user = await User.findOne({
@@ -209,24 +280,29 @@ const reactivateUser = async (req, res) => {
       return res.status(404).json({ message: "Deactivated user not found" });
     }
 
-    await user.update({ status: "active" });
+    // Reset warning count on reactivation — user starts fresh
+    await user.update({
+      status: "active",
+      deactivated_at: null,
+      warning_count: 0,
+    });
 
-    // Notify user
     await Notification.create({
       user_id: user.id,
       title: "Account Reactivated",
       message:
-        "Your account has been reactivated. You can now log in to SIGLA.",
+        "Your account has been reactivated. You can now log in to SIGLA. Please ensure you follow the system's terms and conditions to avoid further violations.",
       type: "general",
+      is_read: false,
+      delivered: false,
     });
 
-    // Log activity
     await ActivityLog.create({
       user_id: req.user.id,
       action: "reactivated_user",
       target_type: "user",
       target_id: user.id,
-      details: `Reactivated account for ${user.username}`,
+      details: `Manually reactivated account for ${user.username}. Warning count reset to 0.`,
     });
 
     return res.status(200).json({ message: "User reactivated successfully" });
@@ -237,31 +313,52 @@ const reactivateUser = async (req, res) => {
 };
 
 // ── DELETE /api/users/:id ─────────────────────────────────────
-// Admin: permanently delete a deactivated user
+// Admin permanently deletes a user
+// Can delete deactivated users OR active users who violated again after reactivation
+// Cancels any pending word submissions and notifies user
 const deleteUser = async (req, res) => {
   try {
+    const { reason } = req.body;
+
     const user = await User.findOne({
-      where: { id: req.params.id, status: "deactivated", role_id: 3 },
+      where: {
+        id: req.params.id,
+        role_id: 3,
+        status: { [Op.in]: ["deactivated", "active"] },
+      },
     });
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found or not deactivated",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    // Log before deleting
+    // Cancel all pending word submissions from this user
+    const pendingWords = await Word.findAll({
+      where: { submitted_by: user.id, status: "pending" },
+    });
+
+    if (pendingWords.length > 0) {
+      await Word.update(
+        { status: "rejected" },
+        { where: { submitted_by: user.id, status: "pending" } },
+      );
+    }
+
+    // Mark user as deleted instead of hard delete to preserve logs
+    await user.update({ status: "deleted" });
+
     await ActivityLog.create({
       user_id: req.user.id,
       action: "deleted_user",
       target_type: "user",
       target_id: user.id,
-      details: `Permanently deleted account for ${user.username}`,
+      details: `Permanently deleted account for ${user.username}. ${pendingWords.length} pending submission(s) cancelled. Reason: ${reason || "No reason provided"}`,
     });
 
-    await user.destroy();
-
-    return res.status(200).json({ message: "User deleted successfully" });
+    return res.status(200).json({
+      message: "User account permanently deleted.",
+      cancelled_submissions: pendingWords.length,
+    });
   } catch (err) {
     console.error("Delete user error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -269,7 +366,6 @@ const deleteUser = async (req, res) => {
 };
 
 // ── PUT /api/users/:id ────────────────────────────────────────
-// Admin: edit user information
 const updateUser = async (req, res) => {
   try {
     const { name, username, email, age, gender } = req.body;
@@ -282,7 +378,6 @@ const updateUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Check for username/email conflicts with other users
     if (username && username !== user.username) {
       const taken = await User.findOne({ where: { username } });
       if (taken) {
@@ -304,7 +399,6 @@ const updateUser = async (req, res) => {
       gender: gender || user.gender,
     });
 
-    // Log activity
     await ActivityLog.create({
       user_id: req.user.id,
       action: "updated_user",
@@ -320,100 +414,53 @@ const updateUser = async (req, res) => {
   }
 };
 
-// ── GET /api/users/admins ─────────────────────────────────────
-// Super admin only: get all admins
-const getAllAdmins = async (req, res) => {
+// ── Auto reactivation job ─────────────────────────────────────
+// Call this from a scheduler (e.g. node-cron) every day
+// Finds all deactivated users whose 30 days have passed and reactivates them
+const runAutoReactivationJob = async () => {
   try {
-    const admins = await User.findAll({
-      where: { role_id: 2 },
-      attributes: { exclude: ["password"] },
-      include: [{ model: Role, as: "role", attributes: ["name"] }],
-      order: [["created_at", "DESC"]],
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const usersToReactivate = await User.findAll({
+      where: {
+        status: "deactivated",
+        deactivated_at: { [Op.lte]: thirtyDaysAgo },
+      },
     });
 
-    return res.status(200).json({ admins });
-  } catch (err) {
-    console.error("Get all admins error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ── POST /api/users/admins ────────────────────────────────────
-// Super admin only: create a new admin account
-const createAdmin = async (req, res) => {
-  try {
-    const { name, username, email, password } = req.body;
-
-    if (!name || !username || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-
-    const existing = await User.findOne({
-      where: { [Op.or]: [{ email }, { username }] },
-    });
-    if (existing) {
-      return res.status(409).json({
-        message:
-          existing.email === email
-            ? "Email already in use"
-            : "Username already taken",
+    for (const user of usersToReactivate) {
+      await user.update({
+        status: "active",
+        deactivated_at: null,
+        warning_count: 0,
       });
+
+      await Notification.create({
+        user_id: user.id,
+        title: "Account Reactivated",
+        message:
+          "Your account has been automatically reactivated after 30 days. You can now log in to SIGLA. Please ensure you follow the system's terms and conditions.",
+        type: "general",
+        is_read: false,
+        delivered: false,
+      });
+
+      await ActivityLog.create({
+        user_id: null,
+        action: "auto_reactivated_user",
+        target_type: "user",
+        target_id: user.id,
+        details: `Auto-reactivated account for ${user.username} after 30-day suspension. Warning count reset to 0.`,
+      });
+
+      console.log(`Auto-reactivated user: ${user.username}`);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const admin = await User.create({
-      name,
-      username,
-      email,
-      password: hashedPassword,
-      role_id: 2,
-      status: "active",
-    });
-
-    // Log activity
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "created_admin",
-      target_type: "user",
-      target_id: admin.id,
-      details: `Created admin account for ${admin.username}`,
-    });
-
-    return res.status(201).json({ message: "Admin created successfully" });
+    console.log(
+      `Auto reactivation job complete. ${usersToReactivate.length} user(s) reactivated.`,
+    );
   } catch (err) {
-    console.error("Create admin error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ── DELETE /api/users/admins/:id ──────────────────────────────
-// Super admin only: remove an admin account
-const deleteAdmin = async (req, res) => {
-  try {
-    const admin = await User.findOne({
-      where: { id: req.params.id, role_id: 2 },
-    });
-
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found" });
-    }
-
-    // Log before deleting
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "deleted_admin",
-      target_type: "user",
-      target_id: admin.id,
-      details: `Removed admin account for ${admin.username}`,
-    });
-
-    await admin.destroy();
-
-    return res.status(200).json({ message: "Admin removed successfully" });
-  } catch (err) {
-    console.error("Delete admin error:", err);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Auto reactivation job error:", err);
   }
 };
 
@@ -424,11 +471,10 @@ module.exports = {
   getUserStats,
   getUserById,
   approveUser,
+  warnUser,
   deactivateUser,
   reactivateUser,
   deleteUser,
   updateUser,
-  getAllAdmins,
-  createAdmin,
-  deleteAdmin,
+  runAutoReactivationJob,
 };
