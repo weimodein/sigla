@@ -44,3 +44,9 @@ export const deleteModel = async (id) => {
   const response = await api.delete(`/models/${id}`);
   return response.data;
 };
+
+// Admin-specific endpoints
+export const getModelVersions = async () => {
+  const response = await api.get("/models");
+  return response.data;
+};
