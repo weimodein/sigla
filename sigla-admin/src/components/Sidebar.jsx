@@ -5,6 +5,7 @@ import {
   Users,
   BookOpen,
   Cpu,
+  BarChart2,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -12,13 +13,14 @@ import {
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Manage Users", path: "/users", icon: Users },
-  { label: "Manage Words", path: "/words", icon: BookOpen },
+  { label: "Manage Word Bank", path: "/words", icon: BookOpen },
   { label: "Manage Model", path: "/model", icon: Cpu },
+  { label: "Reports", path: "/reports", icon: BarChart2 },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
 const Sidebar = () => {
-  const { user, logout, isSuperAdmin } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
