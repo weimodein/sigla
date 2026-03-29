@@ -168,7 +168,7 @@ const getAllWords = async (req, res) => {
 // ── GET /api/words/stats ──────────────────────────────────────
 const getWordStats = async (req, res) => {
   try {
-    const [total, pending, approved, rejected, active, locked] =
+    const [total, pending, approved, rejected, active, locked, totalSamples] =
       await Promise.all([
         Word.count(),
         Word.count({ where: { status: "pending" } }),
@@ -176,11 +176,18 @@ const getWordStats = async (req, res) => {
         Word.count({ where: { status: "rejected" } }),
         Word.count({ where: { is_active: true } }),
         Word.count({ where: { is_locked: true } }),
+        Word.sum("total_samples"), // sum of all total_samples
       ]);
 
-    return res
-      .status(200)
-      .json({ total, pending, approved, rejected, active, locked });
+    return res.status(200).json({
+      total,
+      pending,
+      approved,
+      rejected,
+      active,
+      locked,
+      total_samples: totalSamples || 0,
+    });
   } catch (err) {
     console.error("Get word stats error:", err);
     return res.status(500).json({ message: "Server error" });
