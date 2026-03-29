@@ -26,7 +26,33 @@ const {
   getUserSampleCountForWord,
 } = require("../controllers/wordController.js");
 
-// All routes require login
+// ... other requires
+
+// Public route for mobile word bank
+router.get("/word-bank", async (req, res) => {
+  try {
+    const words = await Word.findAll({
+      where: { is_active: true },
+      attributes: [
+        "id",
+        "label",
+        "description",
+        "sign_type",
+        "category",
+        "hands_count",
+        "video_url",
+        "gesture_type",
+      ],
+      order: [["label", "ASC"]],
+    });
+    res.json({ words });
+  } catch (err) {
+    console.error("Word bank error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// All other routes require login
 router.use(authMiddleware);
 
 // ── Static routes first ───────────────────────────────────────
