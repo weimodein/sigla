@@ -25,10 +25,31 @@ const Notification = sequelize.define(
       type: DataTypes.STRING(30),
       defaultValue: "general",
       validate: {
-        isIn: [["general", "word_approved", "word_rejected", "model_updated"]],
+        isIn: [
+          [
+            "general",
+            "announcement",
+            "warning",
+            "submission_result",
+            "word_approved",
+            "word_rejected",
+            "model_updated",
+          ],
+        ],
       },
     },
     is_read: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    // True for admin broadcast announcements sent to all active users
+    is_broadcast: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    // False when created, set to true once the user loads their notifications
+    // Used to queue notifications for offline users and deliver on reconnect
+    delivered: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },

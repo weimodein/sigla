@@ -17,7 +17,6 @@ const getAllUsers = async (req, res) => {
     const offset = (page - 1) * limit;
 
     const where = { role_id: 3 };
-
     if (status) where.status = status;
     if (search) {
       where[Op.or] = [
@@ -56,7 +55,6 @@ const getPendingUsers = async (req, res) => {
       attributes: { exclude: ["password"] },
       order: [["created_at", "DESC"]],
     });
-
     return res.status(200).json({ users });
   } catch (err) {
     console.error("Get pending users error:", err);
@@ -72,7 +70,6 @@ const getDeactivatedUsers = async (req, res) => {
       attributes: { exclude: ["password"] },
       order: [["deactivated_at", "DESC"]],
     });
-
     return res.status(200).json({ users });
   } catch (err) {
     console.error("Get deactivated users error:", err);
@@ -83,19 +80,17 @@ const getDeactivatedUsers = async (req, res) => {
 // ── GET /api/users/stats ──────────────────────────────────────
 const getUserStats = async (req, res) => {
   try {
-    const [total, pending, active, deactivated, warned, deleted] =
-      await Promise.all([
-        User.count({ where: { role_id: 3 } }),
-        User.count({ where: { role_id: 3, status: "pending" } }),
-        User.count({ where: { role_id: 3, status: "active" } }),
-        User.count({ where: { role_id: 3, status: "deactivated" } }),
-        User.count({ where: { role_id: 3, warning_count: { [Op.gt]: 0 } } }),
-        User.count({ where: { role_id: 3, status: "deleted" } }),
-      ]);
+    const [total, active, deactivated, warned, deleted] = await Promise.all([
+      User.count({ where: { role_id: 3 } }),
+      User.count({ where: { role_id: 3, status: "active" } }),
+      User.count({ where: { role_id: 3, status: "deactivated" } }),
+      User.count({ where: { role_id: 3, warning_count: { [Op.gt]: 0 } } }),
+      User.count({ where: { role_id: 3, status: "deleted" } }),
+    ]);
 
     return res
       .status(200)
-      .json({ total, pending, active, deactivated, warned, deleted });
+      .json({ total, active, deactivated, warned, deleted });
   } catch (err) {
     console.error("Get user stats error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -118,6 +113,73 @@ const getUserById = async (req, res) => {
     return res.status(200).json({ user });
   } catch (err) {
     console.error("Get user by id error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ── POST /api/users/create ────────────────────────────────────
+// Admin manually creates a user account — bypasses email verification
+// Account is immediately active, no verification code sent
+const createUser = async (req, res) => {
+  try {
+    const { name, username, email, password } = req.body;
+
+    if (!name || !username || !email || !password) {
+      return res.status(400).json({
+        message: "Name, username, email, and password are required",
+      });
+    }
+
+    // Check for existing username or email
+    const existing = await User.findOne({
+      where: { [Op.or]: [{ email }, { username }] },
+    });
+    if (existing) {
+      return res.status(409).json({
+        message:
+          existing.email === email
+            ? "Email already in use"
+            : "Username already taken",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Admin-created accounts are immediately active —
+    // email verification is bypassed since the admin is entering the credentials
+    const user = await User.create({
+      name,
+      username,
+      email,
+      password: hashedPassword,
+      role_id: 3,
+      status: "active",
+      warning_count: 0,
+    });
+
+    // Create default settings for the new user
+    await UserSetting.create({ user_id: user.id });
+
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: "created_user",
+      target_type: "user",
+      target_id: user.id,
+      details: `Admin manually created account for ${username} (${email})`,
+    });
+
+    return res.status(201).json({
+      message: "User account created successfully",
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        status: user.status,
+      },
+    });
+  } catch (err) {
+    console.error("Create user error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -160,8 +222,7 @@ const approveUser = async (req, res) => {
 };
 
 // ── PATCH /api/users/:id/warn ─────────────────────────────────
-// Admin issues a warning — increments warning_count
-// After 2 warnings, deactivate button becomes available
+// Increments warning_count — deactivate button becomes available after 2 warnings
 const warnUser = async (req, res) => {
   try {
     const { reason } = req.body;
@@ -177,7 +238,6 @@ const warnUser = async (req, res) => {
     const newWarningCount = (user.warning_count || 0) + 1;
     await user.update({ warning_count: newWarningCount });
 
-    // Notify user of warning
     await Notification.create({
       user_id: user.id,
       title: `Warning ${newWarningCount} of 2`,
@@ -209,8 +269,7 @@ const warnUser = async (req, res) => {
 };
 
 // ── PATCH /api/users/:id/deactivate ──────────────────────────
-// Admin deactivates user — only allowed after 2 warnings
-// Sets deactivated_at for 30-day auto reactivation
+// Only allowed after 2 warnings — sets deactivated_at for 30-day auto reactivation
 const deactivateUser = async (req, res) => {
   try {
     const { reason } = req.body;
@@ -223,7 +282,6 @@ const deactivateUser = async (req, res) => {
       return res.status(404).json({ message: "Active user not found" });
     }
 
-    // Enforce 2-warning requirement before deactivation
     if ((user.warning_count || 0) < 2) {
       return res.status(400).json({
         message: `User must have at least 2 warnings before being deactivated. Current warnings: ${user.warning_count || 0}/2`,
@@ -236,7 +294,6 @@ const deactivateUser = async (req, res) => {
       deactivated_at: new Date(),
     });
 
-    // Notify user — account suspended for 30 days
     await Notification.create({
       user_id: user.id,
       title: "Account Suspended",
@@ -268,8 +325,7 @@ const deactivateUser = async (req, res) => {
 };
 
 // ── PATCH /api/users/:id/reactivate ──────────────────────────
-// Admin manually reactivates a deactivated user
-// Resets warning_count to 0 so user starts fresh
+// Resets warning_count to 0 so the user starts fresh
 const reactivateUser = async (req, res) => {
   try {
     const user = await User.findOne({
@@ -280,7 +336,6 @@ const reactivateUser = async (req, res) => {
       return res.status(404).json({ message: "Deactivated user not found" });
     }
 
-    // Reset warning count on reactivation — user starts fresh
     await user.update({
       status: "active",
       deactivated_at: null,
@@ -313,9 +368,9 @@ const reactivateUser = async (req, res) => {
 };
 
 // ── DELETE /api/users/:id ─────────────────────────────────────
-// Admin permanently deletes a user
-// Can delete deactivated users OR active users who violated again after reactivation
-// Cancels any pending word submissions and notifies user
+// Soft delete — sets status to "deleted" to preserve activity logs
+// Cancels all pending word submissions
+// Gesture samples are retained for dataset integrity (submitted_by set to NULL via DB constraint)
 const deleteUser = async (req, res) => {
   try {
     const { reason } = req.body;
@@ -344,7 +399,7 @@ const deleteUser = async (req, res) => {
       );
     }
 
-    // Mark user as deleted instead of hard delete to preserve logs
+    // Soft delete — preserves logs and gesture sample references
     await user.update({ status: "deleted" });
 
     await ActivityLog.create({
@@ -414,9 +469,9 @@ const updateUser = async (req, res) => {
   }
 };
 
-// ── Auto reactivation job ─────────────────────────────────────
-// Call this from a scheduler (e.g. node-cron) every day
-// Finds all deactivated users whose 30 days have passed and reactivates them
+// ── Auto reactivation cron job ────────────────────────────────
+// Runs daily — reactivates deactivated users whose 30 days have passed
+// Resets warning_count to 0 on reactivation
 const runAutoReactivationJob = async () => {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -470,6 +525,7 @@ module.exports = {
   getDeactivatedUsers,
   getUserStats,
   getUserById,
+  createUser,
   approveUser,
   warnUser,
   deactivateUser,

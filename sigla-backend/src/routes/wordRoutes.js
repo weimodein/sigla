@@ -7,6 +7,8 @@ const {
   getWordStats,
   getWordById,
   submitWord,
+  adminAddWord,
+  adminUploadSamples,
   approveWord,
   rejectWord,
   updateWord,
@@ -30,16 +32,25 @@ router.use(authMiddleware);
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getWordStats);
 
-// ── User routes ───────────────────────────────────────────────
+// ── Admin add word manually ───────────────────────────────────
+// IMPORTANT: must come before /:id wildcard routes
+router.post("/admin-add", roleMiddleware("admin"), adminAddWord);
+
+// ── List and submit ───────────────────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllWords);
 router.get("/:id", roleMiddleware("admin", "user"), getWordById);
 router.post("/", roleMiddleware("user"), submitWord);
+
+// ── Admin sample upload (auto-approved, bypasses user cap) ────
+router.post("/:id/admin-samples", roleMiddleware("admin"), adminUploadSamples);
+
+// ── User sample upload ────────────────────────────────────────
 router.post("/:id/samples", roleMiddleware("user"), uploadSamples);
 router.get("/:id/samples", roleMiddleware("admin"), getSamples);
 
 // ── Sample review routes (admin only) ────────────────────────
-// IMPORTANT: specific /user/:userId routes must come BEFORE /:sampleId wildcard
-// otherwise Express matches "user" as a sampleId and the route is never reached
+// IMPORTANT: specific /user/:userId routes MUST come BEFORE /:sampleId wildcard
+// otherwise Express matches "user" as sampleId and the route is never reached
 router.patch(
   "/:id/samples/user/:userId/approve-all",
   roleMiddleware("admin"),
@@ -61,7 +72,7 @@ router.patch(
   rejectSample,
 );
 
-// ── Submission level routes (admin only) ──────────────────────
+// ── Submission level routes ───────────────────────────────────
 router.patch(
   "/:id/approve-submission",
   roleMiddleware("admin"),
@@ -82,7 +93,7 @@ router.get(
   getUserSampleCountForWord,
 );
 
-// ── Admin word management routes ──────────────────────────────
+// ── Admin word management ─────────────────────────────────────
 router.patch("/:id/approve", roleMiddleware("admin"), approveWord);
 router.patch("/:id/reject", roleMiddleware("admin"), rejectWord);
 router.put("/:id", roleMiddleware("admin"), updateWord);

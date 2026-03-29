@@ -169,7 +169,6 @@ const verifyEmail = async (req, res) => {
       return res.status(400).json({ message: "Email and code are required" });
     }
 
-    // Get latest valid record (not used, not invalidated, not expired)
     const record = await getLatestVerification(email, "registration");
 
     if (!record) {
@@ -178,11 +177,9 @@ const verifyEmail = async (req, res) => {
         .json({ message: "Invalid or expired verification code" });
     }
 
-    // Check if code matches
     if (record.code !== code) {
       const newAttemptCount = record.attempt_count + 1;
 
-      // Invalidate session after 5 wrong attempts
       if (newAttemptCount >= 5) {
         await record.update({
           attempt_count: newAttemptCount,
@@ -213,6 +210,8 @@ const verifyEmail = async (req, res) => {
 };
 
 // ── POST /api/auth/set-password ───────────────────────────────
+// Final step of registration — creates the user account with status "active"
+// since email was already verified in the previous step
 const setPassword = async (req, res) => {
   try {
     const { name, username, email, age, gender, password } = req.body;
@@ -229,10 +228,10 @@ const setPassword = async (req, res) => {
       return res.status(400).json({ message: "Email not verified" });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user with role_id 3 (user) and status pending
+    // Create user with status "active" — email verification already confirms ownership
+    // No pending approval step is needed
     const user = await User.create({
       name,
       username,
@@ -241,7 +240,7 @@ const setPassword = async (req, res) => {
       gender: gender || null,
       password: hashedPassword,
       role_id: 3,
-      status: "pending",
+      status: "active",
       warning_count: 0,
     });
 
@@ -249,7 +248,7 @@ const setPassword = async (req, res) => {
     await UserSetting.create({ user_id: user.id });
 
     return res.status(201).json({
-      message: "Account created successfully. Waiting for admin approval.",
+      message: "Account created successfully. You can now log in.",
     });
   } catch (err) {
     console.error("Set password error:", err);
@@ -258,7 +257,7 @@ const setPassword = async (req, res) => {
 };
 
 // ── POST /api/auth/login ──────────────────────────────────────
-// Accepts email OR username
+// Accepts email OR username via identifier field
 const login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
@@ -269,7 +268,6 @@ const login = async (req, res) => {
         .json({ message: "Email/username and password are required" });
     }
 
-    // Find user by email or username
     const user = await User.findOne({
       where: {
         [Op.or]: [{ email: identifier }, { username: identifier }],
@@ -281,16 +279,11 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Check password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Check account status
-    if (user.status === "pending") {
-      return res.status(403).json({ message: "Account is pending approval" });
-    }
     if (user.status === "deactivated") {
       return res.status(403).json({ message: "Account has been deactivated" });
     }
@@ -425,7 +418,6 @@ const verifyResetCode = async (req, res) => {
       });
     }
 
-    // Code is correct — mark as used
     await record.update({ is_used: true });
 
     return res
@@ -448,7 +440,6 @@ const resetPassword = async (req, res) => {
         .json({ message: "Email and password are required" });
     }
 
-    // Confirm reset code was already verified
     const verified = await EmailVerification.findOne({
       where: { email, type: "password_reset", is_used: true },
       order: [["created_at", "DESC"]],
@@ -462,9 +453,6 @@ const resetPassword = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     await User.update({ password: hashedPassword }, { where: { email } });
-
-    // Clean up used verification record
-    await verified.update({ is_used: true });
 
     return res.status(200).json({ message: "Password reset successfully" });
   } catch (err) {

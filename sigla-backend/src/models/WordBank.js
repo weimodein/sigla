@@ -24,12 +24,11 @@ const WordBank = sequelize.define(
     sign_type: {
       type: DataTypes.STRING(10),
       allowNull: false,
-      validate: { isIn: [["FSL", "ASL"]] },
+      validate: { isIn: [["FSL"]] },
     },
     category: {
-      type: DataTypes.STRING(20),
-      defaultValue: "word",
-      validate: { isIn: [["word", "alphabet"]] },
+      type: DataTypes.STRING(50),
+      defaultValue: "additional words",
     },
     image_url: {
       type: DataTypes.TEXT,
@@ -42,6 +41,11 @@ const WordBank = sequelize.define(
     hands_count: {
       type: DataTypes.INTEGER,
       defaultValue: 1,
+    },
+    // Auto-generated demonstration video compiled from approved gesture samples
+    video_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
   },
   {

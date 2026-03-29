@@ -34,7 +34,7 @@ const sendVerificationCode = async (email, code, type) => {
             ${code}
           </span>
         </div>
-        <p>This code expires in <strong>10 minutes</strong>.</p>
+        <p>This code expires in <strong>5 minutes</strong>.</p>
         <p>If you did not request this, please ignore this email.</p>
         <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;" />
         <p style="font-size: 12px; color: #999; text-align: center;">

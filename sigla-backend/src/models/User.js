@@ -48,13 +48,23 @@ const User = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Default is now "active" — email is verified before account is created
+    // so no pending approval step is needed
     status: {
       type: DataTypes.STRING(20),
       allowNull: false,
-      defaultValue: "pending",
+      defaultValue: "active",
       validate: {
-        isIn: [["pending", "active", "deactivated"]],
+        isIn: [["active", "deactivated", "deleted"]],
       },
+    },
+    warning_count: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    deactivated_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {

@@ -36,6 +36,21 @@ const EmailVerification = sequelize.define(
       type: DataTypes.DATE,
       allowNull: false,
     },
+    // Tracks how many wrong codes were entered — session expires after 5
+    attempt_count: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    // Set to true when attempt_count hits 5 or a new code is requested
+    session_invalidated: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    // Used to enforce the 1-minute resend cooldown
+    last_sent_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     tableName: "email_verifications",

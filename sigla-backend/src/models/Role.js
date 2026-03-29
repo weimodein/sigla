@@ -14,7 +14,7 @@ const Role = sequelize.define(
       allowNull: false,
       unique: true,
       validate: {
-        isIn: [["super_admin", "admin", "user"]],
+        isIn: [["admin", "user"]],
       },
     },
   },

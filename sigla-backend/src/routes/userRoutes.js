@@ -8,6 +8,7 @@ const {
   getDeactivatedUsers,
   getUserStats,
   getUserById,
+  createUser,
   approveUser,
   warnUser,
   deactivateUser,
@@ -24,8 +25,9 @@ router.get("/stats", roleMiddleware("admin"), getUserStats);
 router.get("/pending", roleMiddleware("admin"), getPendingUsers);
 router.get("/deactivated", roleMiddleware("admin"), getDeactivatedUsers);
 
-// ── Admin routes ──────────────────────────────────────────────
+// ── Admin user management routes ──────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllUsers);
+router.post("/create", roleMiddleware("admin"), createUser);
 router.get("/:id", roleMiddleware("admin"), getUserById);
 router.patch("/:id/approve", roleMiddleware("admin"), approveUser);
 router.patch("/:id/warn", roleMiddleware("admin"), warnUser);

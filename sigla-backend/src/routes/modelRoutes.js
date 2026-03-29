@@ -18,21 +18,19 @@ const {
 router.use(authMiddleware);
 
 // ── Static routes first ───────────────────────────────────────
-router.get("/stats", roleMiddleware("admin", "super_admin"), getModelStats);
-router.get(
-  "/latest",
-  roleMiddleware("admin", "super_admin", "user"),
-  getLatestModel,
-);
+router.get("/stats", roleMiddleware("admin"), getModelStats);
 
-// ── Admin routes ──────────────────────────────────────────────
-router.get("/", roleMiddleware("admin", "super_admin"), getAllModels);
-router.get("/:id", roleMiddleware("admin", "super_admin"), getModelById);
-router.post("/train", roleMiddleware("admin", "super_admin"), trainModel);
-router.post("/test", roleMiddleware("admin", "super_admin"), testModel);
-router.post("/deploy", roleMiddleware("admin", "super_admin"), deployModel);
-router.post("/revert", roleMiddleware("admin", "super_admin"), revertModel);
-router.delete("/:id", roleMiddleware("admin", "super_admin"), deleteModel);
+// Mobile app fetches the latest deployed model — user role allowed
+router.get("/latest", roleMiddleware("admin", "user"), getLatestModel);
+
+// ── Admin model management routes ────────────────────────────
+router.get("/", roleMiddleware("admin"), getAllModels);
+router.get("/:id", roleMiddleware("admin"), getModelById);
+router.post("/train", roleMiddleware("admin"), trainModel);
+router.post("/test", roleMiddleware("admin"), testModel);
+router.post("/deploy", roleMiddleware("admin"), deployModel);
+router.post("/revert", roleMiddleware("admin"), revertModel);
+router.delete("/:id", roleMiddleware("admin"), deleteModel);
 
 module.exports = router;
 // ```
