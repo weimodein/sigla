@@ -1,7 +1,7 @@
 import os
 import json
 import numpy as np
-from app.utils.supabase_client import supabase, BUCKET_GESTURES
+import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,51 +9,40 @@ load_dotenv()
 FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 
+# Backend API configuration
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
+ML_API_KEY  = os.getenv("ML_API_KEY")  # Must be set in .env
+
 
 def fetch_approved_samples() -> dict:
     """
-    Fetch all approved gesture samples from Supabase Storage.
+    Fetch all approved gesture samples from the backend API.
     Returns a dict: { label: [sample_array, ...] }
     """
-    print("Fetching approved samples from Supabase...")
+    print("Fetching approved samples from backend API...")
 
-    # List all files in the approved folder
-    files = supabase.storage.from_(BUCKET_GESTURES).list("approved")
+    if not ML_API_KEY:
+        raise ValueError("ML_API_KEY environment variable is not set")
 
-    if not files:
-        raise ValueError("No approved samples found in Supabase Storage.")
+    url = f"{BACKEND_URL}/ml/dataset"
+    headers = {"X-API-Key": ML_API_KEY}
 
-    dataset = {}
-
-    for file in files:
-        filename  = file["name"]
-        file_path = f"approved/{filename}"
-
-        # Skip non-JSON files
-        if not filename.endswith(".json"):
-            continue
-
-        # Download the file
-        raw_bytes = supabase.storage.from_(BUCKET_GESTURES).download(file_path)
-        data      = json.loads(raw_bytes.decode("utf-8"))
-
-        label   = data.get("label")
-        samples = data.get("samples", [])
-
-        if not label or not samples:
-            print(f"Skipping {filename} — missing label or samples")
-            continue
-
-        if label not in dataset:
-            dataset[label] = []
-
-        dataset[label].extend(samples)
-        print(f"Loaded {len(samples)} samples for '{label}' from {filename}")
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            dataset = response.json()
+    except httpx.HTTPStatusError as e:
+        raise ValueError(f"Backend API returned error {e.response.status_code}: {e.response.text}")
+    except httpx.RequestError as e:
+        raise ValueError(f"Failed to connect to backend API: {e}")
 
     if not dataset:
-        raise ValueError("No valid samples found after processing files.")
+        raise ValueError("No approved samples found in backend database.")
 
-    print(f"Total classes found: {len(dataset)}")
+    total_classes = len(dataset)
+    total_samples = sum(len(samples) for samples in dataset.values())
+    print(f"Fetched {total_samples} samples across {total_classes} classes")
     return dataset
 
 

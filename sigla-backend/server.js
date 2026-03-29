@@ -16,6 +16,7 @@ const userRoutes = require("./src/routes/userRoutes.js");
 const wordRoutes = require("./src/routes/wordRoutes.js");
 const modelRoutes = require("./src/routes/modelRoutes.js");
 const notificationRoutes = require("./src/routes/notificationRoutes.js");
+const mlRoutes = require("./src/routes/mlRoutes.js"); // ML service routes (internal)
 
 // application setup
 const app = express();
@@ -29,6 +30,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/words", wordRoutes);
 app.use("/api/models", modelRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/ml", mlRoutes);
 
 // database connection
 connectDB();
