@@ -44,6 +44,7 @@ router.get("/word-bank", async (req, res) => {
         "hands_count",
         "video_url",
         "gesture_type",
+        "filipino_translation",
       ],
       order: [["label", "ASC"]],
     });

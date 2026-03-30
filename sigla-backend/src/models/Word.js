@@ -83,6 +83,11 @@ const Word = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // Filipino translation of the word/phrase
+    filipino_translation: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+    },
     // URL of the auto-generated demonstration video stored in Supabase
     video_url: {
       type: DataTypes.TEXT,

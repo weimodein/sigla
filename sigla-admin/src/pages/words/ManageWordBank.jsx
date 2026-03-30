@@ -362,6 +362,7 @@ const ManageWordBank = () => {
   const [editForm, setEditForm] = useState({
     label: "", description: "", hands_count: 1,
     sign_type: "FSL", category: "additional words", gesture_type: "static",
+    filipino_translation: "",
   });
 
   const handleEditOpen = (word) => {
@@ -372,6 +373,7 @@ const ManageWordBank = () => {
       sign_type: word.sign_type || "FSL",
       category: word.category || "additional words",
       gesture_type: word.gesture_type || "static",
+      filipino_translation: word.filipino_translation || "",
     });
     setEditModal(word);
   };
@@ -410,6 +412,7 @@ const ManageWordBank = () => {
   const [addForm, setAddForm] = useState({
     label: "", description: "", hands_count: 1,
     sign_type: "FSL", category: "additional words", gesture_type: "static",
+    filipino_translation: "",
   });
 
   const handleAddWord = async () => {
@@ -419,7 +422,7 @@ const ManageWordBank = () => {
       await adminAddWord(addForm);
       showSuccess(`Word "${addForm.label}" added. Upload gesture samples to activate it.`);
       setAddModal(false);
-      setAddForm({ label: "", description: "", hands_count: 1, sign_type: "FSL", category: "additional words", gesture_type: "static" });
+      setAddForm({ label: "", description: "", hands_count: 1, sign_type: "FSL", category: "additional words", gesture_type: "static", filipino_translation: "" });
       fetchStats();
       fetchWords();
     } catch (err) {
@@ -581,6 +584,7 @@ const ManageWordBank = () => {
                 <th className="px-4 py-3">Sign Type</th>
                 <th className="px-4 py-3">Gesture</th>
                 <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3">Filipino</th>
                 <th className="px-4 py-3">Samples</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Submitted By</th>
@@ -590,7 +594,7 @@ const ManageWordBank = () => {
             <tbody>
               {words.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-gray-400 text-sm">
+                  <td colSpan={10} className="text-center py-8 text-gray-400 text-sm">
                     No words found
                   </td>
                 </tr>
@@ -616,6 +620,7 @@ const ManageWordBank = () => {
                     <td className="px-4 py-3"><Badge value={word.sign_type} /></td>
                     <td className="px-4 py-3"><Badge value={word.gesture_type || "static"} /></td>
                     <td className="px-4 py-3 text-xs text-gray-500 capitalize">{word.category || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{word.filipino_translation || "—"}</td>
                     <td className="px-4 py-3 text-gray-600">
                       <span className="text-xs">
                         {word.approved_sample_count || 0}/{word.total_samples || 0} approved
@@ -914,6 +919,16 @@ const ManageWordBank = () => {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Filipino Translation</label>
+              <input
+                type="text"
+                value={addForm.filipino_translation}
+                onChange={(e) => setAddForm({ ...addForm, filipino_translation: e.target.value })}
+                placeholder="e.g. Kumusta"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+              />
+            </div>
             <p className="text-xs text-gray-400 bg-blue-50 rounded-lg px-3 py-2">
               The word will be added as <strong>approved but inactive</strong>. Upload gesture samples afterwards to activate it in the mobile app.
             </p>
@@ -1043,6 +1058,16 @@ const ManageWordBank = () => {
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Filipino Translation</label>
+              <input
+                type="text"
+                value={editForm.filipino_translation}
+                onChange={(e) => setEditForm({ ...editForm, filipino_translation: e.target.value })}
+                placeholder="e.g. Kumusta"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+              />
             </div>
             <div className="flex gap-2 pt-2">
               <button

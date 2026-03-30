@@ -310,6 +310,7 @@ const adminAddWord = async (req, res) => {
       sign_type,
       category,
       gesture_type,
+      filipino_translation,
     } = req.body;
 
     if (!label || !sign_type) {
@@ -346,6 +347,7 @@ const adminAddWord = async (req, res) => {
       sign_type,
       gesture_type: gesture_type || "static",
       category: category || "additional words",
+      filipino_translation: filipino_translation || null,
       submitted_by: req.user.id,
       status: "approved",
       is_locked: false,
@@ -903,7 +905,7 @@ const rejectWord = async (req, res) => {
 // ── PUT /api/words/:id ────────────────────────────────────────
 const updateWord = async (req, res) => {
   try {
-    const { label, description, hands_count, sign_type, category } = req.body;
+    const { label, description, hands_count, sign_type, category, filipino_translation } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
     if (!word) {
@@ -920,6 +922,7 @@ const updateWord = async (req, res) => {
       hands_count: hands_count || word.hands_count,
       sign_type: sign_type || word.sign_type,
       category: category || word.category,
+      filipino_translation: filipino_translation !== undefined ? filipino_translation : word.filipino_translation,
     });
 
     // Sync label and description to word bank if word is approved

@@ -5,9 +5,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
-import android.util.Log
+import android.speech.tts.TextToSpeech
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -20,7 +22,9 @@ import com.example.sigla.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import java.util.concurrent.Executors
+import retrofit2.Response
 
 private const val TAG               = "MainActivity"
 private const val CAMERA_PERMISSION = 100
@@ -30,19 +34,32 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var predictor: PredictionService
     private lateinit var landmarker: HandLandmarkHelper
+    private lateinit var session: SessionManager
+    private lateinit var historyManager: TranslationHistoryManager
+    private lateinit var appSettings: AppSettings
+    private var tts: TextToSpeech? = null
+    private var isTtsReady = false
 
     private val executor      = Executors.newSingleThreadExecutor()
     private var isFrontCamera = false
     private var cameraProvider: ProcessCameraProvider? = null
+    private var showFilipino  = true
+    private var emergencyHoldStart = 0L
+    private var filipinoMap = mutableMapOf<String, String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        predictor = PredictionService(this)
+        session        = SessionManager.getInstance(this)
+        historyManager = TranslationHistoryManager.getInstance(this)
+        appSettings    = AppSettings.getInstance(this)
+        showFilipino   = appSettings.showFilipino
 
-        // LIVE_STREAM: MediaPipe calls this on its own thread when a result is ready
+        initTts()
+
+        predictor = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
             predictor.processFrame(result.features, result.handsDetected)
             runOnUiThread {
@@ -58,15 +75,47 @@ class MainActivity : AppCompatActivity() {
             predictor.init()
             withContext(Dispatchers.Main) {
                 binding.tvStatus.text = if (predictor.isReady)
-                    "Models loaded ✓" else "⚠ Model files missing from assets/"
+                    getString(R.string.models_ready)
+                else "⚠ Model files missing"
             }
         }
 
         setupCallbacks()
         setupButtons()
+        setupDrawer()
+        updateFilipinoToggleLabel()
+        loadFilipinoTranslations()
 
         if (hasCameraPermission()) startCamera()
         else requestCameraPermission()
+
+        // Check first launch / onboarding
+        if (session.isFirstLaunch) {
+            session.isFirstLaunch = false
+            if (!session.isOnboardingDone) {
+                startActivity(Intent(this, OnboardingActivity::class.java))
+            }
+        }
+    }
+
+    // ── TTS ──────────────────────────────────────────────────────────────────
+
+    private fun initTts() {
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.ENGLISH
+                isTtsReady = true
+            }
+        }
+    }
+
+    private fun speak(text: String) {
+        if (!isTtsReady) return
+        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val targetVol = (appSettings.volume / 100.0 * maxVol).toInt()
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     // ── Callbacks ─────────────────────────────────────────────────────────────
@@ -77,10 +126,28 @@ class MainActivity : AppCompatActivity() {
                 val pct = (result.confidence * 100).toInt()
                 val tag = if (result.isMotion) "MOTION" else "STATIC"
                 val ee  = if (result.earlyExit) " ⚡" else ""
-                binding.tvResult.text     = result.label
+
+                binding.tvResult.text     = result.label.uppercase()
                 binding.tvConfidence.text = "$pct%  [$tag]$ee"
+                binding.tvResult.textSize = appSettings.textSize.toFloat()
                 binding.cardResult.visibility = View.VISIBLE
                 binding.progressBuffer.progress = 0
+
+                // Filipino translation
+                val filipino = filipinoMap[result.label.lowercase()]
+                if (filipino != null && showFilipino) {
+                    binding.tvFilipinoResult.text = filipino
+                    binding.tvFilipinoResult.visibility = View.VISIBLE
+                } else {
+                    binding.tvFilipinoResult.visibility = View.GONE
+                }
+
+                // Text-to-speech
+                speak(result.label)
+
+                // Save to history
+                historyManager.add(result.label, pct, if (result.isMotion) "motion" else "static")
+
                 binding.cardResult.postDelayed(
                     { binding.cardResult.visibility = View.INVISIBLE }, 2000)
             }
@@ -106,24 +173,103 @@ class MainActivity : AppCompatActivity() {
 
         predictor.onNoHands = {
             runOnUiThread {
-                binding.tvFrames.text = "No hands"
+                binding.tvFrames.text = "Detecting…"
                 binding.tvVelocity.text = ""
                 binding.tvStreak.visibility = View.GONE
                 binding.progressBuffer.progress = 0
                 binding.overlayView.clear()
+                binding.tvHandsWarning.visibility = View.GONE
             }
         }
     }
 
+    // ── Buttons ───────────────────────────────────────────────────────────────
+
     private fun setupButtons() {
-        binding.btnCollect.setOnClickListener {
-            startActivity(Intent(this, CollectionActivity::class.java))
-        }
+        // Flip camera
         binding.btnFlipCamera.setOnClickListener {
             isFrontCamera = !isFrontCamera
             predictor.reset()
             bindCamera()
-            binding.btnFlipCamera.text = if (isFrontCamera) "⇄ Back" else "⇄ Front"
+        }
+
+        // Filipino toggle
+        binding.btnToggleFilipino.setOnClickListener {
+            showFilipino = !showFilipino
+            appSettings.showFilipino = showFilipino
+            updateFilipinoToggleLabel()
+            if (!showFilipino) binding.tvFilipinoResult.visibility = View.GONE
+        }
+
+        // Emergency button — hold 2 seconds
+        binding.btnEmergency.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    emergencyHoldStart = SystemClock.elapsedRealtime()
+                    binding.btnEmergency.postDelayed(emergencyRunnable, 2000)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    binding.btnEmergency.removeCallbacks(emergencyRunnable)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private val emergencyRunnable = Runnable {
+        speak("Help me")
+        Toast.makeText(this, "Emergency alert played", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateFilipinoToggleLabel() {
+        binding.btnToggleFilipino.text =
+            if (showFilipino) "Hide Filipino" else "Show Filipino"
+    }
+
+    // ── Filipino translations (loaded from API) ────────────────────────────────
+
+    private fun loadFilipinoTranslations() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val response: Response<WordBankResponse> =
+                    ApiClient.get(session.token).getWordBank()
+
+                if (response.isSuccessful) {
+                    val body: WordBankResponse? = response.body()
+                    val words: List<WordBankWord> = body?.words ?: emptyList()
+
+                    val map = mutableMapOf<String, String>()
+
+                    for (word: WordBankWord in words) {
+                        val translation: String? = word.filipino_translation
+                        if (!translation.isNullOrBlank()) {
+                            map[word.label.lowercase()] = translation
+                        }
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        filipinoMap = map
+                    }
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // ── Drawer ────────────────────────────────────────────────────────────────
+
+    private fun setupDrawer() {
+        // The sidebar view is the include'd LinearLayout which is the second child of DrawerLayout
+        val sidebar = binding.drawerLayout.getChildAt(1)
+        NavigationHelper.setup(this, binding.drawerLayout, sidebar, Screen.MAIN)
+
+        // Hamburger opens drawer
+        binding.btnMenu.setOnClickListener {
+            binding.drawerLayout.openDrawer(sidebar)
         }
     }
 
@@ -151,12 +297,10 @@ class MainActivity : AppCompatActivity() {
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
 
-        // Analyzer just prepares the bitmap and fires detectAsync — returns immediately
         analysis.setAnalyzer(executor) { imageProxy ->
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
-            // Use elapsedRealtime for monotonically increasing timestamps required by LIVE_STREAM
             landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
             imageProxy.close()
         }
@@ -170,11 +314,9 @@ class MainActivity : AppCompatActivity() {
             provider.unbindAll()
             provider.bindToLifecycle(this, selector, preview, analysis)
         } catch (e: Exception) {
-            Log.e(TAG, "Camera bind failed: ${e.message}")
+            android.util.Log.e(TAG, "Camera bind failed: ${e.message}")
         }
     }
-
-    // ── Image processing ──────────────────────────────────────────────────────
 
     private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
         val maxDim = 640
@@ -212,6 +354,7 @@ class MainActivity : AppCompatActivity() {
         executor.shutdown()
         predictor.close()
         landmarker.close()
+        tts?.shutdown()
         super.onDestroy()
     }
 }
