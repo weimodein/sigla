@@ -395,15 +395,20 @@ const adminUploadSamples = async (req, res) => {
 
     const newCount = parseInt(sample_count) || 1;
 
-    // Create sample record — auto-approved since uploaded by admin
+    // Inside uploadSamples, after validating the sample cap, change the create call:
     const sample = await GestureSample.create({
       word_id: word.id,
       submitted_by: req.user.id,
       file_url,
       landmark_url: landmark_url || null,
       sample_count: newCount,
-      status: "approved",
+      status: "pending",
       is_validated: true,
+      // NEW: store landmarks or sequence
+      landmarks:
+        word.gesture_type === "static" ? req.body.landmarks || null : null,
+      sequence:
+        word.gesture_type === "motion" ? req.body.sequence || null : null,
     });
 
     // Update total samples count

@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { getApprovedDataset } = require("../controllers/mlController.js");
+const {
+  getApprovedDataset,
+  getWordSamplesForVideo,
+} = require("../controllers/mlController.js");
 
 // Simple API key middleware
 const apiKeyAuth = (req, res, next) => {
@@ -12,5 +15,6 @@ const apiKeyAuth = (req, res, next) => {
 };
 
 router.get("/dataset", apiKeyAuth, getApprovedDataset);
+router.get("/word-samples/:wordId", apiKeyAuth, getWordSamplesForVideo);
 
 module.exports = router;

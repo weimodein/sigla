@@ -47,6 +47,20 @@ const GestureSample = sequelize.define(
         isIn: [["pending", "approved", "rejected"]],
       },
     },
+    // For static gestures: array of 126 floats (hand landmarks)
+    landmarks: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      comment:
+        "Array of 126 normalized hand landmark coordinates for static gestures",
+    },
+    // For motion gestures: array of frames, each frame array of 126 floats
+    sequence: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      comment:
+        "Array of frames, each frame containing 126 landmark coordinates for motion gestures",
+    },
   },
   {
     tableName: "gesture_samples",

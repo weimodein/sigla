@@ -7,6 +7,7 @@ import os
 from app.services.train  import train
 from app.services.test   import test
 from app.services.deploy import deploy
+from app.services.video import generate_word_video
 
 router = APIRouter(prefix="", tags=["Model"])
 
@@ -180,3 +181,21 @@ async def get_deployed_model_checksum():
         raise HTTPException(status_code=408, detail="Request timed out while fetching model file")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Checksum computation failed: {str(e)}")
+
+
+class VideoRequest(BaseModel):
+    word_id: int
+    word_label: str
+
+@router.post("/generate-video")
+async def generate_video(request: VideoRequest):
+    """
+    Generates a short demonstration video from approved gesture images.
+    Called by backend when a word becomes active.
+    """
+    try:
+        from app.services.video import generate_word_video
+        video_url = generate_word_video(request.word_id, request.word_label)
+        return {"video_url": video_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
