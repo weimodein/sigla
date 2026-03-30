@@ -82,3 +82,19 @@ export const getUserSampleCount = async (wordId) => {
   const response = await api.get(`/words/${wordId}/user-sample-count`);
   return response.data;
 };
+
+export const adminAddWord = async (data) => {
+  const response = await api.post("/words/admin-add", data);
+  return response.data;
+};
+
+export const adminUploadSamples = async (wordId, data) => {
+  const response = await api.post(`/words/${wordId}/admin-samples`, data);
+  return response.data;
+};
+
+export const approveAllSamplesForWord = (wordId) =>
+  api.patch(`/words/${wordId}/samples/approve-all`).then((r) => r.data);
+
+export const rejectAllSamplesForWord = (wordId) =>
+  api.patch(`/words/${wordId}/samples/reject-all`).then((r) => r.data);

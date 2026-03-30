@@ -1,30 +1,109 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { getUserStats, getAllUsers } from "../../api/userApi.js";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { getUserStats, getUserRegistrations, getRecentActivity } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
-import { getModelStats } from "../../api/modelApi.js";
+import { getAllModels, getModelStats } from "../../api/modelApi.js";
 import { broadcastAnnouncement } from "../../api/notificationApi.js";
 import {
   Users,
   BookOpen,
   Cpu,
   ClipboardList,
-  AlertTriangle,
   Send,
   Bell,
   CheckCircle,
   XCircle,
-  UserPlus,
+  Database,
+  Activity,
+  FileText,
 } from "lucide-react";
+
+// ── Helpers ───────────────────────────────────────────────────
+const ACTION_LABELS = {
+  submitted_word: "submitted a word",
+  admin_added_word: "added a word",
+  admin_uploaded_samples: "uploaded samples",
+  approved_submission: "approved a submission",
+  rejected_submission: "rejected a submission",
+  locked_word: "locked a word",
+  unlocked_word: "unlocked a word",
+  approved_word: "approved a word",
+  rejected_word: "rejected a word",
+  updated_word: "updated a word",
+  deleted_word: "deleted a word",
+  created_user: "created a user",
+  approved_user: "approved a user",
+  warned_user: "warned a user",
+  deactivated_user: "deactivated a user",
+  reactivated_user: "reactivated a user",
+  auto_reactivated_user: "auto-reactivated a user",
+  deleted_user: "deleted a user",
+  updated_user: "updated a user",
+  trained_model: "trained a model",
+  tested_model: "tested a model",
+  deployed_model: "deployed a model",
+  reverted_model: "reverted a model",
+  deleted_model: "deleted a model",
+  sent_announcement: "sent an announcement",
+};
+
+const ACTION_COLORS = {
+  submitted_word: "bg-blue-100 text-blue-700",
+  admin_added_word: "bg-blue-100 text-blue-700",
+  approved_submission: "bg-green-100 text-green-700",
+  approved_word: "bg-green-100 text-green-700",
+  approved_user: "bg-green-100 text-green-700",
+  reactivated_user: "bg-green-100 text-green-700",
+  auto_reactivated_user: "bg-green-100 text-green-700",
+  rejected_submission: "bg-red-100 text-red-700",
+  rejected_word: "bg-red-100 text-red-700",
+  deleted_word: "bg-red-100 text-red-700",
+  deleted_user: "bg-red-100 text-red-700",
+  deleted_model: "bg-red-100 text-red-700",
+  warned_user: "bg-orange-100 text-orange-700",
+  deactivated_user: "bg-orange-100 text-orange-700",
+  deployed_model: "bg-purple-100 text-purple-700",
+  trained_model: "bg-purple-100 text-purple-700",
+  tested_model: "bg-purple-100 text-purple-700",
+};
+
+const formatActivityDate = (dateStr) => {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+};
+
+const formatChartDate = (dateStr, period) => {
+  const d = new Date(dateStr);
+  if (period === "year") {
+    return d.toLocaleDateString("en-PH", { month: "short", year: "2-digit" });
+  }
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+};
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl shadow-sm p-6 flex items-center gap-4">
+  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
     <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={22} className="text-white" />
+      <Icon size={20} className="text-white" />
     </div>
     <div>
-      <p className="text-sm text-gray-500">{title}</p>
+      <p className="text-xs text-gray-500">{title}</p>
       <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
     </div>
   </div>
@@ -37,8 +116,11 @@ const Dashboard = () => {
   const [userStats, setUserStats] = useState(null);
   const [wordStats, setWordStats] = useState(null);
   const [modelStats, setModelStats] = useState(null);
+  const [allModels, setAllModels] = useState([]);
   const [pendingWords, setPendingWords] = useState([]);
-  const [recentUsers, setRecentUsers] = useState([]);
+  const [registrations, setRegistrations] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [regPeriod, setRegPeriod] = useState("month");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -49,23 +131,25 @@ const Dashboard = () => {
   const [sendSuccess, setSendSuccess] = useState("");
   const [sendError, setSendError] = useState("");
 
-  // ── Fetch ───────────────────────────────────────────────────
+  // ── Fetch core data ─────────────────────────────────────────
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [users, words, models, pendingData, recentUsersData] =
+        const [users, words, models, modelsAll, pendingData, activityData] =
           await Promise.all([
             getUserStats(),
             getWordStats(),
             getModelStats(),
+            getAllModels(),
             getAllWords({ status: "pending", limit: 5 }),
-            getAllUsers({ limit: 5 }),
+            getRecentActivity(10),
           ]);
         setUserStats(users);
         setWordStats(words);
         setModelStats(models);
+        setAllModels(modelsAll.models || []);
         setPendingWords(pendingData.words || []);
-        setRecentUsers(recentUsersData.users || []);
+        setActivity(activityData.activity || []);
       } catch (err) {
         setError("Failed to load dashboard data");
       } finally {
@@ -74,6 +158,20 @@ const Dashboard = () => {
     };
     fetchAll();
   }, []);
+
+  // ── Fetch registration chart data ───────────────────────────
+  const fetchRegistrations = useCallback(async (period) => {
+    try {
+      const res = await getUserRegistrations(period);
+      setRegistrations(res.data || []);
+    } catch {
+      setRegistrations([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRegistrations(regPeriod);
+  }, [regPeriod, fetchRegistrations]);
 
   // ── Send Announcement ───────────────────────────────────────
   const handleSendAnnouncement = async () => {
@@ -119,6 +217,17 @@ const Dashboard = () => {
     );
   }
 
+  const deployedModel = modelStats?.current_model;
+  const chartData = registrations.map((r) => ({
+    ...r,
+    label: formatChartDate(r.date, regPeriod),
+  }));
+
+  // Models with accuracy, sorted newest first, limit 8
+  const modelsWithAccuracy = allModels
+    .filter((m) => m.accuracy != null)
+    .slice(0, 8);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -129,148 +238,198 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* User Stats */}
-      <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          Users
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Users"
-            value={userStats?.total}
-            icon={Users}
-            color="bg-blue-900"
-          />
-          <StatCard
-            title="Pending Requests"
-            value={userStats?.pending}
-            icon={ClipboardList}
-            color="bg-yellow-500"
-          />
-          <StatCard
-            title="Deactivated"
-            value={userStats?.deactivated}
-            icon={Users}
-            color="bg-red-500"
-          />
-          <StatCard
-            title="Warned"
-            value={userStats?.warned}
-            icon={AlertTriangle}
-            color="bg-orange-500"
-          />
-        </div>
+      {/* ── Summary — 5 key stats ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard
+          title="Total Users"
+          value={userStats?.total}
+          icon={Users}
+          color="bg-blue-900"
+        />
+        <StatCard
+          title="Total Words"
+          value={wordStats?.total}
+          icon={BookOpen}
+          color="bg-blue-700"
+        />
+        <StatCard
+          title="Pending Submissions"
+          value={wordStats?.pending}
+          icon={ClipboardList}
+          color="bg-yellow-500"
+        />
+        <StatCard
+          title="Gesture Samples"
+          value={wordStats?.total_samples}
+          icon={Database}
+          color="bg-indigo-500"
+        />
+        <StatCard
+          title="Model Version"
+          value={deployedModel?.version_number ?? "None"}
+          icon={Cpu}
+          color="bg-green-600"
+        />
       </div>
 
-      {/* Word Stats */}
-      <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          Words
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Words"
-            value={wordStats?.total}
-            icon={BookOpen}
-            color="bg-blue-900"
-          />
-          <StatCard
-            title="Pending Approval"
-            value={wordStats?.pending}
-            icon={ClipboardList}
-            color="bg-yellow-500"
-          />
-          <StatCard
-            title="Approved"
-            value={wordStats?.approved}
-            icon={BookOpen}
-            color="bg-green-500"
-          />
-          <StatCard
-            title="Rejected"
-            value={wordStats?.rejected}
-            icon={BookOpen}
-            color="bg-red-500"
-          />
-        </div>
-      </div>
-
-      {/* Model Stats */}
-      <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          Model
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard
-            title="Total Versions"
-            value={modelStats?.total}
-            icon={Cpu}
-            color="bg-blue-900"
-          />
-          <StatCard
-            title="Deployed"
-            value={modelStats?.deployed}
-            icon={Cpu}
-            color="bg-green-500"
-          />
-          <StatCard
-            title="Trained (not deployed)"
-            value={modelStats?.trained}
-            icon={Cpu}
-            color="bg-yellow-500"
-          />
-        </div>
-      </div>
-
-      {/* Currently Deployed Model */}
-      {modelStats?.current_model && (
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-            Currently Deployed Model
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-gray-500">Version</p>
-              <p className="font-semibold text-gray-800">
-                {modelStats.current_model.version_number}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Accuracy</p>
-              <p className="font-semibold text-gray-800">
-                {modelStats.current_model.accuracy
-                  ? `${(modelStats.current_model.accuracy * 100).toFixed(1)}%`
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Classes</p>
-              <p className="font-semibold text-gray-800">
-                {modelStats.current_model.total_classes ?? "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Deployed At</p>
-              <p className="font-semibold text-gray-800">
-                {modelStats.current_model.deployed_at
-                  ? new Date(
-                      modelStats.current_model.deployed_at,
-                    ).toLocaleDateString("en-PH")
-                  : "—"}
-              </p>
+      {/* ── Chart + Model Accuracy ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Registration chart (2/3 width) */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold text-gray-700">
+              New User Registrations
+            </p>
+            <div className="flex gap-1">
+              {["week", "month", "year"].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setRegPeriod(p)}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium transition ${
+                    regPeriod === p
+                      ? "bg-blue-900 text-white"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  }`}
+                >
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </button>
+              ))}
             </div>
           </div>
+          {chartData.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
+              No registration data for this period
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#9ca3af" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 11, fill: "#9ca3af" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                  cursor={{ fill: "#f3f4f6" }}
+                />
+                <Bar dataKey="count" name="Registrations" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
-      )}
 
-      {/* Bottom Row — Pending Submissions + Recent Users */}
+        {/* Model accuracy list (1/3 width) */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <p className="text-sm font-semibold text-gray-700 mb-4">
+            Model Accuracy by Version
+          </p>
+          {modelsWithAccuracy.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-6">
+              No trained models yet
+            </p>
+          ) : (
+            <div className="space-y-3 overflow-y-auto max-h-56">
+              {modelsWithAccuracy.map((m) => {
+                const pct = (m.accuracy * 100).toFixed(1);
+                const isDeployed = m.status === "deployed";
+                return (
+                  <div key={m.id} className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-xs font-medium text-gray-700 truncate">
+                          v{m.version_number}
+                        </p>
+                        {isDeployed && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                            deployed
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full ${isDeployed ? "bg-green-500" : "bg-blue-400"}`}
+                          style={{ width: `${Math.min(parseFloat(pct), 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-600 w-10 text-right">
+                      {pct}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Recent Activity + Pending Submissions ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent activity feed */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity size={16} className="text-gray-400" />
+            <p className="text-sm font-semibold text-gray-700">
+              Recent Activity
+            </p>
+          </div>
+          {activity.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-6">
+              No activity yet
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {activity.map((log) => {
+                const label = ACTION_LABELS[log.action] || log.action;
+                const colorClass =
+                  ACTION_COLORS[log.action] || "bg-gray-100 text-gray-600";
+                const actor = log.user?.username || "System";
+                return (
+                  <div
+                    key={log.id}
+                    className="flex items-start gap-3 py-2 border-b last:border-0"
+                  >
+                    <span
+                      className={`mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${colorClass}`}
+                    >
+                      {log.action.replace(/_/g, " ")}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-700">
+                        <span className="font-medium">{actor}</span>{" "}
+                        {label}
+                        {log.details ? (
+                          <span className="text-gray-400"> — {log.details}</span>
+                        ) : null}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {formatActivityDate(log.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Pending word submissions */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-gray-700">
-              Words Waiting for Review
-            </p>
+            <div className="flex items-center gap-2">
+              <FileText size={16} className="text-gray-400" />
+              <p className="text-sm font-semibold text-gray-700">
+                Words Waiting for Review
+              </p>
+            </div>
             <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
               {wordStats?.pending ?? 0} pending
             </span>
@@ -306,51 +465,9 @@ const Dashboard = () => {
             </div>
           )}
         </div>
-
-        {/* Recent activity */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <p className="text-sm font-semibold text-gray-700 mb-4">
-            Recent User Registrations
-          </p>
-          {recentUsers.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">
-              No recent registrations
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {recentUsers.map((user) => (
-                <div
-                  key={user.id}
-                  className="flex items-center gap-3 py-2 border-b last:border-0"
-                >
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <UserPlus size={14} className="text-blue-700" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">
-                      {user.username}
-                    </p>
-                    <p className="text-xs text-gray-400">{user.email}</p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      user.status === "active"
-                        ? "bg-green-100 text-green-700"
-                        : user.status === "pending"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {user.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Send Announcement */}
+      {/* ── Send Announcement ── */}
       <div className="bg-white rounded-xl shadow-sm p-6">
         <div className="flex items-center gap-2 mb-1">
           <Bell size={18} className="text-blue-900" />

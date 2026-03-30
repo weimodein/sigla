@@ -519,6 +519,73 @@ const runAutoReactivationJob = async () => {
   }
 };
 
+// ── GET /api/users/registrations?period=week|month|year ───────
+const getUserRegistrations = async (req, res) => {
+  try {
+    const { period = "month" } = req.query;
+    const { sequelize } = require("../config/db.js");
+
+    let trunc, interval;
+    if (period === "week") {
+      trunc = "day";
+      interval = "7 days";
+    } else if (period === "year") {
+      trunc = "month";
+      interval = "12 months";
+    } else {
+      // month
+      trunc = "day";
+      interval = "30 days";
+    }
+
+    const rows = await sequelize.query(
+      `SELECT DATE_TRUNC(:trunc, created_at) AS date, COUNT(*) AS count
+       FROM users
+       WHERE role_id = 3
+         AND created_at >= NOW() - INTERVAL '${interval}'
+       GROUP BY DATE_TRUNC(:trunc, created_at)
+       ORDER BY date ASC`,
+      {
+        replacements: { trunc },
+        type: sequelize.QueryTypes.SELECT,
+      },
+    );
+
+    const data = rows.map((r) => ({
+      date: r.date,
+      count: parseInt(r.count, 10),
+    }));
+
+    return res.status(200).json({ data, period });
+  } catch (err) {
+    console.error("Get user registrations error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ── GET /api/users/activity?limit=10 ──────────────────────────
+const getRecentActivity = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const logs = await ActivityLog.findAll({
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "username", "name"],
+          required: false,
+        },
+      ],
+      order: [["created_at", "DESC"]],
+      limit,
+    });
+    return res.status(200).json({ activity: logs });
+  } catch (err) {
+    console.error("Get recent activity error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getPendingUsers,
@@ -533,4 +600,6 @@ module.exports = {
   deleteUser,
   updateUser,
   runAutoReactivationJob,
+  getUserRegistrations,
+  getRecentActivity,
 };

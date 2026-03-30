@@ -1036,6 +1036,82 @@ const getUserSampleCountForWord = async (req, res) => {
   }
 };
 
+// ── PATCH /api/words/:id/samples/approve-all ─────────────────
+// Approve ALL pending samples for a word regardless of submitter
+const approveAllSamplesForWord = async (req, res) => {
+  try {
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) {
+      return res.status(404).json({ message: "Word not found" });
+    }
+
+    const [count] = await GestureSample.update(
+      { status: "approved" },
+      { where: { word_id: word.id, status: "pending" } },
+    );
+
+    const totalApproved = await getApprovedSampleCount(word.id);
+    const activated = await checkAndActivateWord(word, req.user.id);
+
+    await word.update({ approved_sample_count: totalApproved });
+
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: "approved_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Approved all ${count} pending samples for word: ${word.label}. Activated: ${activated}`,
+    });
+
+    return res.status(200).json({
+      message: `${count} samples approved`,
+      total_approved: totalApproved,
+      is_active: activated,
+    });
+  } catch (err) {
+    console.error("Approve all samples for word error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ── PATCH /api/words/:id/samples/reject-all ──────────────────
+// Reject ALL pending samples for a word regardless of submitter
+const rejectAllSamplesForWord = async (req, res) => {
+  try {
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) {
+      return res.status(404).json({ message: "Word not found" });
+    }
+
+    const [count] = await GestureSample.update(
+      { status: "rejected" },
+      { where: { word_id: word.id, status: "pending" } },
+    );
+
+    const totalApproved = await getApprovedSampleCount(word.id);
+    if (totalApproved === 0) {
+      await word.update({
+        status: "rejected",
+        reviewed_by: req.user.id,
+        reviewed_at: new Date(),
+      });
+    }
+
+    await ActivityLog.create({
+      user_id: req.user.id,
+      action: "rejected_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Rejected all ${count} pending samples for word: ${word.label}`,
+    });
+
+    return res.status(200).json({ message: `${count} samples rejected` });
+  } catch (err) {
+    console.error("Reject all samples for word error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getAllWords,
   getWordStats,
@@ -1053,6 +1129,8 @@ module.exports = {
   rejectSample,
   approveAllSamplesByUser,
   rejectAllSamplesByUser,
+  approveAllSamplesForWord,
+  rejectAllSamplesForWord,
   approveSubmission,
   rejectSubmission,
   lockWord,

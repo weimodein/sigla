@@ -19,6 +19,8 @@ const {
   rejectSample,
   approveAllSamplesByUser,
   rejectAllSamplesByUser,
+  approveAllSamplesForWord,
+  rejectAllSamplesForWord,
   approveSubmission,
   rejectSubmission,
   lockWord,
@@ -77,6 +79,16 @@ router.get("/:id/samples", roleMiddleware("admin"), getSamples);
 // ── Sample review routes (admin only) ────────────────────────
 // IMPORTANT: specific /user/:userId routes MUST come BEFORE /:sampleId wildcard
 // otherwise Express matches "user" as sampleId and the route is never reached
+router.patch(
+  "/:id/samples/approve-all",
+  roleMiddleware("admin"),
+  approveAllSamplesForWord,
+);
+router.patch(
+  "/:id/samples/reject-all",
+  roleMiddleware("admin"),
+  rejectAllSamplesForWord,
+);
 router.patch(
   "/:id/samples/user/:userId/approve-all",
   roleMiddleware("admin"),

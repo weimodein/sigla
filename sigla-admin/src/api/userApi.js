@@ -54,3 +54,13 @@ export const updateUser = async (id, data) => {
   const response = await api.put(`/users/${id}`, data);
   return response.data;
 };
+
+export const getUserRegistrations = async (period = "month") => {
+  const response = await api.get("/users/registrations", { params: { period } });
+  return response.data;
+};
+
+export const getRecentActivity = async (limit = 10) => {
+  const response = await api.get("/users/activity", { params: { limit } });
+  return response.data;
+};
