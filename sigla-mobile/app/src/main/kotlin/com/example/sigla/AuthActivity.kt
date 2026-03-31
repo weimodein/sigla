@@ -163,7 +163,7 @@ class AuthActivity : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val body = response.body()!!
                     val user = body.user!!
-                    session.saveUser(user.id, user.username, user.email, user.name ?: "", body.token!!)
+                    session.saveUser(user.id, user.username, user.email, user.username, body.token!!)
                     startActivity(Intent(this@AuthActivity, MainActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK))
                     finish()
@@ -304,7 +304,7 @@ class AuthActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val response = if (flowType == "registration") {
-                    ApiClient.get().setPassword(SetPasswordRequest(pendingEmail, pw))
+                    ApiClient.get().setPassword(SetPasswordRequest(pendingUsername, pendingEmail, pw))
                 } else {
                     ApiClient.get().resetPassword(ResetPasswordRequest(pendingEmail, pw))
                 }
@@ -313,7 +313,7 @@ class AuthActivity : AppCompatActivity() {
                     val body = response.body()!!
                     if (body.token != null && body.user != null) {
                         val user = body.user
-                        session.saveUser(user.id, user.username, user.email, user.name ?: "", body.token)
+                        session.saveUser(user.id, user.username, user.email, user.username, body.token)
                         startActivity(Intent(this@AuthActivity, MainActivity::class.java)
                             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK))
                         finish()

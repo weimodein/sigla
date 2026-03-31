@@ -39,12 +39,12 @@ const getLatestVerification = async (email, type) => {
 // ── POST /api/auth/register ───────────────────────────────────
 const register = async (req, res) => {
   try {
-    const { name, username, email } = req.body;
+    const { username, email } = req.body;
 
-    if (!name || !username || !email) {
+    if (!username || !email) {
       return res
         .status(400)
-        .json({ message: "Name, username, and email are required" });
+        .json({ message: "username and email are required" });
     }
 
     // Check if username or email already exists
@@ -214,10 +214,12 @@ const verifyEmail = async (req, res) => {
 // since email was already verified in the previous step
 const setPassword = async (req, res) => {
   try {
-    const { name, username, email, age, gender, password } = req.body;
+    const { username, email, age, gender, password } = req.body;
 
-    if (!name || !username || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!username || !email || !password) {
+      return res
+        .status(400)
+        .json({ message: "Username, email, and password are required" });
     }
 
     // Confirm email was verified
@@ -233,7 +235,6 @@ const setPassword = async (req, res) => {
     // Create user with status "active" — email verification already confirms ownership
     // No pending approval step is needed
     const user = await User.create({
-      name,
       username,
       email,
       age: age || null,
@@ -302,7 +303,6 @@ const login = async (req, res) => {
       token,
       user: {
         id: user.id,
-        name: user.name,
         username: user.username,
         email: user.email,
         role: user.role.name,

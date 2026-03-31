@@ -15,9 +15,7 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 const getAllModels = async (req, res) => {
   try {
     const models = await ModelVersion.findAll({
-      include: [
-        { model: User, as: "trainer", attributes: ["id", "username", "name"] },
-      ],
+      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
       order: [["created_at", "DESC"]],
     });
 
@@ -89,9 +87,7 @@ const getModelById = async (req, res) => {
   try {
     const model = await ModelVersion.findOne({
       where: { id: req.params.id },
-      include: [
-        { model: User, as: "trainer", attributes: ["id", "username", "name"] },
-      ],
+      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
     });
 
     if (!model) {

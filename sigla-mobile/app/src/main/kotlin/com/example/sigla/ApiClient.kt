@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 object ApiClient {
 
     // Change to your backend server address
-    private const val BASE_URL = "http://10.0.2.2:3000/api/"
+    private const val BASE_URL = "http://192.168.100.163:3000/api/"
 
     private fun buildClient(token: String? = null): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {

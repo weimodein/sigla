@@ -7,8 +7,8 @@ import retrofit2.http.*
 
 data class RegisterRequest(val username: String, val email: String)
 data class VerifyEmailRequest(val email: String, val code: String)
-data class SetPasswordRequest(val email: String, val password: String)
-data class LoginRequest(val email: String, val password: String)
+data class SetPasswordRequest(val username: String, val email: String, val password: String)
+data class LoginRequest(val identifier: String, val password: String)
 data class ForgotPasswordRequest(val email: String)
 data class VerifyResetRequest(val email: String, val code: String)
 data class ResetPasswordRequest(val email: String, val password: String)

@@ -144,9 +144,9 @@ const getAllWords = async (req, res) => {
         {
           model: User,
           as: "submitter",
-          attributes: ["id", "username", "name"],
+          attributes: ["id", "username"],
         },
-        { model: User, as: "reviewer", attributes: ["id", "username", "name"] },
+        { model: User, as: "reviewer", attributes: ["id", "username"] },
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -203,9 +203,9 @@ const getWordById = async (req, res) => {
         {
           model: User,
           as: "submitter",
-          attributes: ["id", "username", "name"],
+          attributes: ["id", "username"],
         },
-        { model: User, as: "reviewer", attributes: ["id", "username", "name"] },
+        { model: User, as: "reviewer", attributes: ["id", "username"] },
         {
           model: GestureSample,
           as: "samples",
@@ -905,7 +905,14 @@ const rejectWord = async (req, res) => {
 // ── PUT /api/words/:id ────────────────────────────────────────
 const updateWord = async (req, res) => {
   try {
-    const { label, description, hands_count, sign_type, category, filipino_translation } = req.body;
+    const {
+      label,
+      description,
+      hands_count,
+      sign_type,
+      category,
+      filipino_translation,
+    } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
     if (!word) {
@@ -922,7 +929,10 @@ const updateWord = async (req, res) => {
       hands_count: hands_count || word.hands_count,
       sign_type: sign_type || word.sign_type,
       category: category || word.category,
-      filipino_translation: filipino_translation !== undefined ? filipino_translation : word.filipino_translation,
+      filipino_translation:
+        filipino_translation !== undefined
+          ? filipino_translation
+          : word.filipino_translation,
     });
 
     // Sync label and description to word bank if word is approved

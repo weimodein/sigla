@@ -151,11 +151,14 @@ class SuggestWordActivity : AppCompatActivity() {
         }
     }
 
+    // ... inside navigateToCollection()
     private fun navigateToCollection(wordId: Int, wordLabel: String) {
+        val gestureType = if (toggleGesture.checkedButtonId == R.id.btnMotion) "motion" else "static"
         val intent = Intent(this, CollectionActivity::class.java).apply {
             putExtra("word_id", wordId)
             putExtra("word_label", wordLabel)
             putExtra("mode", "suggest")
+            putExtra("gesture_type", gestureType)   // <-- added
         }
         startActivity(intent)
         finish()

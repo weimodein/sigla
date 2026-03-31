@@ -21,7 +21,6 @@ const getAllUsers = async (req, res) => {
     if (search) {
       where[Op.or] = [
         { username: { [Op.iLike]: `%${search}%` } },
-        { name: { [Op.iLike]: `%${search}%` } },
         { email: { [Op.iLike]: `%${search}%` } },
       ];
     }
@@ -122,11 +121,11 @@ const getUserById = async (req, res) => {
 // Account is immediately active, no verification code sent
 const createUser = async (req, res) => {
   try {
-    const { name, username, email, password } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!name || !username || !email || !password) {
+    if (!username || !email || !password) {
       return res.status(400).json({
-        message: "Name, username, email, and password are required",
+        message: "Username, email, and password are required",
       });
     }
 
@@ -148,7 +147,6 @@ const createUser = async (req, res) => {
     // Admin-created accounts are immediately active —
     // email verification is bypassed since the admin is entering the credentials
     const user = await User.create({
-      name,
       username,
       email,
       password: hashedPassword,
@@ -172,7 +170,6 @@ const createUser = async (req, res) => {
       message: "User account created successfully",
       user: {
         id: user.id,
-        name: user.name,
         username: user.username,
         email: user.email,
         status: user.status,
@@ -423,7 +420,7 @@ const deleteUser = async (req, res) => {
 // ── PUT /api/users/:id ────────────────────────────────────────
 const updateUser = async (req, res) => {
   try {
-    const { name, username, email, age, gender } = req.body;
+    const { username, email, age, gender } = req.body;
 
     const user = await User.findOne({
       where: { id: req.params.id, role_id: 3 },
@@ -447,7 +444,6 @@ const updateUser = async (req, res) => {
     }
 
     await user.update({
-      name: name || user.name,
       username: username || user.username,
       email: email || user.email,
       age: age ?? user.age,
@@ -572,7 +568,7 @@ const getRecentActivity = async (req, res) => {
         {
           model: User,
           as: "user",
-          attributes: ["id", "username", "name"],
+          attributes: ["id", "username"], // removed "name"
           required: false,
         },
       ],
