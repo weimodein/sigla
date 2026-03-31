@@ -111,12 +111,34 @@
         app:layout_constraintBottom_toBottomOf="parent">
 
         <TextView
+            android:id="@+id/tvDoneTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="✓ Collection Complete!"
             android:textColor="#00E676"
             android:textSize="24sp"
             android:textStyle="bold" />
+
+        <!-- Upload progress (suggest mode) -->
+        <ProgressBar
+            android:id="@+id/progressUpload"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:max="100"
+            android:progressTint="#667EEA"
+            android:layout_marginTop="20dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvUploadStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="#AAAAAA"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvDonePath"
@@ -127,6 +149,15 @@
             android:textColor="#CCCCCC"
             android:textSize="13sp"
             android:gravity="center" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDoneClose"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:text="Done"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            app:backgroundTint="#667EEA" />
     </LinearLayout>
 
     <!-- Bottom controls -->

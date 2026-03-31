@@ -72,11 +72,11 @@ data class SubmitWordResponse(
 )
 
 data class UploadSamplesRequest(
-    val file_url: String,
+    val file_url: String? = null,
     val landmark_url: String? = null,
     val sample_count: Int,
-    val landmarks: Any? = null,
-    val sequence: Any? = null
+    val landmarks: List<List<Float>>? = null,
+    val sequence: List<List<List<Float>>>? = null
 )
 
 data class ModelInfo(

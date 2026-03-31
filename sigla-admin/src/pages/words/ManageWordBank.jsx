@@ -795,20 +795,37 @@ const ManageWordBank = () => {
                   <div className="p-3 grid grid-cols-4 sm:grid-cols-6 gap-2">
                     {group.samples.map((sample) => (
                       <div key={sample.id} className="relative group">
-                        <img
-                          src={sample.file_url}
-                          alt={`sample-${sample.id}`}
-                          className={`w-full aspect-square object-cover rounded-lg border-2 ${
-                            sample.status === "approved"
-                              ? "border-green-400"
-                              : sample.status === "rejected"
-                                ? "border-red-400"
-                                : "border-gray-200"
-                          }`}
-                          onError={(e) => {
-                            e.target.src = "https://via.placeholder.com/80?text=No+Image";
-                          }}
-                        />
+                        {sample.file_url && sample.file_url.startsWith("landmark_direct_") ? (
+                          <div
+                            className={`w-full aspect-square rounded-lg border-2 flex flex-col items-center justify-center bg-indigo-50 ${
+                              sample.status === "approved"
+                                ? "border-green-400"
+                                : sample.status === "rejected"
+                                  ? "border-red-400"
+                                  : "border-gray-200"
+                            }`}
+                          >
+                            <span className="text-2xl">🖐</span>
+                            <span className="text-xs text-indigo-600 font-medium mt-1 text-center leading-tight px-1">
+                              {sample.sequence ? "Motion" : "Static"}
+                            </span>
+                          </div>
+                        ) : (
+                          <img
+                            src={sample.file_url}
+                            alt={`sample-${sample.id}`}
+                            className={`w-full aspect-square object-cover rounded-lg border-2 ${
+                              sample.status === "approved"
+                                ? "border-green-400"
+                                : sample.status === "rejected"
+                                  ? "border-red-400"
+                                  : "border-gray-200"
+                            }`}
+                            onError={(e) => {
+                              e.target.src = "https://via.placeholder.com/80?text=No+Image";
+                            }}
+                          />
+                        )}
                         <div
                           className={`absolute top-1 right-1 w-3 h-3 rounded-full ${
                             sample.status === "approved"

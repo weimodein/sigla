@@ -1,5 +1,7 @@
 package com.example.sigla
 
+import android.app.Dialog
+import android.net.Uri
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.text.Editable
@@ -7,13 +9,15 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.*
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.launch
@@ -30,23 +34,25 @@ class WordBankActivity : AppCompatActivity() {
     private lateinit var adapter: WordAdapter
 
     private var allWords = listOf<WordBankWord>()
-    private var filteredWords = listOf<WordBankWord>()
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
+
+    // Active media dialog (kept to stop video on dismiss)
+    private var mediaDialog: Dialog? = null
 
     private val categories = listOf(
         "All Categories",
         "Introducing Oneself",
         "Ordering Food",
         "Buying Items",
-        "Asking/Giving Directions",
-        "Telling Time",
-        "Common/Everyday Phrases",
-        "Emergency",
+        "Asking for Prices",
+        "Giving Numbers",
+        "Requesting Assistance",
+        "Asking for Directions",
+        "Confirming Information",
+        "Communicating Basic Needs",
+        "Alphabets",
         "Numbers",
-        "Alphabet",
-        "Pronouns",
-        "Questions",
         "Additional Words"
     )
 
@@ -78,8 +84,8 @@ class WordBankActivity : AppCompatActivity() {
 
         // RecyclerView
         adapter = WordAdapter(
-            onAudio = { word -> speakWord(word.label) },
-            onVideo = { word -> showVideoDialog(word) }
+            onThumbnailClick = { word -> showMediaDialog(word) },
+            onAudio = { word -> speakWord(word.label) }
         )
         rvWords.layoutManager = LinearLayoutManager(this)
         rvWords.adapter = adapter
@@ -122,7 +128,7 @@ class WordBankActivity : AppCompatActivity() {
                     tvEmpty.visibility = View.VISIBLE
                 }
             } catch (e: Exception) {
-                tvEmpty.text = "Connection error"
+                tvEmpty.text = "Connection error: ${e.message}"
                 tvEmpty.visibility = View.VISIBLE
             } finally {
                 progressLoading.visibility = View.GONE
@@ -134,19 +140,113 @@ class WordBankActivity : AppCompatActivity() {
         val selectedCategory = spinnerCategory.selectedItem?.toString() ?: "All Categories"
         val searchQuery = etSearch.text.toString().trim().lowercase()
 
-        filteredWords = allWords.filter { word ->
+        val filtered = allWords.filter { word ->
             val matchesCategory = selectedCategory == "All Categories" ||
                     word.category.equals(selectedCategory, ignoreCase = true)
             val matchesSearch = searchQuery.isEmpty() ||
                     word.label.lowercase().contains(searchQuery) ||
-                    (word.description?.lowercase()?.contains(searchQuery) == true)
+                    word.filipino_translation?.lowercase()?.contains(searchQuery) == true ||
+                    word.description?.lowercase()?.contains(searchQuery) == true
             matchesCategory && matchesSearch
         }
 
-        adapter.submitList(filteredWords)
-        rvWords.visibility = if (filteredWords.isNotEmpty()) View.VISIBLE else View.GONE
-        tvEmpty.visibility = if (filteredWords.isEmpty() && progressLoading.visibility != View.VISIBLE) View.VISIBLE else View.GONE
+        adapter.submitList(filtered)
+        rvWords.visibility = if (filtered.isNotEmpty()) View.VISIBLE else View.GONE
+        tvEmpty.visibility = if (filtered.isEmpty() && progressLoading.visibility != View.VISIBLE) View.VISIBLE else View.GONE
         tvEmpty.text = getString(R.string.no_words_found)
+    }
+
+    // ── Media dialog ──────────────────────────────────────────────
+
+    private fun showMediaDialog(word: WordBankWord) {
+        mediaDialog?.dismiss()
+
+        val dialog = Dialog(this, android.R.style.Theme_Material_Light_NoActionBar)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val view = layoutInflater.inflate(R.layout.dialog_word_media, null)
+        dialog.setContentView(view)
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+
+        // Title
+        view.findViewById<TextView>(R.id.tvMediaTitle).text = word.label
+
+        // Filipino translation
+        val tvFilipino = view.findViewById<TextView>(R.id.tvMediaFilipino)
+        if (!word.filipino_translation.isNullOrBlank()) {
+            tvFilipino.text = word.filipino_translation
+            tvFilipino.visibility = View.VISIBLE
+        }
+
+        // Description
+        val tvDesc = view.findViewById<TextView>(R.id.tvMediaDescription)
+        if (!word.description.isNullOrBlank()) {
+            tvDesc.text = word.description
+            tvDesc.visibility = View.VISIBLE
+        }
+
+        // Tags
+        view.findViewById<TextView>(R.id.tvMediaGesture).text = word.gesture_type
+        view.findViewById<TextView>(R.id.tvMediaHands).text =
+            "${word.hands_count} hand${if (word.hands_count > 1) "s" else ""}"
+        view.findViewById<TextView>(R.id.tvMediaCategory).text = word.category
+
+        // Close button
+        view.findViewById<ImageButton>(R.id.btnCloseMedia).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        // Audio button
+        view.findViewById<MaterialButton>(R.id.btnMediaAudio).setOnClickListener {
+            speakWord(word.label)
+        }
+
+        // Video or image
+        val frameVideo = view.findViewById<FrameLayout>(R.id.frameVideo)
+        val ivImage = view.findViewById<ImageView>(R.id.ivMediaImage)
+        val videoView = view.findViewById<VideoView>(R.id.videoView)
+        val progressVideo = view.findViewById<ProgressBar>(R.id.progressVideo)
+
+        when {
+            !word.video_url.isNullOrBlank() -> {
+                frameVideo.visibility = View.VISIBLE
+                progressVideo.visibility = View.VISIBLE
+
+                val uri = Uri.parse(word.video_url)
+                videoView.setVideoURI(uri)
+                videoView.setOnPreparedListener { mp ->
+                    progressVideo.visibility = View.GONE
+                    mp.isLooping = true
+                    videoView.start()
+                }
+                videoView.setOnErrorListener { _, _, _ ->
+                    progressVideo.visibility = View.GONE
+                    // Fall back to showing the URL as image attempt via Glide
+                    frameVideo.visibility = View.GONE
+                    ivImage.visibility = View.VISIBLE
+                    Glide.with(this)
+                        .load(word.video_url)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .placeholder(android.R.drawable.ic_menu_gallery)
+                        .into(ivImage)
+                    true
+                }
+            }
+            else -> {
+                // No media — show a subtle placeholder in the audio-only dialog
+                frameVideo.visibility = View.GONE
+                ivImage.visibility = View.GONE
+            }
+        }
+
+        dialog.setOnDismissListener {
+            videoView.stopPlayback()
+        }
+
+        dialog.show()
+        mediaDialog = dialog
     }
 
     private fun speakWord(word: String) {
@@ -155,17 +255,9 @@ class WordBankActivity : AppCompatActivity() {
         }
     }
 
-    private fun showVideoDialog(word: WordBankWord) {
-        if (word.video_url.isNullOrEmpty()) {
-            Toast.makeText(this, "No demo video available", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val dialog = AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog)
-            .setTitle(word.label)
-            .setMessage("Video demo: ${word.video_url}")
-            .setPositiveButton("Close", null)
-            .create()
-        dialog.show()
+    override fun onPause() {
+        super.onPause()
+        mediaDialog?.dismiss()
     }
 
     override fun onDestroy() {
@@ -174,11 +266,11 @@ class WordBankActivity : AppCompatActivity() {
     }
 }
 
-// ── Word Adapter ────────────────────────────────────────────────────
+// ── Word Adapter ─────────────────────────────────────────────────────────────
 
 class WordAdapter(
-    private val onAudio: (WordBankWord) -> Unit,
-    private val onVideo: (WordBankWord) -> Unit
+    private val onThumbnailClick: (WordBankWord) -> Unit,
+    private val onAudio: (WordBankWord) -> Unit
 ) : RecyclerView.Adapter<WordAdapter.VH>() {
 
     private var words = listOf<WordBankWord>()
@@ -189,12 +281,16 @@ class WordAdapter(
     }
 
     class VH(view: View) : RecyclerView.ViewHolder(view) {
+        val layoutThumbnail: FrameLayout = view.findViewById(R.id.layoutThumbnail)
+        val ivThumbnail: ImageView = view.findViewById(R.id.ivThumbnail)
+        val layoutPlayOverlay: FrameLayout = view.findViewById(R.id.layoutPlayOverlay)
+        val tvNoMedia: TextView = view.findViewById(R.id.tvNoMedia)
         val tvLabel: TextView = view.findViewById(R.id.tvWordLabel)
+        val tvFilipino: TextView = view.findViewById(R.id.tvWordFilipino)
         val tvCategory: TextView = view.findViewById(R.id.tvWordCategory)
         val tvGesture: TextView = view.findViewById(R.id.tvWordGesture)
         val tvHands: TextView = view.findViewById(R.id.tvWordHands)
         val btnAudio: MaterialButton = view.findViewById(R.id.btnAudio)
-        val btnVideo: MaterialButton = view.findViewById(R.id.btnVideo)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -205,13 +301,40 @@ class WordAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val word = words[position]
+
         holder.tvLabel.text = word.label
         holder.tvCategory.text = word.category
         holder.tvGesture.text = word.gesture_type
-        holder.tvHands.text = "${word.hands_count} hand${if (word.hands_count > 1) "s" else ""}"
+        holder.tvHands.text = "${word.hands_count}H"
+
+        // Filipino translation
+        if (!word.filipino_translation.isNullOrBlank()) {
+            holder.tvFilipino.text = word.filipino_translation
+            holder.tvFilipino.visibility = View.VISIBLE
+        } else {
+            holder.tvFilipino.visibility = View.GONE
+        }
+
+        // Thumbnail: load video frame via Glide if video_url is available
+        if (!word.video_url.isNullOrBlank()) {
+            holder.tvNoMedia.visibility = View.GONE
+            holder.layoutPlayOverlay.visibility = View.VISIBLE
+
+            Glide.with(holder.itemView.context)
+                .load(Uri.parse(word.video_url))
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .centerCrop()
+                .placeholder(android.R.color.darker_gray)
+                .error(android.R.color.darker_gray)
+                .into(holder.ivThumbnail)
+        } else {
+            holder.ivThumbnail.setImageDrawable(null)
+            holder.layoutPlayOverlay.visibility = View.GONE
+            holder.tvNoMedia.visibility = View.VISIBLE
+        }
+
+        holder.layoutThumbnail.setOnClickListener { onThumbnailClick(word) }
         holder.btnAudio.setOnClickListener { onAudio(word) }
-        holder.btnVideo.setOnClickListener { onVideo(word) }
-        holder.btnVideo.visibility = if (word.video_url.isNullOrEmpty()) View.GONE else View.VISIBLE
     }
 
     override fun getItemCount() = words.size

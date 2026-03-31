@@ -461,13 +461,24 @@ const uploadSamples = async (req, res) => {
       });
     }
 
-    const { file_url, landmark_url, sample_count } = req.body;
+    const { file_url, landmark_url, sample_count, landmarks, sequence } = req.body;
 
-    if (!file_url) {
-      return res.status(400).json({ message: "File URL is required" });
+    // Either a file_url or direct landmark data must be provided
+    const hasLandmarkData = (landmarks && Array.isArray(landmarks) && landmarks.length > 0) ||
+                            (sequence && Array.isArray(sequence) && sequence.length > 0);
+
+    if (!file_url && !hasLandmarkData) {
+      return res.status(400).json({ message: "Either file_url or landmark data (landmarks/sequence) is required" });
     }
 
-    const newCount = parseInt(sample_count) || 0;
+    // Derive sample count: if landmark data provided directly, count from the array
+    const newCount = parseInt(sample_count) ||
+      (landmarks ? landmarks.length : sequence ? sequence.length : 0);
+
+    if (newCount <= 0) {
+      return res.status(400).json({ message: "sample_count must be greater than 0" });
+    }
+
     const cap = getSampleCap(word.gesture_type || "static");
     const userTotal = await getUserSampleCount(req.user.id, word.id);
 
@@ -502,21 +513,48 @@ const uploadSamples = async (req, res) => {
       });
     }
 
-    const sample = await GestureSample.create({
-      word_id: word.id,
-      submitted_by: req.user.id,
-      file_url,
-      landmark_url: landmark_url || null,
-      sample_count: newCount,
-      status: "pending",
-      is_validated: true,
-    });
+    // When landmark data is sent directly (no file upload), create one record per sample
+    // so the admin gallery shows individual entries rather than one batched record.
+    if (hasLandmarkData) {
+      const records = landmarks
+        ? landmarks.map((lm) => ({
+            word_id: word.id,
+            submitted_by: req.user.id,
+            file_url: `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            landmarks: lm,
+            sequence: null,
+            sample_count: 1,
+            status: "pending",
+            is_validated: true,
+          }))
+        : sequence.map((seq) => ({
+            word_id: word.id,
+            submitted_by: req.user.id,
+            file_url: `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            landmarks: null,
+            sequence: seq,
+            sample_count: 1,
+            status: "pending",
+            is_validated: true,
+          }));
+
+      await GestureSample.bulkCreate(records);
+    } else {
+      await GestureSample.create({
+        word_id: word.id,
+        submitted_by: req.user.id,
+        file_url,
+        landmark_url: landmark_url || null,
+        sample_count: newCount,
+        status: "pending",
+        is_validated: true,
+      });
+    }
 
     await word.update({ total_samples: (word.total_samples || 0) + newCount });
 
     return res.status(201).json({
       message: "Samples uploaded successfully",
-      sample,
       user_total: userTotal + newCount,
       remaining: cap - (userTotal + newCount),
     });
@@ -811,6 +849,7 @@ const approveWord = async (req, res) => {
 
     await word.update({
       status: "approved",
+      is_active: true,
       reviewed_by: req.user.id,
       reviewed_at: new Date(),
     });
@@ -824,7 +863,10 @@ const approveWord = async (req, res) => {
         sign_type: word.sign_type,
         category: word.category,
         hands_count: word.hands_count,
+        filipino_translation: word.filipino_translation || null,
       });
+    } else {
+      await existing.update({ is_active: true });
     }
 
     if (word.submitted_by) {

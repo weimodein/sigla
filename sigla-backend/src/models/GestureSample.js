@@ -19,10 +19,10 @@ const GestureSample = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
-    // Supabase Storage URL of the gesture image
+    // Supabase Storage URL of the gesture image (optional when landmark data is sent directly)
     file_url: {
       type: DataTypes.TEXT,
-      allowNull: false,
+      allowNull: true,
     },
     // Supabase Storage URL of the extracted landmark JSON file
     landmark_url: {
