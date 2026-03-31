@@ -8,6 +8,7 @@ import {
   revertModel,
   deleteModel,
 } from "../../api/modelApi.js";
+import { getWordStats } from "../../api/wordApi.js";
 import { Cpu, CheckCircle, Clock, Archive, X } from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────
@@ -57,6 +58,7 @@ const Modal = ({ title, onClose, children }) => (
 // ── Main Component ────────────────────────────────────────────
 const ManageModel = () => {
   const [stats, setStats] = useState(null);
+  const [wordStats, setWordStats] = useState(null);
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -78,12 +80,14 @@ const ManageModel = () => {
     setLoading(true);
     setError("");
     try {
-      const [statsData, modelsData] = await Promise.all([
+      const [statsData, modelsData, wordStatsData] = await Promise.all([
         getModelStats(),
         getAllModels(),
+        getWordStats(),
       ]);
       setStats(statsData);
       setModels(modelsData.models);
+      setWordStats(wordStatsData);
     } catch (err) {
       setError("Failed to load model data");
     } finally {
@@ -530,6 +534,12 @@ const ManageModel = () => {
                 Current deployed model{" "}
                 <strong>{stats.current_model.version_number}</strong> will
                 become inactive.
+              </div>
+            )}
+            {wordStats?.ready_to_activate > 0 && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
+                🧠 <strong>{wordStats.ready_to_activate}</strong> word{wordStats.ready_to_activate !== 1 ? "s" : ""} with
+                enough approved samples will become visible in the mobile app after this deploy.
               </div>
             )}
             <div className="flex gap-2 pt-2">

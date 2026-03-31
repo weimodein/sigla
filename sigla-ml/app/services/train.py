@@ -118,11 +118,14 @@ def train(version_number: str, model_id: int) -> dict:
     print("\n--- Training Static Model (MLP) ---")
     X_static, y_static, static_label_map = prepare_static_dataset(dataset)
 
+    if len(static_label_map) < 2:
+        raise ValueError("At least 2 static gesture classes with valid feature data are required.")
+
     X_train_s, X_val_s, y_train_s, y_val_s = train_test_split(
         X_static, y_static, test_size=0.2, random_state=42, stratify=y_static
     )
 
-    static_model = build_static_model(total_classes)
+    static_model = build_static_model(len(static_label_map))
 
     static_callbacks = [
         keras.callbacks.EarlyStopping(

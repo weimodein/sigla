@@ -83,38 +83,26 @@ const sendSubmissionNotification = async (
   });
 };
 
-// ── Helper: auto-activate word and add to word bank ───────────
+// ── Helper: update sample count; mark word approved when threshold met ────
+// Words are NOT activated here — activation only happens on model deploy.
 const checkAndActivateWord = async (word, reviewerId = null) => {
   const threshold = getActivationThreshold(word.gesture_type || "static");
   const approvedCount = await getApprovedSampleCount(word.id);
 
-  if (approvedCount >= threshold && !word.is_active) {
-    await word.update({
-      is_active: true,
+  const reachedThreshold = approvedCount >= threshold;
+
+  await word.update({
+    approved_sample_count: approvedCount,
+    // Mark as approved (ready for training) once threshold is reached,
+    // but do NOT set is_active — that only happens on model deploy.
+    ...(reachedThreshold && word.status !== "approved" && {
       status: "approved",
-      approved_sample_count: approvedCount,
       reviewed_by: reviewerId,
       reviewed_at: new Date(),
-    });
+    }),
+  });
 
-    // Add to word bank if not already there
-    const existing = await WordBank.findOne({ where: { word_id: word.id } });
-    if (!existing) {
-      await WordBank.create({
-        word_id: word.id,
-        label: word.label,
-        description: word.description,
-        sign_type: word.sign_type,
-        category: word.category,
-        hands_count: word.hands_count,
-      });
-    }
-
-    return true;
-  }
-
-  await word.update({ approved_sample_count: approvedCount });
-  return false;
+  return reachedThreshold;
 };
 
 // ── GET /api/words ────────────────────────────────────────────
@@ -181,8 +169,13 @@ const getWordStats = async (req, res) => {
         Word.count({ where: { status: "rejected" } }),
         Word.count({ where: { is_active: true } }),
         Word.count({ where: { is_locked: true } }),
-        Word.sum("total_samples"), // sum of all total_samples
+        Word.sum("total_samples"),
       ]);
+
+    // Words approved but not yet active — waiting for next model deploy
+    const readyToActivate = await Word.count({
+      where: { status: "approved", is_active: false },
+    });
 
     return res.status(200).json({
       total,
@@ -191,6 +184,7 @@ const getWordStats = async (req, res) => {
       rejected,
       active,
       locked,
+      ready_to_activate: readyToActivate,
       total_samples: totalSamples || 0,
     });
   } catch (err) {
@@ -871,31 +865,16 @@ const approveWord = async (req, res) => {
 
     await word.update({
       status: "approved",
-      is_active: true,
+      // is_active stays false — word becomes visible in mobile only after model deploy
       reviewed_by: req.user.id,
       reviewed_at: new Date(),
     });
-
-    const existing = await WordBank.findOne({ where: { word_id: word.id } });
-    if (!existing) {
-      await WordBank.create({
-        word_id: word.id,
-        label: word.label,
-        description: word.description,
-        sign_type: word.sign_type,
-        category: word.category,
-        hands_count: word.hands_count,
-        filipino_translation: word.filipino_translation || null,
-      });
-    } else {
-      await existing.update({ is_active: true });
-    }
 
     if (word.submitted_by) {
       await Notification.create({
         user_id: word.submitted_by,
         title: "Word Approved",
-        message: `Your submitted word "${word.label}" has been approved and added to the word bank.`,
+        message: `Your submitted word "${word.label}" has been approved. It will appear in the app after the next model update.`,
         type: "word_approved",
         is_read: false,
         delivered: false,

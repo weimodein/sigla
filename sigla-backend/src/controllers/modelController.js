@@ -2,6 +2,8 @@ const { Op } = require("sequelize");
 const axios = require("axios");
 const {
   ModelVersion,
+  Word,
+  WordBank,
   User,
   ActivityLog,
   Notification,
@@ -288,23 +290,61 @@ const deployModel = async (req, res) => {
       deployed_at: new Date(),
     });
 
+    // ── Activate all approved words that have reached their sample threshold ──
+    // These words have enough data in the newly trained model and can now be
+    // shown in the mobile word bank.
+    const approvedWords = await Word.findAll({
+      where: { status: "approved", is_active: false },
+    });
+
+    const ACTIVATION_THRESHOLD = { static: 100, motion: 150 };
+    const wordsToActivate = approvedWords.filter(
+      (w) => w.approved_sample_count >= (ACTIVATION_THRESHOLD[w.gesture_type] || ACTIVATION_THRESHOLD.static)
+    );
+
+    for (const word of wordsToActivate) {
+      await word.update({ is_active: true });
+
+      // Upsert into word bank
+      const existing = await WordBank.findOne({ where: { word_id: word.id } });
+      if (!existing) {
+        await WordBank.create({
+          word_id: word.id,
+          label: word.label,
+          description: word.description,
+          sign_type: word.sign_type,
+          category: word.category,
+          hands_count: word.hands_count,
+          gesture_type: word.gesture_type,
+          video_url: word.video_url || null,
+          image_url: word.thumbnail_url || null,
+          filipino_translation: word.filipino_translation || null,
+        });
+      } else {
+        await existing.update({ is_active: true });
+      }
+    }
+
     // Notify all active users about the new model
-    const { User: UserModel } = require("../models/index.js");
-    const activeUsers = await UserModel.findAll({
+    const activeUsers = await User.findAll({
       where: { status: "active", role_id: 3 },
       attributes: ["id"],
     });
 
+    const newWordLabels = wordsToActivate.map((w) => w.label);
+    const wordNote = newWordLabels.length > 0
+      ? ` ${newWordLabels.length} new word(s) added: ${newWordLabels.slice(0, 5).join(", ")}${newWordLabels.length > 5 ? "…" : ""}.`
+      : "";
+
     const notifications = activeUsers.map((u) => ({
       user_id: u.id,
       title: "New Model Available",
-      message: `A new sign language model (${model.version_number}) has been deployed. Update your app to get the latest translation improvements.`,
+      message: `A new sign language model (${model.version_number}) has been deployed.${wordNote} Update your app to get the latest improvements.`,
       type: "model_updated",
     }));
 
     if (notifications.length > 0) {
-      const { Notification: NotifModel } = require("../models/index.js");
-      await NotifModel.bulkCreate(notifications);
+      await Notification.bulkCreate(notifications);
     }
 
     // Log activity

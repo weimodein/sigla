@@ -574,12 +574,23 @@ const ManageWordBank = () => {
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard title="Total Words" value={stats?.total} icon={BookOpen} color="bg-blue-900" />
         <StatCard title="Pending" value={stats?.pending} icon={Clock} color="bg-yellow-500" />
         <StatCard title="Approved" value={stats?.approved} icon={CheckCircle} color="bg-green-500" />
         <StatCard title="Locked" value={stats?.locked} icon={Lock} color="bg-gray-600" />
       </div>
+
+      {/* Ready-to-activate banner */}
+      {stats?.ready_to_activate > 0 && (
+        <div className="mb-6 flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 text-sm text-indigo-800">
+          <span className="text-lg">🧠</span>
+          <span>
+            <strong>{stats.ready_to_activate}</strong> word{stats.ready_to_activate !== 1 ? "s have" : " has"} enough
+            approved samples and will become visible in the mobile app after the next model is trained and deployed.
+          </span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 mb-4 border-b">

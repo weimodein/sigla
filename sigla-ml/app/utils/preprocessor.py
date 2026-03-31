@@ -50,17 +50,23 @@ def prepare_static_dataset(dataset: dict):
     """
     Prepare dataset for static gesture model (MLP).
     Each sample is a single frame of FEATURE_SIZE landmarks.
+    Only includes labels that have at least one valid static sample.
     Returns X (features), y (labels), label_map (index → label)
     """
-    X      = []
-    y      = []
-    labels = sorted(dataset.keys())
+    X = []
+    y = []
 
-    label_map = { i: label for i, label in enumerate(labels) }
-    label_idx = { label: i for i, label in enumerate(labels) }
+    # Only include labels that actually have valid static samples
+    static_labels = sorted([
+        label for label, samples in dataset.items()
+        if any(len(s.get("features", [])) == FEATURE_SIZE for s in samples)
+    ])
 
-    for label, samples in dataset.items():
-        for sample in samples:
+    label_map = { i: label for i, label in enumerate(static_labels) }
+    label_idx = { label: i for i, label in enumerate(static_labels) }
+
+    for label in static_labels:
+        for sample in dataset[label]:
             features = sample.get("features", [])
             if len(features) != FEATURE_SIZE:
                 continue
@@ -70,7 +76,7 @@ def prepare_static_dataset(dataset: dict):
     X = np.array(X, dtype=np.float32)
     y = np.array(y, dtype=np.int32)
 
-    print(f"Static dataset — X: {X.shape}, y: {y.shape}, classes: {len(labels)}")
+    print(f"Static dataset — X: {X.shape}, y: {y.shape}, classes: {len(static_labels)}")
     return X, y, label_map
 
 
