@@ -209,6 +209,7 @@ class WordBankActivity : AppCompatActivity() {
         val videoView = view.findViewById<VideoView>(R.id.videoView)
         val progressVideo = view.findViewById<ProgressBar>(R.id.progressVideo)
 
+        val resolvedDialogThumb = ApiClient.resolveUrl(word.thumbnail_url)
         when {
             !word.video_url.isNullOrBlank() -> {
                 frameVideo.visibility = View.VISIBLE
@@ -223,7 +224,6 @@ class WordBankActivity : AppCompatActivity() {
                 }
                 videoView.setOnErrorListener { _, _, _ ->
                     progressVideo.visibility = View.GONE
-                    // Fall back to showing the URL as image attempt via Glide
                     frameVideo.visibility = View.GONE
                     ivImage.visibility = View.VISIBLE
                     Glide.with(this)
@@ -234,8 +234,17 @@ class WordBankActivity : AppCompatActivity() {
                     true
                 }
             }
+            resolvedDialogThumb != null -> {
+                frameVideo.visibility = View.GONE
+                ivImage.visibility = View.VISIBLE
+                Glide.with(this)
+                    .load(resolvedDialogThumb)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .centerCrop()
+                    .placeholder(android.R.drawable.ic_menu_gallery)
+                    .into(ivImage)
+            }
             else -> {
-                // No media — show a subtle placeholder in the audio-only dialog
                 frameVideo.visibility = View.GONE
                 ivImage.visibility = View.GONE
             }
@@ -315,22 +324,36 @@ class WordAdapter(
             holder.tvFilipino.visibility = View.GONE
         }
 
-        // Thumbnail: load video frame via Glide if video_url is available
-        if (!word.video_url.isNullOrBlank()) {
-            holder.tvNoMedia.visibility = View.GONE
-            holder.layoutPlayOverlay.visibility = View.VISIBLE
-
-            Glide.with(holder.itemView.context)
-                .load(Uri.parse(word.video_url))
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .centerCrop()
-                .placeholder(android.R.color.darker_gray)
-                .error(android.R.color.darker_gray)
-                .into(holder.ivThumbnail)
-        } else {
-            holder.ivThumbnail.setImageDrawable(null)
-            holder.layoutPlayOverlay.visibility = View.GONE
-            holder.tvNoMedia.visibility = View.VISIBLE
+        // Priority: video_url (motion) → thumbnail_url (static, admin-chosen) → no-media
+        val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
+        when {
+            !word.video_url.isNullOrBlank() -> {
+                holder.tvNoMedia.visibility = View.GONE
+                holder.layoutPlayOverlay.visibility = View.VISIBLE
+                Glide.with(holder.itemView.context)
+                    .load(Uri.parse(word.video_url))
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .centerCrop()
+                    .placeholder(android.R.color.darker_gray)
+                    .error(android.R.color.darker_gray)
+                    .into(holder.ivThumbnail)
+            }
+            resolvedThumb != null -> {
+                holder.tvNoMedia.visibility = View.GONE
+                holder.layoutPlayOverlay.visibility = View.GONE
+                Glide.with(holder.itemView.context)
+                    .load(resolvedThumb)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .centerCrop()
+                    .placeholder(android.R.color.darker_gray)
+                    .error(android.R.color.darker_gray)
+                    .into(holder.ivThumbnail)
+            }
+            else -> {
+                holder.ivThumbnail.setImageDrawable(null)
+                holder.layoutPlayOverlay.visibility = View.GONE
+                holder.tvNoMedia.visibility = View.VISIBLE
+            }
         }
 
         holder.layoutThumbnail.setOnClickListener { onThumbnailClick(word) }

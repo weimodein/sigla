@@ -88,7 +88,12 @@ const Word = sequelize.define(
       type: DataTypes.STRING(200),
       allowNull: true,
     },
-    // URL of the auto-generated demonstration video stored in Supabase
+    // Admin-selected thumbnail image shown in the mobile word bank (static words)
+    thumbnail_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    // URL of the demonstration video shown in the mobile word bank (motion words)
     video_url: {
       type: DataTypes.TEXT,
       allowNull: true,

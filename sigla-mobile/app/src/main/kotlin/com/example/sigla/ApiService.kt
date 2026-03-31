@@ -38,6 +38,7 @@ data class WordBankWord(
     val category: String = "additional words",
     val hands_count: Int = 1,
     val gesture_type: String = "static",
+    val thumbnail_url: String? = null,
     val video_url: String? = null,
     val filipino_translation: String? = null
 )

@@ -10,6 +10,13 @@ object ApiClient {
 
     // Change to your backend server address
     private const val BASE_URL = "http://192.168.100.163:3000/api/"
+    val SERVER_URL = BASE_URL.removeSuffix("api/")
+
+    /** Resolve a server-relative path (e.g. /uploads/…) to a full URL. */
+    fun resolveUrl(path: String?): String? {
+        if (path.isNullOrBlank()) return null
+        return if (path.startsWith("http")) path else SERVER_URL.trimEnd('/') + path
+    }
 
     private fun buildClient(token: String? = null): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {

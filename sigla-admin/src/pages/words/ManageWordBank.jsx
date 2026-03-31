@@ -19,6 +19,8 @@ import {
   unlockWord,
   adminAddWord,
   adminUploadSamples,
+  setWordThumbnail,
+  setWordVideo,
 } from "../../api/wordApi.js";
 import {
   BookOpen,
@@ -119,6 +121,8 @@ const ManageWordBank = () => {
   const [samples, setSamples] = useState([]);
   const [samplesLoading, setSamplesLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [videoInput, setVideoInput] = useState("");
+  const [videoLoading, setVideoLoading] = useState(false);
 
   // ── Fetch ───────────────────────────────────────────────────
   const fetchStats = async () => {
@@ -459,6 +463,61 @@ const ManageWordBank = () => {
     }
   };
 
+  // ── Set word bank thumbnail (static words) ───────────────────
+  const handleSetThumbnail = async (word, imageUrl) => {
+    setActionLoading(true);
+    try {
+      await setWordThumbnail(word.id, imageUrl);
+      setGalleryModal((prev) => prev ? { ...prev, thumbnail_url: imageUrl } : prev);
+      fetchWords();
+      showSuccess("Word bank image updated");
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to set thumbnail");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ── Set word bank video (motion words) ───────────────────────
+  const handleSetVideo = async (videoUrl) => {
+    if (!videoUrl.trim()) { showError("Please enter a video URL or upload a file"); return; }
+    setVideoLoading(true);
+    try {
+      await setWordVideo(galleryModal.id, { video_url: videoUrl.trim() });
+      setGalleryModal((prev) => prev ? { ...prev, video_url: videoUrl.trim() } : prev);
+      setVideoInput("");
+      fetchWords();
+      showSuccess("Gesture video updated");
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to set video");
+    } finally {
+      setVideoLoading(false);
+    }
+  };
+
+  const handleVideoFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(",")[1];
+      const ext = file.name.split(".").pop().toLowerCase();
+      setVideoLoading(true);
+      try {
+        const res = await setWordVideo(galleryModal.id, { video_base64: base64, video_ext: ext });
+        setGalleryModal((prev) => prev ? { ...prev, video_url: res.video_url } : prev);
+        fetchWords();
+        showSuccess("Gesture video uploaded");
+      } catch (err) {
+        showError(err.response?.data?.message || "Failed to upload video");
+      } finally {
+        setVideoLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   // ── Group samples by user ────────────────────────────────────
   const groupSamplesByUser = (samples) => {
     const groups = {};
@@ -738,6 +797,67 @@ const ManageWordBank = () => {
               </p>
             </div>
 
+            {/* ── Word Bank Media Controls ──────────────────────── */}
+            {galleryModal.gesture_type === "motion" ? (
+              <div className="border border-indigo-200 rounded-lg p-4 bg-indigo-50 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-indigo-800">Gesture Video</span>
+                  {galleryModal.video_url && (
+                    <a
+                      href={galleryModal.video_url.startsWith("/")
+                        ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${galleryModal.video_url}`
+                        : galleryModal.video_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-indigo-600 underline"
+                    >
+                      View current video ↗
+                    </a>
+                  )}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="url"
+                    value={videoInput}
+                    onChange={(e) => setVideoInput(e.target.value)}
+                    placeholder="Paste video URL…"
+                    className="flex-1 border border-indigo-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                  <button
+                    onClick={() => handleSetVideo(videoInput)}
+                    disabled={videoLoading || !videoInput.trim()}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-2 rounded-lg disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {videoLoading ? "Saving…" : "Set URL"}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-indigo-600">or upload a video file:</span>
+                  <label className="cursor-pointer bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-700 text-xs px-3 py-1.5 rounded-lg">
+                    {videoLoading ? "Uploading…" : "Choose File"}
+                    <input type="file" accept="video/*" className="hidden" onChange={handleVideoFileUpload} disabled={videoLoading} />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              galleryModal.thumbnail_url && (
+                <div className="border border-green-200 rounded-lg p-3 bg-green-50 flex items-center gap-3">
+                  <img
+                    src={galleryModal.thumbnail_url.startsWith("/")
+                      ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${galleryModal.thumbnail_url}`
+                      : galleryModal.thumbnail_url}
+                    alt="current thumbnail"
+                    className="w-16 h-16 object-cover rounded-lg border border-green-300"
+                    onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/64?text=?"; }}
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">Current Word Bank Image</p>
+                    <p className="text-xs text-green-600">Hover a sample below and click "Use" to change it.</p>
+                  </div>
+                </div>
+              )
+            )}
+
             {samplesLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900" />
@@ -836,21 +956,34 @@ const ManageWordBank = () => {
                                 : "bg-yellow-400"
                           }`}
                         />
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 rounded-lg transition flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
-                          {sample.status !== "approved" && (
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-lg transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 p-1">
+                          <div className="flex gap-1">
+                            {sample.status !== "approved" && (
+                              <button
+                                onClick={() => handleApproveSample(galleryModal.id, sample.id)}
+                                className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded"
+                              >
+                                ✓
+                              </button>
+                            )}
+                            {sample.status !== "rejected" && (
+                              <button
+                                onClick={() => handleRejectSample(galleryModal.id, sample.id)}
+                                className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                          {galleryModal.gesture_type !== "motion" &&
+                            !sample.file_url?.startsWith("landmark_direct_") && (
                             <button
-                              onClick={() => handleApproveSample(galleryModal.id, sample.id)}
-                              className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded"
+                              onClick={() => handleSetThumbnail(galleryModal, sample.file_url)}
+                              disabled={actionLoading}
+                              title="Set as Word Bank image"
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-2 py-0.5 rounded disabled:opacity-50"
                             >
-                              ✓
-                            </button>
-                          )}
-                          {sample.status !== "rejected" && (
-                            <button
-                              onClick={() => handleRejectSample(galleryModal.id, sample.id)}
-                              className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded"
-                            >
-                              ✕
+                              Use
                             </button>
                           )}
                         </div>

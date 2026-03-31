@@ -1213,4 +1213,59 @@ module.exports = {
   lockWord,
   unlockWord,
   getUserSampleCountForWord,
+  setThumbnail,
+  setVideo,
 };
+
+// ── PATCH /api/words/:id/set-thumbnail ───────────────────────
+async function setThumbnail(req, res) {
+  try {
+    const word = await Word.findByPk(req.params.id);
+    if (!word) return res.status(404).json({ message: "Word not found" });
+
+    const { thumbnail_url } = req.body;
+    if (!thumbnail_url) return res.status(400).json({ message: "thumbnail_url is required" });
+
+    await word.update({ thumbnail_url });
+
+    const wb = await WordBank.findOne({ where: { word_id: word.id } });
+    if (wb) await wb.update({ image_url: thumbnail_url });
+
+    return res.status(200).json({ message: "Thumbnail updated", thumbnail_url });
+  } catch (err) {
+    console.error("Set thumbnail error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+// ── PATCH /api/words/:id/set-video ───────────────────────────
+async function setVideo(req, res) {
+  try {
+    const word = await Word.findByPk(req.params.id);
+    if (!word) return res.status(404).json({ message: "Word not found" });
+
+    let videoUrl = req.body.video_url || null;
+
+    if (!videoUrl && req.body.video_base64) {
+      const ext = (req.body.video_ext || "mp4").replace(/[^a-z0-9]/gi, "");
+      const videosDir = path.join(__dirname, "../../uploads/videos");
+      if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
+      const filename = `gesture_${word.id}_${Date.now()}.${ext}`;
+      const filepath = path.join(videosDir, filename);
+      fs.writeFileSync(filepath, Buffer.from(req.body.video_base64, "base64"));
+      videoUrl = `/uploads/videos/${filename}`;
+    }
+
+    if (!videoUrl) return res.status(400).json({ message: "Either video_url or video_base64 is required" });
+
+    await word.update({ video_url: videoUrl });
+
+    const wb = await WordBank.findOne({ where: { word_id: word.id } });
+    if (wb) await wb.update({ video_url: videoUrl });
+
+    return res.status(200).json({ message: "Video updated", video_url: videoUrl });
+  } catch (err) {
+    console.error("Set video error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}

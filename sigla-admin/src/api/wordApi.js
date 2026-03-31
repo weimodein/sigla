@@ -98,3 +98,9 @@ export const approveAllSamplesForWord = (wordId) =>
 
 export const rejectAllSamplesForWord = (wordId) =>
   api.patch(`/words/${wordId}/samples/reject-all`).then((r) => r.data);
+
+export const setWordThumbnail = (wordId, thumbnail_url) =>
+  api.patch(`/words/${wordId}/set-thumbnail`, { thumbnail_url }).then((r) => r.data);
+
+export const setWordVideo = (wordId, data) =>
+  api.patch(`/words/${wordId}/set-video`, data).then((r) => r.data);

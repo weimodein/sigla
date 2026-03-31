@@ -27,6 +27,8 @@ const {
   lockWord,
   unlockWord,
   getUserSampleCountForWord,
+  setThumbnail,
+  setVideo,
 } = require("../controllers/wordController.js");
 
 // ... other requires
@@ -43,8 +45,9 @@ router.get("/word-bank", async (req, res) => {
         "sign_type",
         "category",
         "hands_count",
-        "video_url",
         "gesture_type",
+        "thumbnail_url",
+        "video_url",
         "filipino_translation",
       ],
       order: [["label", "ASC"]],
@@ -134,6 +137,8 @@ router.get(
 );
 
 // ── Admin word management ─────────────────────────────────────
+router.patch("/:id/set-thumbnail", roleMiddleware("admin"), setThumbnail);
+router.patch("/:id/set-video", roleMiddleware("admin"), setVideo);
 router.patch("/:id/approve", roleMiddleware("admin"), approveWord);
 router.patch("/:id/reject", roleMiddleware("admin"), rejectWord);
 router.put("/:id", roleMiddleware("admin"), updateWord);
