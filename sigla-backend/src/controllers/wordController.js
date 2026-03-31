@@ -1,4 +1,6 @@
 const { Op } = require("sequelize");
+const fs = require("fs");
+const path = require("path");
 const {
   Word,
   GestureSample,
@@ -7,6 +9,9 @@ const {
   Notification,
   ActivityLog,
 } = require("../models/index.js");
+
+const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // ── Sample cap and activation thresholds per gesture type ─────
 // Static gestures: 100 samples per user, 100 needed to activate
@@ -461,7 +466,7 @@ const uploadSamples = async (req, res) => {
       });
     }
 
-    const { file_url, landmark_url, sample_count, landmarks, sequence } = req.body;
+    const { file_url, landmark_url, sample_count, landmarks, sequence, images } = req.body;
 
     // Either a file_url or direct landmark data must be provided
     const hasLandmarkData = (landmarks && Array.isArray(landmarks) && landmarks.length > 0) ||
@@ -470,6 +475,18 @@ const uploadSamples = async (req, res) => {
     if (!file_url && !hasLandmarkData) {
       return res.status(400).json({ message: "Either file_url or landmark data (landmarks/sequence) is required" });
     }
+
+    // Helper: save a base64 image to disk, return its public URL path
+    const saveImage = (base64, index) => {
+      try {
+        const filename = `sample_${word.id}_${Date.now()}_${index}.jpg`;
+        const filepath = path.join(UPLOADS_DIR, filename);
+        fs.writeFileSync(filepath, Buffer.from(base64, "base64"));
+        return `/uploads/samples/${filename}`;
+      } catch (e) {
+        return `landmark_direct_${Date.now()}_${index}`;
+      }
+    };
 
     // Derive sample count: if landmark data provided directly, count from the array
     const newCount = parseInt(sample_count) ||
@@ -516,21 +533,26 @@ const uploadSamples = async (req, res) => {
     // When landmark data is sent directly (no file upload), create one record per sample
     // so the admin gallery shows individual entries rather than one batched record.
     if (hasLandmarkData) {
+      const hasImages = Array.isArray(images) && images.length > 0;
       const records = landmarks
-        ? landmarks.map((lm) => ({
+        ? landmarks.map((lm, i) => ({
             word_id: word.id,
             submitted_by: req.user.id,
-            file_url: `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            file_url: hasImages && images[i]
+              ? saveImage(images[i], i)
+              : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             landmarks: lm,
             sequence: null,
             sample_count: 1,
             status: "pending",
             is_validated: true,
           }))
-        : sequence.map((seq) => ({
+        : sequence.map((seq, i) => ({
             word_id: word.id,
             submitted_by: req.user.id,
-            file_url: `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            file_url: hasImages && images[i]
+              ? saveImage(images[i], i)
+              : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             landmarks: null,
             sequence: seq,
             sample_count: 1,

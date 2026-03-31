@@ -6,6 +6,7 @@ const { connectDB } = require("./src/config/db.js");
 const express = require("express");
 const cors = require("cors");
 const cron = require("node-cron");
+const path = require("path");
 const {
   runAutoReactivationJob,
 } = require("./src/controllers/userController.js");
@@ -21,8 +22,9 @@ const mlRoutes = require("./src/routes/mlRoutes.js"); // ML service routes (inte
 // application setup
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // route setup
 app.use("/api/auth", authRoutes);

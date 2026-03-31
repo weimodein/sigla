@@ -806,13 +806,13 @@ const ManageWordBank = () => {
                             }`}
                           >
                             <span className="text-2xl">🖐</span>
-                            <span className="text-xs text-indigo-600 font-medium mt-1 text-center leading-tight px-1">
-                              {sample.sequence ? "Motion" : "Static"}
+                            <span className="text-xs text-indigo-500 font-medium mt-1 text-center leading-tight px-1">
+                              Landmark only
                             </span>
                           </div>
                         ) : (
                           <img
-                            src={sample.file_url}
+                            src={`${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${sample.file_url}`}
                             alt={`sample-${sample.id}`}
                             className={`w-full aspect-square object-cover rounded-lg border-2 ${
                               sample.status === "approved"
@@ -822,6 +822,7 @@ const ManageWordBank = () => {
                                   : "border-gray-200"
                             }`}
                             onError={(e) => {
+                              e.target.onerror = null;
                               e.target.src = "https://via.placeholder.com/80?text=No+Image";
                             }}
                           />

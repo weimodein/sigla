@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Bundle
 import android.os.Environment
+import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.widget.Toast
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -81,6 +83,7 @@ class CollectionActivity : AppCompatActivity() {
     // In-memory landmark store for suggest mode (sent directly to backend)
     private val collectedLandmarks = mutableListOf<List<Float>>()       // static
     private val collectedSequences = mutableListOf<List<List<Float>>>() // motion
+    private val collectedImages    = mutableListOf<String>()            // base64 JPEG per sample
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -227,7 +230,9 @@ class CollectionActivity : AppCompatActivity() {
             val bitmap = imageProxy.toBitmap()
             val prepared = prepareBitmap(bitmap, imageProxy.imageInfo.rotationDegrees)
             val result = landmarker.detect(prepared)
-            runOnUiThread { tick(result.handsDetected, result.features) }
+            // Downscale for transmission: 320×240 is enough for admin preview
+            val thumb = Bitmap.createScaledBitmap(prepared, 320, 240, true)
+            runOnUiThread { tick(result.handsDetected, result.features, thumb) }
         } catch (e: Exception) {
             Log.e(TAG, "Frame error: ${e.message}")
         } finally {
@@ -248,7 +253,7 @@ class CollectionActivity : AppCompatActivity() {
 
     // ── State machine ─────────────────────────────────────────────────────────
 
-    private fun tick(handsDetected: Int, features: FloatArray) {
+    private fun tick(handsDetected: Int, features: FloatArray, frameBitmap: Bitmap) {
         if (count >= targetCount) {
             state = CollectState.DONE
             showDoneScreen()
@@ -288,7 +293,7 @@ class CollectionActivity : AppCompatActivity() {
                 binding.tvRec.visibility = View.VISIBLE
                 if (!isMotion) {
                     if (handsDetected > 0) {
-                        saveSample(features)
+                        saveSample(features, frameBitmap)
                         count++
                         updateCountDisplay()
                         state        = CollectState.COOLDOWN
@@ -304,7 +309,7 @@ class CollectionActivity : AppCompatActivity() {
                         binding.tvOverlay.text = "${seqBuffer.size}/$SEQUENCE_LENGTH"
                         binding.tvOverlay.visibility = View.VISIBLE
                         if (seqBuffer.size >= SEQUENCE_LENGTH) {
-                            saveSequence(seqBuffer)
+                            saveSequence(seqBuffer, frameBitmap)
                             count++
                             updateCountDisplay()
                             state        = CollectState.COOLDOWN
@@ -317,7 +322,7 @@ class CollectionActivity : AppCompatActivity() {
                         noHandTick++
                         if (noHandTick >= NO_HAND_FRAMES) {
                             if (seqBuffer.size >= MIN_FRAMES) {
-                                saveSequence(seqBuffer)
+                                saveSequence(seqBuffer, frameBitmap)
                                 count++
                                 updateCountDisplay()
                                 state        = CollectState.COOLDOWN
@@ -355,10 +360,17 @@ class CollectionActivity : AppCompatActivity() {
 
     // ── Save helpers ──────────────────────────────────────────────────────────
 
-    private fun saveSample(features: FloatArray) {
+    private fun bitmapToBase64(bitmap: Bitmap): String {
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 65, out)
+        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }
+
+    private fun saveSample(features: FloatArray, frameBitmap: Bitmap) {
         // Always store in-memory for suggest mode upload
         if (isSuggestMode) {
             collectedLandmarks.add(features.toList())
+            collectedImages.add(bitmapToBase64(frameBitmap))
         }
         // Also write to disk (admin mode primary, suggest mode fallback)
         val file = File(saveDir, "$count.json")
@@ -370,7 +382,7 @@ class CollectionActivity : AppCompatActivity() {
         }.toString())
     }
 
-    private fun saveSequence(buffer: List<FloatArray>) {
+    private fun saveSequence(buffer: List<FloatArray>, frameBitmap: Bitmap) {
         // Pad/trim to SEQUENCE_LENGTH
         val padded = buffer.toMutableList()
         while (padded.size < SEQUENCE_LENGTH) padded.add(padded.last().copyOf())
@@ -379,6 +391,7 @@ class CollectionActivity : AppCompatActivity() {
         // Store in-memory for suggest mode upload
         if (isSuggestMode) {
             collectedSequences.add(trimmed.map { it.toList() })
+            collectedImages.add(bitmapToBase64(frameBitmap))
         }
 
         // Write to disk
@@ -401,6 +414,7 @@ class CollectionActivity : AppCompatActivity() {
         if (isSuggestMode) {
             if (!isMotion && collectedLandmarks.isNotEmpty()) collectedLandmarks.removeLast()
             else if (isMotion && collectedSequences.isNotEmpty()) collectedSequences.removeLast()
+            if (collectedImages.isNotEmpty()) collectedImages.removeLast()
         }
         updateCountDisplay()
         Toast.makeText(this, "Deleted sample $count", Toast.LENGTH_SHORT).show()
@@ -446,15 +460,18 @@ class CollectionActivity : AppCompatActivity() {
                     binding.progressUpload.isIndeterminate = true
                 }
 
+                val imageList = collectedImages.toList().ifEmpty { null }
                 val request = if (!isMotion) {
                     UploadSamplesRequest(
                         landmarks    = collectedLandmarks,
-                        sample_count = collectedLandmarks.size
+                        sample_count = collectedLandmarks.size,
+                        images       = imageList
                     )
                 } else {
                     UploadSamplesRequest(
                         sequence     = collectedSequences,
-                        sample_count = collectedSequences.size
+                        sample_count = collectedSequences.size,
+                        images       = imageList
                     )
                 }
 

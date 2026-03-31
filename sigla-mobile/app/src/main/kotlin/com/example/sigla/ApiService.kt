@@ -76,7 +76,8 @@ data class UploadSamplesRequest(
     val landmark_url: String? = null,
     val sample_count: Int,
     val landmarks: List<List<Float>>? = null,
-    val sequence: List<List<List<Float>>>? = null
+    val sequence: List<List<List<Float>>>? = null,
+    val images: List<String>? = null
 )
 
 data class ModelInfo(
