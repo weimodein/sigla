@@ -116,20 +116,31 @@ class PredictionService(private val context: Context) {
     // ── Init ──────────────────────────────────────────────────────────────────
 
     fun init() {
-        try {
-            val options = Interpreter.Options().apply { numThreads = 4 }
+        val options = Interpreter.Options().apply { numThreads = 4 }
 
-            staticInterp  = Interpreter(loadModel("sign_model_static.tflite"), options)
-            motionInterp  = Interpreter(loadModel("sign_model_motion.tflite"), options)
-            staticLabels  = loadLabels("labels_static.json")
-            motionLabels  = loadLabels("labels_motion.json")
-            gestureConfig = loadGestureConfig()
-            isReady       = true
-            Log.i(TAG, "Models loaded — static: ${staticLabels.size} classes, " +
-                    "motion: ${motionLabels.size} classes")
+        // Static model is required — if it fails, detection cannot work
+        try {
+            staticInterp = Interpreter(loadModel("sign_model_static.tflite"), options)
+            staticLabels = loadLabels("labels_static.json")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load models: ${e.message}")
+            Log.e(TAG, "Failed to load static model: ${e.message}")
+            return
         }
+
+        // Motion model is optional — detection still works with static only
+        try {
+            motionInterp = Interpreter(loadModel("sign_model_motion.tflite"), options)
+            motionLabels = loadLabels("labels_motion.json")
+        } catch (e: Exception) {
+            Log.w(TAG, "Motion model not available, running static-only: ${e.message}")
+            motionInterp = null
+            motionLabels = emptyList()
+        }
+
+        gestureConfig = loadGestureConfig()
+        isReady       = true
+        Log.i(TAG, "Models loaded — static: ${staticLabels.size} classes, " +
+                "motion: ${motionLabels.size} classes")
     }
 
     private fun loadModel(filename: String): MappedByteBuffer {

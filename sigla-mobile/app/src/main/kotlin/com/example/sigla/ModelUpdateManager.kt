@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URL
 
 object ModelUpdateManager {
@@ -40,36 +41,40 @@ object ModelUpdateManager {
             val model = response.body()?.model ?: return
             val remoteVersion = model.version_number
             val cachedVersion = getCachedVersion(context)
+            val isNewVersion  = remoteVersion != cachedVersion
 
-            if (remoteVersion == cachedVersion) {
+            // Always re-download word_bank.json — it's updated on every deploy
+            // and is small (JSON), so the cost is negligible
+            model.word_bank_url?.let { url ->
+                downloadFile(context, url, "word_bank.json")
+            }
+
+            if (!isNewVersion) {
                 Log.i(TAG, "Model up-to-date: $remoteVersion")
                 return
             }
 
             Log.i(TAG, "New model available: $remoteVersion (was: $cachedVersion)")
 
-            // Build URL map from the model response
             val urlMap = mapOf(
                 "tflite_url"        to model.tflite_url,
                 "motion_tflite_url" to model.motion_tflite_url,
                 "labels_static_url" to model.labels_static_url,
                 "labels_motion_url" to model.labels_motion_url,
-                "word_bank_url"     to model.word_bank_url,
             )
 
-            var allSuccess = true
-            for ((key, filename) in MODEL_FILES) {
+            var staticOk = true
+            for ((key, filename) in MODEL_FILES.filter { it.second != "word_bank.json" }) {
                 val url = urlMap[key] ?: continue
                 val ok  = downloadFile(context, url, filename)
-                if (!ok && filename.endsWith(".tflite")) {
-                    // Critical file failed — abort, keep old version
-                    Log.e(TAG, "Critical download failed: $filename — keeping current version")
-                    allSuccess = false
+                if (!ok && filename == "sign_model_static.tflite") {
+                    Log.e(TAG, "Static model download failed — keeping current version")
+                    staticOk = false
                     break
                 }
             }
 
-            if (allSuccess) {
+            if (staticOk) {
                 prefs(context).edit().putString(KEY_VERSION, remoteVersion).apply()
                 Log.i(TAG, "Model updated to $remoteVersion")
             }
@@ -81,7 +86,18 @@ object ModelUpdateManager {
 
     private fun downloadFile(context: Context, url: String, filename: String): Boolean {
         return try {
-            val bytes = URL(url).readBytes()
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.connectTimeout = 30_000
+            conn.readTimeout    = 60_000
+            conn.connect()
+            val code = conn.responseCode
+            if (code != HttpURLConnection.HTTP_OK) {
+                Log.w(TAG, "Skipping $filename — server returned $code")
+                conn.disconnect()
+                return false
+            }
+            val bytes = conn.inputStream.readBytes()
+            conn.disconnect()
             File(context.filesDir, filename).writeBytes(bytes)
             Log.i(TAG, "Downloaded: $filename (${bytes.size / 1024} KB)")
             true

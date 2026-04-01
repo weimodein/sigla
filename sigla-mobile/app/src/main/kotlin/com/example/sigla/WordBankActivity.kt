@@ -118,30 +118,31 @@ class WordBankActivity : AppCompatActivity() {
 
         val session = SessionManager.getInstance(this)
         lifecycleScope.launch {
-            // Try local cache first (available offline)
+            // Show local cache immediately (works offline)
             val cached = ModelUpdateManager.loadCachedWordBank(this@WordBankActivity)
             if (cached != null) {
                 allWords = cached
                 applyFilters()
                 progressLoading.visibility = View.GONE
-                return@launch
             }
 
-            // Fall back to API
+            // Always fetch fresh data from API in the background
             try {
                 val response = ApiClient.get(session.token).getWordBank()
                 if (response.isSuccessful) {
-                    allWords = response.body()?.words ?: emptyList()
-                    applyFilters()
-                } else {
-                    tvEmpty.text = "Failed to load words"
-                    tvEmpty.visibility = View.VISIBLE
+                    val fresh = response.body()?.words ?: emptyList()
+                    if (fresh != allWords) {
+                        allWords = fresh
+                        applyFilters()
+                    }
                 }
-            } catch (e: Exception) {
-                tvEmpty.text = "Connection error: ${e.message}"
-                tvEmpty.visibility = View.VISIBLE
+            } catch (_: Exception) {
+                // Network unavailable — cache is still shown
             } finally {
                 progressLoading.visibility = View.GONE
+                if (allWords.isEmpty()) {
+                    tvEmpty.visibility = View.VISIBLE
+                }
             }
         }
     }

@@ -106,7 +106,7 @@ def test(version_number: str, model_id: int) -> dict:
     static_report = classification_report(
         y_test_s,
         static_preds,
-        target_names=[static_label_map[str(i)] for i in range(len(static_label_map))],
+        target_names=[static_label_map[i] for i in range(len(static_label_map))],
         zero_division=0
     )
 
@@ -152,7 +152,7 @@ def test(version_number: str, model_id: int) -> dict:
             motion_report = classification_report(
                 y_test_m,
                 motion_preds,
-                target_names=[motion_label_map[str(i)] for i in range(len(motion_label_map))],
+                target_names=[motion_label_map[i] for i in range(len(motion_label_map))],
                 zero_division=0
             )
 
