@@ -77,7 +77,11 @@ object ModelUpdateManager {
                 val modelFileMissing = !hasLocalModel(context)
 
                 // Always re-download word_bank.json — tiny file, updated every deploy
-                model.word_bank_url?.let { downloadFile(context, it, "word_bank.json") }
+                model.word_bank_url?.let {
+                    downloadFile(context, it, "word_bank.json")
+                    // Pre-cache thumbnail images so Word Bank works fully offline
+                    loadCachedWordBank(context)?.let { words -> downloadWordBankImages(context, words) }
+                }
 
                 if (!versionChanged && !modelFileMissing) {
                     Log.i(TAG, "Model up-to-date: $remoteVersion")
@@ -146,6 +150,42 @@ object ModelUpdateManager {
     fun getLocalFile(context: Context, filename: String): File? {
         val file = File(context.filesDir, filename)
         return if (file.exists()) file else null
+    }
+
+    /**
+     * Returns the locally cached thumbnail for a word, or null if not yet downloaded.
+     */
+    fun getLocalThumb(context: Context, wordId: Int): File? {
+        val file = File(context.filesDir, "wb_thumb_$wordId")
+        return if (file.exists()) file else null
+    }
+
+    /**
+     * Downloads thumbnail images for all words that have a thumbnail_url but no local file yet.
+     * Skips words already cached. Safe to call repeatedly.
+     */
+    suspend fun downloadWordBankImages(context: Context, words: List<WordBankWord>) {
+        withContext(Dispatchers.IO) {
+            for (word in words) {
+                val url = ApiClient.resolveUrl(word.thumbnail_url) ?: continue
+                val localFile = File(context.filesDir, "wb_thumb_${word.id}")
+                if (localFile.exists()) continue
+                try {
+                    val request  = Request.Builder().url(url).build()
+                    val response = http.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val bytes = response.body?.bytes()
+                        if (bytes != null && bytes.isNotEmpty()) {
+                            localFile.writeBytes(bytes)
+                            Log.i(TAG, "Cached thumb for word ${word.id} (${bytes.size / 1024} KB)")
+                        }
+                    }
+                    response.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to cache thumb for word ${word.id}: ${e.message}")
+                }
+            }
+        }
     }
 
     /**

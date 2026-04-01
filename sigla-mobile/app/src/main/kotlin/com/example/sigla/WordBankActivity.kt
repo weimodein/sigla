@@ -124,6 +124,8 @@ class WordBankActivity : AppCompatActivity() {
                 allWords = cached
                 applyFilters()
                 progressLoading.visibility = View.GONE
+                // Cache any missing thumbnails in the background
+                launch { ModelUpdateManager.downloadWordBankImages(this@WordBankActivity, cached) }
             }
 
             // Always fetch fresh data from API in the background
@@ -134,6 +136,8 @@ class WordBankActivity : AppCompatActivity() {
                     if (fresh != allWords) {
                         allWords = fresh
                         applyFilters()
+                        // Cache any thumbnails not yet downloaded
+                        launch { ModelUpdateManager.downloadWordBankImages(this@WordBankActivity, fresh) }
                     }
                 }
             } catch (_: Exception) {
@@ -221,6 +225,10 @@ class WordBankActivity : AppCompatActivity() {
         val progressVideo = view.findViewById<ProgressBar>(R.id.progressVideo)
 
         val resolvedDialogThumb = ApiClient.resolveUrl(word.thumbnail_url)
+        val localThumb = ModelUpdateManager.getLocalThumb(this, word.id)
+        // Prefer local file; fall back to remote URL for both image display and video error handler
+        val thumbSource: Any? = localThumb ?: resolvedDialogThumb
+
         when {
             !word.video_url.isNullOrBlank() -> {
                 frameVideo.visibility = View.VISIBLE
@@ -234,22 +242,25 @@ class WordBankActivity : AppCompatActivity() {
                     videoView.start()
                 }
                 videoView.setOnErrorListener { _, _, _ ->
+                    // Video unavailable (offline) — show cached/remote thumbnail image instead
                     progressVideo.visibility = View.GONE
                     frameVideo.visibility = View.GONE
-                    ivImage.visibility = View.VISIBLE
-                    Glide.with(this)
-                        .load(word.video_url)
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .placeholder(android.R.drawable.ic_menu_gallery)
-                        .into(ivImage)
+                    if (thumbSource != null) {
+                        ivImage.visibility = View.VISIBLE
+                        Glide.with(this)
+                            .load(thumbSource)
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .placeholder(android.R.drawable.ic_menu_gallery)
+                            .into(ivImage)
+                    }
                     true
                 }
             }
-            resolvedDialogThumb != null -> {
+            thumbSource != null -> {
                 frameVideo.visibility = View.GONE
                 ivImage.visibility = View.VISIBLE
                 Glide.with(this)
-                    .load(resolvedDialogThumb)
+                    .load(thumbSource)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .centerCrop()
                     .placeholder(android.R.drawable.ic_menu_gallery)
@@ -335,25 +346,31 @@ class WordAdapter(
             holder.tvFilipino.visibility = View.GONE
         }
 
-        // Priority: video_url (motion) → thumbnail_url (static, admin-chosen) → no-media
+        // Prefer locally cached thumbnail (works offline); fall back to remote URL.
+        // For video words the play-overlay is kept so the user still knows it's a motion gesture.
         val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
+        val localThumb    = ModelUpdateManager.getLocalThumb(holder.itemView.context, word.id)
+        val thumbSource: Any? = localThumb ?: resolvedThumb
+        val isVideo = !word.video_url.isNullOrBlank()
+
         when {
-            !word.video_url.isNullOrBlank() -> {
+            thumbSource != null -> {
                 holder.tvNoMedia.visibility = View.GONE
-                holder.layoutPlayOverlay.visibility = View.VISIBLE
+                holder.layoutPlayOverlay.visibility = if (isVideo) View.VISIBLE else View.GONE
                 Glide.with(holder.itemView.context)
-                    .load(Uri.parse(word.video_url))
+                    .load(thumbSource)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .centerCrop()
                     .placeholder(android.R.color.darker_gray)
                     .error(android.R.color.darker_gray)
                     .into(holder.ivThumbnail)
             }
-            resolvedThumb != null -> {
+            isVideo -> {
+                // No thumbnail cached yet, but has a video — try loading a frame from the video URL
                 holder.tvNoMedia.visibility = View.GONE
-                holder.layoutPlayOverlay.visibility = View.GONE
+                holder.layoutPlayOverlay.visibility = View.VISIBLE
                 Glide.with(holder.itemView.context)
-                    .load(resolvedThumb)
+                    .load(Uri.parse(word.video_url))
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .centerCrop()
                     .placeholder(android.R.color.darker_gray)
