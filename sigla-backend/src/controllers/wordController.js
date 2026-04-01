@@ -257,10 +257,26 @@ const submitWord = async (req, res) => {
     });
 
     if (existing) {
+      // Check contribution eligibility for the existing word
+      const userId = req.user.id;
+      const cap = getSampleCap(existing.gesture_type || "static");
+
+      const [userSampleCount, userApprovedCount] = await Promise.all([
+        GestureSample.count({ where: { submitted_by: userId, word_id: existing.id } }),
+        GestureSample.count({ where: { submitted_by: userId, word_id: existing.id, status: "approved" } }),
+      ]);
+
       return res.status(409).json({
         message: "This word already exists or is pending approval",
         word_id: existing.id,
         existing: true,
+        label: existing.label,
+        gesture_type: existing.gesture_type || "static",
+        hands_count: existing.hands_count || 1,
+        is_locked: !!existing.is_locked,
+        user_approved: userApprovedCount > 0,
+        cap_reached: userSampleCount >= cap,
+        cap,
       });
     }
 

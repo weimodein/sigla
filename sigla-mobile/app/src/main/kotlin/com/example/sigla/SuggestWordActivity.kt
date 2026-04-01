@@ -119,21 +119,59 @@ class SuggestWordActivity : AppCompatActivity() {
 
                 if (response.isSuccessful) {
                     val body = response.body()!!
-                    if (body.exists) {
-                        // Word already exists - ask if they want to contribute samples
-                        AlertDialog.Builder(this@SuggestWordActivity)
-                            .setTitle(getString(R.string.word_exists_title))
-                            .setMessage(getString(R.string.word_exists_message))
-                            .setPositiveButton("Contribute") { _, _ ->
-                                navigateToCollection(body.word_id ?: body.word?.id ?: 0, normalizedWord)
+                    val wordId = body.word_id ?: body.word?.id ?: 0
+                    Toast.makeText(this@SuggestWordActivity,
+                        "Word submitted! Now collect gesture samples.", Toast.LENGTH_SHORT).show()
+                    navigateToCollection(wordId, normalizedWord, gestureType, handsCount)
+                } else if (response.code() == 409) {
+                    // Word already exists — check contribution eligibility
+                    val errorBody = response.errorBody()?.string() ?: ""
+                    try {
+                        val json = com.google.gson.JsonParser.parseString(errorBody).asJsonObject
+                        val isExisting = json.get("existing")?.asBoolean ?: false
+                        if (isExisting) {
+                            val wordId       = json.get("word_id")?.asInt ?: 0
+                            val wordLabel    = json.get("label")?.asString ?: normalizedWord
+                            val wordGesture  = json.get("gesture_type")?.asString ?: gestureType
+                            val wordHands    = json.get("hands_count")?.asInt ?: handsCount
+                            val isLocked     = json.get("is_locked")?.asBoolean ?: false
+                            val userApproved = json.get("user_approved")?.asBoolean ?: false
+                            val capReached   = json.get("cap_reached")?.asBoolean ?: false
+                            val cap          = json.get("cap")?.asInt ?: 100
+
+                            when {
+                                isLocked -> AlertDialog.Builder(this@SuggestWordActivity)
+                                    .setTitle("Submissions Locked")
+                                    .setMessage("The administrator has locked submissions for \"$wordLabel\". You cannot contribute gesture samples for this word at this time.")
+                                    .setPositiveButton("OK", null)
+                                    .show()
+
+                                userApproved -> AlertDialog.Builder(this@SuggestWordActivity)
+                                    .setTitle("Already Approved")
+                                    .setMessage("Your gesture samples for \"$wordLabel\" have already been approved. You cannot submit additional samples for this word.")
+                                    .setPositiveButton("OK", null)
+                                    .show()
+
+                                capReached -> AlertDialog.Builder(this@SuggestWordActivity)
+                                    .setTitle("Sample Limit Reached")
+                                    .setMessage("You have already reached the maximum of $cap samples for \"$wordLabel\".")
+                                    .setPositiveButton("OK", null)
+                                    .show()
+
+                                else -> AlertDialog.Builder(this@SuggestWordActivity)
+                                    .setTitle(getString(R.string.word_exists_title))
+                                    .setMessage(getString(R.string.word_exists_message))
+                                    .setPositiveButton("Contribute") { _, _ ->
+                                        navigateToCollection(wordId, wordLabel, wordGesture, wordHands)
+                                    }
+                                    .setNegativeButton("Cancel", null)
+                                    .show()
                             }
-                            .setNegativeButton("Cancel", null)
-                            .show()
-                    } else {
-                        val wordId = body.word_id ?: body.word?.id ?: 0
-                        Toast.makeText(this@SuggestWordActivity,
-                            "Word submitted! Now collect gesture samples.", Toast.LENGTH_SHORT).show()
-                        navigateToCollection(wordId, normalizedWord)
+                        } else {
+                            showError(json.get("message")?.asString ?: "Submission failed")
+                        }
+                    } catch (e: Exception) {
+                        showError("Submission failed")
                     }
                 } else {
                     val errorBody = response.errorBody()?.string() ?: ""
@@ -151,14 +189,13 @@ class SuggestWordActivity : AppCompatActivity() {
         }
     }
 
-    // ... inside navigateToCollection()
-    private fun navigateToCollection(wordId: Int, wordLabel: String) {
-        val gestureType = if (toggleGesture.checkedButtonId == R.id.btnMotion) "motion" else "static"
+    private fun navigateToCollection(wordId: Int, wordLabel: String, gestureType: String, handsCount: Int) {
         val intent = Intent(this, CollectionActivity::class.java).apply {
             putExtra("word_id", wordId)
             putExtra("word_label", wordLabel)
             putExtra("mode", "suggest")
-            putExtra("gesture_type", gestureType)   // <-- added
+            putExtra("gesture_type", gestureType)
+            putExtra("hands_count", handsCount)
         }
         startActivity(intent)
         finish()
