@@ -136,9 +136,15 @@ const trainModel = async (req, res) => {
       });
       trainingResult = response.data;
     } catch (mlErr) {
-      // If ML service is unreachable, delete the record and return error
       await modelRecord.destroy();
-      console.error("ML service error:", mlErr.message);
+      if (mlErr.response) {
+        // ML service responded with an error (4xx/5xx) — show the real message
+        const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
+        console.error("ML service training error:", detail);
+        return res.status(mlErr.response.status).json({ message: detail });
+      }
+      // Network error — service is unreachable
+      console.error("ML service unreachable:", mlErr.message);
       return res.status(503).json({
         message: "ML service unavailable. Make sure sigla-ml is running.",
       });
@@ -205,7 +211,12 @@ const testModel = async (req, res) => {
       });
       testResult = response.data;
     } catch (mlErr) {
-      console.error("ML service error:", mlErr.message);
+      if (mlErr.response) {
+        const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
+        console.error("ML service test error:", detail);
+        return res.status(mlErr.response.status).json({ message: detail });
+      }
+      console.error("ML service unreachable:", mlErr.message);
       return res.status(503).json({
         message: "ML service unavailable. Make sure sigla-ml is running.",
       });
@@ -272,7 +283,12 @@ const deployModel = async (req, res) => {
         tflite_url: model.tflite_url,
       });
     } catch (mlErr) {
-      console.error("ML service error:", mlErr.message);
+      if (mlErr.response) {
+        const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
+        console.error("ML service deploy error:", detail);
+        return res.status(mlErr.response.status).json({ message: detail });
+      }
+      console.error("ML service unreachable:", mlErr.message);
       return res.status(503).json({
         message: "ML service unavailable. Make sure sigla-ml is running.",
       });
