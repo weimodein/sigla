@@ -5,6 +5,11 @@ import android.content.Intent
 import android.widget.TextView
 import androidx.drawerlayout.widget.DrawerLayout
 import android.view.View
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class Screen { MAIN, WORD_BANK, HISTORY, SUGGEST, NOTIFICATIONS, PROFILE, SETTINGS }
 
@@ -98,6 +103,27 @@ object NavigationHelper {
                     .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK))
             } else {
                 activity.startActivity(Intent(activity, AuthActivity::class.java))
+            }
+        }
+
+        // Load notification badge if user is logged in
+        if (session.isLoggedIn) {
+            (activity as? LifecycleOwner)?.lifecycleScope?.launch {
+                try {
+                    val response = withContext(Dispatchers.IO) {
+                        ApiClient.get(session.token).getUnreadCount()
+                    }
+                    if (response.isSuccessful) {
+                        val unread = response.body()?.unread ?: 0
+                        val badge = sidebar.findViewById<TextView>(R.id.tvNavNotificationsBadge)
+                        if (unread > 0) {
+                            badge?.text = if (unread > 99) "99+" else unread.toString()
+                            badge?.visibility = View.VISIBLE
+                        } else {
+                            badge?.visibility = View.GONE
+                        }
+                    }
+                } catch (_: Exception) {}
             }
         }
     }

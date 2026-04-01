@@ -9,15 +9,26 @@ const { Op } = require("sequelize");
  */
 const getApprovedDataset = async (req, res) => {
   try {
-    // Fetch all approved samples with their associated word
+    // Fetch all training-eligible samples:
+    // - "approved" samples (admin-reviewed) for any word
+    // - "pending" samples that passed MediaPipe validation (is_validated=true)
+    //   but only for words the admin has approved (status="approved" or is_active=true)
     const samples = await GestureSample.findAll({
-      where: { status: "approved" },
+      where: {
+        [Op.or]: [
+          { status: "approved" },
+          { status: "pending", is_validated: true },
+        ],
+      },
       include: [
         {
           model: Word,
           as: "word",
           attributes: ["label", "gesture_type"],
           required: true,
+          where: {
+            [Op.or]: [{ status: "approved" }, { is_active: true }],
+          },
         },
       ],
       order: [["created_at", "ASC"]],

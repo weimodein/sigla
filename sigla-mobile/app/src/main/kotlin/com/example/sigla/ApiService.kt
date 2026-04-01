@@ -55,7 +55,7 @@ data class NotificationItem(
 
 data class NotificationsResponse(val notifications: List<NotificationItem>)
 
-data class UnreadCountResponse(val count: Int)
+data class UnreadCountResponse(val unread: Int)
 
 data class SubmitWordRequest(
     val label: String,

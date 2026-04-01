@@ -60,12 +60,6 @@ data class CollectingState(
     val streak: Int
 )
 
-data class GestureConfig(
-    val oneHanded: Boolean,
-    val normalizeHand: Boolean,
-    val motion: Boolean
-)
-
 // ── PredictionService ─────────────────────────────────────────────────────────
 
 class PredictionService(private val context: Context) {
@@ -80,7 +74,6 @@ class PredictionService(private val context: Context) {
     private var motionInterp: Interpreter? = null
     private var staticLabels: List<String> = emptyList()
     private var motionLabels: List<String> = emptyList()
-    private var gestureConfig: Map<String, GestureConfig> = emptyMap()
 
     var isReady = false
         private set
@@ -139,8 +132,7 @@ class PredictionService(private val context: Context) {
             motionLabels = emptyList()
         }
 
-        gestureConfig = loadGestureConfig()
-        isReady       = true
+        isReady = true
         Log.i(TAG, "Models loaded — static: ${staticLabels.size} classes, " +
                 "motion: ${motionLabels.size} classes")
     }
@@ -184,21 +176,6 @@ class PredictionService(private val context: Context) {
         while (json.has(i.toString())) {
             result.add(json.getString(i.toString()))
             i++
-        }
-        return result
-    }
-
-    private fun loadGestureConfig(): Map<String, GestureConfig> {
-        if (!context.assets.list("")!!.contains("gesture_config.json")) return emptyMap()
-        val json   = JSONObject(context.assets.open("gesture_config.json").bufferedReader().readText())
-        val result = mutableMapOf<String, GestureConfig>()
-        for (key in json.keys()) {
-            val obj = json.getJSONObject(key)
-            result[key] = GestureConfig(
-                oneHanded     = obj.optBoolean("one_handed", true),
-                normalizeHand = obj.optBoolean("normalize_hand", true),
-                motion        = obj.optBoolean("motion", false)
-            )
         }
         return result
     }
@@ -256,7 +233,7 @@ class PredictionService(private val context: Context) {
 
             val (idx, conf)         = staticResult
             val label               = staticLabels.getOrNull(idx) ?: ""
-            val isMotionGesture     = gestureConfig[label]?.motion == true
+            val isMotionGesture     = motionLabels.contains(label)
             val conflictsWithMotion = MOTION_CONFLICTS.containsKey(label)
 
             if (!isMotionGesture && conf >= EARLY_EXIT_THRESHOLD) {
@@ -299,7 +276,7 @@ class PredictionService(private val context: Context) {
             if (motionResult != null) {
                 val (mIdx, mConf)   = motionResult
                 val mLabel          = motionLabels.getOrNull(mIdx) ?: ""
-                val isMotionGesture = gestureConfig[mLabel]?.motion == true
+                val isMotionGesture = motionLabels.contains(mLabel)
                 if (isMotionGesture && mConf >= MOTION_EARLY_CONF) {
                     if (mIdx == motionEarlyLabel) motionEarlyStreak++
                     else { motionEarlyStreak = 1; motionEarlyLabel = mIdx }
@@ -353,7 +330,7 @@ class PredictionService(private val context: Context) {
         if (motionResult != null) {
             val (mIdx, mConf)   = motionResult
             val mLabel          = motionLabels.getOrNull(mIdx) ?: return
-            val isMotionGesture = gestureConfig[mLabel]?.motion == true
+            val isMotionGesture = motionLabels.contains(mLabel)
             // Motion only wins if buffer mean velocity confirms real movement
             if (isMotionGesture && mConf >= MOTION_THRESHOLD
                 && meanVel >= MOTION_VELOCITY_THRESH) {
@@ -367,7 +344,7 @@ class PredictionService(private val context: Context) {
         if (staticResult != null) {
             val (sIdx, sConf)   = staticResult
             val sLabel          = staticLabels.getOrNull(sIdx) ?: return
-            val isMotionGesture = gestureConfig[sLabel]?.motion == true
+            val isMotionGesture = motionLabels.contains(sLabel)
             if (!isMotionGesture && sConf >= STATIC_THRESHOLD) {
                 lastDetectionTime = now
                 onResult?.invoke(PredictionResult(sLabel, sConf, isMotion = false))
