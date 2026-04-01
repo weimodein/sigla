@@ -148,6 +148,14 @@ const trainModel = async (req, res) => {
       return res.status(400).json({ message: "Version number is required" });
     }
 
+    // Only allow characters that are safe in Supabase storage paths
+    if (!/^[a-zA-Z0-9._\-]+$/.test(version_number)) {
+      return res.status(400).json({
+        message:
+          "Version number can only contain letters, numbers, dots (.), dashes (-), and underscores (_). Special characters like backticks, spaces, or slashes are not allowed.",
+      });
+    }
+
     // Check if version number already exists
     const existing = await ModelVersion.findOne({ where: { version_number } });
     if (existing) {

@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -103,6 +104,12 @@ def upload_model_to_supabase(local_path: str, version_number: str, model_type: s
 
 def train(version_number: str, model_id: int) -> dict:
     from tensorflow import keras
+
+    # Strip any characters that are invalid in Supabase storage keys
+    safe_version = re.sub(r"[^a-zA-Z0-9._\-]", "_", version_number)
+    if safe_version != version_number:
+        print(f"WARNING: version_number sanitized from '{version_number}' to '{safe_version}'")
+    version_number = safe_version
 
     print(f"\n{'='*50}")
     print(f"Starting training for version: {version_number}")

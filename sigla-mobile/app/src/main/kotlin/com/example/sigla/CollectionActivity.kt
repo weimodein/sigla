@@ -103,7 +103,12 @@ class CollectionActivity : AppCompatActivity() {
             label         = wordLabel
             isMotion      = gestureType == "motion"
 
-            targetCount     = if (isMotion) TARGET_SUGGEST_MOTION else TARGET_SUGGEST
+            // Use remaining samples from backend (accounts for what user already submitted).
+            // Capped at the per-session max so collection stays manageable in one sitting.
+            val sessionMax  = if (isMotion) TARGET_SUGGEST_MOTION else TARGET_SUGGEST
+            val fromBackend = intent.getIntExtra("target_count", -1)
+            targetCount     = if (fromBackend > 0) minOf(fromBackend, sessionMax) else sessionMax
+
             countdownFrames = COUNTDOWN_SUGGEST
             cooldownFrames  = if (isMotion) COOLDOWN_MOTION_SUGGEST else COOLDOWN_STATIC_SUGGEST
 

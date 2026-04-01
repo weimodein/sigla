@@ -120,9 +120,11 @@ class SuggestWordActivity : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val body = response.body()!!
                     val wordId = body.word_id ?: body.word?.id ?: 0
+                    // New word: user has 0 samples, full per-user cap available
+                    val sessionMax = if (gestureType == "motion") 20 else 100
                     Toast.makeText(this@SuggestWordActivity,
                         "Word submitted! Now collect gesture samples.", Toast.LENGTH_SHORT).show()
-                    navigateToCollection(wordId, normalizedWord, gestureType, handsCount)
+                    navigateToCollection(wordId, normalizedWord, gestureType, handsCount, sessionMax)
                 } else if (response.code() == 409) {
                     // Word already exists — check contribution eligibility
                     val errorBody = response.errorBody()?.string() ?: ""
@@ -173,7 +175,7 @@ class SuggestWordActivity : AppCompatActivity() {
                                         .setTitle(getString(R.string.word_exists_title))
                                         .setMessage(msg)
                                         .setPositiveButton("Contribute") { _, _ ->
-                                            navigateToCollection(wordId, wordLabel, wordGesture, wordHands)
+                                            navigateToCollection(wordId, wordLabel, wordGesture, wordHands, remainingForUser)
                                         }
                                         .setNegativeButton("Cancel", null)
                                         .show()
@@ -201,13 +203,14 @@ class SuggestWordActivity : AppCompatActivity() {
         }
     }
 
-    private fun navigateToCollection(wordId: Int, wordLabel: String, gestureType: String, handsCount: Int) {
+    private fun navigateToCollection(wordId: Int, wordLabel: String, gestureType: String, handsCount: Int, targetCount: Int) {
         val intent = Intent(this, CollectionActivity::class.java).apply {
             putExtra("word_id", wordId)
             putExtra("word_label", wordLabel)
             putExtra("mode", "suggest")
             putExtra("gesture_type", gestureType)
             putExtra("hands_count", handsCount)
+            putExtra("target_count", targetCount)
         }
         startActivity(intent)
         finish()
