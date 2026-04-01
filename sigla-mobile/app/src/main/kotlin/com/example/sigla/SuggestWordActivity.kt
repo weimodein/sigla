@@ -130,14 +130,14 @@ class SuggestWordActivity : AppCompatActivity() {
                         val json = com.google.gson.JsonParser.parseString(errorBody).asJsonObject
                         val isExisting = json.get("existing")?.asBoolean ?: false
                         if (isExisting) {
-                            val wordId       = json.get("word_id")?.asInt ?: 0
-                            val wordLabel    = json.get("label")?.asString ?: normalizedWord
-                            val wordGesture  = json.get("gesture_type")?.asString ?: gestureType
-                            val wordHands    = json.get("hands_count")?.asInt ?: handsCount
-                            val isLocked     = json.get("is_locked")?.asBoolean ?: false
-                            val userApproved = json.get("user_approved")?.asBoolean ?: false
-                            val capReached   = json.get("cap_reached")?.asBoolean ?: false
-                            val cap          = json.get("cap")?.asInt ?: 100
+                            val wordId     = json.get("word_id")?.asInt ?: 0
+                            val wordLabel  = json.get("label")?.asString ?: normalizedWord
+                            val wordGesture = json.get("gesture_type")?.asString ?: gestureType
+                            val wordHands  = json.get("hands_count")?.asInt ?: handsCount
+                            val isLocked   = json.get("is_locked")?.asBoolean ?: false
+                            val capReached = json.get("cap_reached")?.asBoolean ?: false
+                            val cap        = json.get("cap")?.asInt ?: 100
+                            val collected  = json.get("total_samples")?.asInt ?: 0
 
                             when {
                                 isLocked -> AlertDialog.Builder(this@SuggestWordActivity)
@@ -146,15 +146,9 @@ class SuggestWordActivity : AppCompatActivity() {
                                     .setPositiveButton("OK", null)
                                     .show()
 
-                                userApproved -> AlertDialog.Builder(this@SuggestWordActivity)
-                                    .setTitle("Already Approved")
-                                    .setMessage("Your gesture samples for \"$wordLabel\" have already been approved. You cannot submit additional samples for this word.")
-                                    .setPositiveButton("OK", null)
-                                    .show()
-
                                 capReached -> AlertDialog.Builder(this@SuggestWordActivity)
                                     .setTitle("Sample Limit Reached")
-                                    .setMessage("You have already reached the maximum of $cap samples for \"$wordLabel\".")
+                                    .setMessage("The maximum of $cap gesture samples for \"$wordLabel\" has already been collected ($collected/$cap). No more contributions are accepted for this word.")
                                     .setPositiveButton("OK", null)
                                     .show()
 

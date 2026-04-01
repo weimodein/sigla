@@ -13,10 +13,10 @@ const {
 const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// ── Sample cap and activation thresholds per gesture type ─────
-// Static gestures: 100 samples per user, 100 needed to activate
-// Motion gestures: 150 samples per user, 150 needed to activate
-const SAMPLE_CAP = { static: 100, motion: 150 };
+// ── Default caps and activation thresholds per gesture type ──
+// Static gestures: 100 samples total, 100 approved needed to activate
+// Motion gestures: 150 samples total, 150 approved needed to activate
+const DEFAULT_SAMPLE_CAP = { static: 100, motion: 150 };
 const ACTIVATION_THRESHOLD = { static: 100, motion: 150 };
 
 // ── Helper: normalize word label ──────────────────────────────
@@ -26,9 +26,16 @@ const normalizeLabel = (label) =>
     .replace(/[^\w\s]/g, "")
     .trim();
 
-// ── Helper: get sample cap for a word based on gesture_type ───
-const getSampleCap = (gestureType) =>
-  SAMPLE_CAP[gestureType] || SAMPLE_CAP.static;
+// ── Helper: effective sample cap for a word ───────────────────
+// Uses admin-set sample_limit when present; otherwise falls back to default by gesture_type.
+const getSampleCap = (gestureTypeOrWord) => {
+  if (gestureTypeOrWord && typeof gestureTypeOrWord === "object") {
+    const word = gestureTypeOrWord;
+    if (word.sample_limit != null) return word.sample_limit;
+    return DEFAULT_SAMPLE_CAP[word.gesture_type] || DEFAULT_SAMPLE_CAP.static;
+  }
+  return DEFAULT_SAMPLE_CAP[gestureTypeOrWord] || DEFAULT_SAMPLE_CAP.static;
+};
 
 // ── Helper: get activation threshold based on gesture_type ────
 const getActivationThreshold = (gestureType) =>
@@ -257,14 +264,8 @@ const submitWord = async (req, res) => {
     });
 
     if (existing) {
-      // Check contribution eligibility for the existing word
-      const userId = req.user.id;
-      const cap = getSampleCap(existing.gesture_type || "static");
-
-      const [userSampleCount, userApprovedCount] = await Promise.all([
-        GestureSample.count({ where: { submitted_by: userId, word_id: existing.id } }),
-        GestureSample.count({ where: { submitted_by: userId, word_id: existing.id, status: "approved" } }),
-      ]);
+      const cap = getSampleCap(existing);
+      const totalSamples = existing.total_samples || 0;
 
       return res.status(409).json({
         message: "This word already exists or is pending approval",
@@ -274,9 +275,9 @@ const submitWord = async (req, res) => {
         gesture_type: existing.gesture_type || "static",
         hands_count: existing.hands_count || 1,
         is_locked: !!existing.is_locked,
-        user_approved: userApprovedCount > 0,
-        cap_reached: userSampleCount >= cap,
+        cap_reached: totalSamples >= cap,
         cap,
+        total_samples: totalSamples,
       });
     }
 
@@ -506,37 +507,22 @@ const uploadSamples = async (req, res) => {
       return res.status(400).json({ message: "sample_count must be greater than 0" });
     }
 
-    const cap = getSampleCap(word.gesture_type || "static");
-    const userTotal = await getUserSampleCount(req.user.id, word.id);
+    const cap = getSampleCap(word);
+    const totalSamples = word.total_samples || 0;
 
-    // Enforce per-user per-word sample cap based on gesture type
-    if (userTotal >= cap) {
+    // Enforce total sample cap across all users (admin-set limit or default by gesture type)
+    if (totalSamples >= cap) {
       return res.status(400).json({
-        message: `You have already reached the maximum of ${cap} samples for "${word.label}". You may still contribute to other words.`,
+        message: `The total sample limit of ${cap} for "${word.label}" has already been reached. No more submissions are accepted for this word.`,
         limit_reached: true,
       });
     }
 
-    if (userTotal + newCount > cap) {
+    if (totalSamples + newCount > cap) {
+      const remaining = cap - totalSamples;
       return res.status(400).json({
-        message: `Adding ${newCount} samples would exceed your ${cap} sample limit for "${word.label}". You can still add up to ${cap - userTotal} more samples.`,
-        remaining: cap - userTotal,
-      });
-    }
-
-    // Block if user already had an approved submission for this word
-    const approvedSubmission = await GestureSample.findOne({
-      where: {
-        submitted_by: req.user.id,
-        word_id: word.id,
-        status: "approved",
-      },
-    });
-
-    if (approvedSubmission) {
-      return res.status(403).json({
-        message: `Your previous submission for "${word.label}" was already approved. You cannot add more samples to this word.`,
-        already_approved: true,
+        message: `Adding ${newCount} samples would exceed the ${cap} sample limit for "${word.label}". Only ${remaining} more sample${remaining !== 1 ? "s" : ""} can be collected.`,
+        remaining,
       });
     }
 
@@ -971,11 +957,20 @@ const updateWord = async (req, res) => {
       sign_type,
       category,
       filipino_translation,
+      sample_limit,
     } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
     if (!word) {
       return res.status(404).json({ message: "Word not found" });
+    }
+
+    // Validate sample_limit when provided
+    if (sample_limit !== undefined && sample_limit !== null) {
+      const parsed = parseInt(sample_limit);
+      if (isNaN(parsed) || parsed < 1) {
+        return res.status(400).json({ message: "sample_limit must be a positive integer" });
+      }
     }
 
     const updatedLabel = label || word.label;
@@ -992,6 +987,7 @@ const updateWord = async (req, res) => {
         filipino_translation !== undefined
           ? filipino_translation
           : word.filipino_translation,
+      sample_limit: sample_limit !== undefined ? (sample_limit === null ? null : parseInt(sample_limit)) : word.sample_limit,
     });
 
     // Sync label and description to word bank if word is approved

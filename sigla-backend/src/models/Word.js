@@ -83,6 +83,13 @@ const Word = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // Admin-defined cap on total gesture samples collected across all users.
+    // When null, falls back to the default cap per gesture_type (static: 100, motion: 150).
+    sample_limit: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
     // Filipino translation of the word/phrase
     filipino_translation: {
       type: DataTypes.STRING(200),

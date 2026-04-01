@@ -13,6 +13,7 @@ const connectDB = async () => {
     // Manually add new columns that sync() won't create on existing tables
     await sequelize.query(`
       ALTER TABLE words ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+      ALTER TABLE words ADD COLUMN IF NOT EXISTS sample_limit INTEGER DEFAULT NULL;
       ALTER TABLE model_versions ADD COLUMN IF NOT EXISTS word_bank_url TEXT;
       ALTER TABLE word_bank ADD COLUMN IF NOT EXISTS gesture_type VARCHAR(10) DEFAULT 'static';
       ALTER TABLE word_bank ADD COLUMN IF NOT EXISTS filipino_translation TEXT;

@@ -366,7 +366,7 @@ const ManageWordBank = () => {
   const [editForm, setEditForm] = useState({
     label: "", description: "", hands_count: 1,
     sign_type: "FSL", category: "additional words", gesture_type: "static",
-    filipino_translation: "",
+    filipino_translation: "", sample_limit: "",
   });
 
   const handleEditOpen = (word) => {
@@ -378,14 +378,23 @@ const ManageWordBank = () => {
       category: word.category || "additional words",
       gesture_type: word.gesture_type || "static",
       filipino_translation: word.filipino_translation || "",
+      sample_limit: word.sample_limit != null ? String(word.sample_limit) : "",
     });
     setEditModal(word);
   };
 
   const handleEditSave = async () => {
+    const limitVal = editForm.sample_limit.trim();
+    if (limitVal !== "" && (isNaN(parseInt(limitVal)) || parseInt(limitVal) < 1)) {
+      showError("Sample limit must be a positive number or left blank for default");
+      return;
+    }
     setActionLoading(true);
     try {
-      await updateWord(editModal.id, editForm);
+      await updateWord(editModal.id, {
+        ...editForm,
+        sample_limit: limitVal === "" ? null : parseInt(limitVal),
+      });
       showSuccess("Word updated successfully");
       setEditModal(null);
       fetchWords();
@@ -695,6 +704,17 @@ const ManageWordBank = () => {
                       <span className="text-xs">
                         {word.approved_sample_count || 0}/{word.total_samples || 0} approved
                       </span>
+                      {(() => {
+                        const defaultCap = word.gesture_type === "motion" ? 150 : 100;
+                        const limit = word.sample_limit != null ? word.sample_limit : defaultCap;
+                        const total = word.total_samples || 0;
+                        const reached = total >= limit;
+                        return (
+                          <span className={`block text-xs mt-0.5 ${reached ? "text-red-600 font-medium" : "text-gray-400"}`}>
+                            {total}/{limit} collected{reached ? " — full" : ""}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3"><Badge value={word.status} /></td>
                     <td className="px-4 py-3 text-gray-600">{word.submitter?.username || "—"}</td>
@@ -1230,6 +1250,20 @@ const ManageWordBank = () => {
                 placeholder="e.g. Kumusta"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Sample Limit</label>
+              <input
+                type="number"
+                min="1"
+                value={editForm.sample_limit}
+                onChange={(e) => setEditForm({ ...editForm, sample_limit: e.target.value })}
+                placeholder={`Default: ${editForm.gesture_type === "motion" ? 150 : 100}`}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Maximum total gesture samples to collect across all users. Leave blank to use the default ({editForm.gesture_type === "motion" ? "150 for motion" : "100 for static"}).
+              </p>
             </div>
             <div className="flex gap-2 pt-2">
               <button
