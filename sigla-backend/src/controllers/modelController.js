@@ -10,7 +10,24 @@ const {
 } = require("../models/index.js");
 require("dotenv").config();
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
+const ML_SERVICE_URL        = process.env.ML_SERVICE_URL || "http://localhost:8000";
+const SUPABASE_URL          = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_BUCKET_MODELS = process.env.SUPABASE_BUCKET_MODELS || "model-files";
+
+// ── Supabase helper: upload buffer to storage ─────────────────
+async function uploadToSupabase(storagePath, buffer, contentType) {
+  const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
+  await axios.post(url, buffer, {
+    headers: {
+      "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+      "Content-Type": contentType,
+      "x-upsert": "true",
+    },
+    maxBodyLength: Infinity,
+  });
+  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
+}
 
 // ── GET /api/models ───────────────────────────────────────────
 // Get all model versions
@@ -56,7 +73,7 @@ const getModelStats = async (req, res) => {
 };
 
 // ── GET /api/models/latest ────────────────────────────────────
-// Mobile app: get the latest deployed model info
+// Mobile app: get the latest deployed model info + all file URLs
 const getLatestModel = async (req, res) => {
   try {
     const model = await ModelVersion.findOne({
@@ -65,6 +82,7 @@ const getLatestModel = async (req, res) => {
         "id",
         "version_number",
         "tflite_url",
+        "word_bank_url",
         "accuracy",
         "deployed_at",
         "total_classes",
@@ -76,7 +94,19 @@ const getLatestModel = async (req, res) => {
       return res.status(404).json({ message: "No deployed model found" });
     }
 
-    return res.status(200).json({ model });
+    // Compute fixed deployed/ path URLs for all model files
+    const base = SUPABASE_URL
+      ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
+      : null;
+
+    return res.status(200).json({
+      model: {
+        ...model.toJSON(),
+        motion_tflite_url:  base ? `${base}/sign_model_motion.tflite` : null,
+        labels_static_url:  base ? `${base}/labels_static.json` : null,
+        labels_motion_url:  base ? `${base}/labels_motion.json` : null,
+      },
+    });
   } catch (err) {
     console.error("Get latest model error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -265,112 +295,153 @@ const deployModel = async (req, res) => {
       return res.status(404).json({ message: "Model not found" });
     }
 
-    if (model.status === "deployed") {
-      return res.status(400).json({ message: "Model is already deployed" });
-    }
-
     if (!model.tflite_url) {
       return res.status(400).json({
         message: "Model has no .tflite file. Train the model first.",
       });
     }
 
-    // Call FastAPI ML microservice to finalize deployment
-    try {
-      await axios.post(`${ML_SERVICE_URL}/deploy`, {
-        version_number: model.version_number,
-        model_id: model.id,
-        tflite_url: model.tflite_url,
-      });
-    } catch (mlErr) {
-      if (mlErr.response) {
-        const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
-        console.error("ML service deploy error:", detail);
-        return res.status(mlErr.response.status).json({ message: detail });
-      }
-      console.error("ML service unreachable:", mlErr.message);
-      return res.status(503).json({
-        message: "ML service unavailable. Make sure sigla-ml is running.",
-      });
-    }
+    // Only call ML service + update status if not already deployed.
+    // If it IS already deployed (stuck from a previous partial failure),
+    // skip straight to the word activation + word bank generation steps.
+    const alreadyDeployed = model.status === "deployed";
 
-    // Set all other deployed models to inactive
-    await ModelVersion.update(
-      { status: "inactive" },
-      { where: { status: "deployed" } },
-    );
-
-    // Deploy this model
-    await model.update({
-      status: "deployed",
-      deployed_at: new Date(),
-    });
-
-    // ── Activate all approved words that have reached their sample threshold ──
-    // These words have enough data in the newly trained model and can now be
-    // shown in the mobile word bank.
-    const approvedWords = await Word.findAll({
-      where: { status: "approved", is_active: false },
-    });
-
-    const ACTIVATION_THRESHOLD = { static: 100, motion: 150 };
-    const wordsToActivate = approvedWords.filter(
-      (w) => w.approved_sample_count >= (ACTIVATION_THRESHOLD[w.gesture_type] || ACTIVATION_THRESHOLD.static)
-    );
-
-    for (const word of wordsToActivate) {
-      await word.update({ is_active: true });
-
-      // Upsert into word bank
-      const existing = await WordBank.findOne({ where: { word_id: word.id } });
-      if (!existing) {
-        await WordBank.create({
-          word_id: word.id,
-          label: word.label,
-          description: word.description,
-          sign_type: word.sign_type,
-          category: word.category,
-          hands_count: word.hands_count,
-          gesture_type: word.gesture_type,
-          video_url: word.video_url || null,
-          image_url: word.thumbnail_url || null,
-          filipino_translation: word.filipino_translation || null,
+    if (!alreadyDeployed) {
+      // Call FastAPI ML microservice to finalize deployment
+      try {
+        await axios.post(`${ML_SERVICE_URL}/deploy`, {
+          version_number: model.version_number,
+          model_id: model.id,
+          tflite_url: model.tflite_url,
         });
-      } else {
-        await existing.update({ is_active: true });
+      } catch (mlErr) {
+        if (mlErr.response) {
+          const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
+          console.error("ML service deploy error:", detail);
+          return res.status(mlErr.response.status).json({ message: detail });
+        }
+        console.error("ML service unreachable:", mlErr.message);
+        return res.status(503).json({
+          message: "ML service unavailable. Make sure sigla-ml is running.",
+        });
       }
+
+      // Set all other deployed models to inactive, then deploy this one
+      await ModelVersion.update(
+        { status: "inactive" },
+        { where: { status: "deployed" } },
+      );
+      await model.update({ status: "deployed", deployed_at: new Date() });
     }
 
-    // Notify all active users about the new model
-    const activeUsers = await User.findAll({
-      where: { status: "active", role_id: 3 },
-      attributes: ["id"],
-    });
+    // ── Activate approved words + generate word_bank.json ────────────────────
+    // Wrapped in try/catch — failure here must never leave the model stuck.
+    let wordsToActivate = [];
+    try {
+      const ACTIVATION_THRESHOLD = { static: 100, motion: 150 };
+      const approvedWords = await Word.findAll({
+        where: { status: "approved", is_active: false },
+      });
 
-    const newWordLabels = wordsToActivate.map((w) => w.label);
-    const wordNote = newWordLabels.length > 0
-      ? ` ${newWordLabels.length} new word(s) added: ${newWordLabels.slice(0, 5).join(", ")}${newWordLabels.length > 5 ? "…" : ""}.`
-      : "";
+      wordsToActivate = approvedWords.filter(
+        (w) => w.approved_sample_count >= (ACTIVATION_THRESHOLD[w.gesture_type] || ACTIVATION_THRESHOLD.static)
+      );
 
-    const notifications = activeUsers.map((u) => ({
-      user_id: u.id,
-      title: "New Model Available",
-      message: `A new sign language model (${model.version_number}) has been deployed.${wordNote} Update your app to get the latest improvements.`,
-      type: "model_updated",
-    }));
+      for (const word of wordsToActivate) {
+        await word.update({ is_active: true });
+        const existing = await WordBank.findOne({ where: { word_id: word.id } });
+        if (!existing) {
+          await WordBank.create({
+            word_id: word.id,
+            label: word.label,
+            description: word.description,
+            sign_type: word.sign_type,
+            category: word.category,
+            hands_count: word.hands_count,
+            gesture_type: word.gesture_type,
+            is_active: true,
+            video_url: word.video_url || null,
+            image_url: word.thumbnail_url || null,
+            filipino_translation: word.filipino_translation || null,
+          });
+        } else {
+          await existing.update({
+            is_active: true,
+            gesture_type: word.gesture_type,
+            filipino_translation: word.filipino_translation || existing.filipino_translation,
+            image_url: word.thumbnail_url || existing.image_url,
+            video_url: word.video_url || existing.video_url,
+          });
+        }
+      }
+    } catch (wordErr) {
+      console.error("Word activation error (non-fatal):", wordErr.message);
+    }
 
-    if (notifications.length > 0) {
-      await Notification.bulkCreate(notifications);
+    // ── Generate and upload word_bank.json to Supabase ───────────────────────
+    try {
+      const allActiveWords = await WordBank.findAll({ where: { is_active: true } });
+      const wordBankPayload = {
+        version: model.version_number,
+        deployed_at: new Date().toISOString(),
+        words: allActiveWords.map((w) => ({
+          id: w.id,
+          label: w.label,
+          description: w.description || null,
+          sign_type: w.sign_type,
+          category: w.category,
+          hands_count: w.hands_count,
+          gesture_type: w.gesture_type || "static",
+          thumbnail_url: w.image_url || null,
+          video_url: w.video_url || null,
+          filipino_translation: w.filipino_translation || null,
+        })),
+      };
+
+      if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+        const jsonBuffer = Buffer.from(JSON.stringify(wordBankPayload), "utf-8");
+        const wordBankUrl = await uploadToSupabase("deployed/word_bank.json", jsonBuffer, "application/json");
+        await model.update({ word_bank_url: wordBankUrl });
+        console.log(`Word bank JSON uploaded: ${allActiveWords.length} words`);
+      }
+    } catch (wbErr) {
+      console.error("Word bank upload error (non-fatal):", wbErr.message);
+    }
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+    try {
+      const activeUsers = await User.findAll({
+        where: { status: "active", role_id: 3 },
+        attributes: ["id"],
+      });
+
+      const newWordLabels = wordsToActivate.map((w) => w.label);
+      const wordNote = newWordLabels.length > 0
+        ? ` ${newWordLabels.length} new word(s) added: ${newWordLabels.slice(0, 5).join(", ")}${newWordLabels.length > 5 ? "…" : ""}.`
+        : "";
+
+      const notifications = activeUsers.map((u) => ({
+        user_id: u.id,
+        title: "New Model Available",
+        message: `A new sign language model (${model.version_number}) has been deployed.${wordNote} Update your app to get the latest improvements.`,
+        type: "model_updated",
+      }));
+
+      if (notifications.length > 0) await Notification.bulkCreate(notifications);
+    } catch (notifErr) {
+      console.error("Notification error (non-fatal):", notifErr.message);
     }
 
     // Log activity
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "deployed_model",
-      target_type: "model",
-      target_id: model.id,
-      details: `Deployed model version ${model.version_number}`,
-    });
+    try {
+      await ActivityLog.create({
+        user_id: req.user.id,
+        action: "deployed_model",
+        target_type: "model",
+        target_id: model.id,
+        details: `Deployed model version ${model.version_number}`,
+      });
+    } catch (_) {}
 
     return res.status(200).json({
       message: `Model ${model.version_number} deployed successfully`,

@@ -85,6 +85,10 @@ data class ModelInfo(
     val id: Int,
     val version_number: String,
     val tflite_url: String? = null,
+    val motion_tflite_url: String? = null,
+    val labels_static_url: String? = null,
+    val labels_motion_url: String? = null,
+    val word_bank_url: String? = null,
     val accuracy: Double? = null,
     val checksum: String? = null,
     val deployed_at: String? = null

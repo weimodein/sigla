@@ -133,6 +133,12 @@ class PredictionService(private val context: Context) {
     }
 
     private fun loadModel(filename: String): MappedByteBuffer {
+        // Prefer downloaded model from internal storage over bundled assets
+        val localFile = ModelUpdateManager.getLocalFile(context, filename)
+        if (localFile != null) {
+            val fis = FileInputStream(localFile)
+            return fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, localFile.length())
+        }
         val afd     = context.assets.openFd(filename)
         val fis     = FileInputStream(afd.fileDescriptor)
         val channel = fis.channel
@@ -140,7 +146,12 @@ class PredictionService(private val context: Context) {
     }
 
     private fun loadLabels(filename: String): List<String> {
-        val json   = JSONObject(context.assets.open(filename).bufferedReader().readText())
+        val localFile = ModelUpdateManager.getLocalFile(context, filename)
+        val text = if (localFile != null)
+            localFile.readText()
+        else
+            context.assets.open(filename).bufferedReader().readText()
+        val json   = JSONObject(text)
         val result = mutableListOf<String>()
         var i = 0
         while (json.has(i.toString())) {

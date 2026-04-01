@@ -72,6 +72,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch(Dispatchers.IO) {
+            // Check for new deployed model + download word bank cache
+            ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
+
             predictor.init()
             withContext(Dispatchers.Main) {
                 binding.tvStatus.text = if (predictor.isReady)
@@ -232,31 +235,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadFilipinoTranslations() {
         lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val response: Response<WordBankResponse> =
-                    ApiClient.get(session.token).getWordBank()
-
-                if (response.isSuccessful) {
-                    val body: WordBankResponse? = response.body()
-                    val words: List<WordBankWord> = body?.words ?: emptyList()
-
-                    val map = mutableMapOf<String, String>()
-
-                    for (word: WordBankWord in words) {
-                        val translation: String? = word.filipino_translation
-                        if (!translation.isNullOrBlank()) {
-                            map[word.label.lowercase()] = translation
-                        }
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        filipinoMap = map
-                    }
-                }
-
+            val words: List<WordBankWord> = try {
+                // Prefer local cache — works offline
+                ModelUpdateManager.loadCachedWordBank(this@MainActivity)
+                    ?: ApiClient.get(session.token).getWordBank().body()?.words
+                    ?: emptyList()
             } catch (e: Exception) {
-                e.printStackTrace()
+                emptyList()
             }
+
+            val map = mutableMapOf<String, String>()
+            for (word in words) {
+                val translation = word.filipino_translation
+                if (!translation.isNullOrBlank()) {
+                    map[word.label.lowercase()] = translation
+                }
+            }
+            withContext(Dispatchers.Main) { filipinoMap = map }
         }
     }
 

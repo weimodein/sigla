@@ -118,6 +118,16 @@ class WordBankActivity : AppCompatActivity() {
 
         val session = SessionManager.getInstance(this)
         lifecycleScope.launch {
+            // Try local cache first (available offline)
+            val cached = ModelUpdateManager.loadCachedWordBank(this@WordBankActivity)
+            if (cached != null) {
+                allWords = cached
+                applyFilters()
+                progressLoading.visibility = View.GONE
+                return@launch
+            }
+
+            // Fall back to API
             try {
                 val response = ApiClient.get(session.token).getWordBank()
                 if (response.isSuccessful) {

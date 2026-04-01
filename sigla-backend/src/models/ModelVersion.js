@@ -62,6 +62,10 @@ const ModelVersion = sequelize.define(
         isIn: [["trained", "deployed", "inactive"]],
       },
     },
+    word_bank_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,

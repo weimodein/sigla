@@ -47,6 +47,20 @@ const WordBank = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    gesture_type: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      defaultValue: "static",
+    },
+    filipino_translation: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   },
   {
     tableName: "word_bank",
