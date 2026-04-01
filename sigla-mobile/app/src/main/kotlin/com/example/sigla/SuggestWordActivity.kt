@@ -130,14 +130,18 @@ class SuggestWordActivity : AppCompatActivity() {
                         val json = com.google.gson.JsonParser.parseString(errorBody).asJsonObject
                         val isExisting = json.get("existing")?.asBoolean ?: false
                         if (isExisting) {
-                            val wordId     = json.get("word_id")?.asInt ?: 0
-                            val wordLabel  = json.get("label")?.asString ?: normalizedWord
-                            val wordGesture = json.get("gesture_type")?.asString ?: gestureType
-                            val wordHands  = json.get("hands_count")?.asInt ?: handsCount
-                            val isLocked   = json.get("is_locked")?.asBoolean ?: false
-                            val capReached = json.get("cap_reached")?.asBoolean ?: false
-                            val cap        = json.get("cap")?.asInt ?: 100
-                            val collected  = json.get("total_samples")?.asInt ?: 0
+                            val wordId         = json.get("word_id")?.asInt ?: 0
+                            val wordLabel      = json.get("label")?.asString ?: normalizedWord
+                            val wordGesture    = json.get("gesture_type")?.asString ?: gestureType
+                            val wordHands      = json.get("hands_count")?.asInt ?: handsCount
+                            val isLocked       = json.get("is_locked")?.asBoolean ?: false
+                            val capReached     = json.get("cap_reached")?.asBoolean ?: false
+                            val userCapReached = json.get("user_cap_reached")?.asBoolean ?: false
+                            val totalCap       = json.get("cap")?.asInt ?: 100
+                            val perUserCap     = json.get("per_user_cap")?.asInt ?: 100
+                            val collected      = json.get("total_samples")?.asInt ?: 0
+                            val userSamples    = json.get("user_samples")?.asInt ?: 0
+                            val remainingForUser = json.get("remaining_for_user")?.asInt ?: (perUserCap - userSamples)
 
                             when {
                                 isLocked -> AlertDialog.Builder(this@SuggestWordActivity)
@@ -148,18 +152,32 @@ class SuggestWordActivity : AppCompatActivity() {
 
                                 capReached -> AlertDialog.Builder(this@SuggestWordActivity)
                                     .setTitle("Sample Limit Reached")
-                                    .setMessage("The maximum of $cap gesture samples for \"$wordLabel\" has already been collected ($collected/$cap). No more contributions are accepted for this word.")
+                                    .setMessage("The maximum of $totalCap gesture samples for \"$wordLabel\" has already been collected ($collected/$totalCap). No more contributions are accepted for this word.")
                                     .setPositiveButton("OK", null)
                                     .show()
 
-                                else -> AlertDialog.Builder(this@SuggestWordActivity)
-                                    .setTitle(getString(R.string.word_exists_title))
-                                    .setMessage(getString(R.string.word_exists_message))
-                                    .setPositiveButton("Contribute") { _, _ ->
-                                        navigateToCollection(wordId, wordLabel, wordGesture, wordHands)
-                                    }
-                                    .setNegativeButton("Cancel", null)
+                                userCapReached -> AlertDialog.Builder(this@SuggestWordActivity)
+                                    .setTitle("Personal Limit Reached")
+                                    .setMessage("You have already contributed the maximum of $perUserCap samples for \"$wordLabel\". Other users can still submit samples for this word.")
+                                    .setPositiveButton("OK", null)
                                     .show()
+
+                                else -> {
+                                    val msg = buildString {
+                                        append(getString(R.string.word_exists_message))
+                                        if (userSamples > 0) {
+                                            append("\n\nYou have submitted $userSamples sample${if (userSamples != 1) "s" else ""} so far. You can contribute $remainingForUser more.")
+                                        }
+                                    }
+                                    AlertDialog.Builder(this@SuggestWordActivity)
+                                        .setTitle(getString(R.string.word_exists_title))
+                                        .setMessage(msg)
+                                        .setPositiveButton("Contribute") { _, _ ->
+                                            navigateToCollection(wordId, wordLabel, wordGesture, wordHands)
+                                        }
+                                        .setNegativeButton("Cancel", null)
+                                        .show()
+                                }
                             }
                         } else {
                             showError(json.get("message")?.asString ?: "Submission failed")

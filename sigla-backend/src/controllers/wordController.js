@@ -13,10 +13,14 @@ const {
 const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// ── Default caps and activation thresholds per gesture type ──
-// Static gestures: 100 samples total, 100 approved needed to activate
-// Motion gestures: 150 samples total, 150 approved needed to activate
+// ── Sample caps ───────────────────────────────────────────────
+// Per-user maximums: how many samples ONE user can contribute to a single word.
+const PER_USER_CAP = { static: 100, motion: 75 };
+
+// Default total caps across ALL users (used when admin has not set sample_limit).
 const DEFAULT_SAMPLE_CAP = { static: 100, motion: 150 };
+
+// Activation threshold: approved samples needed before a word is eligible for deploy.
 const ACTIVATION_THRESHOLD = { static: 100, motion: 150 };
 
 // ── Helper: normalize word label ──────────────────────────────
@@ -26,8 +30,7 @@ const normalizeLabel = (label) =>
     .replace(/[^\w\s]/g, "")
     .trim();
 
-// ── Helper: effective sample cap for a word ───────────────────
-// Uses admin-set sample_limit when present; otherwise falls back to default by gesture_type.
+// ── Helper: total cap for a word (admin-set or default) ───────
 const getSampleCap = (gestureTypeOrWord) => {
   if (gestureTypeOrWord && typeof gestureTypeOrWord === "object") {
     const word = gestureTypeOrWord;
@@ -36,6 +39,10 @@ const getSampleCap = (gestureTypeOrWord) => {
   }
   return DEFAULT_SAMPLE_CAP[gestureTypeOrWord] || DEFAULT_SAMPLE_CAP.static;
 };
+
+// ── Helper: per-user cap based on gesture type ────────────────
+const getPerUserCap = (gestureType) =>
+  PER_USER_CAP[gestureType] || PER_USER_CAP.static;
 
 // ── Helper: get activation threshold based on gesture_type ────
 const getActivationThreshold = (gestureType) =>
@@ -264,8 +271,14 @@ const submitWord = async (req, res) => {
     });
 
     if (existing) {
-      const cap = getSampleCap(existing);
-      const totalSamples = existing.total_samples || 0;
+      const totalCap   = getSampleCap(existing);
+      const perUserCap = getPerUserCap(existing.gesture_type || "static");
+
+      // Use live DB counts — stored counters can be stale
+      const [totalSamples, userSamples] = await Promise.all([
+        GestureSample.count({ where: { word_id: existing.id } }),
+        getUserSampleCount(req.user.id, existing.id),
+      ]);
 
       return res.status(409).json({
         message: "This word already exists or is pending approval",
@@ -275,9 +288,13 @@ const submitWord = async (req, res) => {
         gesture_type: existing.gesture_type || "static",
         hands_count: existing.hands_count || 1,
         is_locked: !!existing.is_locked,
-        cap_reached: totalSamples >= cap,
-        cap,
+        cap_reached: totalSamples >= totalCap,
+        user_cap_reached: userSamples >= perUserCap,
+        cap: totalCap,
+        per_user_cap: perUserCap,
         total_samples: totalSamples,
+        user_samples: userSamples,
+        remaining_for_user: Math.max(0, Math.min(perUserCap - userSamples, totalCap - totalSamples)),
       });
     }
 
@@ -507,22 +524,45 @@ const uploadSamples = async (req, res) => {
       return res.status(400).json({ message: "sample_count must be greater than 0" });
     }
 
-    const cap = getSampleCap(word);
-    const totalSamples = word.total_samples || 0;
+    const totalCap   = getSampleCap(word);
+    const perUserCap = getPerUserCap(word.gesture_type || "static");
 
-    // Enforce total sample cap across all users (admin-set limit or default by gesture type)
-    if (totalSamples >= cap) {
+    // Use live DB counts — word.total_samples can be stale
+    const [totalSamples, userTotal] = await Promise.all([
+      GestureSample.count({ where: { word_id: word.id } }),
+      getUserSampleCount(req.user.id, word.id),
+    ]);
+
+    // ── 1. Total cap across all users ─────────────────────────
+    if (totalSamples >= totalCap) {
       return res.status(400).json({
-        message: `The total sample limit of ${cap} for "${word.label}" has already been reached. No more submissions are accepted for this word.`,
+        message: `The sample limit of ${totalCap} for "${word.label}" has already been reached (${totalSamples}/${totalCap}). No more submissions are accepted for this word.`,
         limit_reached: true,
       });
     }
 
-    if (totalSamples + newCount > cap) {
-      const remaining = cap - totalSamples;
+    const totalRemaining = totalCap - totalSamples;
+    if (totalSamples + newCount > totalCap) {
       return res.status(400).json({
-        message: `Adding ${newCount} samples would exceed the ${cap} sample limit for "${word.label}". Only ${remaining} more sample${remaining !== 1 ? "s" : ""} can be collected.`,
-        remaining,
+        message: `Adding ${newCount} samples would exceed the ${totalCap}-sample limit for "${word.label}". Only ${totalRemaining} more sample${totalRemaining !== 1 ? "s" : ""} can be collected in total.`,
+        remaining: totalRemaining,
+      });
+    }
+
+    // ── 2. Per-user cap ───────────────────────────────────────
+    if (userTotal >= perUserCap) {
+      return res.status(400).json({
+        message: `You have already contributed the maximum of ${perUserCap} samples for "${word.label}". Other users can still contribute up to the word's total limit.`,
+        user_limit_reached: true,
+      });
+    }
+
+    const userRemaining = perUserCap - userTotal;
+    if (userTotal + newCount > perUserCap) {
+      return res.status(400).json({
+        message: `Adding ${newCount} samples would exceed your personal limit of ${perUserCap} for "${word.label}". You can still add up to ${userRemaining} more sample${userRemaining !== 1 ? "s" : ""}.`,
+        remaining: userRemaining,
+        user_limit_reached: false,
       });
     }
 
@@ -574,7 +614,8 @@ const uploadSamples = async (req, res) => {
     return res.status(201).json({
       message: "Samples uploaded successfully",
       user_total: userTotal + newCount,
-      remaining: cap - (userTotal + newCount),
+      user_remaining: perUserCap - (userTotal + newCount),
+      total_remaining: totalCap - (totalSamples + newCount),
     });
   } catch (err) {
     console.error("Upload samples error:", err);

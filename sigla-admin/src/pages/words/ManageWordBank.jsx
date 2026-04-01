@@ -1262,7 +1262,7 @@ const ManageWordBank = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Maximum total gesture samples to collect across all users. Leave blank to use the default ({editForm.gesture_type === "motion" ? "150 for motion" : "100 for static"}).
+                Total gesture samples to collect across all users. Each user can contribute up to {editForm.gesture_type === "motion" ? "75 (motion)" : "100 (static)"} samples individually. Leave blank to use the default ({editForm.gesture_type === "motion" ? "150 for motion" : "100 for static"}).
               </p>
             </div>
             <div className="flex gap-2 pt-2">
