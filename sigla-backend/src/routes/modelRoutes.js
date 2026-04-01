@@ -14,14 +14,14 @@ const {
   deleteModel,
 } = require("../controllers/modelController.js");
 
-// All routes require login
+// Public — mobile checks for model updates before/after login
+router.get("/latest", getLatestModel);
+
+// All other routes require login
 router.use(authMiddleware);
 
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getModelStats);
-
-// Mobile app fetches the latest deployed model — user role allowed
-router.get("/latest", roleMiddleware("admin", "user"), getLatestModel);
 
 // ── Admin model management routes ────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllModels);

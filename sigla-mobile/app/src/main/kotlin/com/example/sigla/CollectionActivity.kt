@@ -35,7 +35,7 @@ private const val COOLDOWN_STATIC_ADMIN = 10
 private const val COOLDOWN_MOTION_ADMIN = 20
 
 // ── Suggest mode (user contribution — fast) ───────────────────────────────
-private const val TARGET_SUGGEST    = 30      // 30 static samples or 20 motion sequences
+private const val TARGET_SUGGEST    = 100      // 30 static samples or 20 motion sequences
 private const val TARGET_SUGGEST_MOTION = 20
 private const val COUNTDOWN_SUGGEST = 5       // ~0.17s at 30fps
 private const val COOLDOWN_STATIC_SUGGEST = 3 // ~0.1s

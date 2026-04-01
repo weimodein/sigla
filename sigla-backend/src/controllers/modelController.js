@@ -10,17 +10,18 @@ const {
 } = require("../models/index.js");
 require("dotenv").config();
 
-const ML_SERVICE_URL        = process.env.ML_SERVICE_URL || "http://localhost:8000";
-const SUPABASE_URL          = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY;
-const SUPABASE_BUCKET_MODELS = process.env.SUPABASE_BUCKET_MODELS || "model-files";
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_BUCKET_MODELS =
+  process.env.SUPABASE_BUCKET_MODELS || "model-files";
 
 // ── Supabase helper: upload buffer to storage ─────────────────
 async function uploadToSupabase(storagePath, buffer, contentType) {
   const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
   await axios.post(url, buffer, {
     headers: {
-      "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
       "Content-Type": contentType,
       "x-upsert": "true",
     },
@@ -94,7 +95,8 @@ const getLatestModel = async (req, res) => {
       return res.status(404).json({ message: "No deployed model found" });
     }
 
-    // Compute fixed deployed/ path URLs for all model files
+    // All file URLs point to the fixed deployed/ folder in Supabase
+    // so the mobile always fetches from a stable path regardless of version
     const base = SUPABASE_URL
       ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
       : null;
@@ -102,9 +104,12 @@ const getLatestModel = async (req, res) => {
     return res.status(200).json({
       model: {
         ...model.toJSON(),
-        motion_tflite_url:  base ? `${base}/sign_model_motion.tflite` : null,
-        labels_static_url:  base ? `${base}/labels_static.json` : null,
-        labels_motion_url:  base ? `${base}/labels_motion.json` : null,
+        tflite_url: base
+          ? `${base}/sign_model_static.tflite`
+          : model.tflite_url,
+        motion_tflite_url: base ? `${base}/sign_model_motion.tflite` : null,
+        labels_static_url: base ? `${base}/labels_static.json` : null,
+        labels_motion_url: base ? `${base}/labels_motion.json` : null,
       },
     });
   } catch (err) {
@@ -169,7 +174,10 @@ const trainModel = async (req, res) => {
       await modelRecord.destroy();
       if (mlErr.response) {
         // ML service responded with an error (4xx/5xx) — show the real message
-        const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
+        const detail =
+          mlErr.response.data?.detail ||
+          mlErr.response.data?.message ||
+          mlErr.message;
         console.error("ML service training error:", detail);
         return res.status(mlErr.response.status).json({ message: detail });
       }
@@ -242,7 +250,10 @@ const testModel = async (req, res) => {
       testResult = response.data;
     } catch (mlErr) {
       if (mlErr.response) {
-        const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
+        const detail =
+          mlErr.response.data?.detail ||
+          mlErr.response.data?.message ||
+          mlErr.message;
         console.error("ML service test error:", detail);
         return res.status(mlErr.response.status).json({ message: detail });
       }
@@ -301,11 +312,80 @@ const deployModel = async (req, res) => {
       });
     }
 
-    // Only call ML service + update status if not already deployed.
-    // If it IS already deployed (stuck from a previous partial failure),
-    // skip straight to the word activation + word bank generation steps.
-    const alreadyDeployed = model.status === "deployed";
+    // ── Upload model files to Supabase deployed folder ───────────────────────
+    // Derive base URL from the static tflite file (assumes all files are in the same folder)
+    const baseUrl = model.tflite_url.substring(
+      0,
+      model.tflite_url.lastIndexOf("/"),
+    );
 
+    // List of expected files – required ones must exist, optional ones are skipped if missing
+    const possibleFiles = [
+      {
+        url: model.tflite_url,
+        name: "sign_model_static.tflite",
+        required: true,
+      },
+      {
+        url: `${baseUrl}/labels_static.json`,
+        name: "labels_static.json",
+        required: true,
+      },
+      {
+        url: `${baseUrl}/sign_model_motion.tflite`,
+        name: "sign_model_motion.tflite",
+        required: false,
+      },
+      {
+        url: `${baseUrl}/labels_motion.json`,
+        name: "labels_motion.json",
+        required: false,
+      },
+    ];
+
+    for (const file of possibleFiles) {
+      // Skip if the URL is missing or empty
+      if (!file.url || file.url === "null") {
+        if (file.required) {
+          throw new Error(`Missing URL for required file: ${file.name}`);
+        } else {
+          console.warn(
+            `Skipping optional file ${file.name} – no URL provided.`,
+          );
+          continue;
+        }
+      }
+
+      try {
+        const response = await axios.get(file.url, {
+          responseType: "arraybuffer",
+          timeout: 30000,
+        });
+        const buffer = Buffer.from(response.data);
+        const contentType =
+          response.headers["content-type"] ||
+          (file.name.endsWith(".tflite")
+            ? "application/octet-stream"
+            : "application/json");
+        await uploadToSupabase(`deployed/${file.name}`, buffer, contentType);
+        console.log(
+          `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed/${file.name}`,
+        );
+      } catch (err) {
+        if (file.required) {
+          console.error(
+            `Failed to upload required file ${file.name}:`,
+            err.message,
+          );
+          throw err; // fail the deployment if a required file is missing
+        } else {
+          console.warn(`Skipping optional file ${file.name}: ${err.message}`);
+        }
+      }
+    }
+
+    // If the model is already deployed (e.g., stuck from a previous partial failure), skip ML call.
+    const alreadyDeployed = model.status === "deployed";
     if (!alreadyDeployed) {
       // Call FastAPI ML microservice to finalize deployment
       try {
@@ -316,7 +396,10 @@ const deployModel = async (req, res) => {
         });
       } catch (mlErr) {
         if (mlErr.response) {
-          const detail = mlErr.response.data?.detail || mlErr.response.data?.message || mlErr.message;
+          const detail =
+            mlErr.response.data?.detail ||
+            mlErr.response.data?.message ||
+            mlErr.message;
           console.error("ML service deploy error:", detail);
           return res.status(mlErr.response.status).json({ message: detail });
         }
@@ -338,18 +421,17 @@ const deployModel = async (req, res) => {
     // Wrapped in try/catch — failure here must never leave the model stuck.
     let wordsToActivate = [];
     try {
-      const ACTIVATION_THRESHOLD = { static: 100, motion: 150 };
-      const approvedWords = await Word.findAll({
+      // Activate ALL approved words — the training pipeline is the quality gate,
+      // not the sample count. Admin deployed this model, so all approved words are ready.
+      wordsToActivate = await Word.findAll({
         where: { status: "approved", is_active: false },
       });
 
-      wordsToActivate = approvedWords.filter(
-        (w) => w.approved_sample_count >= (ACTIVATION_THRESHOLD[w.gesture_type] || ACTIVATION_THRESHOLD.static)
-      );
-
       for (const word of wordsToActivate) {
         await word.update({ is_active: true });
-        const existing = await WordBank.findOne({ where: { word_id: word.id } });
+        const existing = await WordBank.findOne({
+          where: { word_id: word.id },
+        });
         if (!existing) {
           await WordBank.create({
             word_id: word.id,
@@ -368,7 +450,8 @@ const deployModel = async (req, res) => {
           await existing.update({
             is_active: true,
             gesture_type: word.gesture_type,
-            filipino_translation: word.filipino_translation || existing.filipino_translation,
+            filipino_translation:
+              word.filipino_translation || existing.filipino_translation,
             image_url: word.thumbnail_url || existing.image_url,
             video_url: word.video_url || existing.video_url,
           });
@@ -380,7 +463,9 @@ const deployModel = async (req, res) => {
 
     // ── Generate and upload word_bank.json to Supabase ───────────────────────
     try {
-      const allActiveWords = await WordBank.findAll({ where: { is_active: true } });
+      const allActiveWords = await WordBank.findAll({
+        where: { is_active: true },
+      });
       const wordBankPayload = {
         version: model.version_number,
         deployed_at: new Date().toISOString(),
@@ -399,8 +484,15 @@ const deployModel = async (req, res) => {
       };
 
       if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-        const jsonBuffer = Buffer.from(JSON.stringify(wordBankPayload), "utf-8");
-        const wordBankUrl = await uploadToSupabase("deployed/word_bank.json", jsonBuffer, "application/json");
+        const jsonBuffer = Buffer.from(
+          JSON.stringify(wordBankPayload),
+          "utf-8",
+        );
+        const wordBankUrl = await uploadToSupabase(
+          "deployed/word_bank.json",
+          jsonBuffer,
+          "application/json",
+        );
         await model.update({ word_bank_url: wordBankUrl });
         console.log(`Word bank JSON uploaded: ${allActiveWords.length} words`);
       }
@@ -416,9 +508,10 @@ const deployModel = async (req, res) => {
       });
 
       const newWordLabels = wordsToActivate.map((w) => w.label);
-      const wordNote = newWordLabels.length > 0
-        ? ` ${newWordLabels.length} new word(s) added: ${newWordLabels.slice(0, 5).join(", ")}${newWordLabels.length > 5 ? "…" : ""}.`
-        : "";
+      const wordNote =
+        newWordLabels.length > 0
+          ? ` ${newWordLabels.length} new word(s) added: ${newWordLabels.slice(0, 5).join(", ")}${newWordLabels.length > 5 ? "…" : ""}.`
+          : "";
 
       const notifications = activeUsers.map((u) => ({
         user_id: u.id,
@@ -427,7 +520,8 @@ const deployModel = async (req, res) => {
         type: "model_updated",
       }));
 
-      if (notifications.length > 0) await Notification.bulkCreate(notifications);
+      if (notifications.length > 0)
+        await Notification.bulkCreate(notifications);
     } catch (notifErr) {
       console.error("Notification error (non-fatal):", notifErr.message);
     }

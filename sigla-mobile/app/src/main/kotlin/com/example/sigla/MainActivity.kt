@@ -8,6 +8,7 @@ import android.graphics.Matrix
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import android.speech.tts.TextToSpeech
 import android.view.MotionEvent
 import android.view.View
@@ -72,14 +73,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch(Dispatchers.IO) {
-            // Check for new deployed model + download word bank cache
-            ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
+            withContext(Dispatchers.Main) { binding.tvStatus.text = "Downloading model…" }
 
+            ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
             predictor.init()
+
+            // If init failed, cached files were corrupt and got deleted — re-download and retry
+            if (!predictor.isReady) {
+                Log.w("MainActivity", "Init failed after first download, re-downloading…")
+                withContext(Dispatchers.Main) { binding.tvStatus.text = "Re-downloading model…" }
+                ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
+                predictor.init()
+            }
+
             withContext(Dispatchers.Main) {
                 binding.tvStatus.text = if (predictor.isReady)
                     getString(R.string.models_ready)
-                else "⚠ Model files missing"
+                else
+                    "⚠ No model — connect to the internet and reopen the app"
             }
         }
 

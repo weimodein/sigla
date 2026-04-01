@@ -67,7 +67,12 @@ def build_motion_model(num_classes: int):
 def convert_to_tflite(model, save_path: str) -> str:
     import tensorflow as tf
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+    # Disable optimizations to avoid advanced op versions (like FULLY_CONNECTED v12)
+    converter.optimizations = []
+    # Explicitly use only built-in ops (default, but we ensure it)
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS]
+
     tflite_model = converter.convert()
 
     tflite_path = save_path.replace(".h5", ".tflite")

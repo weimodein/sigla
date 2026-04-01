@@ -4,14 +4,24 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
 
 object ModelUpdateManager {
 
     private const val TAG         = "ModelUpdateManager"
     private const val PREFS       = "model_cache"
     private const val KEY_VERSION = "cached_version"
+
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .build()
 
     // Files downloaded from the deployed/ Supabase folder
     private val MODEL_FILES = listOf(
@@ -33,79 +43,101 @@ object ModelUpdateManager {
      * word_bank.json to internal storage and save the new version number.
      * Safe to call on every app launch — no-op if already up-to-date.
      */
-    suspend fun checkAndUpdate(context: Context, token: String?) {
-        try {
-            val response = ApiClient.get(token).getLatestModel()
-            if (!response.isSuccessful) return
+    /**
+     * Returns true if all required local model files exist on disk.
+     */
+    fun hasLocalModel(context: Context): Boolean {
+        return listOf(
+            "sign_model_static.tflite",
+            "labels_static.json"
+        ).all { File(context.filesDir, it).exists() }
+    }
 
-            val model = response.body()?.model ?: return
-            val remoteVersion = model.version_number
-            val cachedVersion = getCachedVersion(context)
-            val isNewVersion  = remoteVersion != cachedVersion
-
-            // Always re-download word_bank.json — it's updated on every deploy
-            // and is small (JSON), so the cost is negligible
-            model.word_bank_url?.let { url ->
-                downloadFile(context, url, "word_bank.json")
-            }
-
-            if (!isNewVersion) {
-                Log.i(TAG, "Model up-to-date: $remoteVersion")
-                return
-            }
-
-            Log.i(TAG, "New model available: $remoteVersion (was: $cachedVersion)")
-
-            val urlMap = mapOf(
-                "tflite_url"        to model.tflite_url,
-                "motion_tflite_url" to model.motion_tflite_url,
-                "labels_static_url" to model.labels_static_url,
-                "labels_motion_url" to model.labels_motion_url,
-            )
-
-            var staticOk = true
-            for ((key, filename) in MODEL_FILES.filter { it.second != "word_bank.json" }) {
-                val url = urlMap[key] ?: continue
-                val ok  = downloadFile(context, url, filename)
-                if (!ok && filename == "sign_model_static.tflite") {
-                    Log.e(TAG, "Static model download failed — keeping current version")
-                    staticOk = false
-                    break
+    suspend fun checkAndUpdate(context: Context, token: String?): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.i(TAG, "Checking for model updates…")
+                val response = ApiClient.get(token).getLatestModel()
+                Log.i(TAG, "getLatestModel HTTP ${response.code()}")
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "getLatestModel failed: ${response.errorBody()?.string()}")
+                    return@withContext hasLocalModel(context)
                 }
-            }
 
-            if (staticOk) {
+                val model = response.body()?.model
+                if (model == null) {
+                    Log.e(TAG, "getLatestModel body is null")
+                    return@withContext hasLocalModel(context)
+                }
+                Log.i(TAG, "Remote: ${model.version_number} tflite=${model.tflite_url} labels=${model.labels_static_url}")
+
+                val remoteVersion    = model.version_number
+                val cachedVersion    = getCachedVersion(context)
+                val versionChanged   = remoteVersion != cachedVersion
+                val modelFileMissing = !hasLocalModel(context)
+
+                // Always re-download word_bank.json — tiny file, updated every deploy
+                model.word_bank_url?.let { downloadFile(context, it, "word_bank.json") }
+
+                if (!versionChanged && !modelFileMissing) {
+                    Log.i(TAG, "Model up-to-date: $remoteVersion")
+                    return@withContext true
+                }
+
+                Log.i(TAG, "Downloading model $remoteVersion (newVersion=$versionChanged, missing=$modelFileMissing)")
+
+                val urlMap = mapOf(
+                    "tflite_url"        to model.tflite_url,
+                    "motion_tflite_url" to model.motion_tflite_url,
+                    "labels_static_url" to model.labels_static_url,
+                    "labels_motion_url" to model.labels_motion_url,
+                )
+
+                for ((key, filename) in MODEL_FILES.filter { it.second != "word_bank.json" }) {
+                    val url = urlMap[key] ?: continue
+                    val ok  = downloadFile(context, url, filename)
+                    if (!ok && (filename == "sign_model_static.tflite" || filename == "labels_static.json")) {
+                        Log.e(TAG, "Critical download failed: $filename")
+                        return@withContext hasLocalModel(context)
+                    }
+                }
+
                 prefs(context).edit().putString(KEY_VERSION, remoteVersion).apply()
-                Log.i(TAG, "Model updated to $remoteVersion")
-            }
+                Log.i(TAG, "Model ready: $remoteVersion")
+                true
 
-        } catch (e: Exception) {
-            Log.e(TAG, "Model update check failed: ${e.message}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Model update failed: ${e.message}", e)
+                hasLocalModel(context)
+            }
         }
     }
 
-    private fun downloadFile(context: Context, url: String, filename: String): Boolean {
-        return try {
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.connectTimeout = 30_000
-            conn.readTimeout    = 60_000
-            conn.connect()
-            val code = conn.responseCode
-            if (code != HttpURLConnection.HTTP_OK) {
-                Log.w(TAG, "Skipping $filename — server returned $code")
-                conn.disconnect()
-                return false
+    private suspend fun downloadFile(context: Context, url: String, filename: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                Log.i(TAG, "Downloading $filename from $url")
+                val request  = Request.Builder().url(url).build()
+                val response = http.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Skipping $filename — HTTP ${response.code}")
+                    response.close()
+                    return@withContext false
+                }
+                val bytes = response.body?.bytes() ?: run {
+                    Log.w(TAG, "Empty body for $filename")
+                    response.close()
+                    return@withContext false
+                }
+                response.close()
+                File(context.filesDir, filename).writeBytes(bytes)
+                Log.i(TAG, "Saved $filename (${bytes.size / 1024} KB)")
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to download $filename: ${e.message}")
+                false
             }
-            val bytes = conn.inputStream.readBytes()
-            conn.disconnect()
-            File(context.filesDir, filename).writeBytes(bytes)
-            Log.i(TAG, "Downloaded: $filename (${bytes.size / 1024} KB)")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to download $filename: ${e.message}")
-            false
         }
-    }
 
     /**
      * Returns the local cached file if it exists, otherwise null.

@@ -4,9 +4,6 @@ import android.content.Context
 import android.util.Log
 import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
-import java.io.FileInputStream
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel
 import kotlin.math.sqrt
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -17,7 +14,7 @@ private const val MOTION_SLIDE_INTERVAL  = 2     // re-run motion every N frames
 private const val MOTION_EARLY_CONF      = 0.92f // requires very strong J/Z signal before early exit
 private const val MOTION_EARLY_STREAK    = 4     // more consecutive hits needed to fire early
 private const val MOTION_VELOCITY_STREAK = 10    // more sustained movement required before motion probe runs
-private const val STATIC_THRESHOLD       = 0.70f
+private const val STATIC_THRESHOLD       = 0.40f
 private const val MOTION_THRESHOLD       = 0.75f // raised — motion must win more decisively in dual-race
 private const val VELOCITY_WINDOW        = 8
 private const val MOTION_VELOCITY_THRESH = 0.010f // raised — small repositioning movements ignored
@@ -118,21 +115,26 @@ class PredictionService(private val context: Context) {
     fun init() {
         val options = Interpreter.Options().apply { numThreads = 4 }
 
-        // Static model is required — if it fails, detection cannot work
-        try {
-            staticInterp = Interpreter(loadModel("sign_model_static.tflite"), options)
-            staticLabels = loadLabels("labels_static.json")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load static model: ${e.message}")
+        // Static model is required — model and labels must be loaded as a matched pair
+        val (sInterp, sLabels) = loadModelPair(
+            "sign_model_static.tflite", "labels_static.json", options
+        )
+        if (sInterp == null || sLabels == null) {
+            Log.e(TAG, "Failed to load static model")
             return
         }
+        staticInterp = sInterp
+        staticLabels = sLabels
 
-        // Motion model is optional — detection still works with static only
-        try {
-            motionInterp = Interpreter(loadModel("sign_model_motion.tflite"), options)
-            motionLabels = loadLabels("labels_motion.json")
-        } catch (e: Exception) {
-            Log.w(TAG, "Motion model not available, running static-only: ${e.message}")
+        // Motion model is optional
+        val (mInterp, mLabels) = loadModelPair(
+            "sign_model_motion.tflite", "labels_motion.json", options
+        )
+        if (mInterp != null && mLabels != null) {
+            motionInterp = mInterp
+            motionLabels = mLabels
+        } else {
+            Log.w(TAG, "Motion model not available, running static-only")
             motionInterp = null
             motionLabels = emptyList()
         }
@@ -143,25 +145,39 @@ class PredictionService(private val context: Context) {
                 "motion: ${motionLabels.size} classes")
     }
 
-    private fun loadModel(filename: String): MappedByteBuffer {
-        // Prefer downloaded model from internal storage over bundled assets
-        val localFile = ModelUpdateManager.getLocalFile(context, filename)
-        if (localFile != null) {
-            val fis = FileInputStream(localFile)
-            return fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, localFile.length())
+    /**
+     * Loads a model + its labels as a matched pair from internal storage only.
+     * Bundled assets are never used — only models deployed by the admin are loaded.
+     * If the local files are missing or corrupt, returns null.
+     */
+    private fun loadModelPair(
+        modelFile: String,
+        labelsFile: String,
+        options: Interpreter.Options
+    ): Pair<Interpreter?, List<String>?> {
+        val localModel  = ModelUpdateManager.getLocalFile(context, modelFile)
+        val localLabels = ModelUpdateManager.getLocalFile(context, labelsFile)
+
+        if (localModel == null || localLabels == null) {
+            Log.w(TAG, "Local $modelFile or $labelsFile not found on disk")
+            return Pair(null, null)
         }
-        val afd     = context.assets.openFd(filename)
-        val fis     = FileInputStream(afd.fileDescriptor)
-        val channel = fis.channel
-        return channel.map(FileChannel.MapMode.READ_ONLY, afd.startOffset, afd.declaredLength)
+
+        return try {
+            // Use File constructor — avoids MappedByteBuffer GC issues
+            val interp = Interpreter(localModel, options)
+            val labels = parseLabels(localLabels.readText())
+            Log.i(TAG, "Loaded $modelFile from deployed cache (${labels.size} classes)")
+            Pair(interp, labels)
+        } catch (e: Exception) {
+            Log.e(TAG, "Corrupt $modelFile/$labelsFile, deleting: ${e.message}")
+            localModel.delete()
+            localLabels.delete()
+            Pair(null, null)
+        }
     }
 
-    private fun loadLabels(filename: String): List<String> {
-        val localFile = ModelUpdateManager.getLocalFile(context, filename)
-        val text = if (localFile != null)
-            localFile.readText()
-        else
-            context.assets.open(filename).bufferedReader().readText()
+    private fun parseLabels(text: String): List<String> {
         val json   = JSONObject(text)
         val result = mutableListOf<String>()
         var i = 0
