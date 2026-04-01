@@ -27,6 +27,11 @@ import java.io.File
 import java.util.concurrent.Executors
 
 private const val TAG = "CollectionActivity"
+// ── Progress bar colour helpers ───────────────────────────────────────────
+
+private const val COLOR_GREEN        = 0
+private const val COLOR_YELLOW       = 1
+private const val COLOR_RED_TO_GREEN = 2
 
 // ── Admin/dev collection (large dataset) ──────────────────────────────────
 private const val TARGET_ADMIN    = 300
@@ -35,16 +40,16 @@ private const val COOLDOWN_STATIC_ADMIN = 10
 private const val COOLDOWN_MOTION_ADMIN = 20
 
 // ── Suggest mode (user contribution — fast) ───────────────────────────────
-private const val TARGET_SUGGEST    = 100      // 30 static samples or 20 motion sequences
-private const val TARGET_SUGGEST_MOTION = 20
-private const val COUNTDOWN_SUGGEST = 5       // ~0.17s at 30fps
-private const val COOLDOWN_STATIC_SUGGEST = 3 // ~0.1s
-private const val COOLDOWN_MOTION_SUGGEST = 6 // ~0.2s
+private const val TARGET_SUGGEST        = 100  // static samples per session
+private const val TARGET_SUGGEST_MOTION = 75   // motion sequences per session
+private const val COUNTDOWN_SUGGEST     = 5    // ~0.17s at 30fps
+private const val COOLDOWN_STATIC_SUGGEST = 3  // ~0.1s
+private const val COOLDOWN_MOTION_SUGGEST = 6  // ~0.2s
 
 // ── Shared constants ──────────────────────────────────────────────────────
-private const val SEQUENCE_LENGTH = 20        // frames per motion sequence (was 30)
-private const val MIN_FRAMES      = 8         // min frames to save motion (was 15)
-private const val NO_HAND_FRAMES  = 5         // frames with no hand before auto-save (was 10)
+private const val SEQUENCE_LENGTH = 10         // frames per motion sequence — must match ML model
+private const val MIN_FRAMES      = 8          // min frames before a cut clip is kept
+private const val NO_HAND_FRAMES  = 5          // frames with no hand before auto-save
 
 private enum class CollectState { WAITING, COUNTDOWN, RECORDING, COOLDOWN, DONE }
 
@@ -78,6 +83,7 @@ class CollectionActivity : AppCompatActivity() {
     private var countdownTick = 0
     private var cooldownTick  = 0
     private var noHandTick    = 0
+    private var flashTick     = 0   // cycles 0..19 for blinking REC indicator
     private val seqBuffer     = mutableListOf<FloatArray>()
 
     // In-memory landmark store for suggest mode (sent directly to backend)
@@ -272,6 +278,8 @@ class CollectionActivity : AppCompatActivity() {
                 else
                     "Show your hand to begin…"
                 binding.tvOverlay.visibility = View.VISIBLE
+                // Overall progress bar (green) while waiting
+                if (isMotion) setCaptureBarColor(count.toFloat() / targetCount, COLOR_GREEN)
                 if (handsDetected > 0) {
                     state         = CollectState.COUNTDOWN
                     countdownTick = 0
@@ -284,19 +292,22 @@ class CollectionActivity : AppCompatActivity() {
                 } else {
                     countdownTick++
                     val rem = countdownFrames - countdownTick
-                    binding.tvOverlay.text = if (rem > 0) "Ready… $rem" else "GO!"
+                    binding.tvOverlay.text = if (rem > 0) "Get ready… $rem" else "GO!"
+                    // Countdown bar (yellow) for motion
+                    if (isMotion) setCaptureBarColor(countdownTick.toFloat() / countdownFrames, COLOR_YELLOW)
                     if (countdownTick >= countdownFrames) {
-                        state = CollectState.RECORDING
+                        state     = CollectState.RECORDING
                         seqBuffer.clear()
                         noHandTick = 0
+                        flashTick  = 0
                         binding.tvOverlay.visibility = View.GONE
                     }
                 }
             }
 
             CollectState.RECORDING -> {
-                binding.tvRec.visibility = View.VISIBLE
                 if (!isMotion) {
+                    binding.tvRec.visibility = View.VISIBLE
                     if (handsDetected > 0) {
                         saveSample(features, frameBitmap)
                         count++
@@ -309,10 +320,18 @@ class CollectionActivity : AppCompatActivity() {
                     if (handsDetected > 0) {
                         seqBuffer.add(features.copyOf())
                         noHandTick = 0
-                        binding.progressCapture.progress =
-                            (seqBuffer.size.toFloat() / SEQUENCE_LENGTH * 100).toInt()
+
+                        // Recording bar: red → green as buffer fills
+                        val ratio = seqBuffer.size.toFloat() / SEQUENCE_LENGTH
+                        setCaptureBarColor(ratio, COLOR_RED_TO_GREEN)
+
+                        // Blinking REC indicator (on for 10 frames, off for 10 frames)
+                        flashTick = (flashTick + 1) % 20
+                        binding.tvRec.visibility = if (flashTick < 10) View.VISIBLE else View.INVISIBLE
+
                         binding.tvOverlay.text = "${seqBuffer.size}/$SEQUENCE_LENGTH"
                         binding.tvOverlay.visibility = View.VISIBLE
+
                         if (seqBuffer.size >= SEQUENCE_LENGTH) {
                             saveSequence(seqBuffer, frameBitmap)
                             count++
@@ -324,7 +343,13 @@ class CollectionActivity : AppCompatActivity() {
                             binding.tvOverlay.visibility = View.GONE
                         }
                     } else {
+                        // Hands lost — show countdown warning
                         noHandTick++
+                        val remaining = NO_HAND_FRAMES - noHandTick
+                        if (remaining > 0) {
+                            binding.tvOverlay.text = "No hands — stopping in $remaining…"
+                            binding.tvOverlay.visibility = View.VISIBLE
+                        }
                         if (noHandTick >= NO_HAND_FRAMES) {
                             if (seqBuffer.size >= MIN_FRAMES) {
                                 saveSequence(seqBuffer, frameBitmap)
@@ -346,11 +371,13 @@ class CollectionActivity : AppCompatActivity() {
             }
 
             CollectState.COOLDOWN -> {
-                binding.progressCapture.progress = 0
+                if (!isMotion) binding.progressCapture.progress = 0
                 cooldownTick++
                 val rem = cooldownFrames - cooldownTick
-                binding.tvOverlay.text = "✓ $count/$targetCount  Next in $rem…"
+                binding.tvOverlay.text = "✓ Saved!  Next in $rem…"
                 binding.tvOverlay.visibility = View.VISIBLE
+                // Overall progress bar (green) while cooling down for motion
+                if (isMotion) setCaptureBarColor(count.toFloat() / targetCount, COLOR_GREEN)
                 if (cooldownTick >= cooldownFrames) {
                     state = if (handsDetected > 0) CollectState.COUNTDOWN else CollectState.WAITING
                     binding.tvOverlay.visibility = View.GONE
@@ -361,6 +388,24 @@ class CollectionActivity : AppCompatActivity() {
         }
 
         binding.progressTotal.progress = (count.toFloat() / targetCount * 100).toInt()
+    }
+
+
+
+    private fun setCaptureBarColor(ratio: Float, mode: Int) {
+        val r = ratio.coerceIn(0f, 1f)
+        val color = when (mode) {
+            COLOR_GREEN  -> android.graphics.Color.rgb(0, 200, 0)
+            COLOR_YELLOW -> android.graphics.Color.rgb(220, 200, 0)
+            else         -> android.graphics.Color.rgb(      // red → green
+                (255 * (1f - r)).toInt(),
+                (255 * r).toInt(),
+                0
+            )
+        }
+        binding.progressCapture.progress = (r * 100).toInt()
+        binding.progressCapture.progressTintList =
+            android.content.res.ColorStateList.valueOf(color)
     }
 
     // ── Save helpers ──────────────────────────────────────────────────────────
@@ -425,6 +470,7 @@ class CollectionActivity : AppCompatActivity() {
         Toast.makeText(this, "Deleted sample $count", Toast.LENGTH_SHORT).show()
         state        = CollectState.COOLDOWN
         cooldownTick = 0
+        flashTick    = 0
     }
 
     private fun updateCountDisplay() {
