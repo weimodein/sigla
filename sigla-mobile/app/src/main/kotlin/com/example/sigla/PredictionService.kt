@@ -4,52 +4,58 @@ import android.content.Context
 import android.util.Log
 import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.flex.FlexDelegate
-import kotlin.math.abs
-import kotlin.math.min
+import kotlin.math.sqrt
 
-// ── Constants — aligned with Python predict_landmarks.py ─────────────────────
 private const val TAG = "PredictionService"
-private const val SEQUENCE_LENGTH = 30
 
-// Probe interval (frames) — Python: PROBE_INTERVAL = 8
-private const val PROBE_INTERVAL = 8
-private const val EARLY_EXIT_CONF = 0.92f
-private const val EARLY_EXIT_STREAK = 3
+// ---------- Constants -------------------------------------------------
+private const val SEQUENCE_LENGTH        = 30
+private const val MIN_MOTION_FRAMES      = 8
+private const val MOTION_SLIDE_INTERVAL  = 2
+private const val MOTION_EARLY_CONF      = 0.85f     // lowered from 0.92
+private const val MOTION_EARLY_STREAK    = 4
+private const val MOTION_VELOCITY_STREAK = 10
+private const val STATIC_THRESHOLD       = 0.40f
+private const val VELOCITY_WINDOW        = 8
 
-// Static averaging
-private const val STATIC_AVG_MAX_FRAMES = 10
-private const val STATIC_HISTORY_LEN = 12
-private const val STATIC_THRESHOLD = 0.40f
+// --- Strong motion gating (raised significantly) ---
+private const val MOTION_VELOCITY_THRESH = 0.025f     // was 0.018f – only clear movement
+private const val LSTM_SKIP_THRESHOLD    = 0.018f     // was 0.014f
 
-// Motion thresholds — match Python exactly
-private const val MOTION_CONF_FLOOR = 0.50f
-private const val MOTION_CONF_BASE = 0.60f
+private const val EARLY_EXIT_STREAK      = 3
+private const val EARLY_EXIT_THRESHOLD   = 0.92f
+private const val STATIC_AVG_FRAMES      = 10
+private const val STATIC_HISTORY_LEN     = 12
+private const val BUFFER_CAPACITY        = 90
+private const val NO_HAND_TIMEOUT        = 6
+private const val BUFFER_FILL_MS         = 1500L
+private const val DETECTION_COOLDOWN_MS  = 3500L
+private const val MOTION_SETTLE_MS       = 2000L
+
+// Adaptive motion threshold
+private const val VELOCITY_SCORE_HIGH    = 0.025f
+private const val VELOCITY_SCORE_LOW     = 0.010f
+private const val MOTION_CONF_BASE       = 0.65f      // lowered, because velocity is already high
 private const val MOTION_CONF_STATIC_CAP = 0.85f
-private const val MOTION_SCORE_HIGH = 0.012f  // Python: 0.012
-private const val MOTION_SCORE_LOW = 0.002f   // Python: 0.002
-private const val MIN_BUF_FRAMES_MOTION = 8
 
-// Derived from MOTION_SCORE_LOW — match Python
-private const val LSTM_SKIP_THRESHOLD = 0.0008f     // Python: MOTION_SCORE_LOW * 0.4
-private const val VELOCITY_TRIM_THRESHOLD = 0.0012f  // Python: MOTION_SCORE_LOW * 0.6
+// Static override: if static model is very confident, motion must be even more confident
+private const val STATIC_HIGH_CONF_THRESH = 0.70f
+private const val MOTION_CONF_MARGIN      = 0.15f
 
-// Rolling window for live velocity — Python: 20
-private const val VELOCITY_WINDOW = 20
+private const val VELOCITY_TRIM_THRESHOLD = 0.004f
 
-// Timing
-private const val BUFFER_CAPACITY = 90
-private const val NO_HAND_TIMEOUT = 6
-private const val BUFFER_FILL_MS = 1500L
-private const val DETECTION_COOLDOWN_MS = 1500L  // Python: RESULT_DISPLAY_SECS = 1.5
-private const val MOTION_SETTLE_MS = 2000L
+// Landmark indices (wrist + fingertips)
+private val KEY_LANDMARK_INDICES = intArrayOf(0, 4, 8, 12, 16, 20)
+private val KEY_XY: IntArray = KEY_LANDMARK_INDICES.flatMap { i -> listOf(i * 3, i * 3 + 1) }.toIntArray()
 
-// Key landmarks: wrist + 5 fingertips — x,y only for velocity
-private val KEY_LANDMARKS = intArrayOf(0, 4, 8, 12, 16, 20)
-private val KEY_XY: IntArray = KEY_LANDMARKS.flatMap { i -> listOf(i * 3, i * 3 + 1) }.toIntArray()
+private val MOTION_CONFLICTS = mapOf(
+    "is" to "J",
+    "I"  to "J",
+    "z"  to "Z",
+    "s"  to "Z"
+)
 
-// ── Data classes ──────────────────────────────────────────────────────────────
-
+// ---------- Data classes ----------------------------------------------
 data class PredictionResult(
     val label: String,
     val confidence: Float,
@@ -65,8 +71,7 @@ data class CollectingState(
     val streak: Int
 )
 
-// ── PredictionService ─────────────────────────────────────────────────────────
-
+// ---------- PredictionService -----------------------------------------
 class PredictionService(private val context: Context) {
 
     var onResult: ((PredictionResult) -> Unit)? = null
@@ -75,443 +80,111 @@ class PredictionService(private val context: Context) {
 
     private var staticInterp: Interpreter? = null
     private var motionInterp: Interpreter? = null
-    private var flexDelegate: FlexDelegate? = null
     private var staticLabels: List<String> = emptyList()
     private var motionLabels: List<String> = emptyList()
 
     var isReady = false
         private set
 
-    // Buffer
     private val frameBuffer = ArrayDeque<FloatArray>()
     private var noHandFrames = 0
     private var collecting = false
     private var bufStartTime = 0L
 
-    // Velocity — rolling window of mean-abs displacement per frame
-    private val velWindow = ArrayDeque<Float>()
-    private var liveVelScore = 0f
-    private var prevKeyXY: FloatArray? = null
+    private val velocityHistory = ArrayDeque<Float>()
+    private var lastKeyXY: FloatArray? = null
+    private val keyXYScratch = FloatArray(KEY_XY.size)
 
-    // Early exit probe
-    private var probeCounter = 0
-    private var probeStreak = 0
-    private var probeLabel = ""
-
-    // Static history
     private val staticHistory = ArrayDeque<String>()
 
-    // Cooldown
+    private var earlyExitStreak = 0
+    private var earlyExitLabel = -1
+    private var motionEarlyStreak = 0
+    private var motionEarlyLabel = -1
+    private var framesSinceMotionRun = 0
     private var lastDetectionTime = 0L
     private var lastMotionDetectionTime = 0L
+    private var sustainedMotionFrames = 0
 
-    // ── Init ──────────────────────────────────────────────────────────────────
-
+    // ---------- Initialisation -----------------------------------------
     fun init() {
-        val staticOptions = Interpreter.Options().apply { numThreads = 4 }
-
-        // FlexDelegate is needed for LSTM (SELECT_TF_OPS).
-        // If it fails, static model must still load.
-        val motionOptions: Interpreter.Options? = try {
-            val fd = FlexDelegate()
-            flexDelegate = fd
-            Interpreter.Options().apply {
-                numThreads = 4
-                addDelegate(fd)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "FlexDelegate unavailable — motion disabled: ${e.message}")
-            flexDelegate = null
-            null
-        }
-
-        // Load static model
-        val sInterp = loadInterpreter("sign_model_static.tflite", staticOptions)
-        val sLabels = loadLabels("labels_static.json")
+        val options = Interpreter.Options().apply { numThreads = 4 }
+        val (sInterp, sLabels) = loadModelPair("sign_model_static.tflite", "labels_static.json", options)
         if (sInterp == null || sLabels == null) {
-            Log.e(TAG, "Static model failed to load — prediction disabled")
+            Log.e(TAG, "Failed to load static model")
             return
         }
         staticInterp = sInterp
         staticLabels = sLabels
-        Log.i(TAG, "Static: ${staticLabels.size} classes (${staticLabels.joinToString()})")
 
-        // Load motion model (optional)
-        if (motionOptions != null) {
-            val mInterp = loadInterpreter("sign_model_motion.tflite", motionOptions)
-            val mLabels = loadLabels("labels_motion.json")
-            if (mInterp != null && mLabels != null) {
-                motionInterp = mInterp
-                motionLabels = mLabels
-                Log.i(TAG, "Motion: ${motionLabels.size} classes (${motionLabels.joinToString()})")
-            } else {
-                Log.w(TAG, "Motion model not available — static-only mode")
-            }
+        val (mInterp, mLabels) = loadModelPair("sign_model_motion.tflite", "labels_motion.json", options)
+        if (mInterp != null && mLabels != null) {
+            motionInterp = mInterp
+            motionLabels = mLabels
         } else {
-            Log.w(TAG, "FlexDelegate failed — static-only mode")
+            Log.w(TAG, "Motion model not available, running static-only")
         }
-
         isReady = true
-        Log.i(TAG, "PredictionService ready — static: ${staticLabels.size}, motion: ${motionLabels.size}")
+        Log.i(TAG, "Models loaded — static: ${staticLabels.size}, motion: ${motionLabels.size}")
     }
 
-    private fun loadInterpreter(fileName: String, options: Interpreter.Options): Interpreter? {
-        val file = ModelUpdateManager.getLocalFile(context, fileName) ?: run {
-            Log.w(TAG, "$fileName not found on disk")
-            return null
-        }
+    private fun loadModelPair(modelFile: String, labelsFile: String, options: Interpreter.Options): Pair<Interpreter?, List<String>?> {
+        val localModel = ModelUpdateManager.getLocalFile(context, modelFile)
+        val localLabels = ModelUpdateManager.getLocalFile(context, labelsFile)
+        if (localModel == null || localLabels == null) return Pair(null, null)
         return try {
-            Interpreter(file, options).also {
-                Log.i(TAG, "Loaded $fileName")
-            }
+            val interp = Interpreter(localModel, options)
+            val labels = parseLabels(localLabels.readText())
+            Pair(interp, labels)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load $fileName: ${e.message}")
-            file.delete()
-            null
+            localModel.delete(); localLabels.delete()
+            Pair(null, null)
         }
     }
 
-    private fun loadLabels(fileName: String): List<String>? {
-        val file = ModelUpdateManager.getLocalFile(context, fileName) ?: run {
-            Log.w(TAG, "$fileName not found on disk")
-            return null
-        }
-        return try {
-            val json = JSONObject(file.readText())
-            val labels = mutableListOf<String>()
-            var i = 0
-            while (json.has(i.toString())) {
-                labels.add(json.getString(i.toString()))
-                i++
-            }
-            labels
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse $fileName: ${e.message}")
-            file.delete()
-            null
-        }
+    private fun parseLabels(text: String): List<String> {
+        val json = JSONObject(text)
+        val result = mutableListOf<String>()
+        var i = 0
+        while (json.has(i.toString())) { result.add(json.getString(i.toString())); i++ }
+        return result
     }
 
-    // ── Hand helpers ──────────────────────────────────────────────────────────
-
+    // ---------- Helpers ------------------------------------------------
     private fun isSingleHand(features: FloatArray): Boolean {
-        for (i in 63 until 126) {
-            if (features[i] != 0f) return false
-        }
+        for (i in 63 until 126) if (features[i] != 0f) return false
         return true
     }
 
     private fun mirrorHandX(features: FloatArray): FloatArray {
         val m = features.copyOf()
-        for (i in 0 until 21) { m[i * 3] = 1.0f - m[i * 3] }
+        for (i in 0 until 21) m[i * 3] = 1.0f - m[i * 3]
         return m
     }
 
-    // ── Velocity (mean-abs displacement — matches Python _frame_velocity) ────
-
-    /**
-     * Mean absolute x,y displacement of key landmarks between two frames.
-     * Matches Python: np.mean(np.abs(db - da))
-     */
-    private fun meanAbsKeyXY(a: FloatArray, b: FloatArray): Float {
-        var sum = 0f
-        for (k in KEY_XY) {
-            sum += abs(a[k] - b[k])
-        }
-        return sum / KEY_XY.size
-    }
-
-    private fun updateLiveVelocity(features: FloatArray) {
-        // Extract key landmark x,y values
-        val curKeyXY = FloatArray(KEY_XY.size) { features[KEY_XY[it]] }
-        val prev = prevKeyXY
-        if (prev != null) {
-            // Mean absolute displacement (not Euclidean — matches Python)
-            var sum = 0f
-            for (i in curKeyXY.indices) {
-                sum += abs(curKeyXY[i] - prev[i])
-            }
-            val v = sum / curKeyXY.size
-            velWindow.addLast(v)
-            while (velWindow.size > VELOCITY_WINDOW) velWindow.removeFirst()
-            liveVelScore = velWindow.average().toFloat()
-        }
-        prevKeyXY = curKeyXY
-    }
-
-    private fun bufferMeanVelocity(buf: List<FloatArray>): Float {
-        if (buf.size < 2) return 0f
-        var total = 0f
-        for (i in 1 until buf.size) {
-            total += meanAbsKeyXY(buf[i], buf[i - 1])
-        }
-        return total / (buf.size - 1)
-    }
-
     private fun adaptiveMotionThreshold(velScore: Float): Float = when {
-        velScore >= MOTION_SCORE_HIGH -> MOTION_CONF_BASE
-        velScore <= MOTION_SCORE_LOW -> MOTION_CONF_STATIC_CAP
+        velScore >= VELOCITY_SCORE_HIGH -> MOTION_CONF_BASE
+        velScore <= VELOCITY_SCORE_LOW -> MOTION_CONF_STATIC_CAP
         else -> {
-            val t = (velScore - MOTION_SCORE_LOW) / (MOTION_SCORE_HIGH - MOTION_SCORE_LOW)
+            val t = (velScore - VELOCITY_SCORE_LOW) / (VELOCITY_SCORE_HIGH - VELOCITY_SCORE_LOW)
             MOTION_CONF_STATIC_CAP + t * (MOTION_CONF_BASE - MOTION_CONF_STATIC_CAP)
         }
     }
 
-    // ── Static inference ──────────────────────────────────────────────────────
-
-    /**
-     * Multi-frame averaged static inference — matches Python _avg_static_pred.
-     * Runs model per-frame (TFLite Interpreter is batch-1) and averages softmax.
-     * Also runs mirrored frames for single-hand inputs (matches Python _run_static).
-     */
-    private fun runStaticOnFrames(frames: List<FloatArray>): Pair<String, Float>? {
-        val interp = staticInterp ?: return null
-        if (staticLabels.isEmpty() || frames.isEmpty()) return null
-
-        val numClasses = staticLabels.size
-        val avgProbs = FloatArray(numClasses)
-        val input = Array(1) { FloatArray(126) }
-        val output = Array(1) { FloatArray(numClasses) }
-        var count = 0
-
-        for (frame in frames) {
-            // Original orientation
-            input[0] = frame
-            try {
-                interp.run(input, output)
-                for (j in 0 until numClasses) avgProbs[j] += output[0][j]
-                count++
-            } catch (_: Exception) { }
-
-            // Mirror for single-hand (matches Python left-hand flip)
-            if (isSingleHand(frame)) {
-                input[0] = mirrorHandX(frame)
-                try {
-                    interp.run(input, output)
-                    for (j in 0 until numClasses) avgProbs[j] += output[0][j]
-                    count++
-                } catch (_: Exception) { }
-            }
-        }
-
-        if (count == 0) return null
-        for (j in 0 until numClasses) avgProbs[j] /= count.toFloat()
-
-        val idx = avgProbs.indices.maxByOrNull { avgProbs[it] } ?: return null
-        val label = staticLabels[idx]
-        val conf = avgProbs[idx]
-        return Pair(label, conf)
-    }
-
-    /**
-     * Single-frame static probe for early-exit — runs original + mirrored,
-     * keeps the higher confidence. Matches Python _probe_static.
-     */
-    private fun probeStatic(frame: FloatArray): Pair<String, Float>? {
-        val interp = staticInterp ?: return null
-        if (staticLabels.isEmpty()) return null
-
-        val numClasses = staticLabels.size
-        val input = Array(1) { FloatArray(126) }
-        val output = Array(1) { FloatArray(numClasses) }
-
-        // Run original
-        input[0] = frame
-        var bestIdx: Int
-        var bestConf: Float
-        try {
-            interp.run(input, output)
-            bestIdx = output[0].indices.maxByOrNull { output[0][it] } ?: return null
-            bestConf = output[0][bestIdx]
-        } catch (_: Exception) {
-            return null
-        }
-
-        // Run mirrored if single hand — keep higher confidence
-        if (isSingleHand(frame)) {
-            input[0] = mirrorHandX(frame)
-            try {
-                interp.run(input, output)
-                val mIdx = output[0].indices.maxByOrNull { output[0][it] }
-                if (mIdx != null && output[0][mIdx] > bestConf) {
-                    bestIdx = mIdx
-                    bestConf = output[0][mIdx]
-                }
-            } catch (_: Exception) { }
-        }
-
-        val label = staticLabels[bestIdx]
-        return Pair(label, bestConf)
-    }
-
-    // ── Motion inference ──────────────────────────────────────────────────────
-
-    /**
-     * Trim low-velocity leading/trailing frames — matches Python _trim_buf_to_motion.
-     */
-    private fun trimBufToMotion(buf: List<FloatArray>): List<FloatArray> {
-        if (buf.size < MIN_BUF_FRAMES_MOTION * 2) return buf
-
-        val profile = FloatArray(buf.size - 1) { i -> meanAbsKeyXY(buf[i + 1], buf[i]) }
-
-        var start = 0
-        for (i in profile.indices) {
-            if (profile[i] >= VELOCITY_TRIM_THRESHOLD) { start = i; break }
-        }
-        var end = buf.size
-        for (i in profile.indices.reversed()) {
-            if (profile[i] >= VELOCITY_TRIM_THRESHOLD) { end = min(buf.size, i + 2); break }
-        }
-
-        val trimmed = buf.subList(start, end)
-        return if (trimmed.size >= MIN_BUF_FRAMES_MOTION) trimmed else buf
-    }
-
-    /**
-     * Peak-centred velocity window — matches Python _peak_centre_window.
-     */
-    private fun peakCentreWindow(buf: List<FloatArray>): List<FloatArray> {
-        if (buf.size <= SEQUENCE_LENGTH) return buf
-
-        val profile = FloatArray(buf.size - 1) { i -> meanAbsKeyXY(buf[i + 1], buf[i]) }
-        val winLen = SEQUENCE_LENGTH - 1
-        if (winLen > profile.size) return buf
-
-        var bestStart = 0
-        var bestSum = 0f
-        var curSum = 0f
-        for (i in 0 until winLen) curSum += profile[i]
-        bestSum = curSum
-
-        for (i in 1..(profile.size - winLen)) {
-            curSum += profile[i + winLen - 1] - profile[i - 1]
-            if (curSum > bestSum) { bestSum = curSum; bestStart = i }
-        }
-
-        return buf.subList(bestStart, min(bestStart + SEQUENCE_LENGTH, buf.size))
-    }
-
-    /**
-     * Linearly interpolate to exactly SEQUENCE_LENGTH frames — matches Python.
-     * Python: np.linspace(0, N-1, SEQUENCE_LENGTH) then linear interp.
-     */
-    private fun resampleToSeqLen(frames: List<FloatArray>): Array<FloatArray> {
-        val n = frames.size
-        val featureSize = frames[0].size
-        return Array(SEQUENCE_LENGTH) { t ->
-            val pos = t.toFloat() * (n - 1) / (SEQUENCE_LENGTH - 1).coerceAtLeast(1)
-            val lo = pos.toInt().coerceIn(0, n - 1)
-            val hi = (lo + 1).coerceIn(0, n - 1)
-            val frac = pos - lo
-            FloatArray(featureSize) { j -> frames[lo][j] * (1f - frac) + frames[hi][j] * frac }
-        }
-    }
-
-    /**
-     * LSTM inference — trim, peak-centre, resample, run.
-     * Input shape: [1, SEQUENCE_LENGTH, 126]
-     * Output shape: [1, num_motion_classes]
-     */
-    private fun runMotionInference(frames: List<FloatArray>): Pair<String, Float>? {
-        val interp = motionInterp ?: return null
-        if (frames.size < MIN_BUF_FRAMES_MOTION || motionLabels.isEmpty()) return null
-
-        val trimmed = trimBufToMotion(frames)
-        val windowed = peakCentreWindow(trimmed)
-        val seq = resampleToSeqLen(windowed)
-
-        // TFLite expects [1][SEQUENCE_LENGTH][features]
-        val input = Array(1) { seq }
-        val output = Array(1) { FloatArray(motionLabels.size) }
-
-        try {
-            interp.run(input, output)
-        } catch (e: Exception) {
-            Log.e(TAG, "Motion inference failed: ${e.message}")
-            return null
-        }
-
-        val probs = output[0]
-        val idx = probs.indices.maxByOrNull { probs[it] } ?: return null
-        val conf = probs[idx]
-
-        if (conf < MOTION_CONF_FLOOR) return null
-        return Pair(motionLabels[idx], conf)
-    }
-
-    // ── Early exit — matches Python _check_early_exit ─────────────────────────
-
     private fun historyMajority(): String {
         if (staticHistory.isEmpty()) return ""
         val counts = mutableMapOf<String, Int>()
-        for (lbl in staticHistory) {
-            if (lbl.isNotEmpty()) counts[lbl] = (counts[lbl] ?: 0) + 1
-        }
-        val top = counts.maxByOrNull { it.value } ?: return ""
-        return if (top.value > staticHistory.size / 2) top.key else ""
+        for (lbl in staticHistory) if (lbl.isNotEmpty()) counts[lbl] = (counts[lbl] ?: 0) + 1
+        val entry = counts.maxByOrNull { it.value } ?: return ""
+        return if (entry.value > staticHistory.size / 2) entry.key else ""
     }
 
-    private fun checkEarlyExit(features: FloatArray): PredictionResult? {
-        probeCounter++
-        if (probeCounter < PROBE_INTERVAL) return null
-        probeCounter = 0
-
-        // Gate 1: velocity must be low (matches Python)
-        if (liveVelScore >= MOTION_SCORE_LOW) {
-            probeStreak = 0
-            probeLabel = ""
-            return null
-        }
-
-        val result = probeStatic(features) ?: run {
-            staticHistory.addLast("")
-            while (staticHistory.size > STATIC_HISTORY_LEN) staticHistory.removeFirst()
-            return null
-        }
-        val (label, conf) = result
-
-        // Don't early-exit motion gestures
-        val isMotionGesture = motionLabels.contains(label)
-
-        // Update history
-        staticHistory.addLast(if (!isMotionGesture && conf >= EARLY_EXIT_CONF) label else "")
-        while (staticHistory.size > STATIC_HISTORY_LEN) staticHistory.removeFirst()
-
-        if (isMotionGesture || conf < EARLY_EXIT_CONF) {
-            probeStreak = 0
-            probeLabel = ""
-            return null
-        }
-
-        // Gate 2: streak
-        if (label == probeLabel) {
-            probeStreak++
-        } else {
-            probeStreak = 1
-            probeLabel = label
-        }
-
-        if (probeStreak >= EARLY_EXIT_STREAK) {
-            // Gate 3: history majority must agree
-            val majority = historyMajority()
-            if (majority == label) {
-                probeStreak = 0
-                probeLabel = ""
-                Log.i(TAG, "Early exit: $label (${"%.3f".format(conf)})")
-                return PredictionResult(label, conf, isMotion = false, earlyExit = true)
-            }
-            probeStreak = 0
-        }
-
-        return null
-    }
-
-    // ── Main entry point ──────────────────────────────────────────────────────
-
+    // ---------- Main processing ----------------------------------------
     fun processFrame(features: FloatArray, handsDetected: Int) {
         if (!isReady) return
 
         val now = System.currentTimeMillis()
+        if (now - lastDetectionTime < DETECTION_COOLDOWN_MS) return
 
         if (handsDetected == 0) {
             noHandFrames++
@@ -522,116 +195,291 @@ class PredictionService(private val context: Context) {
             return
         }
 
-        // During cooldown, track hands but don't run prediction
-        if (now - lastDetectionTime < DETECTION_COOLDOWN_MS) return
-
         noHandFrames = 0
-        updateLiveVelocity(features)
-
-        if (!collecting) {
-            collecting = true
-            bufStartTime = now
-        }
+        collecting = true
+        if (bufStartTime == 0L) bufStartTime = now
 
         frameBuffer.addLast(features.copyOf())
-        while (frameBuffer.size > BUFFER_CAPACITY) frameBuffer.removeFirst()
+        if (frameBuffer.size > BUFFER_CAPACITY) frameBuffer.removeFirst()
 
-        // Early exit check
-        val earlyResult = checkEarlyExit(features)
-        if (earlyResult != null) {
-            lastDetectionTime = now
-            onResult?.invoke(earlyResult)
-            resetBuffers()
-            return
+        val velocity = computeVelocity(features)
+        val isMotion = velocity > MOTION_VELOCITY_THRESH
+        framesSinceMotionRun++
+
+        if (velocity >= MOTION_VELOCITY_THRESH) sustainedMotionFrames++
+        else sustainedMotionFrames = 0
+
+        val motionProbeArmed = (now - lastMotionDetectionTime) >= MOTION_SETTLE_MS
+
+        // ---- Static early‑exit ----
+        val staticResult = runStaticOnFrames(frameBuffer.takeLast(STATIC_AVG_FRAMES))
+        if (staticResult != null) {
+            val (idx, conf) = staticResult
+            val label = staticLabels.getOrNull(idx) ?: ""
+            val isMotionGesture = motionLabels.contains(label)
+            val conflictsWithMotion = MOTION_CONFLICTS.containsKey(label)
+
+            staticHistory.addLast(if (!isMotionGesture && conf >= EARLY_EXIT_THRESHOLD) label else "")
+            if (staticHistory.size > STATIC_HISTORY_LEN) staticHistory.removeFirst()
+
+            if (!isMotionGesture && conf >= EARLY_EXIT_THRESHOLD) {
+                if (conflictsWithMotion && velocity >= MOTION_VELOCITY_THRESH) {
+                    earlyExitStreak = 0; earlyExitLabel = -1
+                } else {
+                    if (idx == earlyExitLabel) earlyExitStreak++
+                    else { earlyExitStreak = 1; earlyExitLabel = idx }
+                    if (earlyExitStreak >= EARLY_EXIT_STREAK && historyMajority() == label) {
+                        lastDetectionTime = now
+                        onResult?.invoke(PredictionResult(label, conf, false, earlyExit = true))
+                        resetBuffers()
+                        return
+                    }
+                }
+            } else {
+                if (idx != earlyExitLabel) { earlyExitStreak = 0; earlyExitLabel = idx }
+            }
         }
 
-        // Progress callback
+        // ---- Motion early‑exit (only if velocity is high) ----
+        if (frameBuffer.size >= MIN_MOTION_FRAMES
+            && framesSinceMotionRun >= MOTION_SLIDE_INTERVAL
+            && sustainedMotionFrames >= MOTION_VELOCITY_STREAK
+            && motionProbeArmed
+            && bufferMeanVelocity() >= MOTION_VELOCITY_THRESH
+        ) {
+            framesSinceMotionRun = 0
+            val motionResult = runMotionInference(frameBuffer.toList())
+            if (motionResult != null) {
+                val (mIdx, mConf) = motionResult
+                val mLabel = motionLabels.getOrNull(mIdx) ?: ""
+                // No high‑risk override – rely on velocity gating instead
+                if (motionLabels.contains(mLabel) && mConf >= MOTION_EARLY_CONF) {
+                    if (mIdx == motionEarlyLabel) motionEarlyStreak++
+                    else { motionEarlyStreak = 1; motionEarlyLabel = mIdx }
+                    if (motionEarlyStreak >= MOTION_EARLY_STREAK) {
+                        Log.i(TAG, "Motion early‑exit: $mLabel (conf=$mConf, vel=${bufferMeanVelocity()})")
+                        lastDetectionTime = now
+                        lastMotionDetectionTime = now
+                        onResult?.invoke(PredictionResult(mLabel, mConf, true, earlyExit = true))
+                        resetBuffers()
+                        return
+                    }
+                } else {
+                    if (mIdx != motionEarlyLabel) { motionEarlyStreak = 0; motionEarlyLabel = mIdx }
+                }
+            }
+        }
+
+        // ---- Collecting UI update ----
         val elapsed = now - bufStartTime
         val progress = (elapsed.toFloat() / BUFFER_FILL_MS).coerceIn(0f, 1f)
-        onCollecting?.invoke(CollectingState(
-            progress = progress,
-            frames = frameBuffer.size,
-            velocity = liveVelScore,
-            isMotion = liveVelScore >= MOTION_SCORE_LOW,
-            streak = probeStreak
-        ))
+        onCollecting?.invoke(CollectingState(progress, frameBuffer.size, velocity, isMotion, earlyExitStreak))
 
-        // Buffer full — run dual-race
-        if (elapsed >= BUFFER_FILL_MS && frameBuffer.size >= MIN_BUF_FRAMES_MOTION) {
+        // ---- Full buffer dual‑race ----
+        if (elapsed >= BUFFER_FILL_MS && frameBuffer.size >= MIN_MOTION_FRAMES) {
             runDualRace(now, frameBuffer.toList())
             resetBuffers()
         }
     }
 
-    // ── Dual-race — matches Python _race() ────────────────────────────────────
-
+    // ---------- Dual‑race (motion only if velocity is high) ----------
     private fun runDualRace(now: Long, frames: List<FloatArray>) {
-        val meanVel = bufferMeanVelocity(frames)
-        val adaptiveThresh = adaptiveMotionThreshold(meanVel)
+        val meanVel = bufferMeanVelocityOf(frames)
+        val adaptiveThreshold = adaptiveMotionThreshold(meanVel)
         val skipLstm = meanVel < LSTM_SKIP_THRESHOLD
         val motionProbeArmed = (now - lastMotionDetectionTime) >= MOTION_SETTLE_MS
 
-        // Run static (multi-frame averaged on last STATIC_AVG_MAX_FRAMES)
-        val staticResult = runStaticOnFrames(frames.takeLast(STATIC_AVG_MAX_FRAMES))
+        val staticResult = runStaticOnFrames(frames.takeLast(STATIC_AVG_FRAMES))
+        val motionResult = if (!skipLstm && motionProbeArmed) runMotionInference(frames) else null
 
-        // Run motion (if velocity warrants it)
-        val motionResult = if (!skipLstm && motionProbeArmed && motionInterp != null)
-            runMotionInference(frames) else null
+        // Static high confidence detection
+        var staticHighConf = false
+        var staticConf = 0f
+        var staticLabel = ""
+        if (staticResult != null) {
+            staticConf = staticResult.second
+            staticLabel = staticLabels.getOrNull(staticResult.first) ?: ""
+            staticHighConf = staticConf >= STATIC_HIGH_CONF_THRESH
+        }
 
-        val skipNote = if (skipLstm) " [LSTM skipped]" else ""
-        Log.d(TAG, "RACE vel=${"%.4f".format(meanVel)} thresh=${"%.2f".format(adaptiveThresh)} " +
-                "static=${staticResult?.let { "${it.first}(${"%.2f".format(it.second)})" } ?: "none"} " +
-                "motion=${motionResult?.let { "${it.first}(${"%.2f".format(it.second)})" } ?: "none"}$skipNote")
+        // Motion result evaluation – only if velocity is high enough
+        if (motionResult != null && meanVel >= MOTION_VELOCITY_THRESH) {
+            val (mIdx, mConf) = motionResult
+            val mLabel = motionLabels.getOrNull(mIdx) ?: return
 
-        // Motion wins if confident enough and velocity confirms movement
-        if (motionResult != null) {
-            val (mLabel, mConf) = motionResult
-            if (mConf >= adaptiveThresh && meanVel >= MOTION_SCORE_LOW) {
-                Log.i(TAG, "MOTION wins: $mLabel (${"%.3f".format(mConf)})")
+            // Discount confidence slightly for borderline velocity (optional)
+            val velocityFactor = (meanVel / MOTION_VELOCITY_THRESH).coerceIn(0.7f, 1.0f)
+            val adjustedConf = mConf * velocityFactor
+
+            // Override by static: if static is very confident, motion must beat it by a margin
+            val overrideByStatic = staticHighConf && !MOTION_CONFLICTS.containsKey(staticLabel) &&
+                    (adjustedConf < staticConf + MOTION_CONF_MARGIN)
+
+            if (adjustedConf >= adaptiveThreshold && !overrideByStatic) {
+                Log.i(TAG, "Motion detected: $mLabel (rawConf=$mConf, adjConf=$adjustedConf, vel=$meanVel)")
                 lastDetectionTime = now
                 lastMotionDetectionTime = now
-                onResult?.invoke(PredictionResult(mLabel, mConf, isMotion = true))
+                onResult?.invoke(PredictionResult(mLabel, mConf, true))
                 return
+            } else {
+                Log.d(TAG, "Motion rejected: $mLabel (adjConf=$adjustedConf, thresh=$adaptiveThreshold, override=$overrideByStatic)")
             }
         }
 
-        // Static fallback — skip labels that belong to motion model
+        // Static result fallback
         if (staticResult != null) {
-            val (sLabel, sConf) = staticResult
+            val (sIdx, sConf) = staticResult
+            val sLabel = staticLabels.getOrNull(sIdx) ?: return
             if (!motionLabels.contains(sLabel) && sConf >= STATIC_THRESHOLD) {
-                Log.i(TAG, "STATIC wins: $sLabel (${"%.3f".format(sConf)})")
+                Log.i(TAG, "Static detected: $sLabel (conf=$sConf)")
                 lastDetectionTime = now
-                onResult?.invoke(PredictionResult(sLabel, sConf, isMotion = false))
-                return
+                onResult?.invoke(PredictionResult(sLabel, sConf, false))
             }
         }
-
-        Log.d(TAG, "RACE: no confident result")
     }
 
-    // ── Reset ─────────────────────────────────────────────────────────────────
+    // ---------- Inference helpers (unchanged) -------------------------
+    private fun runStaticOnFrames(frames: List<FloatArray>): Pair<Int, Float>? {
+        val interp = staticInterp ?: return null
+        if (staticLabels.isEmpty() || frames.isEmpty()) return null
+        val sumProbs = FloatArray(staticLabels.size)
+        val input = Array(1) { FloatArray(126) }
+        val output = Array(1) { FloatArray(staticLabels.size) }
+        var count = 0
+        for (frame in frames) {
+            if (accumulateStatic(interp, frame, input, output, sumProbs)) count++
+            if (isSingleHand(frame) && accumulateStatic(interp, mirrorHandX(frame), input, output, sumProbs)) count++
+        }
+        if (count == 0) return null
+        val countF = count.toFloat()
+        for (i in sumProbs.indices) sumProbs[i] /= countF
+        val idx = sumProbs.indices.maxByOrNull { sumProbs[it] } ?: return null
+        return Pair(idx, sumProbs[idx])
+    }
 
+    private fun accumulateStatic(interp: Interpreter, frame: FloatArray, input: Array<FloatArray>, output: Array<FloatArray>, sumProbs: FloatArray): Boolean {
+        input[0] = frame
+        return try {
+            interp.run(input, output)
+            for (i in output[0].indices) sumProbs[i] += output[0][i]
+            true
+        } catch (_: Exception) { false }
+    }
+
+    private fun runMotionInference(frames: List<FloatArray>): Pair<Int, Float>? {
+        val interp = motionInterp ?: return null
+        if (frames.size < MIN_MOTION_FRAMES) return null
+        val trimmed = trimBufToMotion(frames)
+        val seq = extractMotionWindow(trimmed)
+        val result1 = runMotionOnSequence(interp, seq)
+        val singleHandCount = seq.count { isSingleHand(it) }
+        if (singleHandCount > seq.size / 2) {
+            val mirroredSeq = seq.map { if (isSingleHand(it)) mirrorHandX(it) else it }
+            val result2 = runMotionOnSequence(interp, mirroredSeq)
+            if (result2 != null && (result1 == null || result2.second > result1.second)) return result2
+        }
+        return result1
+    }
+
+    private fun runMotionOnSequence(interp: Interpreter, seq: List<FloatArray>): Pair<Int, Float>? {
+        val input = Array(1) { Array(SEQUENCE_LENGTH) { i -> seq[i] } }
+        val output = Array(1) { FloatArray(motionLabels.size) }
+        return try {
+            interp.run(input, output)
+            val probs = output[0]
+            val idx = probs.indices.maxByOrNull { probs[it] } ?: return null
+            Pair(idx, probs[idx])
+        } catch (_: Exception) { null }
+    }
+
+    private fun trimBufToMotion(frames: List<FloatArray>): List<FloatArray> {
+        if (frames.size < MIN_MOTION_FRAMES * 2) return frames
+        val profile = FloatArray(frames.size - 1) { i -> keyXYDist(frames[i + 1], frames[i]) }
+        var start = 0
+        var end = frames.size
+        for (i in profile.indices) { if (profile[i] >= VELOCITY_TRIM_THRESHOLD) { start = i; break } }
+        for (i in profile.indices.reversed()) { if (profile[i] >= VELOCITY_TRIM_THRESHOLD) { end = minOf(frames.size, i + 2); break } }
+        val trimmed = frames.subList(start, end)
+        return if (trimmed.size >= MIN_MOTION_FRAMES) trimmed else frames
+    }
+
+    private fun extractMotionWindow(frames: List<FloatArray>): List<FloatArray> {
+        if (frames.size <= SEQUENCE_LENGTH) {
+            val w = frames.toMutableList()
+            while (w.size < SEQUENCE_LENGTH) w.add(w.last())
+            return w
+        }
+        val profile = FloatArray(frames.size - 1) { i -> keyXYDist(frames[i + 1], frames[i]) }
+        val winLen = SEQUENCE_LENGTH - 1
+        var bestStart = 0
+        var bestSum = 0f
+        var curSum = 0f
+        for (i in 0 until minOf(winLen, profile.size)) curSum += profile[i]
+        bestSum = curSum
+        for (i in 1..(profile.size - winLen)) {
+            curSum += profile[i + winLen - 1] - profile[i - 1]
+            if (curSum > bestSum) { bestSum = curSum; bestStart = i }
+        }
+        val end = minOf(bestStart + SEQUENCE_LENGTH, frames.size)
+        val window = frames.subList(bestStart, end).toMutableList()
+        while (window.size < SEQUENCE_LENGTH) window.add(window.last())
+        return window
+    }
+
+    // ---------- Velocity utilities -------------------------------------
+    private fun computeVelocity(features: FloatArray): Float {
+        for (i in KEY_XY.indices) keyXYScratch[i] = features[KEY_XY[i]]
+        val prev = lastKeyXY
+        lastKeyXY = keyXYScratch.copyOf()
+        val instantV = if (prev != null) euclideanDist(keyXYScratch, prev) else 0f
+        velocityHistory.addLast(instantV)
+        if (velocityHistory.size > VELOCITY_WINDOW) velocityHistory.removeFirst()
+        return velocityHistory.average().toFloat()
+    }
+
+    private fun keyXYDist(a: FloatArray, b: FloatArray): Float {
+        var sum = 0f
+        for (k in KEY_XY) { val d = a[k] - b[k]; sum += d * d }
+        return sqrt(sum)
+    }
+
+    private fun bufferMeanVelocity(): Float = bufferMeanVelocityOf(frameBuffer.toList())
+    private fun bufferMeanVelocityOf(frames: List<FloatArray>): Float {
+        if (frames.size < 2) return 0f
+        var total = 0f
+        for (i in 1 until frames.size) total += keyXYDist(frames[i], frames[i - 1])
+        return total / (frames.size - 1)
+    }
+
+    private fun euclideanDist(a: FloatArray, b: FloatArray): Float {
+        var sum = 0f
+        for (i in a.indices) { val d = a[i] - b[i]; sum += d * d }
+        return sqrt(sum)
+    }
+
+    // ---------- Reset -------------------------------------------------
     private fun resetBuffers() {
         frameBuffer.clear()
-        velWindow.clear()
-        prevKeyXY = null
-        liveVelScore = 0f
-        probeCounter = 0
-        probeStreak = 0
-        probeLabel = ""
+        velocityHistory.clear()
+        lastKeyXY = null
         collecting = false
         bufStartTime = 0L
+        earlyExitStreak = 0
+        earlyExitLabel = -1
+        motionEarlyStreak = 0
+        motionEarlyLabel = -1
+        framesSinceMotionRun = 0
+        sustainedMotionFrames = 0
     }
 
     fun reset() {
         resetBuffers()
-        staticHistory.clear()
         noHandFrames = 0
+        staticHistory.clear()
     }
 
     fun close() {
         staticInterp?.close()
         motionInterp?.close()
-        flexDelegate?.close()
     }
 }
