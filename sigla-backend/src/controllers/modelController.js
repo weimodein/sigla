@@ -198,13 +198,14 @@ const trainModel = async (req, res) => {
 
     // Update model record with training results from FastAPI
     await modelRecord.update({
-      accuracy: trainingResult.accuracy || null,
-      precision: trainingResult.precision || null,
-      recall: trainingResult.recall || null,
-      f1_score: trainingResult.f1_score || null,
-      total_classes: trainingResult.total_classes || null,
-      tflite_url: trainingResult.tflite_url || null,
-      h5_url: trainingResult.h5_url || null,
+      accuracy:          trainingResult.accuracy          || null,
+      precision:         trainingResult.precision         || null,
+      recall:            trainingResult.recall            || null,
+      f1_score:          trainingResult.f1_score          || null,
+      total_classes:     trainingResult.total_classes     || null,
+      tflite_url:        trainingResult.tflite_url        || null,
+      h5_url:            trainingResult.h5_url            || null,
+      motion_tflite_url: trainingResult.motion_tflite_url || null,
       trained_at: new Date(),
     });
 
@@ -217,8 +218,12 @@ const trainModel = async (req, res) => {
       details: `Trained model version ${version_number}`,
     });
 
+    const motionNote = trainingResult.motion_trained
+      ? `Motion model trained (${trainingResult.motion_classes} classes).`
+      : `Motion model NOT trained — only ${trainingResult.motion_classes ?? 0} motion gesture class(es) found in dataset (need at least 2).`;
+
     return res.status(200).json({
-      message: "Model trained successfully",
+      message: `Model trained successfully. ${motionNote}`,
       model: modelRecord,
       training_result: trainingResult,
     });
@@ -327,7 +332,9 @@ const deployModel = async (req, res) => {
       model.tflite_url.lastIndexOf("/"),
     );
 
-    // List of expected files – required ones must exist, optional ones are skipped if missing
+    // List of expected files – required ones must exist, optional ones are skipped if missing.
+    // Motion model URL comes from the stored DB column (saved after training).
+    // Labels URLs are derived from the versioned base path (same folder as the tflite files).
     const possibleFiles = [
       {
         url: model.tflite_url,
@@ -340,12 +347,12 @@ const deployModel = async (req, res) => {
         required: true,
       },
       {
-        url: `${baseUrl}/sign_model_motion.tflite`,
+        url: model.motion_tflite_url || null,
         name: "sign_model_motion.tflite",
         required: false,
       },
       {
-        url: `${baseUrl}/labels_motion.json`,
+        url: model.motion_tflite_url ? `${baseUrl}/labels_motion.json` : null,
         name: "labels_motion.json",
         required: false,
       },

@@ -18,6 +18,10 @@ const ModelVersion = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    motion_tflite_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     h5_url: {
       type: DataTypes.TEXT,
       allowNull: true,

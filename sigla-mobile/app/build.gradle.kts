@@ -52,6 +52,8 @@ dependencies {
     // TFLite
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // Required for motion (LSTM) model — uses TensorList ops that need the Select TF delegate
+    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.14.0")
 
     // Kotlin coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

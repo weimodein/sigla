@@ -65,14 +65,32 @@ def build_motion_model(num_classes: int):
     return model
 
 
-def convert_to_tflite(model, save_path: str) -> str:
+def convert_to_tflite(model, save_path: str, use_select_ops: bool = False) -> str:
+    """
+    Convert a Keras model to TFLite.
+
+    Static (MLP) models convert with TFLITE_BUILTINS only.
+    Motion (LSTM) models require SELECT_TF_OPS because LSTM uses TensorList ops
+    that cannot be lowered to built-in TFLite ops with static shapes.
+    The Android app must include tensorflow-lite-select-tf-ops to run these.
+    """
     import tensorflow as tf
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
 
     # Disable optimizations to avoid advanced op versions (like FULLY_CONNECTED v12)
     converter.optimizations = []
-    # Explicitly use only built-in ops (default, but we ensure it)
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS]
+
+    if use_select_ops:
+        # LSTM uses TensorListReserve which requires the Select TF ops delegate.
+        # The mobile app must include tensorflow-lite-select-tf-ops to run this model.
+        converter.target_spec.supported_ops = [
+            tf.lite.OpsSet.TFLITE_BUILTINS,
+            tf.lite.OpsSet.SELECT_TF_OPS,
+        ]
+        converter._experimental_lower_tensor_list_ops = False
+        print("  Using SELECT_TF_OPS for LSTM TFLite conversion")
+    else:
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS]
 
     tflite_model = converter.convert()
 
@@ -179,7 +197,7 @@ def train(version_number: str, model_id: int) -> dict:
     motion_dataset = { k: v for k, v in motion_dataset.items() if v }
 
     if len(motion_dataset) >= 2:
-        print("\n--- Training Motion Model (LSTM) ---")
+        print(f"\n--- Training Motion Model (LSTM) — {len(motion_dataset)} motion classes ---")
         X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
 
         X_train_m, X_val_m, y_train_m, y_val_m = train_test_split(
@@ -211,7 +229,7 @@ def train(version_number: str, model_id: int) -> dict:
 
         motion_h5_path     = os.path.join(version_dir, "sign_model_motion.h5")
         motion_model.save(motion_h5_path)
-        motion_tflite_path = convert_to_tflite(motion_model, motion_h5_path)
+        motion_tflite_path = convert_to_tflite(motion_model, motion_h5_path, use_select_ops=True)
 
         motion_label_map_path = os.path.join(version_dir, "labels_motion.json")
         save_label_map(motion_label_map, motion_label_map_path)
@@ -219,7 +237,9 @@ def train(version_number: str, model_id: int) -> dict:
         motion_tflite_url = upload_model_to_supabase(motion_tflite_path, version_number, "motion")
         motion_h5_url     = upload_model_to_supabase(motion_h5_path,     version_number, "motion_h5")
     else:
-        print("\nNot enough motion gesture classes — skipping motion model training.")
+        motion_classes_found = len(motion_dataset)
+        print(f"\nWARNING: Motion model NOT trained — found {motion_classes_found} motion gesture class(es), need at least 2.")
+        print("Motion classes in dataset:", list(motion_dataset.keys()) if motion_dataset else "none")
 
     # ── Step 4: Upload static model to Supabase ───────────────
     static_tflite_url = upload_model_to_supabase(static_tflite_path, version_number, "static")
@@ -242,6 +262,8 @@ def train(version_number: str, model_id: int) -> dict:
         "total_classes":     total_classes,
         "accuracy":          round(float(static_accuracy), 4),
         "motion_accuracy":   round(float(motion_accuracy), 4) if motion_accuracy else None,
+        "motion_trained":    motion_tflite_url is not None,
+        "motion_classes":    len(motion_dataset),
         "tflite_url":        static_tflite_url,
         "h5_url":            static_h5_url,
         "motion_tflite_url": motion_tflite_url,
