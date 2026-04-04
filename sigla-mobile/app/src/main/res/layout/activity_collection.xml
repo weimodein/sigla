@@ -12,6 +12,12 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Hand skeleton overlay -->
+    <com.example.sigla.OverlayView
+        android:id="@+id/overlayView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
     <!-- Top bar -->
     <LinearLayout
         android:id="@+id/topBar"

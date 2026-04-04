@@ -67,6 +67,7 @@ class CollectionActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityCollectionBinding
     private lateinit var landmarker: HandLandmarkHelper
+    private lateinit var predictor: PredictionService
 
     private val executor = Executors.newSingleThreadExecutor()
     private var isProcessing = false
@@ -110,6 +111,7 @@ class CollectionActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         landmarker = HandLandmarkHelper(this)
+        predictor = PredictionService(this)
 
         val wordIdExtra  = intent.getIntExtra("word_id", -1)
         val wordLabel    = intent.getStringExtra("word_label")
@@ -273,7 +275,23 @@ class CollectionActivity : AppCompatActivity() {
             val prepared = prepareBitmap(bitmap, imageProxy.imageInfo.rotationDegrees)
             val result = landmarker.detect(prepared)
             val thumb = Bitmap.createScaledBitmap(prepared, 320, 240, true)
-            runOnUiThread { tick(result.handsDetected, result.features, thumb) }
+            runOnUiThread {
+                // Mirror landmarks for front camera to match the mirrored preview
+                val landmarksToDraw = if (isFrontCamera) {
+                    result.landmarks.map { hand ->
+                        hand.map { (x, y) -> Pair(1.0f - x, y) }
+                    }
+                } else {
+                    result.landmarks
+                }
+                // Update overlay view with hand landmarks
+                binding.overlayView.setLandmarks(
+                    landmarksToDraw,
+                    binding.cameraPreview.width.toFloat(),
+                    binding.cameraPreview.height.toFloat()
+                )
+                tick(result.handsDetected, result.features, thumb)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Frame error: ${e.message}")
         } finally {
@@ -681,6 +699,7 @@ class CollectionActivity : AppCompatActivity() {
         uploadJob?.cancel()
         executor.shutdown()
         landmarker.close()
+        predictor.close()
         super.onDestroy()
     }
 }
