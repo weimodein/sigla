@@ -46,12 +46,12 @@ private const val COOLDOWN_MOTION_ADMIN = 20
 // ── Suggest mode (user contribution — fast) ───────────────────────────────
 private const val TARGET_SUGGEST        = 100  // static samples per session
 private const val TARGET_SUGGEST_MOTION = 75   // motion sequences per session
-private const val COUNTDOWN_SUGGEST     = 5
-private const val COOLDOWN_STATIC_SUGGEST = 3
-private const val COOLDOWN_MOTION_SUGGEST = 6
+private const val COUNTDOWN_SUGGEST     = 2
+private const val COOLDOWN_STATIC_SUGGEST = 1
+private const val COOLDOWN_MOTION_SUGGEST = 1
 
 // ── Shared constants ──────────────────────────────────────────────────────
-private const val SEQUENCE_LENGTH = 30           // FIXED: must match model (was 10)
+private const val SEQUENCE_LENGTH = 20           // FIXED: must match model (was 10)
 private const val STATIC_FRAMES_PER_SAMPLE = 5   // collect 5 frames for static, then average
 private const val MIN_FRAMES      = 8            // min frames before a cut clip is kept
 private const val NO_HAND_FRAMES  = 5

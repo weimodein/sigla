@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
-SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
+SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 20))
 
 # Backend API configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
