@@ -174,10 +174,18 @@ class NotificationAdapter(
 
     private fun formatRelativeTime(iso: String): String {
         return try {
+            // Handle different ISO formats: with/without milliseconds and timezone
+            val cleanIso = iso.replace(Regex("\\.\\d{3}.*"), "") // Remove milliseconds and timezone
             val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
             sdf.timeZone = TimeZone.getTimeZone("UTC")
-            val date = sdf.parse(iso) ?: return iso
-            val diff = System.currentTimeMillis() - date.time
+            val date = sdf.parse(cleanIso) ?: return iso
+
+            // Convert UTC date to local time for accurate diff calculation
+            val localTimeZone = TimeZone.getDefault()
+            val utcTime = date.time
+            val localTime = utcTime + localTimeZone.getOffset(utcTime)
+
+            val diff = System.currentTimeMillis() - localTime
             val minutes = diff / 60000
             val hours = minutes / 60
             val days = hours / 24
@@ -187,7 +195,7 @@ class NotificationAdapter(
                 minutes < 60 -> "${minutes}m ago"
                 hours < 24 -> "${hours}h ago"
                 days < 7 -> "${days}d ago"
-                else -> SimpleDateFormat("MMM dd", Locale.getDefault()).format(date)
+                else -> SimpleDateFormat("MMM dd", Locale.getDefault()).format(Date(localTime))
             }
         } catch (e: Exception) { iso }
     }
