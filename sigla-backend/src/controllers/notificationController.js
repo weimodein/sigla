@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { Notification, User, ActivityLog } = require("../models/index.js");
+const { Notification, User } = require("../models/index.js");
 
 // ── GET /api/notifications ────────────────────────────────────
 // Get all notifications for the logged in user
@@ -160,13 +160,13 @@ const broadcastAnnouncement = async (req, res) => {
     await Notification.bulkCreate(notifications);
 
     // Log activity
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "broadcast_announcement",
-      target_type: "announcement",
-      target_id: null,
-      details: `Broadcast announcement to ${activeUsers.length} users. Title: "${title}"`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "broadcast_announcement",
+    //   target_type: "announcement",
+    //   target_id: null,
+    //   details: `Broadcast announcement to ${activeUsers.length} users. Title: "${title}"`,
+    // });
 
     return res.status(201).json({
       message: "Announcement sent successfully",

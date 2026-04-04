@@ -8,7 +8,7 @@ const WordBank = require("./WordBank.js");
 const Notification = require("./Notification.js");
 const Report = require("./Report.js");
 const UserSetting = require("./UserSetting.js");
-const ActivityLog = require("./ActivityLog.js");
+// const ActivityLog = require("./ActivityLog.js");
 
 // ── Associations ──────────────────────────────────────────────
 
@@ -49,8 +49,8 @@ UserSetting.belongsTo(User, { foreignKey: "user_id", as: "user" });
 User.hasOne(UserSetting, { foreignKey: "user_id", as: "settings" });
 
 // ActivityLog belongs to User
-ActivityLog.belongsTo(User, { foreignKey: "user_id", as: "user" });
-User.hasMany(ActivityLog, { foreignKey: "user_id", as: "logs" });
+// ActivityLog.belongsTo(User, { foreignKey: "user_id", as: "user" });
+// User.hasMany(ActivityLog, { foreignKey: "user_id", as: "logs" });
 
 module.exports = {
   Role,
@@ -63,5 +63,5 @@ module.exports = {
   Notification,
   Report,
   UserSetting,
-  ActivityLog,
+  // ActivityLog,
 };

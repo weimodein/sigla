@@ -35,6 +35,30 @@ object ModelUpdateManager {
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    private fun deleteAllModelFiles(context: Context) {
+        val filesToDelete = listOf(
+            "sign_model_static.tflite",
+            "sign_model_motion.tflite",
+            "labels_static.json",
+            "labels_motion.json",
+            "word_bank.json"
+        )
+        for (filename in filesToDelete) {
+            val file = File(context.filesDir, filename)
+            if (file.exists()) {
+                file.delete()
+                Log.i(TAG, "Deleted old file: $filename")
+            }
+        }
+        // Delete all cached thumbnail files
+        context.filesDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith("wb_thumb_")) {
+                file.delete()
+                Log.i(TAG, "Deleted old thumbnail: ${file.name}")
+            }
+        }
+    }
+
     fun getCachedVersion(context: Context): String? =
         prefs(context).getString(KEY_VERSION, null)
 
@@ -89,6 +113,11 @@ object ModelUpdateManager {
                 }
 
                 Log.i(TAG, "Downloading model $remoteVersion (newVersion=$versionChanged, missing=$modelFileMissing)")
+
+                // Delete old model files if version changed
+                if (versionChanged) {
+                    deleteAllModelFiles(context)
+                }
 
                 val urlMap = mapOf(
                     "tflite_url"        to model.tflite_url,

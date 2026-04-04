@@ -4,7 +4,7 @@ const {
   User,
   Role,
   UserSetting,
-  ActivityLog,
+  // ActivityLog,
   Notification,
   Word,
   GestureSample,
@@ -158,13 +158,13 @@ const createUser = async (req, res) => {
     // Create default settings for the new user
     await UserSetting.create({ user_id: user.id });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "created_user",
-      target_type: "user",
-      target_id: user.id,
-      details: `Admin manually created account for ${username} (${email})`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "created_user",
+    //   target_type: "user",
+    //   target_id: user.id,
+    //   details: `Admin manually created account for ${username} (${email})`,
+    // });
 
     return res.status(201).json({
       message: "User account created successfully",
@@ -203,13 +203,13 @@ const approveUser = async (req, res) => {
       delivered: false,
     });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "approved_user",
-      target_type: "user",
-      target_id: user.id,
-      details: `Approved account for ${user.username}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "approved_user",
+    //   target_type: "user",
+    //   target_id: user.id,
+    //   details: `Approved account for ${user.username}`,
+    // });
 
     return res.status(200).json({ message: "User approved successfully" });
   } catch (err) {
@@ -246,13 +246,13 @@ const warnUser = async (req, res) => {
       delivered: false,
     });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "warned_user",
-      target_type: "user",
-      target_id: user.id,
-      details: `Issued warning ${newWarningCount}/2 to ${user.username}. Reason: ${reason || "No reason provided"}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "warned_user",
+    //   target_type: "user",
+    //   target_id: user.id,
+    //   details: `Issued warning ${newWarningCount}/2 to ${user.username}. Reason: ${reason || "No reason provided"}`,
+    // });
 
     return res.status(200).json({
       message: `Warning issued. User now has ${newWarningCount}/2 warnings.`,
@@ -302,13 +302,13 @@ const deactivateUser = async (req, res) => {
       delivered: false,
     });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "deactivated_user",
-      target_type: "user",
-      target_id: user.id,
-      details: `Deactivated account for ${user.username}. Will auto-reactivate on ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toDateString()}. Reason: ${reason || "No reason provided"}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "deactivated_user",
+    //   target_type: "user",
+    //   target_id: user.id,
+    //   details: `Deactivated account for ${user.username}. Will auto-reactivate on ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toDateString()}. Reason: ${reason || "No reason provided"}`,
+    // });
 
     return res.status(200).json({
       message:
@@ -349,13 +349,13 @@ const reactivateUser = async (req, res) => {
       delivered: false,
     });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "reactivated_user",
-      target_type: "user",
-      target_id: user.id,
-      details: `Manually reactivated account for ${user.username}. Warning count reset to 0.`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "reactivated_user",
+    //   target_type: "user",
+    //   target_id: user.id,
+    //   details: `Manually reactivated account for ${user.username}. Warning count reset to 0.`,
+    // });
 
     return res.status(200).json({ message: "User reactivated successfully" });
   } catch (err) {
@@ -399,13 +399,13 @@ const deleteUser = async (req, res) => {
     // Soft delete — preserves logs and gesture sample references
     await user.update({ status: "deleted" });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "deleted_user",
-      target_type: "user",
-      target_id: user.id,
-      details: `Permanently deleted account for ${user.username}. ${pendingWords.length} pending submission(s) cancelled. Reason: ${reason || "No reason provided"}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "deleted_user",
+    //   target_type: "user",
+    //   target_id: user.id,
+    //   details: `Permanently deleted account for ${user.username}. ${pendingWords.length} pending submission(s) cancelled. Reason: ${reason || "No reason provided"}`,
+    // });
 
     return res.status(200).json({
       message: "User account permanently deleted.",
@@ -450,13 +450,13 @@ const updateUser = async (req, res) => {
       gender: gender || user.gender,
     });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "updated_user",
-      target_type: "user",
-      target_id: user.id,
-      details: `Updated info for ${user.username}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "updated_user",
+    //   target_type: "user",
+    //   target_id: user.id,
+    //   details: `Updated info for ${user.username}`,
+    // });
 
     return res.status(200).json({ message: "User updated successfully" });
   } catch (err) {
@@ -496,13 +496,13 @@ const runAutoReactivationJob = async () => {
         delivered: false,
       });
 
-      await ActivityLog.create({
-        user_id: null,
-        action: "auto_reactivated_user",
-        target_type: "user",
-        target_id: user.id,
-        details: `Auto-reactivated account for ${user.username} after 30-day suspension. Warning count reset to 0.`,
-      });
+      // await ActivityLog.create({
+      //   user_id: null,
+      //   action: "auto_reactivated_user",
+      //   target_type: "user",
+      //   target_id: user.id,
+      //   details: `Auto-reactivated account for ${user.username} after 30-day suspension. Warning count reset to 0.`,
+      // });
 
       console.log(`Auto-reactivated user: ${user.username}`);
     }
@@ -560,27 +560,27 @@ const getUserRegistrations = async (req, res) => {
 };
 
 // ── GET /api/users/activity?limit=10 ──────────────────────────
-const getRecentActivity = async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-    const logs = await ActivityLog.findAll({
-      include: [
-        {
-          model: User,
-          as: "user",
-          attributes: ["id", "username"], // removed "name"
-          required: false,
-        },
-      ],
-      order: [["created_at", "DESC"]],
-      limit,
-    });
-    return res.status(200).json({ activity: logs });
-  } catch (err) {
-    console.error("Get recent activity error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
+// const getRecentActivity = async (req, res) => {
+//   try {
+//     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+//     const logs = await ActivityLog.findAll({
+//       include: [
+//         {
+//           model: User,
+//           as: "user",
+//           attributes: ["id", "username"], // removed "name"
+//           required: false,
+//         },
+//       ],
+//       order: [["created_at", "DESC"]],
+//       limit,
+//     });
+//     return res.status(200).json({ activity: logs });
+//   } catch (err) {
+//     console.error("Get recent activity error:", err);
+//     return res.status(500).json({ message: "Server error" });
+//   }
+// };
 
 module.exports = {
   getAllUsers,
@@ -597,5 +597,5 @@ module.exports = {
   updateUser,
   runAutoReactivationJob,
   getUserRegistrations,
-  getRecentActivity,
+  // getRecentActivity,
 };

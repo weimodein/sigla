@@ -16,7 +16,7 @@ const {
   deleteUser,
   updateUser,
   getUserRegistrations,
-  getRecentActivity,
+  // getRecentActivity,
 } = require("../controllers/userController.js");
 
 // All routes require login
@@ -25,7 +25,7 @@ router.use(authMiddleware);
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getUserStats);
 router.get("/registrations", roleMiddleware("admin"), getUserRegistrations);
-router.get("/activity", roleMiddleware("admin"), getRecentActivity);
+// router.get("/activity", roleMiddleware("admin"), getRecentActivity);
 router.get("/pending", roleMiddleware("admin"), getPendingUsers);
 router.get("/deactivated", roleMiddleware("admin"), getDeactivatedUsers);
 

@@ -3,6 +3,7 @@ import re
 import json
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 from app.utils.preprocessor import (
     fetch_approved_samples,
     prepare_static_dataset,
@@ -24,9 +25,12 @@ def build_static_model(num_classes: int):
     from tensorflow import keras
     model = keras.Sequential([
         keras.layers.Input(shape=(FEATURE_SIZE,)),
+        keras.layers.Dense(512, activation="relu"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Dropout(0.4),
         keras.layers.Dense(256, activation="relu"),
         keras.layers.BatchNormalization(),
-        keras.layers.Dropout(0.3),
+        keras.layers.Dropout(0.4),
         keras.layers.Dense(128, activation="relu"),
         keras.layers.BatchNormalization(),
         keras.layers.Dropout(0.3),
@@ -36,7 +40,7 @@ def build_static_model(num_classes: int):
     ], name="sigla_static_model")
 
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=keras.optimizers.Adam(learning_rate=0.0005),
         loss="sparse_categorical_crossentropy",
         metrics=["accuracy"]
     )
@@ -48,17 +52,19 @@ def build_motion_model(num_classes: int):
     from tensorflow import keras
     model = keras.Sequential([
         keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_SIZE)),
+        keras.layers.LSTM(256, return_sequences=True),
+        keras.layers.Dropout(0.4),
         keras.layers.LSTM(128, return_sequences=True),
-        keras.layers.Dropout(0.3),
+        keras.layers.Dropout(0.4),
         keras.layers.LSTM(64, return_sequences=False),
         keras.layers.Dropout(0.3),
-        keras.layers.Dense(64, activation="relu"),
+        keras.layers.Dense(128, activation="relu"),
         keras.layers.Dropout(0.2),
         keras.layers.Dense(num_classes, activation="softmax"),
     ], name="sigla_motion_model")
 
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=keras.optimizers.Adam(learning_rate=0.0005),
         loss="sparse_categorical_crossentropy",
         metrics=["accuracy"]
     )
@@ -157,21 +163,27 @@ def train(version_number: str, model_id: int) -> dict:
 
     static_model = build_static_model(len(static_label_map))
 
+    # Calculate class weights for imbalanced data
+    from sklearn.utils.class_weight import compute_class_weight
+    class_weights = compute_class_weight('balanced', classes=np.unique(y_train_s), y=y_train_s)
+    class_weight_dict = dict(enumerate(class_weights))
+
     static_callbacks = [
         keras.callbacks.EarlyStopping(
-            monitor="val_accuracy", patience=10, restore_best_weights=True
+            monitor="val_accuracy", patience=15, restore_best_weights=True
         ),
         keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss", factor=0.5, patience=5
+            monitor="val_loss", factor=0.5, patience=7
         ),
     ]
 
     static_history = static_model.fit(
         X_train_s, y_train_s,
         validation_data=(X_val_s, y_val_s),
-        epochs=100,
-        batch_size=32,
+        epochs=200,
+        batch_size=16,
         callbacks=static_callbacks,
+        class_weight=class_weight_dict,
         verbose=1,
     )
 
@@ -206,21 +218,26 @@ def train(version_number: str, model_id: int) -> dict:
 
         motion_model = build_motion_model(len(motion_dataset))
 
+        # Calculate class weights for imbalanced data
+        motion_class_weights = compute_class_weight('balanced', classes=np.unique(y_train_m), y=y_train_m)
+        motion_class_weight_dict = dict(enumerate(motion_class_weights))
+
         motion_callbacks = [
             keras.callbacks.EarlyStopping(
-                monitor="val_accuracy", patience=10, restore_best_weights=True
+                monitor="val_accuracy", patience=15, restore_best_weights=True
             ),
             keras.callbacks.ReduceLROnPlateau(
-                monitor="val_loss", factor=0.5, patience=5
+                monitor="val_loss", factor=0.5, patience=7
             ),
         ]
 
         motion_history = motion_model.fit(
             X_train_m, y_train_m,
             validation_data=(X_val_m, y_val_m),
-            epochs=100,
-            batch_size=32,
+            epochs=200,
+            batch_size=16,
             callbacks=motion_callbacks,
+            class_weight=motion_class_weight_dict,
             verbose=1,
         )
 

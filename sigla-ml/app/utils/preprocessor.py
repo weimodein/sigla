@@ -66,10 +66,20 @@ def prepare_static_dataset(dataset: dict):
     label_idx = { label: i for i, label in enumerate(static_labels) }
 
     for label in static_labels:
+        samples_for_label = []
         for sample in dataset[label]:
             features = sample.get("features", [])
             if len(features) != FEATURE_SIZE:
                 continue
+            samples_for_label.append(features)
+
+        # Apply data augmentation if we have few samples
+        if len(samples_for_label) < 10:
+            # Augment by adding noise and slight rotations
+            augmented = augment_static_samples(samples_for_label, target_count=50)
+            samples_for_label.extend(augmented)
+
+        for features in samples_for_label:
             X.append(features)
             y.append(label_idx[label])
 
@@ -94,6 +104,7 @@ def prepare_motion_dataset(dataset: dict):
     label_idx = { label: i for i, label in enumerate(labels) }
 
     for label, samples in dataset.items():
+        sequences_for_label = []
         for sample in samples:
             sequence = sample.get("sequence", [])
             if not sequence:
@@ -110,6 +121,15 @@ def prepare_motion_dataset(dataset: dict):
             if len(sequence[0]) != FEATURE_SIZE:
                 continue
 
+            sequences_for_label.append(sequence)
+
+        # Apply data augmentation if we have few sequences
+        if len(sequences_for_label) < 5:
+            # Augment by adding temporal variations and noise
+            augmented = augment_motion_sequences(sequences_for_label, target_count=20)
+            sequences_for_label.extend(augmented)
+
+        for sequence in sequences_for_label:
             X.append(sequence)
             y.append(label_idx[label])
 
@@ -130,9 +150,37 @@ def save_label_map(label_map: dict, path: str) -> None:
     print(f"Label map saved to {path}")
 
 
-def load_label_map(path: str) -> dict:
+def augment_motion_sequences(sequences: list, target_count: int = 20) -> list:
     """
-    Load label map from JSON file.
+    Augment motion gesture sequences by adding temporal variations and noise.
     """
-    with open(path, "r") as f:
-        return json.load(f)
+    augmented = []
+    np.random.seed(42)  # For reproducibility
+
+    while len(augmented) < target_count - len(sequences):
+        # Randomly select a base sequence
+        base_sequence = np.array(sequences[np.random.randint(len(sequences))])
+
+        # Apply temporal stretching (slight speed variation)
+        stretch_factor = np.random.uniform(0.9, 1.1)
+        stretched_length = int(SEQUENCE_LENGTH * stretch_factor)
+
+        if stretched_length < SEQUENCE_LENGTH:
+            # Interpolate to fill
+            indices = np.linspace(0, base_sequence.shape[0] - 1, SEQUENCE_LENGTH)
+            augmented_sequence = np.array([np.interp(indices, np.arange(base_sequence.shape[0]), base_sequence[:, i]) for i in range(base_sequence.shape[1])]).T
+        else:
+            # Sample to reduce
+            indices = np.linspace(0, base_sequence.shape[0] - 1, SEQUENCE_LENGTH)
+            augmented_sequence = base_sequence[np.round(indices).astype(int)]
+
+        # Add small random noise to all frames
+        noise = np.random.normal(0, 0.005, augmented_sequence.shape)
+        augmented_sequence = augmented_sequence + noise
+
+        # Ensure values stay in valid range
+        augmented_sequence = np.clip(augmented_sequence, 0, 1)
+
+        augmented.append(augmented_sequence.tolist())
+
+    return augmented

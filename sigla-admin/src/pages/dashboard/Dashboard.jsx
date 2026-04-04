@@ -9,7 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { getUserStats, getUserRegistrations, getRecentActivity } from "../../api/userApi.js";
+import { getUserStats, getUserRegistrations } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getAllModels, getModelStats } from "../../api/modelApi.js";
 import { broadcastAnnouncement } from "../../api/notificationApi.js";
@@ -23,58 +23,10 @@ import {
   CheckCircle,
   XCircle,
   Database,
-  Activity,
   FileText,
 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────
-const ACTION_LABELS = {
-  submitted_word: "submitted a word",
-  admin_added_word: "added a word",
-  admin_uploaded_samples: "uploaded samples",
-  approved_submission: "approved a submission",
-  rejected_submission: "rejected a submission",
-  locked_word: "locked a word",
-  unlocked_word: "unlocked a word",
-  approved_word: "approved a word",
-  rejected_word: "rejected a word",
-  updated_word: "updated a word",
-  deleted_word: "deleted a word",
-  created_user: "created a user",
-  approved_user: "approved a user",
-  warned_user: "warned a user",
-  deactivated_user: "deactivated a user",
-  reactivated_user: "reactivated a user",
-  auto_reactivated_user: "auto-reactivated a user",
-  deleted_user: "deleted a user",
-  updated_user: "updated a user",
-  trained_model: "trained a model",
-  tested_model: "tested a model",
-  deployed_model: "deployed a model",
-  reverted_model: "reverted a model",
-  deleted_model: "deleted a model",
-  sent_announcement: "sent an announcement",
-};
-
-const ACTION_COLORS = {
-  submitted_word: "bg-blue-100 text-blue-700",
-  admin_added_word: "bg-blue-100 text-blue-700",
-  approved_submission: "bg-green-100 text-green-700",
-  approved_word: "bg-green-100 text-green-700",
-  approved_user: "bg-green-100 text-green-700",
-  reactivated_user: "bg-green-100 text-green-700",
-  auto_reactivated_user: "bg-green-100 text-green-700",
-  rejected_submission: "bg-red-100 text-red-700",
-  rejected_word: "bg-red-100 text-red-700",
-  deleted_word: "bg-red-100 text-red-700",
-  deleted_user: "bg-red-100 text-red-700",
-  deleted_model: "bg-red-100 text-red-700",
-  warned_user: "bg-orange-100 text-orange-700",
-  deactivated_user: "bg-orange-100 text-orange-700",
-  deployed_model: "bg-purple-100 text-purple-700",
-  trained_model: "bg-purple-100 text-purple-700",
-  tested_model: "bg-purple-100 text-purple-700",
-};
 
 const formatActivityDate = (dateStr) => {
   const d = new Date(dateStr);
@@ -119,7 +71,6 @@ const Dashboard = () => {
   const [allModels, setAllModels] = useState([]);
   const [pendingWords, setPendingWords] = useState([]);
   const [registrations, setRegistrations] = useState([]);
-  const [activity, setActivity] = useState([]);
   const [regPeriod, setRegPeriod] = useState("month");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -135,21 +86,19 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [users, words, models, modelsAll, pendingData, activityData] =
+        const [users, words, models, modelsAll, pendingData] =
           await Promise.all([
             getUserStats(),
             getWordStats(),
             getModelStats(),
             getAllModels(),
             getAllWords({ status: "pending", limit: 5 }),
-            getRecentActivity(10),
           ]);
         setUserStats(users);
         setWordStats(words);
         setModelStats(models);
         setAllModels(modelsAll.models || []);
         setPendingWords(pendingData.words || []);
-        setActivity(activityData.activity || []);
       } catch (err) {
         setError("Failed to load dashboard data");
       } finally {
@@ -302,7 +251,10 @@ const Dashboard = () => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <BarChart
+                data={chartData}
+                margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
                   dataKey="label"
@@ -317,10 +269,19 @@ const Dashboard = () => {
                   axisLine={false}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                  contentStyle={{
+                    fontSize: 12,
+                    borderRadius: 8,
+                    border: "1px solid #e5e7eb",
+                  }}
                   cursor={{ fill: "#f3f4f6" }}
                 />
-                <Bar dataKey="count" name="Registrations" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="count"
+                  name="Registrations"
+                  fill="#1e3a8a"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -356,7 +317,9 @@ const Dashboard = () => {
                       <div className="w-full bg-gray-100 rounded-full h-1.5">
                         <div
                           className={`h-1.5 rounded-full ${isDeployed ? "bg-green-500" : "bg-blue-400"}`}
-                          style={{ width: `${Math.min(parseFloat(pct), 100)}%` }}
+                          style={{
+                            width: `${Math.min(parseFloat(pct), 100)}%`,
+                          }}
                         />
                       </div>
                     </div>
@@ -371,56 +334,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ── Recent Activity + Pending Submissions ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent activity feed */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Activity size={16} className="text-gray-400" />
-            <p className="text-sm font-semibold text-gray-700">
-              Recent Activity
-            </p>
-          </div>
-          {activity.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">
-              No activity yet
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {activity.map((log) => {
-                const label = ACTION_LABELS[log.action] || log.action;
-                const colorClass =
-                  ACTION_COLORS[log.action] || "bg-gray-100 text-gray-600";
-                const actor = log.user?.username || "System";
-                return (
-                  <div
-                    key={log.id}
-                    className="flex items-start gap-3 py-2 border-b last:border-0"
-                  >
-                    <span
-                      className={`mt-0.5 text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${colorClass}`}
-                    >
-                      {log.action.replace(/_/g, " ")}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-700">
-                        <span className="font-medium">{actor}</span>{" "}
-                        {label}
-                        {log.details ? (
-                          <span className="text-gray-400"> — {log.details}</span>
-                        ) : null}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {formatActivityDate(log.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
+      {/* ── Pending Submissions ── */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Pending word submissions */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">

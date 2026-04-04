@@ -7,7 +7,7 @@ const {
   WordBank,
   User,
   Notification,
-  ActivityLog,
+  // ActivityLog,
 } = require("../models/index.js");
 
 const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
@@ -109,11 +109,12 @@ const checkAndActivateWord = async (word, reviewerId = null) => {
     approved_sample_count: approvedCount,
     // Mark as approved (ready for training) once threshold is reached,
     // but do NOT set is_active — that only happens on model deploy.
-    ...(reachedThreshold && word.status !== "approved" && {
-      status: "approved",
-      reviewed_by: reviewerId,
-      reviewed_at: new Date(),
-    }),
+    ...(reachedThreshold &&
+      word.status !== "approved" && {
+        status: "approved",
+        reviewed_by: reviewerId,
+        reviewed_at: new Date(),
+      }),
   });
 
   return reachedThreshold;
@@ -271,7 +272,7 @@ const submitWord = async (req, res) => {
     });
 
     if (existing) {
-      const totalCap   = getSampleCap(existing);
+      const totalCap = getSampleCap(existing);
       const perUserCap = getPerUserCap(existing.gesture_type || "static");
 
       // Use live DB counts — stored counters can be stale
@@ -294,7 +295,10 @@ const submitWord = async (req, res) => {
         per_user_cap: perUserCap,
         total_samples: totalSamples,
         user_samples: userSamples,
-        remaining_for_user: Math.max(0, Math.min(perUserCap - userSamples, totalCap - totalSamples)),
+        remaining_for_user: Math.max(
+          0,
+          Math.min(perUserCap - userSamples, totalCap - totalSamples),
+        ),
       });
     }
 
@@ -313,13 +317,13 @@ const submitWord = async (req, res) => {
       approved_sample_count: 0,
     });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "submitted_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Submitted word: ${label} (${sign_type}, ${gesture_type || "static"})`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "submitted_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Submitted word: ${label} (${sign_type}, ${gesture_type || "static"})`,
+    // });
 
     return res.status(201).json({
       message: "Word submitted successfully. Waiting for admin review.",
@@ -390,13 +394,13 @@ const adminAddWord = async (req, res) => {
       reviewed_at: new Date(),
     });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "admin_added_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Admin manually added word: ${label} (${sign_type}, ${gesture_type || "static"})`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "admin_added_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Admin manually added word: ${label} (${sign_type}, ${gesture_type || "static"})`,
+    // });
 
     return res.status(201).json({
       message:
@@ -454,13 +458,13 @@ const adminUploadSamples = async (req, res) => {
     // Check if word should now be activated
     const activated = await checkAndActivateWord(word, req.user.id);
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "admin_uploaded_samples",
-      target_type: "word",
-      target_id: word.id,
-      details: `Admin uploaded ${newCount} gesture sample(s) for word: ${word.label}. Word activated: ${activated}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "admin_uploaded_samples",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Admin uploaded ${newCount} gesture sample(s) for word: ${word.label}. Word activated: ${activated}`,
+    // });
 
     return res.status(201).json({
       message: activated
@@ -494,14 +498,27 @@ const uploadSamples = async (req, res) => {
       });
     }
 
-    const { file_url, landmark_url, sample_count, landmarks, sequence, images } = req.body;
+    const {
+      file_url,
+      landmark_url,
+      sample_count,
+      landmarks,
+      sequence,
+      images,
+    } = req.body;
 
     // Either a file_url or direct landmark data must be provided
-    const hasLandmarkData = (landmarks && Array.isArray(landmarks) && landmarks.length > 0) ||
-                            (sequence && Array.isArray(sequence) && sequence.length > 0);
+    const hasLandmarkData =
+      (landmarks && Array.isArray(landmarks) && landmarks.length > 0) ||
+      (sequence && Array.isArray(sequence) && sequence.length > 0);
 
     if (!file_url && !hasLandmarkData) {
-      return res.status(400).json({ message: "Either file_url or landmark data (landmarks/sequence) is required" });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Either file_url or landmark data (landmarks/sequence) is required",
+        });
     }
 
     // Helper: save a base64 image to disk, return its public URL path
@@ -517,14 +534,17 @@ const uploadSamples = async (req, res) => {
     };
 
     // Derive sample count: if landmark data provided directly, count from the array
-    const newCount = parseInt(sample_count) ||
+    const newCount =
+      parseInt(sample_count) ||
       (landmarks ? landmarks.length : sequence ? sequence.length : 0);
 
     if (newCount <= 0) {
-      return res.status(400).json({ message: "sample_count must be greater than 0" });
+      return res
+        .status(400)
+        .json({ message: "sample_count must be greater than 0" });
     }
 
-    const totalCap   = getSampleCap(word);
+    const totalCap = getSampleCap(word);
     const perUserCap = getPerUserCap(word.gesture_type || "static");
 
     // Use live DB counts — word.total_samples can be stale
@@ -574,9 +594,10 @@ const uploadSamples = async (req, res) => {
         ? landmarks.map((lm, i) => ({
             word_id: word.id,
             submitted_by: req.user.id,
-            file_url: hasImages && images[i]
-              ? saveImage(images[i], i)
-              : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            file_url:
+              hasImages && images[i]
+                ? saveImage(images[i], i)
+                : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             landmarks: lm,
             sequence: null,
             sample_count: 1,
@@ -586,9 +607,10 @@ const uploadSamples = async (req, res) => {
         : sequence.map((seq, i) => ({
             word_id: word.id,
             submitted_by: req.user.id,
-            file_url: hasImages && images[i]
-              ? saveImage(images[i], i)
-              : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            file_url:
+              hasImages && images[i]
+                ? saveImage(images[i], i)
+                : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             landmarks: null,
             sequence: seq,
             sample_count: 1,
@@ -762,13 +784,13 @@ const approveSubmission = async (req, res) => {
       cap,
     );
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "approved_submission",
-      target_type: "word",
-      target_id: word.id,
-      details: `Approved submission for word: ${word.label} — ${totalApproved} total approved samples. Activated: ${activated}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "approved_submission",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Approved submission for word: ${word.label} — ${totalApproved} total approved samples. Activated: ${activated}`,
+    // });
 
     return res.status(200).json({
       message: "Submission approved",
@@ -824,13 +846,13 @@ const rejectSubmission = async (req, res) => {
       cap,
     );
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "rejected_submission",
-      target_type: "word",
-      target_id: word.id,
-      details: `Rejected submission for word: ${word.label}. Reason: ${reason || "No reason provided"}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "rejected_submission",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Rejected submission for word: ${word.label}. Reason: ${reason || "No reason provided"}`,
+    // });
 
     return res
       .status(200)
@@ -851,13 +873,13 @@ const lockWord = async (req, res) => {
 
     await word.update({ is_locked: true });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "locked_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Locked submissions for word: ${word.label}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "locked_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Locked submissions for word: ${word.label}`,
+    // });
 
     return res
       .status(200)
@@ -878,13 +900,13 @@ const unlockWord = async (req, res) => {
 
     await word.update({ is_locked: false });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "unlocked_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Unlocked submissions for word: ${word.label}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "unlocked_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Unlocked submissions for word: ${word.label}`,
+    // });
 
     return res
       .status(200)
@@ -924,13 +946,13 @@ const approveWord = async (req, res) => {
       });
     }
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "approved_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Approved word: ${word.label}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "approved_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Approved word: ${word.label}`,
+    // });
 
     return res
       .status(200)
@@ -973,13 +995,13 @@ const rejectWord = async (req, res) => {
       });
     }
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "rejected_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Rejected word: ${word.label}. Reason: ${reason || "No reason provided"}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "rejected_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Rejected word: ${word.label}. Reason: ${reason || "No reason provided"}`,
+    // });
 
     return res.status(200).json({ message: "Word rejected successfully" });
   } catch (err) {
@@ -1010,7 +1032,9 @@ const updateWord = async (req, res) => {
     if (sample_limit !== undefined && sample_limit !== null) {
       const parsed = parseInt(sample_limit);
       if (isNaN(parsed) || parsed < 1) {
-        return res.status(400).json({ message: "sample_limit must be a positive integer" });
+        return res
+          .status(400)
+          .json({ message: "sample_limit must be a positive integer" });
       }
     }
 
@@ -1028,7 +1052,12 @@ const updateWord = async (req, res) => {
         filipino_translation !== undefined
           ? filipino_translation
           : word.filipino_translation,
-      sample_limit: sample_limit !== undefined ? (sample_limit === null ? null : parseInt(sample_limit)) : word.sample_limit,
+      sample_limit:
+        sample_limit !== undefined
+          ? sample_limit === null
+            ? null
+            : parseInt(sample_limit)
+          : word.sample_limit,
     });
 
     // Sync label and description to word bank if word is approved
@@ -1044,13 +1073,13 @@ const updateWord = async (req, res) => {
       );
     }
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "updated_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Updated word: ${word.label}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "updated_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Updated word: ${word.label}`,
+    // });
 
     return res.status(200).json({ message: "Word updated successfully" });
   } catch (err) {
@@ -1067,13 +1096,13 @@ const deleteWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "deleted_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Deleted word: ${word.label} — all associated gesture samples and word bank entry removed`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "deleted_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Deleted word: ${word.label} — all associated gesture samples and word bank entry removed`,
+    // });
 
     await word.destroy();
 
@@ -1164,13 +1193,13 @@ const approveAllSamplesForWord = async (req, res) => {
 
     await word.update({ approved_sample_count: totalApproved });
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "approved_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Approved all ${count} pending samples for word: ${word.label}. Activated: ${activated}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "approved_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Approved all ${count} pending samples for word: ${word.label}. Activated: ${activated}`,
+    // });
 
     return res.status(200).json({
       message: `${count} samples approved`,
@@ -1206,13 +1235,13 @@ const rejectAllSamplesForWord = async (req, res) => {
       });
     }
 
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "rejected_word",
-      target_type: "word",
-      target_id: word.id,
-      details: `Rejected all ${count} pending samples for word: ${word.label}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "rejected_word",
+    //   target_type: "word",
+    //   target_id: word.id,
+    //   details: `Rejected all ${count} pending samples for word: ${word.label}`,
+    // });
 
     return res.status(200).json({ message: `${count} samples rejected` });
   } catch (err) {
@@ -1256,14 +1285,17 @@ async function setThumbnail(req, res) {
     if (!word) return res.status(404).json({ message: "Word not found" });
 
     const { thumbnail_url } = req.body;
-    if (!thumbnail_url) return res.status(400).json({ message: "thumbnail_url is required" });
+    if (!thumbnail_url)
+      return res.status(400).json({ message: "thumbnail_url is required" });
 
     await word.update({ thumbnail_url });
 
     const wb = await WordBank.findOne({ where: { word_id: word.id } });
     if (wb) await wb.update({ image_url: thumbnail_url });
 
-    return res.status(200).json({ message: "Thumbnail updated", thumbnail_url });
+    return res
+      .status(200)
+      .json({ message: "Thumbnail updated", thumbnail_url });
   } catch (err) {
     console.error("Set thumbnail error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -1281,21 +1313,27 @@ async function setVideo(req, res) {
     if (!videoUrl && req.body.video_base64) {
       const ext = (req.body.video_ext || "mp4").replace(/[^a-z0-9]/gi, "");
       const videosDir = path.join(__dirname, "../../uploads/videos");
-      if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
+      if (!fs.existsSync(videosDir))
+        fs.mkdirSync(videosDir, { recursive: true });
       const filename = `gesture_${word.id}_${Date.now()}.${ext}`;
       const filepath = path.join(videosDir, filename);
       fs.writeFileSync(filepath, Buffer.from(req.body.video_base64, "base64"));
       videoUrl = `/uploads/videos/${filename}`;
     }
 
-    if (!videoUrl) return res.status(400).json({ message: "Either video_url or video_base64 is required" });
+    if (!videoUrl)
+      return res
+        .status(400)
+        .json({ message: "Either video_url or video_base64 is required" });
 
     await word.update({ video_url: videoUrl });
 
     const wb = await WordBank.findOne({ where: { word_id: word.id } });
     if (wb) await wb.update({ video_url: videoUrl });
 
-    return res.status(200).json({ message: "Video updated", video_url: videoUrl });
+    return res
+      .status(200)
+      .json({ message: "Video updated", video_url: videoUrl });
   } catch (err) {
     console.error("Set video error:", err);
     return res.status(500).json({ message: "Server error" });

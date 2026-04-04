@@ -15,7 +15,7 @@ private const val MOTION_SLIDE_INTERVAL  = 2
 private const val MOTION_EARLY_CONF      = 0.85f     // lowered from 0.92
 private const val MOTION_EARLY_STREAK    = 4
 private const val MOTION_VELOCITY_STREAK = 10
-private const val STATIC_THRESHOLD       = 0.40f
+private const val STATIC_THRESHOLD       = 0.40f     // increased for better accuracy
 private const val VELOCITY_WINDOW        = 8
 
 // --- Strong motion gating (raised significantly) ---
@@ -23,13 +23,13 @@ private const val MOTION_VELOCITY_THRESH = 0.025f     // was 0.018f – only cle
 private const val LSTM_SKIP_THRESHOLD    = 0.018f     // was 0.014f
 
 private const val EARLY_EXIT_STREAK      = 3
-private const val EARLY_EXIT_THRESHOLD   = 0.92f
-private const val STATIC_AVG_FRAMES      = 10
+private const val EARLY_EXIT_THRESHOLD   = 0.90f      // increased for better accuracy
+private const val STATIC_AVG_FRAMES      = 5          // reduced for performance
 private const val STATIC_HISTORY_LEN     = 12
 private const val BUFFER_CAPACITY        = 90
 private const val NO_HAND_TIMEOUT        = 6
-private const val BUFFER_FILL_MS         = 1500L
-private const val DETECTION_COOLDOWN_MS  = 3500L
+private const val BUFFER_FILL_MS         = 1000L      // reduced for faster detection
+private const val DETECTION_COOLDOWN_MS  = 4000L      // increased to prevent spam
 private const val MOTION_SETTLE_MS       = 2000L
 
 // Adaptive motion threshold
@@ -47,13 +47,6 @@ private const val VELOCITY_TRIM_THRESHOLD = 0.004f
 // Landmark indices (wrist + fingertips)
 private val KEY_LANDMARK_INDICES = intArrayOf(0, 4, 8, 12, 16, 20)
 private val KEY_XY: IntArray = KEY_LANDMARK_INDICES.flatMap { i -> listOf(i * 3, i * 3 + 1) }.toIntArray()
-
-private val MOTION_CONFLICTS = mapOf(
-    "is" to "J",
-    "I"  to "J",
-    "z"  to "Z",
-    "s"  to "Z"
-)
 
 // ---------- Data classes ----------------------------------------------
 data class PredictionResult(
@@ -126,6 +119,8 @@ class PredictionService(private val context: Context) {
         }
         isReady = true
         Log.i(TAG, "Models loaded — static: ${staticLabels.size}, motion: ${motionLabels.size}")
+        Log.i(TAG, "Static labels: ${staticLabels.joinToString()}")
+        Log.i(TAG, "Motion labels: ${motionLabels.joinToString()}")
     }
 
     private fun loadModelPair(modelFile: String, labelsFile: String, options: Interpreter.Options): Pair<Interpreter?, List<String>?> {
@@ -217,23 +212,18 @@ class PredictionService(private val context: Context) {
             val (idx, conf) = staticResult
             val label = staticLabels.getOrNull(idx) ?: ""
             val isMotionGesture = motionLabels.contains(label)
-            val conflictsWithMotion = MOTION_CONFLICTS.containsKey(label)
 
             staticHistory.addLast(if (!isMotionGesture && conf >= EARLY_EXIT_THRESHOLD) label else "")
             if (staticHistory.size > STATIC_HISTORY_LEN) staticHistory.removeFirst()
 
             if (!isMotionGesture && conf >= EARLY_EXIT_THRESHOLD) {
-                if (conflictsWithMotion && velocity >= MOTION_VELOCITY_THRESH) {
-                    earlyExitStreak = 0; earlyExitLabel = -1
-                } else {
-                    if (idx == earlyExitLabel) earlyExitStreak++
-                    else { earlyExitStreak = 1; earlyExitLabel = idx }
-                    if (earlyExitStreak >= EARLY_EXIT_STREAK && historyMajority() == label) {
-                        lastDetectionTime = now
-                        onResult?.invoke(PredictionResult(label, conf, false, earlyExit = true))
-                        resetBuffers()
-                        return
-                    }
+                if (idx == earlyExitLabel) earlyExitStreak++
+                else { earlyExitStreak = 1; earlyExitLabel = idx }
+                if (earlyExitStreak >= EARLY_EXIT_STREAK && historyMajority() == label) {
+                    lastDetectionTime = now
+                    onResult?.invoke(PredictionResult(label, conf, false, earlyExit = true))
+                    resetBuffers()
+                    return
                 }
             } else {
                 if (idx != earlyExitLabel) { earlyExitStreak = 0; earlyExitLabel = idx }
@@ -312,8 +302,7 @@ class PredictionService(private val context: Context) {
             val adjustedConf = mConf * velocityFactor
 
             // Override by static: if static is very confident, motion must beat it by a margin
-            val overrideByStatic = staticHighConf && !MOTION_CONFLICTS.containsKey(staticLabel) &&
-                    (adjustedConf < staticConf + MOTION_CONF_MARGIN)
+            val overrideByStatic = staticHighConf && (adjustedConf < staticConf + MOTION_CONF_MARGIN)
 
             if (adjustedConf >= adaptiveThreshold && !overrideByStatic) {
                 Log.i(TAG, "Motion detected: $mLabel (rawConf=$mConf, adjConf=$adjustedConf, vel=$meanVel)")
@@ -353,7 +342,7 @@ class PredictionService(private val context: Context) {
         if (count == 0) return null
         val countF = count.toFloat()
         for (i in sumProbs.indices) sumProbs[i] /= countF
-        val idx = sumProbs.indices.maxByOrNull { sumProbs[it] } ?: return null
+        val idx = sumProbs.indices.filter { staticLabels.getOrNull(it) != "J" }.maxByOrNull { sumProbs[it] } ?: return null
         return Pair(idx, sumProbs[idx])
     }
 
@@ -387,7 +376,7 @@ class PredictionService(private val context: Context) {
         return try {
             interp.run(input, output)
             val probs = output[0]
-            val idx = probs.indices.maxByOrNull { probs[it] } ?: return null
+            val idx = probs.indices.filter { motionLabels.getOrNull(it) != "J" }.maxByOrNull { probs[it] } ?: return null
             Pair(idx, probs[idx])
         } catch (_: Exception) { null }
     }

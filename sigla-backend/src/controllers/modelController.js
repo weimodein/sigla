@@ -5,7 +5,7 @@ const {
   Word,
   WordBank,
   User,
-  ActivityLog,
+  // ActivityLog,
   Notification,
 } = require("../models/index.js");
 require("dotenv").config();
@@ -198,25 +198,25 @@ const trainModel = async (req, res) => {
 
     // Update model record with training results from FastAPI
     await modelRecord.update({
-      accuracy:          trainingResult.accuracy          || null,
-      precision:         trainingResult.precision         || null,
-      recall:            trainingResult.recall            || null,
-      f1_score:          trainingResult.f1_score          || null,
-      total_classes:     trainingResult.total_classes     || null,
-      tflite_url:        trainingResult.tflite_url        || null,
-      h5_url:            trainingResult.h5_url            || null,
+      accuracy: trainingResult.accuracy || null,
+      precision: trainingResult.precision || null,
+      recall: trainingResult.recall || null,
+      f1_score: trainingResult.f1_score || null,
+      total_classes: trainingResult.total_classes || null,
+      tflite_url: trainingResult.tflite_url || null,
+      h5_url: trainingResult.h5_url || null,
       motion_tflite_url: trainingResult.motion_tflite_url || null,
       trained_at: new Date(),
     });
 
     // Log activity
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "trained_model",
-      target_type: "model",
-      target_id: modelRecord.id,
-      details: `Trained model version ${version_number}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "trained_model",
+    //   target_type: "model",
+    //   target_id: modelRecord.id,
+    //   details: `Trained model version ${version_number}`,
+    // });
 
     const motionNote = trainingResult.motion_trained
       ? `Motion model trained (${trainingResult.motion_classes} classes).`
@@ -285,13 +285,13 @@ const testModel = async (req, res) => {
     });
 
     // Log activity
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "tested_model",
-      target_type: "model",
-      target_id: model.id,
-      details: `Tested model version ${model.version_number}. Accuracy: ${testResult.accuracy}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "tested_model",
+    //   target_type: "model",
+    //   target_id: model.id,
+    //   details: `Tested model version ${model.version_number}. Accuracy: ${testResult.accuracy}`,
+    // });
 
     return res.status(200).json({
       message: "Model tested successfully",
@@ -542,15 +542,15 @@ const deployModel = async (req, res) => {
     }
 
     // Log activity
-    try {
-      await ActivityLog.create({
-        user_id: req.user.id,
-        action: "deployed_model",
-        target_type: "model",
-        target_id: model.id,
-        details: `Deployed model version ${model.version_number}`,
-      });
-    } catch (_) {}
+    // try {
+    //   await ActivityLog.create({
+    //     user_id: req.user.id,
+    //     action: "deployed_model",
+    //     target_type: "model",
+    //     target_id: model.id,
+    //     details: `Deployed model version ${model.version_number}`,
+    //   });
+    // } catch (_) {}
 
     return res.status(200).json({
       message: `Model ${model.version_number} deployed successfully`,
@@ -602,13 +602,13 @@ const revertModel = async (req, res) => {
     });
 
     // Log activity
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "reverted_model",
-      target_type: "model",
-      target_id: model.id,
-      details: `Reverted to model version ${model.version_number}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "reverted_model",
+    //   target_type: "model",
+    //   target_id: model.id,
+    //   details: `Reverted to model version ${model.version_number}`,
+    // });
 
     return res.status(200).json({
       message: `Reverted to model version ${model.version_number} successfully`,
@@ -638,13 +638,13 @@ const deleteModel = async (req, res) => {
     }
 
     // Log before deleting
-    await ActivityLog.create({
-      user_id: req.user.id,
-      action: "deleted_model",
-      target_type: "model",
-      target_id: model.id,
-      details: `Deleted model version ${model.version_number}`,
-    });
+    // await ActivityLog.create({
+    //   user_id: req.user.id,
+    //   action: "deleted_model",
+    //   target_type: "model",
+    //   target_id: model.id,
+    //   details: `Deleted model version ${model.version_number}`,
+    // });
 
     await model.destroy();
 
