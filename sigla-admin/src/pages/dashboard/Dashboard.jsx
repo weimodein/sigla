@@ -19,12 +19,12 @@ import {
   BookOpen,
   Cpu,
   ClipboardList,
-  Send,
+  Database,
   FileText,
   ArrowUpRight,
   ArrowDownRight,
   TrendingUp,
-  Database,
+  Send,
   BarChart2,
 } from "lucide-react";
 
@@ -154,13 +154,13 @@ const injectStyles = () => {
 };
 
 // ── Stat Card ──
-const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor, style, centered }) => {
-  const inner = centered ? (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "16px" }}>
+const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor }) => (
+  <div className="dash-stat-card">
+    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
       <div
         style={{
-          width: "64px",
-          height: "64px",
+          width: "60px",
+          height: "60px",
           borderRadius: "12px",
           display: "flex",
           alignItems: "center",
@@ -169,78 +169,46 @@ const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor, style, c
           color: iconColor,
         }}
       >
-        <Icon size={28} />
+        <Icon size={24} />
       </div>
-      <div>
-        <p style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "6px", margin: 0 }}>{title}</p>
-        <p style={{ fontSize: "2rem", fontWeight: 700, color: C.text, margin: 0 }}>{value ?? "—"}</p>
-      </div>
-    </div>
-  ) : (
-    <>
-      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-        <div
+      <div style={{ flex: 1 }}>
+        <p
+          style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "4px" }}
+        >
+          {title}
+        </p>
+        <p
           style={{
-            width: "60px",
-            height: "60px",
-            borderRadius: "12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: iconBg,
-            color: iconColor,
+            fontSize: "1.75rem",
+            fontWeight: 700,
+            color: C.text,
+            margin: 0,
           }}
         >
-          <Icon size={24} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "4px" }}>
-            {title}
-          </p>
-          <p style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
-            {value ?? "—"}
-          </p>
-        </div>
+          {value ?? "—"}
+        </p>
       </div>
-      {trend != null && (
-        <div
-          style={{
-            position: "absolute",
-            top: "24px",
-            right: "24px",
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            fontSize: "0.8rem",
-            fontWeight: 600,
-            color: trend > 0 ? "#16a34a" : "#dc2626",
-          }}
-        >
-          {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          <span>{Math.abs(trend)}%</span>
-        </div>
-      )}
-    </>
-  );
-
-  return (
-    <div
-      className="dash-stat-card"
-      style={{
-        ...(centered
-          ? {
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-            }
-          : {}),
-        ...style,
-      }}
-    >
-      {inner}
     </div>
-  );
-};
+    {trend && (
+      <div
+        style={{
+          position: "absolute",
+          top: "24px",
+          right: "24px",
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+          fontSize: "0.8rem",
+          fontWeight: 600,
+          color: trend > 0 ? "#16a34a" : "#dc2626",
+        }}
+      >
+        {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+        <span>{Math.abs(trend)}%</span>
+      </div>
+    )}
+  </div>
+);
 
 // ── Skeleton Card ──
 const SkeletonCard = () => (
@@ -264,7 +232,14 @@ const SkeletonCard = () => (
             marginBottom: "8px",
           }}
         />
-        <div style={{ width: "40px", height: "28px", background: "#e5e7eb", borderRadius: "4px" }} />
+        <div
+          style={{
+            width: "40px",
+            height: "28px",
+            background: "#e5e7eb",
+            borderRadius: "4px",
+          }}
+        />
       </div>
     </div>
   </div>
@@ -312,7 +287,7 @@ const Dashboard = () => {
       }
     };
     fetchAll();
-  }, []);
+  }, [toast]);
 
   const fetchRegistrations = useCallback(async (period) => {
     try {
@@ -361,7 +336,14 @@ const Dashboard = () => {
               marginBottom: "8px",
             }}
           />
-          <div style={{ width: "200px", height: "16px", background: "#e5e7eb", borderRadius: "6px" }} />
+          <div
+            style={{
+              width: "200px",
+              height: "16px",
+              background: "#e5e7eb",
+              borderRadius: "6px",
+            }}
+          />
         </div>
         <div
           style={{
@@ -392,9 +374,16 @@ const Dashboard = () => {
 
   return (
     <div>
-      {/* ── Welcome Header ── */}
+      {/* Welcome Header */}
       <div style={{ marginBottom: "32px" }}>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
+        <h1
+          style={{
+            fontSize: "1.75rem",
+            fontWeight: 700,
+            color: C.text,
+            margin: 0,
+          }}
+        >
           Admin Dashboard
         </h1>
         <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
@@ -402,80 +391,151 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* ── Quick Stats (2x2 + tall right card) ── */}
+      {/* Quick Stats Grid */}
       <div
         style={{
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 280px",
+          gridTemplateRows: "auto auto",
           gap: "24px",
           marginBottom: "32px",
-          alignItems: "stretch",
         }}
       >
-        {/* Left 2x2 cards */}
-        <div
-          style={{
-            flex: 1,
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gridTemplateRows: "auto auto",
-            gap: "24px",
-          }}
-        >
-          <StatCard
-            title="Total Users"
-            value={userStats?.total}
-            icon={Users}
-            trend={12}
-            iconBg={`${C.primary}22`}
-            iconColor={C.primary}
-          />
-          <StatCard
-            title="Total Words"
-            value={wordStats?.total}
-            icon={BookOpen}
-            trend={8}
-            iconBg={`${C.secondary}22`}
-            iconColor={C.secondary}
-          />
-          <StatCard
-            title="Pending Submissions"
-            value={wordStats?.pending}
-            icon={ClipboardList}
-            trend={-3}
-            iconBg="#fbbf2433"
-            iconColor="#d97706"
-          />
-          <StatCard
-            title="Gesture Samples"
-            value={wordStats?.total_samples}
-            icon={Database}
-            iconBg={`${C.accent}22`}
-            iconColor={C.accent}
-          />
-        </div>
-
+        <StatCard
+          title="Total Users"
+          value={userStats?.total}
+          icon={Users}
+          trend={12}
+          iconBg={`${C.primary}22`}
+          iconColor={C.primary}
+        />
+        <StatCard
+          title="Total Words"
+          value={wordStats?.total}
+          icon={BookOpen}
+          trend={8}
+          iconBg={`${C.secondary}22`}
+          iconColor={C.secondary}
+        />
+        <StatCard
+          title="Pending Submissions"
+          value={wordStats?.pending}
+          icon={ClipboardList}
+          trend={-3}
+          iconBg="#fbbf2433"
+          iconColor="#d97706"
+        />
+        <StatCard
+          title="Gesture Samples"
+          value={wordStats?.total_samples}
+          icon={Database}
+          iconBg={`${C.accent}22`}
+          iconColor={C.accent}
+        />
         {/* Tall card on right — Model Version */}
-        <div style={{ width: "280px" }}>
-          <StatCard
-            title="Model Version"
-            value={deployedModel?.version_number ?? "None"}
-            icon={Cpu}
-            iconBg="#22c55e33"
-            iconColor="#16a34a"
-            centered
-            style={{ height: "100%" }}
-          />
+        <div style={{ gridRow: "1 / 3" }}>
+          <div
+            className="dash-stat-card"
+            style={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: "60px",
+                  height: "60px",
+                  borderRadius: "12px",
+                  background: "#22c55e33",
+                  color: "#16a34a",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Cpu size={24} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <p
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#6b7280",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Model Version
+                </p>
+                <p
+                  style={{
+                    fontSize: "1.75rem",
+                    fontWeight: 700,
+                    color: C.text,
+                    margin: 0,
+                  }}
+                >
+                  {deployedModel?.version_number ?? "None"}
+                </p>
+              </div>
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                top: "16px",
+                right: "16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "0.8rem",
+                fontWeight: 600,
+                color: "#16a34a",
+              }}
+            >
+              <ArrowUpRight size={14} />
+              <span>5%</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── Main Content Grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", alignItems: "start" }}>
-        {/* ── Left Column: Chart + Recent Activity ── */}
+      {/* Main Content Grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "2fr 1fr",
+          gap: "24px",
+          alignItems: "start",
+        }}
+      >
+        {/* Left Column: Chart + Recent Activity */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* Registration chart */}
-          <div className="dash-card" style={{ height: "500px", display: "flex", flexDirection: "column" }}>
+          <div
+            className="dash-card"
+            style={{
+              height: "500px",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <div className="dash-card-header">
-              <h2 style={{ fontSize: "1.5rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+              <h2
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 600,
+                  color: C.text,
+                  margin: "0 0 4px",
+                }}
+              >
                 New User Registrations
               </h2>
               <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
@@ -484,7 +544,12 @@ const Dashboard = () => {
             </div>
             <div
               className="dash-card-body"
-              style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+              }}
             >
               {/* Period toggle */}
               <div
@@ -529,7 +594,10 @@ const Dashboard = () => {
                     textAlign: "center",
                   }}
                 >
-                  <TrendingUp size={48} style={{ marginBottom: "12px", opacity: 0.4 }} />
+                  <TrendingUp
+                    size={48}
+                    style={{ marginBottom: "12px", opacity: 0.4 }}
+                  />
                   <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
                     No registration data for this period
                   </p>
@@ -578,14 +646,24 @@ const Dashboard = () => {
           {/* Recent Activity / Pending submissions */}
           <div className="dash-card">
             <div className="dash-card-header">
-              <h2 style={{ fontSize: "1.5rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+              <h2
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: 600,
+                  color: C.text,
+                  margin: "0 0 4px",
+                }}
+              >
                 Recent Activity
               </h2>
               <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
                 Latest actions in the system
               </p>
             </div>
-            <div className="dash-card-body" style={{ maxHeight: "300px", overflowY: "auto" }}>
+            <div
+              className="dash-card-body"
+              style={{ maxHeight: "300px", overflowY: "auto" }}
+            >
               {pendingWords.length === 0 ? (
                 <div
                   style={{
@@ -594,13 +672,22 @@ const Dashboard = () => {
                     padding: "32px 16px",
                   }}
                 >
-                  <FileText size={40} style={{ marginBottom: "8px", opacity: 0.4 }} />
+                  <FileText
+                    size={40}
+                    style={{ marginBottom: "8px", opacity: 0.4 }}
+                  />
                   <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
                     No recent activity
                   </p>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "16px",
+                  }}
+                >
                   {pendingWords.map((word) => (
                     <div key={word.id} className="dash-request-item">
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -613,18 +700,45 @@ const Dashboard = () => {
                             marginBottom: "4px",
                           }}
                         >
-                          <h4 style={{ fontSize: "0.95rem", fontWeight: 600, color: C.text, margin: 0, flex: 1 }}>
+                          <h4
+                            style={{
+                              fontSize: "0.95rem",
+                              fontWeight: 600,
+                              color: C.text,
+                              margin: 0,
+                              flex: 1,
+                            }}
+                          >
                             {word.label}
                           </h4>
-                          <span className="badge-pending" style={{ padding: "4px 8px", borderRadius: "12px", fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                          <span
+                            className="badge-pending"
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: "12px",
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
                             pending
                           </span>
                         </div>
-                        <p style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "4px" }}>
-                          {word.submitter?.username || "—"} · {word.total_samples || 0} samples
+                        <p
+                          style={{
+                            fontSize: "0.85rem",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          {word.submitter?.username || "—"} ·{" "}
+                          {word.total_samples || 0} samples
                         </p>
                         <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
-                          {formatActivityDate(word.created_at || word.updated_at || Date.now())}
+                          {formatActivityDate(
+                            word.created_at || word.updated_at || Date.now(),
+                          )}
                         </span>
                       </div>
                       <button
@@ -653,32 +767,76 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ── Right Column ── */}
+        {/* Right Column: Model Accuracy + Quick Actions */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* Model accuracy */}
-          <div className="dash-card" style={{ height: "500px", display: "flex", flexDirection: "column" }}>
+          <div
+            className="dash-card"
+            style={{
+              height: "500px",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <div className="dash-card-header">
-              <h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+              <h2
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 600,
+                  color: C.text,
+                  margin: "0 0 4px",
+                }}
+              >
                 Model Accuracy
               </h2>
               <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
                 By version
               </p>
             </div>
-            <div className="dash-card-body" style={{ flex: 1, overflowY: "auto" }}>
+            <div
+              className="dash-card-body"
+              style={{ flex: 1, overflowY: "auto" }}
+            >
               {modelsWithAccuracy.length === 0 ? (
-                <p style={{ color: "#9ca3af", fontSize: "0.85rem", textAlign: "center", padding: "24px" }}>
+                <p
+                  style={{
+                    color: "#9ca3af",
+                    fontSize: "0.85rem",
+                    textAlign: "center",
+                    padding: "24px",
+                  }}
+                >
                   No trained models yet
                 </p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "14px",
+                  }}
+                >
                   {modelsWithAccuracy.map((m) => {
                     const pct = (m.accuracy * 100).toFixed(1);
                     const isDeployed = m.status === "deployed";
                     return (
                       <div key={m.id} style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                          <p style={{ fontSize: "0.8rem", fontWeight: 500, color: C.text, margin: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          <p
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: 500,
+                              color: C.text,
+                              margin: 0,
+                            }}
+                          >
                             v{m.version_number}
                           </p>
                           {isDeployed && (
@@ -696,7 +854,14 @@ const Dashboard = () => {
                             </span>
                           )}
                         </div>
-                        <div style={{ width: "100%", background: "#f3f4f6", borderRadius: "4px", height: "6px" }}>
+                        <div
+                          style={{
+                            width: "100%",
+                            background: "#f3f4f6",
+                            borderRadius: "4px",
+                            height: "6px",
+                          }}
+                        >
                           <div
                             style={{
                               height: "6px",
@@ -730,7 +895,14 @@ const Dashboard = () => {
           {/* Quick Actions */}
           <div className="dash-card">
             <div className="dash-card-header">
-              <h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+              <h2
+                style={{
+                  fontSize: "1.25rem",
+                  fontWeight: 600,
+                  color: C.text,
+                  margin: "0 0 4px",
+                }}
+              >
                 Quick Actions
               </h2>
               <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
@@ -738,7 +910,13 @@ const Dashboard = () => {
               </p>
             </div>
             <div className="dash-card-body">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <button
                   className="dash-quick-action"
                   onClick={() => navigate("/word_bank")}
@@ -781,10 +959,17 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ── Send Announcement ── */}
+      {/* Send Announcement */}
       <div className="dash-card" style={{ marginTop: "24px" }}>
         <div className="dash-card-header">
-          <h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+          <h2
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: 600,
+              color: C.text,
+              margin: "0 0 4px",
+            }}
+          >
             Send Announcement
           </h2>
           <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
@@ -792,9 +977,19 @@ const Dashboard = () => {
           </p>
         </div>
         <div className="dash-card-body">
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+          >
             <div>
-              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 500, color: "#4b5563", marginBottom: "4px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.85rem",
+                  fontWeight: 500,
+                  color: "#4b5563",
+                  marginBottom: "4px",
+                }}
+              >
                 Title
               </label>
               <input
@@ -822,7 +1017,15 @@ const Dashboard = () => {
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 500, color: "#4b5563", marginBottom: "4px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.85rem",
+                  fontWeight: 500,
+                  color: "#4b5563",
+                  marginBottom: "4px",
+                }}
+              >
                 Message
               </label>
               <textarea
@@ -853,14 +1056,20 @@ const Dashboard = () => {
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button
                 onClick={handleSendAnnouncement}
-                disabled={sending || !announcementTitle.trim() || !announcementMessage.trim()}
+                disabled={
+                  sending ||
+                  !announcementTitle.trim() ||
+                  !announcementMessage.trim()
+                }
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 20px",
                   background:
-                    sending || !announcementTitle.trim() || !announcementMessage.trim()
+                    sending ||
+                    !announcementTitle.trim() ||
+                    !announcementMessage.trim()
                       ? "#9ca3af"
                       : C.primary,
                   color: "white",
@@ -869,7 +1078,9 @@ const Dashboard = () => {
                   fontSize: "0.9rem",
                   fontWeight: 500,
                   cursor:
-                    sending || !announcementTitle.trim() || !announcementMessage.trim()
+                    sending ||
+                    !announcementTitle.trim() ||
+                    !announcementMessage.trim()
                       ? "not-allowed"
                       : "pointer",
                   transition: "0.3s",
