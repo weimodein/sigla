@@ -22,7 +22,7 @@ const navItems = [
   { label: "Administrator Account", path: "/admin_account", icon: Settings },
 ];
 
-const Sidebar = () => {
+const Sidebar = ({ onToggle }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -32,77 +32,206 @@ const Sidebar = () => {
     navigate("/login");
   };
 
+  const handleToggle = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    if (onToggle) onToggle(next);
+  };
+
   return (
     <aside
-      className={`flex flex-col min-h-screen bg-blue-900 text-white transition-all duration-300 ease-in-out shrink-0 ${
-        collapsed ? "w-20" : "w-64"
-      }`}
+      style={{
+        width: collapsed ? "70px" : "280px",
+        background: "white",
+        borderRight: "1px solid #e5e7eb",
+        display: "flex",
+        flexDirection: "column",
+        transition: "all 0.3s ease",
+        boxShadow: "0 4px 6px rgba(0,0,0,0.07)",
+        zIndex: 1000,
+        height: "100vh",
+        position: "fixed",
+        left: 0,
+        top: 0,
+        overflow: "hidden",
+      }}
     >
-      {/* Toggle + Logo */}
-      <div className="flex items-center gap-2 px-4 py-5 border-b border-blue-800">
+      {/* Sidebar Header */}
+      <div
+        style={{
+          padding: "24px",
+          borderBottom: "1px solid #f0f0f0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexShrink: 0,
+          background: "white",
+        }}
+      >
         {!collapsed && (
-          <>
-            <h1 className="text-xl font-bold tracking-wide flex-1">SIGLA</h1>
-            <p className="text-blue-300 text-xs -mt-2">Admin Panel</p>
-          </>
+          <span
+            style={{
+              fontSize: "1.5rem",
+              fontWeight: 700,
+              color: "#1e3a8a",
+            }}
+          >
+            SIGLA
+          </span>
         )}
         <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="p-1.5 rounded-md hover:bg-blue-800 transition shrink-0"
+          onClick={handleToggle}
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: "1.25rem",
+            color: "#6b7280",
+            cursor: "pointer",
+            padding: "8px",
+            borderRadius: "6px",
+            transition: "all 0.2s ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#f0f0f0";
+            e.currentTarget.style.color = "#1e3a8a";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none";
+            e.currentTarget.style.color = "#6b7280";
+          }}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
-            <PanelLeftOpen size={18} />
+            <PanelLeftOpen size={20} />
           ) : (
-            <PanelLeftClose size={18} />
+            <PanelLeftClose size={20} />
           )}
         </button>
       </div>
 
-      {/* User info */}
+      {/* User Info */}
       {!collapsed && (
-        <div className="px-4 py-3 border-b border-blue-800">
-          <p className="text-sm font-semibold truncate">{user?.name}</p>
-          <p className="text-blue-300 text-xs capitalize mt-0.5">
+        <div
+          style={{
+            padding: "16px 24px",
+            borderBottom: "1px solid #f0f0f0",
+            flexShrink: 0,
+          }}
+        >
+          <p
+            style={{
+              fontSize: "0.95rem",
+              fontWeight: 600,
+              color: "#1f2937",
+              marginBottom: "4px",
+            }}
+          >
+            {user?.name}
+          </p>
+          <p
+            style={{
+              fontSize: "0.8rem",
+              color: "#6b7280",
+              textTransform: "capitalize",
+            }}
+          >
             {user?.role?.replace("_", " ")}
           </p>
         </div>
       )}
 
-      {/* Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-1">
+      {/* Navigation Menu */}
+      <nav
+        style={{
+          flex: 1,
+          padding: "16px 0",
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
         {navItems.map(({ label, path, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}
             title={collapsed ? label : undefined}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg text-sm font-medium transition px-3 py-2.5 ${
-                collapsed ? "justify-center" : ""
-              } ${
-                isActive
-                  ? "bg-white text-blue-900"
-                  : "text-blue-100 hover:bg-blue-800"
-              }`
-            }
+            style={({ isActive }) => ({
+              display: "flex",
+              alignItems: "center",
+              gap: collapsed ? 0 : "16px",
+              padding: collapsed ? "12px 0" : "12px 24px",
+              justifyContent: collapsed ? "center" : "flex-start",
+              borderLeft: isActive ? "3px solid #1e3a8a" : "3px solid transparent",
+              textDecoration: "none",
+              transition: "all 0.2s ease",
+              minHeight: "48px",
+              height: "48px",
+              whiteSpace: "nowrap",
+              background: isActive ? "#1e3a8a22" : "transparent",
+              color: isActive ? "#1e3a8a" : "#6b7280",
+            })}
           >
-            <Icon size={18} className="shrink-0" />
-            {!collapsed && <span className="truncate">{label}</span>}
+            <Icon size={20} style={{ flexShrink: 0 }} />
+            {!collapsed && (
+              <span
+                style={{
+                  fontWeight: 500,
+                  fontSize: "0.95rem",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
+                {label}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      {/* Logout */}
-      <div className="px-2 py-3 border-t border-blue-800">
+      {/* Sidebar Footer */}
+      <div
+        style={{
+          borderTop: "1px solid #f0f0f0",
+          padding: "16px 0",
+          flexShrink: 0,
+          background: "white",
+        }}
+      >
         <button
           onClick={handleLogout}
           title={collapsed ? "Logout" : undefined}
-          className={`flex items-center gap-3 w-full rounded-lg text-sm font-medium text-blue-100 hover:bg-blue-800 transition ${
-            collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5"
-          }`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: collapsed ? 0 : "16px",
+            justifyContent: collapsed ? "center" : "flex-start",
+            width: "100%",
+            background: "none",
+            border: "none",
+            padding: collapsed ? "12px 0" : "12px 24px",
+            minHeight: "48px",
+            height: "48px",
+            color: "#6b7280",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            borderRadius: 0,
+            fontFamily: "inherit",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#f0f0f0";
+            e.currentTarget.style.color = "#1e3a8a";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none";
+            e.currentTarget.style.color = "#6b7280";
+          }}
         >
-          <LogOut size={18} className="shrink-0" />
-          {!collapsed && <span>Logout</span>}
+          <LogOut size={20} style={{ flexShrink: 0 }} />
+          {!collapsed && <span style={{ fontWeight: 500, fontSize: "0.95rem" }}>Logout</span>}
         </button>
       </div>
     </aside>
