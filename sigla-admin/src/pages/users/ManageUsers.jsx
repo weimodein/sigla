@@ -44,6 +44,29 @@ const C = {
   surface: "#ffffff",
 };
 
+// ── Dashboard card styles ──
+const injectCardStyles = () => {
+  if (document.getElementById("manage-users-card-styles")) return;
+  const s = document.createElement("style");
+  s.id = "manage-users-card-styles";
+  s.textContent = `
+    .mv-stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      border: 1px solid #f0f0f0;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .mv-stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+    }
+  `;
+  document.head.appendChild(s);
+};
+
 const chipStyle = (bg) => ({
   display: "inline-block",
   padding: "3px 10px",
@@ -54,58 +77,82 @@ const chipStyle = (bg) => ({
   color: bg,
 });
 
-// ── Stat Card ────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div
-    className="rounded-2xl p-5 flex items-center gap-4"
-    style={{
-      background: C.surface,
-      border: `1px solid ${C.border}`,
-      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-    }}
-  >
-    <div
-      className="p-3 rounded-xl"
-      style={{
-        background: color,
-        minWidth: 44,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs font-medium mb-0.5" style={{ color: C.muted }}>
-        {title}
-      </p>
-      <p className="text-2xl font-bold leading-tight" style={{ color: C.text }}>
-        {value ?? "—"}
-      </p>
+// ── Stat Card (matches Dashboard.jsx) ────────────────────────
+const StatCard = ({ title, value, icon: Icon, iconBg, iconColor }) => (
+  <div className="mv-stat-card">
+    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+      <div
+        style={{
+          padding: "12px",
+          borderRadius: "12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: iconBg,
+          color: iconColor,
+          minWidth: "44px",
+        }}
+      >
+        <Icon size={20} />
+      </div>
+      <div style={{ flex: 1 }}>
+        <p
+          style={{
+            fontSize: "0.75rem",
+            fontWeight: 500,
+            color: "#9ca3af",
+            marginBottom: "4px",
+          }}
+        >
+          {title}
+        </p>
+        <p
+          style={{
+            fontSize: "1.5rem",
+            fontWeight: 700,
+            color: C.text,
+            margin: 0,
+            lineHeight: "1",
+          }}
+        >
+          {value ?? "—"}
+        </p>
+      </div>
     </div>
   </div>
 );
 
-// ── Skeleton ─────────────────────────────────────────────────
+// ── Skeleton (matches Dashboard.jsx) ─────────────────────────
 const SkeletonCard = () => (
-  <div
-    className="rounded-2xl p-5 flex items-center gap-4"
-    style={{ background: C.surface, border: `1px solid ${C.border}` }}
-  >
-    <div
-      className="w-11 h-11 rounded-xl animate-pulse"
-      style={{ background: C.border }}
-    />
-    <div className="space-y-2 flex-1">
+  <div className="mv-stat-card" style={{ opacity: 0.6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
       <div
-        className="h-3 w-16 rounded animate-pulse"
-        style={{ background: C.border }}
+        style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "12px",
+          background: "#e5e7eb",
+        }}
       />
-      <div
-        className="h-7 w-12 rounded animate-pulse"
-        style={{ background: C.border }}
-      />
+      <div style={{ flex: 1 }}>
+        <div
+          style={{
+            width: "64px",
+            height: "12px",
+            background: "#e5e7eb",
+            borderRadius: "4px",
+            marginBottom: "8px",
+          }}
+        />
+        <div
+          style={{
+            width: "40px",
+            height: "28px",
+            background: "#e5e7eb",
+            borderRadius: "4px",
+          }}
+        />
+      </div>
     </div>
   </div>
 );
@@ -392,6 +439,7 @@ const ManageUsers = () => {
   };
 
   useEffect(() => {
+    injectCardStyles();
     fetchStats();
   }, []);
   useEffect(() => {
@@ -715,19 +763,22 @@ const ManageUsers = () => {
             title="Total Users"
             value={stats?.total}
             icon={Users}
-            color={C.primary}
+            iconBg={`${C.primary}22`}
+            iconColor={C.primary}
           />
           <StatCard
-            title="Pending"
-            value={stats?.pending}
-            icon={ClipboardList}
-            color={C.yellow}
+            title="Active"
+            value={stats?.active}
+            icon={Users}
+            iconBg={`${C.green}22`}
+            iconColor={C.green}
           />
           <StatCard
             title="Deactivated"
             value={stats?.deactivated}
             icon={UserX}
-            color={C.red}
+            iconBg={`${C.red}22`}
+            iconColor={C.red}
           />
           <StatCard
             title="Warned"
