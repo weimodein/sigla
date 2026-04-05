@@ -539,14 +539,14 @@ const Dashboard = () => {
       {/* Main Content: Charts Row */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
+          display: "flex",
           gap: "24px",
           marginBottom: "24px",
+          alignItems: "stretch",
         }}
       >
         {/* Chart */}
-        <div className="dash-card">
+        <div className="dash-card" style={{ flex: 1 }}>
           <div className="dash-card-header">
             <h2
               style={{
@@ -565,6 +565,7 @@ const Dashboard = () => {
           <div
             className="dash-card-body"
             style={{
+              maxHeight: "300px",
               display: "flex",
               flexDirection: "column",
             }}
@@ -661,7 +662,7 @@ const Dashboard = () => {
         </div>
 
         {/* Model Accuracy */}
-        <div className="dash-card">
+        <div className="dash-card" style={{ width: "280px", minHeight: 0 }}>
           <div className="dash-card-header">
             <h2
               style={{
@@ -780,14 +781,14 @@ const Dashboard = () => {
       {/* Main Content: Activity Row */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
+          display: "flex",
           gap: "24px",
           marginBottom: "24px",
+          alignItems: "stretch",
         }}
       >
         {/* Recent Activity */}
-        <div className="dash-card">
+        <div className="dash-card" style={{ flex: 1 }}>
           <div className="dash-card-header">
             <h2
               style={{
@@ -891,7 +892,7 @@ const Dashboard = () => {
         </div>
 
         {/* Pending Words */}
-        <div className="dash-card">
+        <div className="dash-card" style={{ width: "280px", minHeight: 0 }}>
           <div className="dash-card-header">
             <h2
               style={{
