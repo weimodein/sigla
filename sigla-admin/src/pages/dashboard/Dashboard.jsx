@@ -158,30 +158,31 @@ const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor }) => (
     <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
       <div
         style={{
-          width: "60px",
-          height: "60px",
+          padding: "12px",
           borderRadius: "12px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           background: iconBg,
           color: iconColor,
+          minWidth: "44px",
         }}
       >
-        <Icon size={24} />
+        <Icon size={20} />
       </div>
       <div style={{ flex: 1 }}>
         <p
-          style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "4px" }}
+          className="text-xs font-medium mb-0.5"
+          style={{ fontSize: "0.75rem", color: "#9ca3af" }}
         >
           {title}
         </p>
         <p
           style={{
-            fontSize: "1.75rem",
+            fontSize: "1.5rem",
             fontWeight: 700,
             color: C.text,
-            margin: 0,
+            lineHeight: "1",
           }}
         >
           {value ?? "—"}
@@ -192,12 +193,12 @@ const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor }) => (
       <div
         style={{
           position: "absolute",
-          top: "24px",
-          right: "24px",
+          top: "20px",
+          right: "20px",
           display: "flex",
           alignItems: "center",
           gap: "4px",
-          fontSize: "0.8rem",
+          fontSize: "0.75rem",
           fontWeight: 600,
           color: trend > 0 ? "#16a34a" : "#dc2626",
         }}
@@ -215,8 +216,8 @@ const SkeletonCard = () => (
     <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
       <div
         style={{
-          width: "60px",
-          height: "60px",
+          width: "44px",
+          height: "44px",
           borderRadius: "12px",
           background: "#e5e7eb",
         }}
@@ -521,34 +522,34 @@ const Dashboard = () => {
             >
               <div
                 style={{
-                  width: "60px",
-                  height: "60px",
+                  padding: "12px",
                   borderRadius: "12px",
                   background: "#22c55e33",
                   color: "#16a34a",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  minWidth: "44px",
                 }}
               >
-                <Cpu size={24} />
+                <Cpu size={20} />
               </div>
               <div style={{ flex: 1 }}>
                 <p
+                  className="text-xs font-medium mb-0.5"
                   style={{
-                    fontSize: "0.85rem",
-                    color: "#6b7280",
-                    marginBottom: "4px",
+                    fontSize: "0.75rem",
+                    color: "#9ca3af",
                   }}
                 >
                   Model Version
                 </p>
                 <p
                   style={{
-                    fontSize: "1.75rem",
+                    fontSize: "1.5rem",
                     fontWeight: 700,
                     color: C.text,
-                    margin: 0,
+                    lineHeight: "1",
                   }}
                 >
                   {deployedModel?.version_number ?? "None"}
@@ -558,12 +559,12 @@ const Dashboard = () => {
             <div
               style={{
                 position: "absolute",
-                top: "16px",
-                right: "16px",
+                top: "20px",
+                right: "20px",
                 display: "flex",
                 alignItems: "center",
                 gap: "4px",
-                fontSize: "0.8rem",
+                fontSize: "0.75rem",
                 fontWeight: 600,
                 color: "#16a34a",
               }}

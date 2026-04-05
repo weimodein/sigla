@@ -27,82 +27,167 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-// ── Stat Card ─────────────────────────────────────────────────
+// ── Color Palette ────────────────────────────────────────────
+const C = {
+  text: "#1f2937",
+  background: "#f3f4f6",
+  primary: "#1e3a8a",
+  secondary: "#1d4ed8",
+  accent: "#3f8efc",
+  yellow: "#f59e0b",
+  red: "#ef4444",
+  orange: "#f97316",
+  green: "#22c55e",
+  muted: "#9ca3af",
+  border: "#e5e7eb",
+  borderLight: "#f0f0f0",
+  surface: "#ffffff",
+};
+
+const chipStyle = (bg) => ({
+  display: "inline-block",
+  padding: "3px 10px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 600,
+  background: bg + "18",
+  color: bg,
+});
+
+// ── Stat Card ────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
+  <div
+    className="rounded-2xl p-5 flex items-center gap-4"
+    style={{
+      background: C.surface,
+      border: `1px solid ${C.border}`,
+      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+    }}
+  >
+    <div
+      className="p-3 rounded-xl"
+      style={{
+        background: color,
+        minWidth: 44,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <Icon size={20} className="text-white" />
     </div>
     <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
+      <p className="text-xs font-medium mb-0.5" style={{ color: C.muted }}>
+        {title}
+      </p>
+      <p className="text-2xl font-bold leading-tight" style={{ color: C.text }}>
+        {value ?? "—"}
+      </p>
     </div>
   </div>
 );
 
-// ── Skeleton Components ───────────────────────────────────────────
+// ── Skeleton ─────────────────────────────────────────────────
 const SkeletonCard = () => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+  <div
+    className="rounded-2xl p-5 flex items-center gap-4"
+    style={{ background: C.surface, border: `1px solid ${C.border}` }}
+  >
+    <div
+      className="w-11 h-11 rounded-xl animate-pulse"
+      style={{ background: C.border }}
+    />
     <div className="space-y-2 flex-1">
-      <div className="h-3 w-16 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-12 bg-gray-200 rounded animate-pulse" />
+      <div
+        className="h-3 w-16 rounded animate-pulse"
+        style={{ background: C.border }}
+      />
+      <div
+        className="h-7 w-12 rounded animate-pulse"
+        style={{ background: C.border }}
+      />
     </div>
   </div>
 );
 
-const SkeletonTableRows = ({ rows = 5, cols = 7 }) =>
+const SkeletonRows = ({ rows = 5, cols = 7 }) =>
   Array.from({ length: rows }).map((_, i) => (
-    <tr key={i} className="border-t">
+    <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
       {Array.from({ length: cols }).map((_, j) => (
-        <td key={j} className="px-4 py-3">
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
+        <td key={j} className="px-5 py-3.5">
+          <div
+            className="h-4 rounded animate-pulse w-3/4"
+            style={{ background: C.border }}
+          />
         </td>
       ))}
     </tr>
   ));
 
-// ── Sortable Header ──────────────────────────────────────────────
+// ── Sortable Header ──────────────────────────────────────────
 const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
   const active = sortField === sortKey;
   return (
     <th
-      className={`px-4 py-3 cursor-pointer select-none group ${
-        sortKey ? "hover:bg-gray-100" : ""
-      }`}
+      className="px-5 py-3.5 select-none"
+      style={{
+        cursor: sortKey ? "pointer" : "default",
+        transition: "background .15s",
+      }}
       onClick={() => sortKey && onSort(sortKey)}
+      onMouseEnter={(e) =>
+        sortKey && (e.currentTarget.style.background = "#f9fafb")
+      }
+      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
     >
-      <div className="flex items-center gap-1">
-        {label}
-        {sortKey && (
-          <span className="text-gray-400">
-            {active ? (
-              sortDir === "asc" ? (
-                <ChevronUp size={14} />
-              ) : (
-                <ChevronDown size={14} />
-              )
+      <div className="flex items-center gap-1.5">
+        <span
+          className="text-xs font-semibold uppercase tracking-wider"
+          style={{ color: C.muted }}
+        >
+          {label}
+        </span>
+        {sortKey &&
+          (active ? (
+            sortDir === "asc" ? (
+              <ChevronUp size={14} style={{ color: C.primary }} />
             ) : (
-              <ChevronUp size={14} className="opacity-0 group-hover:opacity-50" />
-            )}
-          </span>
-        )}
+              <ChevronDown size={14} style={{ color: C.primary }} />
+            )
+          ) : (
+            <ChevronUp size={14} style={{ color: C.border }} />
+          ))}
       </div>
     </th>
   );
 };
 
-// ── Pagination ─────────────────────────────────────────────────────
-const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) => (
-  <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600">
-    <div className="flex items-center gap-2">
+// ── Pagination ───────────────────────────────────────────────
+const Pagination = ({
+  page,
+  totalPages,
+  onPage,
+  pageSize,
+  onPageSize,
+  total,
+}) => (
+  <div
+    className="flex items-center justify-between px-5 py-3.5"
+    style={{
+      borderTop: `1px solid ${C.border}`,
+      fontSize: 13,
+      color: "#6b7280",
+    }}
+  >
+    <div className="flex items-center gap-3">
       <span>
         {total} result{total !== 1 ? "s" : ""}
       </span>
       <select
         value={pageSize}
-        onChange={(e) => onPageSize(Number(e.target.value))}
-        className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-900"
+        onChange={(e) => onPageSize(+e.target.value)}
+        className="rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+        style={{ border: `1px solid ${C.border}` }}
       >
         <option value={10}>10 / page</option>
         <option value={25}>25 / page</option>
@@ -111,102 +196,139 @@ const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) =
       </select>
     </div>
     <div className="flex items-center gap-1">
-      <button
-        onClick={() => onPage(1)}
-        disabled={page === 1}
-        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
-        aria-label="First page"
-      >
-        <ChevronsLeft size={16} />
-      </button>
-      <button
-        onClick={() => onPage(page - 1)}
-        disabled={page === 1}
-        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
-        aria-label="Previous page"
-      >
-        <ChevronLeft size={16} />
-      </button>
-      <span className="px-2">
+      {[
+        {
+          icon: <ChevronsLeft size={16} />,
+          action: () => onPage(1),
+          disabled: page === 1,
+        },
+        {
+          icon: <ChevronLeft size={16} />,
+          action: () => onPage(page - 1),
+          disabled: page === 1,
+        },
+      ].map((b, i) => (
+        <button
+          key={i}
+          onClick={b.action}
+          disabled={b.disabled}
+          className="p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition hover:bg-gray-100"
+          aria-label={b.disabled ? "" : "pagination"}
+        >
+          {b.icon}
+        </button>
+      ))}
+      <span className="px-3 font-medium" style={{ color: C.text }}>
         Page {page} of {totalPages || 1}
       </span>
-      <button
-        onClick={() => onPage(page + 1)}
-        disabled={page >= totalPages}
-        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
-        aria-label="Next page"
-      >
-        <ChevronRight size={16} />
-      </button>
-      <button
-        onClick={() => onPage(totalPages)}
-        disabled={page >= totalPages}
-        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
-        aria-label="Last page"
-      >
-        <ChevronsRight size={16} />
-      </button>
+      {[
+        {
+          icon: <ChevronRight size={16} />,
+          action: () => onPage(page + 1),
+          disabled: page >= totalPages,
+        },
+        {
+          icon: <ChevronsRight size={16} />,
+          action: () => onPage(totalPages),
+          disabled: page >= totalPages,
+        },
+      ].map((b, i) => (
+        <button
+          key={i}
+          onClick={b.action}
+          disabled={b.disabled}
+          className="p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition hover:bg-gray-100"
+          aria-label={b.disabled ? "" : "pagination"}
+        >
+          {b.icon}
+        </button>
+      ))}
     </div>
   </div>
 );
 
-// ── Status Badge ──────────────────────────────────────────────
+// ── Status Badge ─────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
-  const styles = {
-    active: "bg-green-100 text-green-700",
-    pending: "bg-yellow-100 text-yellow-700",
-    deactivated: "bg-red-100 text-red-700",
-    deleted: "bg-gray-100 text-gray-500",
+  const map = {
+    active: C.green,
+    pending: C.yellow,
+    deactivated: C.red,
+    deleted: C.muted,
   };
-  return (
-    <span
-      className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-600"}`}
-    >
-      {status}
-    </span>
-  );
+  const bg = map[status] || C.muted;
+  return <span style={chipStyle(bg)}>{status}</span>;
 };
 
-// ── Warning Badge ─────────────────────────────────────────────
+// ── Warning Badge ────────────────────────────────────────────
 const WarningBadge = ({ count }) => {
   if (!count || count === 0) return null;
-  const color =
-    count >= 2 ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700";
   return (
-    <span
-      className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${color}`}
-    >
+    <span className="ml-2" style={chipStyle(count >= 2 ? C.red : C.orange)}>
       {count}/2
     </span>
   );
 };
 
-// ── Modal ─────────────────────────────────────────────────────
-const Modal = ({ title, onClose, children }) => (
-  <div
-    className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4"
-    onKeyDown={(e) => e.key === "Escape" && onClose()}
-    role="dialog"
-    aria-modal="true"
-    aria-label={title}
-  >
-    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 transition"
-          aria-label="Close dialog"
-        >
-          <X size={20} />
-        </button>
+// ── Modal ────────────────────────────────────────────────────
+const Modal = ({ title, onClose, children }) => {
+  useEffect(() => {
+    const h = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ background: "rgba(0,0,0,0.35)" }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+        style={{ background: C.surface }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold" style={{ color: C.text }}>
+            {title}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg transition hover:bg-gray-100"
+            style={{ color: C.muted }}
+            aria-label="Close dialog"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        {children}
       </div>
-      {children}
     </div>
-  </div>
+  );
+};
+
+// ── Action Button ────────────────────────────────────────────
+const ActionBtn = ({ label, bg, onClick, disabled, title }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    title={title}
+    className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+    style={{
+      background: bg + "18",
+      color: bg,
+    }}
+    onMouseEnter={(e) => (e.currentTarget.style.background = bg + "30")}
+    onMouseLeave={(e) => (e.currentTarget.style.background = bg + "18")}
+  >
+    {label}
+  </button>
 );
 
-// ── Main Component ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// ── Main Component ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
 const ManageUsers = () => {
   const [activeTab, setActiveTab] = useState("all");
   const toast = useToast();
@@ -300,7 +422,7 @@ const ManageUsers = () => {
   const totalPages = Math.ceil(sortedUsers.length / pageSize);
   const paginatedUsers = sortedUsers.slice(
     (page - 1) * pageSize,
-    page * pageSize
+    page * pageSize,
   );
 
   // ── Actions ─────────────────────────────────────────────────
@@ -331,7 +453,7 @@ const ManageUsers = () => {
     try {
       const res = await warnUser(warnModal.id, { reason: warnReason });
       showSuccess(
-        `Warning issued. User now has ${res.warning_count}/2 warnings.`
+        `Warning issued. User now has ${res.warning_count}/2 warnings.`,
       );
       setWarnModal(null);
       setWarnReason("");
@@ -347,13 +469,13 @@ const ManageUsers = () => {
   const handleDeactivate = async (id, warningCount) => {
     if ((warningCount || 0) < 2) {
       showError(
-        `User must have 2 warnings before being deactivated. Current: ${warningCount || 0}/2`
+        `User must have 2 warnings before being deactivated. Current: ${warningCount || 0}/2`,
       );
       return;
     }
     if (
       !window.confirm(
-        "Deactivate this user? Their account will auto-reactivate after 30 days."
+        "Deactivate this user? Their account will auto-reactivate after 30 days.",
       )
     )
       return;
@@ -361,7 +483,7 @@ const ManageUsers = () => {
     try {
       await deactivateUser(id);
       showSuccess(
-        "User deactivated. Account will auto-reactivate after 30 days."
+        "User deactivated. Account will auto-reactivate after 30 days.",
       );
       fetchStats();
       fetchTabData();
@@ -453,7 +575,8 @@ const ManageUsers = () => {
         <tr>
           <td
             colSpan={activeTab === "deactivated" ? 7 : 6}
-            className="text-center py-8 text-gray-400 text-sm"
+            className="text-center py-10"
+            style={{ color: C.muted, fontSize: 13 }}
           >
             No records found
           </td>
@@ -462,90 +585,97 @@ const ManageUsers = () => {
     }
 
     return paginatedUsers.map((u) => (
-      <tr key={u.id} className="border-t hover:bg-gray-50 text-sm">
-        <td className="px-4 py-3 text-gray-500">{u.id}</td>
-        <td className="px-4 py-3 font-medium text-gray-800">
+      <tr
+        key={u.id}
+        className="border-t hover:bg-gray-50 text-sm"
+        style={{
+          borderTop: `1px solid ${C.border}`,
+          transition: "background .15s",
+        }}
+      >
+        <td
+          className="px-5 py-3.5 font-mono"
+          style={{ color: C.muted, fontSize: 12 }}
+        >
+          {u.id}
+        </td>
+        <td className="px-5 py-3.5 font-semibold" style={{ color: C.text }}>
           {u.username}
           <WarningBadge count={u.warning_count} />
         </td>
-        <td className="px-4 py-3 text-gray-600">{u.name}</td>
-        <td className="px-4 py-3 text-gray-600">{u.email}</td>
-        <td className="px-4 py-3">
+        <td className="px-5 py-3.5" style={{ color: "#4b5563" }}>
+          {u.name}
+        </td>
+        <td className="px-5 py-3.5" style={{ color: "#4b5563" }}>
+          {u.email}
+        </td>
+        <td className="px-5 py-3.5">
           <StatusBadge status={u.status} />
         </td>
         {activeTab === "deactivated" && (
-          <td className="px-4 py-3 text-xs text-gray-500">
+          <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 12 }}>
             Auto-reactivates: {getReactivationDate(u.deactivated_at)}
           </td>
         )}
-        <td className="px-4 py-3">
-          <div className="flex gap-2 flex-wrap">
+        <td className="px-5 py-3.5">
+          <div className="flex gap-1.5 flex-wrap">
             {activeTab === "all" && (
               <>
-                <button
+                <ActionBtn
+                  label="Edit"
+                  bg={C.primary}
                   onClick={() => handleEditOpen(u)}
-                  className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded-lg"
-                >
-                  Edit
-                </button>
-                <button
+                />
+                <ActionBtn
+                  label="Warn"
+                  bg={C.orange}
                   onClick={() => handleWarnOpen(u)}
                   disabled={(u.warning_count || 0) >= 2}
-                  className="text-xs bg-orange-50 text-orange-700 hover:bg-orange-100 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
                   title={
                     (u.warning_count || 0) >= 2
                       ? "User already has 2 warnings"
                       : "Issue a warning"
                   }
-                >
-                  Warn
-                </button>
-                <button
+                />
+                <ActionBtn
+                  label="Deactivate"
+                  bg={C.red}
                   onClick={() => handleDeactivate(u.id, u.warning_count)}
                   disabled={(u.warning_count || 0) < 2}
-                  className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
                   title={
                     (u.warning_count || 0) < 2
                       ? `User needs ${2 - (u.warning_count || 0)} more warning(s) before deactivation`
                       : "Deactivate user"
                   }
-                >
-                  Deactivate
-                </button>
+                />
               </>
             )}
-
             {activeTab === "pending" && (
               <>
-                <button
+                <ActionBtn
+                  label="Approve"
+                  bg={C.green}
                   onClick={() => handleApprove(u.id)}
-                  className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-3 py-1 rounded-lg"
-                >
-                  Approve
-                </button>
-                <button
+                />
+                <ActionBtn
+                  label="Deny"
+                  bg={C.red}
                   onClick={() => handleDelete(u.id)}
-                  className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
-                >
-                  Deny
-                </button>
+                />
               </>
             )}
-
             {activeTab === "deactivated" && (
               <>
-                <button
+                <ActionBtn
+                  label="Reactivate"
+                  bg={C.green}
                   onClick={() => handleReactivate(u.id)}
-                  className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-3 py-1 rounded-lg"
-                >
-                  Reactivate
-                </button>
-                <button
+                />
+                <ActionBtn
+                  label="Delete"
+                  bg={C.red}
                   onClick={() => handleDelete(u.id)}
-                  className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
-                >
-                  Delete
-                </button>
+                />
               </>
             )}
           </div>
@@ -555,6 +685,7 @@ const ManageUsers = () => {
   };
 
   const tableCols = activeTab === "deactivated" ? 7 : 6;
+  const isDeactivated = activeTab === "deactivated";
 
   // ── JSX ─────────────────────────────────────────────────────
   return (
@@ -562,8 +693,10 @@ const ManageUsers = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Manage Users</h2>
-          <p className="text-gray-500 text-sm mt-1">
+          <h2 className="text-2xl font-bold" style={{ color: C.text }}>
+            Manage Users
+          </h2>
+          <p className="text-sm mt-1" style={{ color: C.muted }}>
             Manage user accounts and access
           </p>
         </div>
@@ -582,40 +715,45 @@ const ManageUsers = () => {
             title="Total Users"
             value={stats?.total}
             icon={Users}
-            color="bg-blue-900"
+            color={C.primary}
           />
           <StatCard
             title="Pending"
             value={stats?.pending}
             icon={ClipboardList}
-            color="bg-yellow-500"
+            color={C.yellow}
           />
           <StatCard
             title="Deactivated"
             value={stats?.deactivated}
             icon={UserX}
-            color="bg-red-500"
+            color={C.red}
           />
           <StatCard
             title="Warned"
             value={stats?.warned}
             icon={AlertTriangle}
-            color="bg-orange-500"
+            color={C.orange}
           />
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4 border-b">
+      <div
+        className="flex gap-1 mb-4 rounded-xl p-1"
+        style={{ background: C.border, width: "fit-content" }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
-              activeTab === tab.key
-                ? "border-blue-900 text-blue-900"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            className="px-4 py-2 text-sm font-medium rounded-lg transition"
+            style={{
+              background: activeTab === tab.key ? C.surface : "transparent",
+              color: activeTab === tab.key ? C.primary : C.muted,
+              boxShadow:
+                activeTab === tab.key ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+            }}
           >
             {tab.label}
           </button>
@@ -625,52 +763,161 @@ const ManageUsers = () => {
       {/* Search */}
       {activeTab === "all" && (
         <div className="relative mb-4 max-w-sm">
-          <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2"
+            style={{ color: C.muted }}
+          />
           <input
             type="text"
             placeholder="Search users..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900"
+            className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl focus:outline-none"
+            style={{
+              border: `1px solid ${C.border}`,
+              background: C.surface,
+              color: C.text,
+            }}
           />
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}
+      >
         {loading ? (
           <table className="w-full text-left">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+            <thead style={{ background: "#f9fafb" }}>
               <tr>
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Username</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Status</th>
-                {activeTab === "deactivated" && (
-                  <th className="px-4 py-3">Auto-Reactivates</th>
+                <th className="px-5 py-3">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
+                    ID
+                  </span>
+                </th>
+                <th className="px-5 py-3">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
+                    Username
+                  </span>
+                </th>
+                <th className="px-5 py-3">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
+                    Name
+                  </span>
+                </th>
+                <th className="px-5 py-3">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
+                    Email
+                  </span>
+                </th>
+                <th className="px-5 py-3">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
+                    Status
+                  </span>
+                </th>
+                {isDeactivated && (
+                  <th className="px-5 py-3">
+                    <span
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: C.muted }}
+                    >
+                      Auto-Reactivates
+                    </span>
+                  </th>
                 )}
-                <th className="px-4 py-3">Actions</th>
+                <th className="px-5 py-3">
+                  <span
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: C.muted }}
+                  >
+                    Actions
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              <SkeletonTableRows rows={5} cols={tableCols} />
+              <SkeletonRows rows={5} cols={tableCols} />
             </tbody>
           </table>
         ) : (
           <>
             <table className="w-full text-left">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+              <thead style={{ background: "#f9fafb" }}>
                 <tr>
-                  <SortableHeader label="ID" sortKey="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <SortableHeader label="Username" sortKey="username" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <SortableHeader label="Name" sortKey="name" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <SortableHeader label="Email" sortKey="email" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <SortableHeader label="Status" sortKey="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  {activeTab === "deactivated" && (
-                    <th className="px-4 py-3">Auto-Reactivates</th>
+                  <SortableHeader
+                    label="ID"
+                    sortKey="id"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Username"
+                    sortKey="username"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Name"
+                    sortKey="name"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Email"
+                    sortKey="email"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Status"
+                    sortKey="status"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  {isDeactivated && (
+                    <th className="px-5 py-3">
+                      <span
+                        className="text-xs font-semibold uppercase tracking-wider"
+                        style={{ color: C.muted }}
+                      >
+                        Auto-Reactivates
+                      </span>
+                    </th>
                   )}
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-5 py-3">
+                    <span
+                      className="text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: C.muted }}
+                    >
+                      Actions
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>{renderRows()}</tbody>
@@ -699,36 +946,42 @@ const ManageUsers = () => {
           onClose={() => setWarnModal(null)}
         >
           <div className="space-y-3">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
               This user currently has{" "}
-              <span className="font-semibold text-orange-600">
+              <span className="font-semibold" style={{ color: C.orange }}>
                 {warnModal.warning_count || 0}/2
               </span>{" "}
               warnings. After 2 warnings, the account can be deactivated.
             </p>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Reason <span className="text-gray-400">(optional)</span>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Reason <span style={{ color: C.muted }}>(optional)</span>
               </label>
               <textarea
                 value={warnReason}
                 onChange={(e) => setWarnReason(e.target.value)}
                 placeholder="Describe the reason for this warning..."
                 rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none resize-none"
+                style={{ borderColor: C.border, background: C.surface }}
               />
             </div>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleWarnSubmit}
                 disabled={actionLoading}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ background: C.orange, color: "#fff" }}
               >
                 {actionLoading ? "Issuing..." : "Issue Warning"}
               </button>
               <button
                 onClick={() => setWarnModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
+                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
+                style={{ borderColor: C.border, color: "#4b5563" }}
               >
                 Cancel
               </button>
@@ -743,7 +996,10 @@ const ManageUsers = () => {
           <div className="space-y-3">
             {["name", "username", "email", "age"].map((field) => (
               <div key={field}>
-                <label className="block text-xs font-medium text-gray-600 mb-1 capitalize">
+                <label
+                  className="block text-xs font-medium mb-1 capitalize"
+                  style={{ color: "#4b5563" }}
+                >
                   {field}
                 </label>
                 <input
@@ -752,12 +1008,20 @@ const ManageUsers = () => {
                   onChange={(e) =>
                     setEditForm({ ...editForm, [field]: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                  className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                  style={{
+                    borderColor: C.border,
+                    background: C.surface,
+                    color: C.text,
+                  }}
                 />
               </div>
             ))}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
                 Gender
               </label>
               <select
@@ -765,7 +1029,12 @@ const ManageUsers = () => {
                 onChange={(e) =>
                   setEditForm({ ...editForm, gender: e.target.value })
                 }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
               >
                 <option value="">Select gender</option>
                 <option value="male">Male</option>
@@ -777,13 +1046,15 @@ const ManageUsers = () => {
               <button
                 onClick={handleEditSave}
                 disabled={actionLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ background: C.primary, color: "#fff" }}
               >
                 {actionLoading ? "Saving..." : "Save Changes"}
               </button>
               <button
                 onClick={() => setEditModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
+                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
+                style={{ borderColor: C.border, color: "#4b5563" }}
               >
                 Cancel
               </button>
