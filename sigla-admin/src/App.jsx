@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
+import { ToastProvider } from "./context/ToastContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import Layout from "./components/Layout.jsx";
 
@@ -10,82 +11,84 @@ import ManageUsers from "./pages/users/ManageUsers.jsx";
 import ManageWordBank from "./pages/words/ManageWordBank.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
 import AdministratorAccount from "./pages/adminaccount/AdministratorAccount.jsx";
-import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx"; // Placeholder for future implementation
+import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx";
 
 const App = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          {/* Public */}
-          <Route path="/login" element={<Login />} />
+        <ToastProvider>
+          <Routes>
+            {/* Public */}
+            <Route path="/login" element={<Login />} />
 
-          {/* Protected — with sidebar layout */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <Dashboard />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ManageUsers />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/word_bank"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ManageWordBank />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/model"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ManageModel />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin_account"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <AdministratorAccount />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <ReportsAnalytics />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected — with sidebar layout */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Dashboard />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ManageUsers />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/word_bank"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ManageWordBank />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/model"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ManageModel />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin_account"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <AdministratorAccount />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ReportsAnalytics />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Redirects */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+            {/* Redirects */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

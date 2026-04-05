@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getUserStats, getAllUsers } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
+import { useToast } from "../../context/ToastContext.jsx";
 import {
   BarChart,
   Bar,
@@ -90,9 +91,9 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 
 // ── Main Component ────────────────────────────────────────────
 const ReportsAnalytics = () => {
+  const toast = useToast();
   const [filter, setFilter] = useState("month");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [generating, setGenerating] = useState(false);
 
   const [userStats, setUserStats] = useState(null);
@@ -115,10 +116,14 @@ const ReportsAnalytics = () => {
     deleted_users: true,
   });
 
+  const [warnedPage, setWarnedPage] = useState(1);
+  const [deactivatedPage, setDeactivatedPage] = useState(1);
+  const [deletedPage, setDeletedPage] = useState(1);
+  const PAGE_SIZE = 5;
+
   // ── Fetch ───────────────────────────────────────────────────
   const fetchAll = async () => {
     setLoading(true);
-    setError("");
     try {
       const [uStats, wStats, usersData, wordsData] = await Promise.all([
         getUserStats(),
@@ -144,7 +149,7 @@ const ReportsAnalytics = () => {
         setModels([]);
       }
     } catch (err) {
-      setError("Failed to load reports data");
+      toast.error("Failed to load reports data");
     } finally {
       setLoading(false);
     }
@@ -152,6 +157,9 @@ const ReportsAnalytics = () => {
 
   useEffect(() => {
     fetchAll();
+    setWarnedPage(1);
+    setDeactivatedPage(1);
+    setDeletedPage(1);
   }, [filter]);
 
   // ── Chart data helpers ──────────────────────────────────────
@@ -308,18 +316,90 @@ const ReportsAnalytics = () => {
       a.download = `sigla_report_${filter}_${new Date().toISOString().split("T")[0]}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success("Report downloaded successfully");
     } catch (err) {
-      setError("Failed to generate report");
+      toast.error("Failed to generate report");
     } finally {
       setGenerating(false);
     }
   };
 
+  // ── Skeleton components ───────────────────────────────────
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4 animate-pulse">
+      <div className="w-10 h-10 rounded-full bg-gray-200" />
+      <div className="flex-1 space-y-2">
+        <div className="h-3 w-20 bg-gray-200 rounded" />
+        <div className="h-7 w-16 bg-gray-200 rounded" />
+      </div>
+    </div>
+  );
+
+  const SkeletonChart = () => (
+    <div className="bg-white rounded-xl shadow-sm p-5 animate-pulse">
+      <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
+      <div className="h-[220px] bg-gray-100 rounded" />
+    </div>
+  );
+
+  const SkeletonTable = () => (
+    <div className="bg-white rounded-xl shadow-sm p-5 animate-pulse">
+      <div className="h-4 w-28 bg-gray-200 rounded mb-3" />
+      <div className="rounded-lg border border-gray-200 overflow-hidden">
+        <div className="h-10 bg-gray-50" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-12 border-t px-4 py-3 flex gap-4">
+            <div className="h-4 flex-1 bg-gray-100 rounded" />
+            <div className="h-4 flex-1 bg-gray-100 rounded" />
+            <div className="h-4 w-12 bg-gray-100 rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   // ── JSX ───────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900" />
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-7 w-48 bg-gray-200 rounded animate-pulse" />
+            <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
+          </div>
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            {["week", "month", "year"].map((f) => (
+              <div
+                key={f}
+                className="w-14 h-7 bg-gray-200 rounded-md animate-pulse"
+              />
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonChart key={i} />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonTable key={i} />
+          ))}
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-5 animate-pulse">
+          <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
+          <div className="h-3 w-52 bg-gray-100 rounded mb-4" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-4 bg-gray-100 rounded" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -352,13 +432,6 @@ const ReportsAnalytics = () => {
           ))}
         </div>
       </div>
-
-      {/* Error */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-          {error}
-        </div>
-      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -502,13 +575,51 @@ const ReportsAnalytics = () => {
           <SectionHeader title="Warned Users" count={warnedUsers.length} />
           <SimpleTable
             headers={["Username", "Email", "Warnings"]}
-            rows={warnedUsers.map((u) => [
-              u.username,
-              u.email,
-              `${u.warning_count}/2`,
-            ])}
+            rows={warnedUsers
+              .slice(
+                (warnedPage - 1) * PAGE_SIZE,
+                warnedPage * PAGE_SIZE,
+              )
+              .map((u) => [
+                u.username,
+                u.email,
+                `${u.warning_count}/2`,
+              ])}
             emptyMessage="No warned users"
           />
+          {warnedUsers.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+              <span>
+                Page {warnedPage} of{" "}
+                {Math.ceil(warnedUsers.length / PAGE_SIZE)}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setWarnedPage((p) => Math.max(1, p - 1))}
+                  disabled={warnedPage === 1}
+                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() =>
+                    setWarnedPage((p) =>
+                      Math.min(
+                        Math.ceil(warnedUsers.length / PAGE_SIZE),
+                        p + 1,
+                      ),
+                    )
+                  }
+                  disabled={
+                    warnedPage >= Math.ceil(warnedUsers.length / PAGE_SIZE)
+                  }
+                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="bg-white rounded-xl shadow-sm p-5">
           <SectionHeader
@@ -517,23 +628,103 @@ const ReportsAnalytics = () => {
           />
           <SimpleTable
             headers={["Username", "Email", "Since"]}
-            rows={deactivatedUsers.map((u) => [
-              u.username,
-              u.email,
-              u.deactivated_at
-                ? new Date(u.deactivated_at).toLocaleDateString("en-PH")
-                : "—",
-            ])}
+            rows={deactivatedUsers
+              .slice(
+                (deactivatedPage - 1) * PAGE_SIZE,
+                deactivatedPage * PAGE_SIZE,
+              )
+              .map((u) => [
+                u.username,
+                u.email,
+                u.deactivated_at
+                  ? new Date(u.deactivated_at).toLocaleDateString("en-PH")
+                  : "—",
+              ])}
             emptyMessage="No deactivated users"
           />
+          {deactivatedUsers.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+              <span>
+                Page {deactivatedPage} of{" "}
+                {Math.ceil(deactivatedUsers.length / PAGE_SIZE)}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() =>
+                    setDeactivatedPage((p) => Math.max(1, p - 1))
+                  }
+                  disabled={deactivatedPage === 1}
+                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() =>
+                    setDeactivatedPage((p) =>
+                      Math.min(
+                        Math.ceil(deactivatedUsers.length / PAGE_SIZE),
+                        p + 1,
+                      ),
+                    )
+                  }
+                  disabled={
+                    deactivatedPage >=
+                    Math.ceil(deactivatedUsers.length / PAGE_SIZE)
+                  }
+                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="bg-white rounded-xl shadow-sm p-5">
           <SectionHeader title="Deleted Accounts" count={deletedUsers.length} />
           <SimpleTable
             headers={["Username", "Email"]}
-            rows={deletedUsers.map((u) => [u.username, u.email])}
+            rows={deletedUsers
+              .slice(
+                (deletedPage - 1) * PAGE_SIZE,
+                deletedPage * PAGE_SIZE,
+              )
+              .map((u) => [u.username, u.email])}
             emptyMessage="No deleted accounts"
           />
+          {deletedUsers.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+              <span>
+                Page {deletedPage} of{" "}
+                {Math.ceil(deletedUsers.length / PAGE_SIZE)}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setDeletedPage((p) => Math.max(1, p - 1))}
+                  disabled={deletedPage === 1}
+                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() =>
+                    setDeletedPage((p) =>
+                      Math.min(
+                        Math.ceil(deletedUsers.length / PAGE_SIZE),
+                        p + 1,
+                      ),
+                    )
+                  }
+                  disabled={
+                    deletedPage >=
+                    Math.ceil(deletedUsers.length / PAGE_SIZE)
+                  }
+                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

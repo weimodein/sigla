@@ -9,7 +9,8 @@ import {
   deleteModel,
 } from "../../api/modelApi.js";
 import { getWordStats } from "../../api/wordApi.js";
-import { Cpu, CheckCircle, Clock, Archive, X } from "lucide-react";
+import { useToast } from "../../context/ToastContext.jsx";
+import { Cpu, CheckCircle, Clock, X, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
@@ -23,6 +24,28 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
     </div>
   </div>
 );
+
+// ── Skeleton Components ───────────────────────────────────────
+const SkeletonCard = () => (
+  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+    <div className="space-y-2 flex-1">
+      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
+    </div>
+  </div>
+);
+
+const SkeletonTableRows = ({ rows = 5 }) =>
+  Array.from({ length: rows }).map((_, i) => (
+    <tr key={i} className="border-t">
+      {Array.from({ length: 10 }).map((_, j) => (
+        <td key={j} className="px-4 py-3">
+          <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
+        </td>
+      ))}
+    </tr>
+  ));
 
 // ── Badge ─────────────────────────────────────────────────────
 const Badge = ({ value }) => {
@@ -41,12 +64,24 @@ const Badge = ({ value }) => {
 };
 
 // ── Modal ─────────────────────────────────────────────────────
-const Modal = ({ title, onClose, children }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
-    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+const Modal = ({ title, onClose, children, wide = false }) => (
+  <div
+    className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4"
+    onKeyDown={(e) => e.key === "Escape" && onClose()}
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+  >
+    <div
+      className={`bg-white rounded-2xl shadow-xl w-full ${wide ? "max-w-3xl" : "max-w-md"} p-6`}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 transition"
+          aria-label="Close dialog"
+        >
           <X size={20} />
         </button>
       </div>
@@ -57,13 +92,20 @@ const Modal = ({ title, onClose, children }) => (
 
 // ── Main Component ────────────────────────────────────────────
 const ManageModel = () => {
+  const toast = useToast();
   const [stats, setStats] = useState(null);
   const [wordStats, setWordStats] = useState(null);
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Sorting
+  const [sortField, setSortField] = useState("trained_at");
+  const [sortDir, setSortDir] = useState("desc");
 
   // Modal state
   const [trainModal, setTrainModal] = useState(false);
@@ -78,7 +120,6 @@ const ManageModel = () => {
   // ── Fetch data ──────────────────────────────────────────────
   const fetchData = async () => {
     setLoading(true);
-    setError("");
     try {
       const [statsData, modelsData, wordStatsData] = await Promise.all([
         getModelStats(),
@@ -86,10 +127,10 @@ const ManageModel = () => {
         getWordStats(),
       ]);
       setStats(statsData);
-      setModels(modelsData.models);
+      setModels(modelsData.models || []);
       setWordStats(wordStatsData);
     } catch (err) {
-      setError("Failed to load model data");
+      toast.error("Failed to load model data");
     } finally {
       setLoading(false);
     }
@@ -99,23 +140,48 @@ const ManageModel = () => {
     fetchData();
   }, []);
 
-  const showSuccess = (msg) => {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(""), 4000);
+  // ── Sort ────────────────────────────────────────────────────
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
   };
+
+  const sortedModels = [...models].sort((a, b) => {
+    let va = a[sortField] ?? "";
+    let vb = b[sortField] ?? "";
+    if (typeof va === "string") va = va.toLowerCase();
+    if (typeof vb === "string") vb = vb.toLowerCase();
+    if (va < vb) return sortDir === "asc" ? -1 : 1;
+    if (va > vb) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // ── Paginate ────────────────────────────────────────────────
+  const totalPages = Math.ceil(sortedModels.length / pageSize);
+  const paginatedModels = sortedModels.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+
+  // ── Actions ─────────────────────────────────────────────────
+  const showSuccess = (msg) => toast.success(msg);
+  const showError = (msg) => toast.error(msg);
 
   // ── Train ─────────────────────────────────────────────────
   const handleTrain = async () => {
     if (!trainForm.version_number) {
-      setError("Version number is required");
+      showError("Version number is required");
       return;
     }
     if (!/^[a-zA-Z0-9._\-]+$/.test(trainForm.version_number)) {
-      setError("Version number can only contain letters, numbers, dots, dashes, and underscores (e.g. v1.0, v2.1-beta)");
+      showError("Version number can only contain letters, numbers, dots, dashes, and underscores (e.g. v1.0, v2.1-beta)");
       return;
     }
     setActionLoading(true);
-    setError("");
     try {
       const result = await trainModel(
         trainForm.version_number,
@@ -127,7 +193,7 @@ const ManageModel = () => {
       setResultModal({ title: "Training Results", data: result });
       fetchData();
     } catch (err) {
-      setError(
+      showError(
         err.response?.data?.message ||
           err.response?.data?.detail ||
           "Training failed",
@@ -140,7 +206,6 @@ const ManageModel = () => {
   // ── Test ──────────────────────────────────────────────────
   const handleTest = async () => {
     setActionLoading(true);
-    setError("");
     try {
       const result = await testModel(testModal.id);
       showSuccess("Model evaluation complete");
@@ -148,7 +213,7 @@ const ManageModel = () => {
       setResultModal({ title: "Test Results", data: result });
       fetchData();
     } catch (err) {
-      setError(
+      showError(
         err.response?.data?.message ||
           err.response?.data?.detail ||
           "Test failed",
@@ -161,14 +226,13 @@ const ManageModel = () => {
   // ── Deploy ────────────────────────────────────────────────
   const handleDeploy = async () => {
     setActionLoading(true);
-    setError("");
     try {
       await deployModel(deployModal.id);
       showSuccess(`Model ${deployModal.version_number} deployed successfully`);
       setDeployModal(null);
       fetchData();
     } catch (err) {
-      setError(
+      showError(
         err.response?.data?.message ||
           err.response?.data?.detail ||
           "Deployment failed",
@@ -181,14 +245,13 @@ const ManageModel = () => {
   // ── Revert ────────────────────────────────────────────────
   const handleRevert = async () => {
     setActionLoading(true);
-    setError("");
     try {
       await revertModel(revertModal.id);
       showSuccess(`Reverted to model ${revertModal.version_number}`);
       setRevertModal(null);
       fetchData();
     } catch (err) {
-      setError(
+      showError(
         err.response?.data?.message ||
           err.response?.data?.detail ||
           "Revert failed",
@@ -212,7 +275,7 @@ const ManageModel = () => {
       showSuccess("Model deleted successfully");
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete model");
+      showError(err.response?.data?.message || "Failed to delete model");
     } finally {
       setActionLoading(false);
     }
@@ -220,6 +283,32 @@ const ManageModel = () => {
 
   // ── Format metric ─────────────────────────────────────────
   const fmt = (val) => (val != null ? `${(val * 100).toFixed(1)}%` : "—");
+
+  // ── Sortable Header ───────────────────────────────────────
+  const SortableHeader = ({ label, sortKey }) => {
+    const active = sortField === sortKey;
+    return (
+      <th
+        className="px-4 py-3 cursor-pointer select-none group hover:bg-gray-100"
+        onClick={() => handleSort(sortKey)}
+      >
+        <div className="flex items-center gap-1">
+          {label}
+          <span className="text-gray-400">
+            {active ? (
+              sortDir === "asc" ? (
+                <ChevronLeft size={14} className="rotate-[-90deg]" />
+              ) : (
+                <ChevronLeft size={14} className="rotate-90" />
+              )
+            ) : (
+              <ChevronUp size={14} className="opacity-0 group-hover:opacity-50" />
+            )}
+          </span>
+        </div>
+      </th>
+    );
+  };
 
   // ── JSX ───────────────────────────────────────────────────
   return (
@@ -240,39 +329,35 @@ const ManageModel = () => {
         </button>
       </div>
 
-      {/* Alerts */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
-          {success}
-        </div>
-      )}
-
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard
-          title="Total Versions"
-          value={stats?.total}
-          icon={Cpu}
-          color="bg-blue-900"
-        />
-        <StatCard
-          title="Deployed"
-          value={stats?.deployed}
-          icon={CheckCircle}
-          color="bg-green-500"
-        />
-        <StatCard
-          title="Trained (pending)"
-          value={stats?.trained}
-          icon={Clock}
-          color="bg-yellow-500"
-        />
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <StatCard
+            title="Total Versions"
+            value={stats?.total}
+            icon={Cpu}
+            color="bg-blue-900"
+          />
+          <StatCard
+            title="Deployed"
+            value={stats?.deployed}
+            icon={CheckCircle}
+            color="bg-green-500"
+          />
+          <StatCard
+            title="Trained (pending)"
+            value={stats?.trained}
+            icon={Clock}
+            color="bg-yellow-500"
+          />
+        </div>
+      )}
 
       {/* Current Deployed Model */}
       {stats?.current_model && (
@@ -316,10 +401,6 @@ const ManageModel = () => {
       {/* Models Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900" />
-          </div>
-        ) : (
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
               <tr>
@@ -336,102 +417,168 @@ const ManageModel = () => {
               </tr>
             </thead>
             <tbody>
-              {models.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={10}
-                    className="text-center py-8 text-gray-400 text-sm"
-                  >
-                    No models found. Train your first model to get started.
-                  </td>
-                </tr>
-              ) : (
-                models.map((model) => (
-                  <tr
-                    key={model.id}
-                    className="border-t hover:bg-gray-50 text-sm"
-                  >
-                    <td className="px-4 py-3 font-semibold text-gray-800">
-                      {model.version_number}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge value={model.status} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {fmt(model.accuracy)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {fmt(model.precision)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {fmt(model.recall)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {fmt(model.f1_score)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {model.total_classes ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {model.trainer?.username || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {model.trained_at
-                        ? new Date(model.trained_at).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2 flex-wrap">
-                        {model.status === "trained" && (
-                          <>
-                            <button
-                              onClick={() => setTestModal(model)}
-                              className="text-xs bg-yellow-50 text-yellow-700 hover:bg-yellow-100 px-3 py-1 rounded-lg"
-                            >
-                              Test
-                            </button>
-                            <button
-                              onClick={() => setDeployModal(model)}
-                              className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-3 py-1 rounded-lg"
-                            >
-                              Deploy
-                            </button>
-                            <button
-                              onClick={() => handleDelete(model)}
-                              className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        )}
-                        {model.status === "inactive" && (
-                          <>
-                            <button
-                              onClick={() => setRevertModal(model)}
-                              className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded-lg"
-                            >
-                              Revert
-                            </button>
-                            <button
-                              onClick={() => handleDelete(model)}
-                              className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        )}
-                        {model.status === "deployed" && (
-                          <span className="text-xs text-green-600 font-medium px-3 py-1">
-                            ✓ Active
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+              <SkeletonTableRows rows={5} />
             </tbody>
           </table>
+        ) : (
+          <>
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                <tr>
+                  <SortableHeader label="Version" sortKey="version_number" />
+                  <SortableHeader label="Status" sortKey="status" />
+                  <SortableHeader label="Accuracy" sortKey="accuracy" />
+                  <SortableHeader label="Precision" sortKey="precision" />
+                  <SortableHeader label="Recall" sortKey="recall" />
+                  <SortableHeader label="F1" sortKey="f1_score" />
+                  <SortableHeader label="Classes" sortKey="total_classes" />
+                  <th className="px-4 py-3">Trained By</th>
+                  <SortableHeader label="Trained At" sortKey="trained_at" />
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedModels.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="text-center py-8 text-gray-400 text-sm"
+                    >
+                      No models found. Train your first model to get started.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedModels.map((model) => (
+                    <tr
+                      key={model.id}
+                      className="border-t hover:bg-gray-50 text-sm"
+                    >
+                      <td className="px-4 py-3 font-semibold text-gray-800">
+                        {model.version_number}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge value={model.status} />
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {fmt(model.accuracy)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {fmt(model.precision)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {fmt(model.recall)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {fmt(model.f1_score)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {model.total_classes ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {model.trainer?.username || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {model.trained_at
+                          ? new Date(model.trained_at).toLocaleDateString()
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2 flex-wrap">
+                          {model.status === "trained" && (
+                            <>
+                              <button
+                                onClick={() => setTestModal(model)}
+                                className="text-xs bg-yellow-50 text-yellow-700 hover:bg-yellow-100 px-3 py-1 rounded-lg"
+                              >
+                                Test
+                              </button>
+                              <button
+                                onClick={() => setDeployModal(model)}
+                                className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-3 py-1 rounded-lg"
+                              >
+                                Deploy
+                              </button>
+                              <button
+                                onClick={() => handleDelete(model)}
+                                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                          {model.status === "inactive" && (
+                            <>
+                              <button
+                                onClick={() => setRevertModal(model)}
+                                className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded-lg"
+                              >
+                                Revert
+                              </button>
+                              <button
+                                onClick={() => handleDelete(model)}
+                                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                          {model.status === "deployed" && (
+                            <span className="text-xs text-green-600 font-medium px-3 py-1">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            {/* Pagination */}
+            {sortedModels.length > pageSize && (
+              <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600">
+                <div className="flex items-center gap-2">
+                  <span>
+                    {sortedModels.length} result{sortedModels.length !== 1 ? "s" : ""}
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-900"
+                  >
+                    <option value={5}>5 / page</option>
+                    <option value={10}>10 / page</option>
+                    <option value={25}>25 / page</option>
+                    <option value={50}>50 / page</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs">
+                    {page} / {totalPages || 1}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -545,7 +692,7 @@ const ManageModel = () => {
             )}
             {wordStats?.ready_to_activate > 0 && (
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
-                🧠 <strong>{wordStats.ready_to_activate}</strong> word{wordStats.ready_to_activate !== 1 ? "s" : ""} with
+                <strong>{wordStats.ready_to_activate}</strong> word{wordStats.ready_to_activate !== 1 ? "s" : ""} with
                 enough approved samples will become visible in the mobile app after this deploy.
               </div>
             )}

@@ -11,6 +11,7 @@ import {
   deleteUser,
   updateUser,
 } from "../../api/userApi.js";
+import { useToast } from "../../context/ToastContext.jsx";
 import {
   Users,
   ClipboardList,
@@ -18,6 +19,12 @@ import {
   AlertTriangle,
   Search,
   X,
+  ChevronUp,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────
@@ -29,6 +36,116 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
     <div>
       <p className="text-xs text-gray-500">{title}</p>
       <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
+    </div>
+  </div>
+);
+
+// ── Skeleton Components ───────────────────────────────────────────
+const SkeletonCard = () => (
+  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+    <div className="space-y-2 flex-1">
+      <div className="h-3 w-16 bg-gray-200 rounded animate-pulse" />
+      <div className="h-7 w-12 bg-gray-200 rounded animate-pulse" />
+    </div>
+  </div>
+);
+
+const SkeletonTableRows = ({ rows = 5, cols = 7 }) =>
+  Array.from({ length: rows }).map((_, i) => (
+    <tr key={i} className="border-t">
+      {Array.from({ length: cols }).map((_, j) => (
+        <td key={j} className="px-4 py-3">
+          <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
+        </td>
+      ))}
+    </tr>
+  ));
+
+// ── Sortable Header ──────────────────────────────────────────────
+const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
+  const active = sortField === sortKey;
+  return (
+    <th
+      className={`px-4 py-3 cursor-pointer select-none group ${
+        sortKey ? "hover:bg-gray-100" : ""
+      }`}
+      onClick={() => sortKey && onSort(sortKey)}
+    >
+      <div className="flex items-center gap-1">
+        {label}
+        {sortKey && (
+          <span className="text-gray-400">
+            {active ? (
+              sortDir === "asc" ? (
+                <ChevronUp size={14} />
+              ) : (
+                <ChevronDown size={14} />
+              )
+            ) : (
+              <ChevronUp size={14} className="opacity-0 group-hover:opacity-50" />
+            )}
+          </span>
+        )}
+      </div>
+    </th>
+  );
+};
+
+// ── Pagination ─────────────────────────────────────────────────────
+const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) => (
+  <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600">
+    <div className="flex items-center gap-2">
+      <span>
+        {total} result{total !== 1 ? "s" : ""}
+      </span>
+      <select
+        value={pageSize}
+        onChange={(e) => onPageSize(Number(e.target.value))}
+        className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-900"
+      >
+        <option value={10}>10 / page</option>
+        <option value={25}>25 / page</option>
+        <option value={50}>50 / page</option>
+        <option value={100}>100 / page</option>
+      </select>
+    </div>
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onPage(1)}
+        disabled={page === 1}
+        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+        aria-label="First page"
+      >
+        <ChevronsLeft size={16} />
+      </button>
+      <button
+        onClick={() => onPage(page - 1)}
+        disabled={page === 1}
+        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+        aria-label="Previous page"
+      >
+        <ChevronLeft size={16} />
+      </button>
+      <span className="px-2">
+        Page {page} of {totalPages || 1}
+      </span>
+      <button
+        onClick={() => onPage(page + 1)}
+        disabled={page >= totalPages}
+        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+        aria-label="Next page"
+      >
+        <ChevronRight size={16} />
+      </button>
+      <button
+        onClick={() => onPage(totalPages)}
+        disabled={page >= totalPages}
+        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+        aria-label="Last page"
+      >
+        <ChevronsRight size={16} />
+      </button>
     </div>
   </div>
 );
@@ -59,18 +176,28 @@ const WarningBadge = ({ count }) => {
     <span
       className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${color}`}
     >
-      ⚠ {count}/2
+      {count}/2
     </span>
   );
 };
 
 // ── Modal ─────────────────────────────────────────────────────
 const Modal = ({ title, onClose, children }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
+  <div
+    className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4"
+    onKeyDown={(e) => e.key === "Escape" && onClose()}
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+  >
     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 transition"
+          aria-label="Close dialog"
+        >
           <X size={20} />
         </button>
       </div>
@@ -82,17 +209,24 @@ const Modal = ({ title, onClose, children }) => (
 // ── Main Component ────────────────────────────────────────────
 const ManageUsers = () => {
   const [activeTab, setActiveTab] = useState("all");
+  const toast = useToast();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Sorting
+  const [sortField, setSortField] = useState("id");
+  const [sortDir, setSortDir] = useState("asc");
+
   // Modal state
   const [editModal, setEditModal] = useState(null);
-  const [warnModal, setWarnModal] = useState(null); // user object
+  const [warnModal, setWarnModal] = useState(null);
   const [warnReason, setWarnReason] = useState("");
 
   // Edit form
@@ -109,29 +243,29 @@ const ManageUsers = () => {
     try {
       const data = await getUserStats();
       setStats(data);
-    } catch (err) {
-      console.error("Failed to load stats");
+    } catch {
+      // non-blocking
     }
   };
 
   const fetchTabData = async () => {
     setLoading(true);
-    setError("");
     try {
       if (activeTab === "all") {
-        const data = await getAllUsers({ search });
-        setUsers(data.users);
+        const data = await getAllUsers({ search, limit: 500 });
+        setUsers(data.users || []);
       } else if (activeTab === "pending") {
         const data = await getPendingUsers();
-        setUsers(data.users);
+        setUsers(data.users || []);
       } else if (activeTab === "deactivated") {
         const data = await getDeactivatedUsers();
-        setUsers(data.users);
+        setUsers(data.users || []);
       }
     } catch (err) {
-      setError("Failed to load users");
+      toast.error(err.response?.data?.message || "Failed to load users");
     } finally {
       setLoading(false);
+      setPage(1);
     }
   };
 
@@ -142,17 +276,37 @@ const ManageUsers = () => {
     fetchTabData();
   }, [activeTab, search]);
 
-  const showSuccess = (msg) => {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
+  // ── Sort ────────────────────────────────────────────────────
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
   };
 
-  const showError = (msg) => {
-    setError(msg);
-    setTimeout(() => setError(""), 4000);
-  };
+  const sortedUsers = [...users].sort((a, b) => {
+    let va = a[sortField] ?? "";
+    let vb = b[sortField] ?? "";
+    if (typeof va === "string") va = va.toLowerCase();
+    if (typeof vb === "string") vb = vb.toLowerCase();
+    if (va < vb) return sortDir === "asc" ? -1 : 1;
+    if (va > vb) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // ── Paginate ────────────────────────────────────────────────
+  const totalPages = Math.ceil(sortedUsers.length / pageSize);
+  const paginatedUsers = sortedUsers.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
 
   // ── Actions ─────────────────────────────────────────────────
+  const showSuccess = (msg) => toast.success(msg);
+  const showError = (msg) => toast.error(msg);
+
   const handleApprove = async (id) => {
     setActionLoading(true);
     try {
@@ -177,7 +331,7 @@ const ManageUsers = () => {
     try {
       const res = await warnUser(warnModal.id, { reason: warnReason });
       showSuccess(
-        `Warning issued. User now has ${res.warning_count}/2 warnings.`,
+        `Warning issued. User now has ${res.warning_count}/2 warnings.`
       );
       setWarnModal(null);
       setWarnReason("");
@@ -191,16 +345,15 @@ const ManageUsers = () => {
   };
 
   const handleDeactivate = async (id, warningCount) => {
-    // Enforce 2-warning requirement on the frontend as well
     if ((warningCount || 0) < 2) {
       showError(
-        `User must have 2 warnings before being deactivated. Current: ${warningCount || 0}/2`,
+        `User must have 2 warnings before being deactivated. Current: ${warningCount || 0}/2`
       );
       return;
     }
     if (
       !window.confirm(
-        "Deactivate this user? Their account will auto-reactivate after 30 days.",
+        "Deactivate this user? Their account will auto-reactivate after 30 days."
       )
     )
       return;
@@ -208,7 +361,7 @@ const ManageUsers = () => {
     try {
       await deactivateUser(id);
       showSuccess(
-        "User deactivated. Account will auto-reactivate after 30 days.",
+        "User deactivated. Account will auto-reactivate after 30 days."
       );
       fetchStats();
       fetchTabData();
@@ -274,14 +427,14 @@ const ManageUsers = () => {
     }
   };
 
-  // ── Tabs ─────────────────────────────────────────────────────
+  // ── Tabs ────────────────────────────────────────────────────
   const tabs = [
     { key: "all", label: "All Users" },
     { key: "pending", label: "Pending" },
     { key: "deactivated", label: "Deactivated" },
   ];
 
-  // ── Format reactivation date ──────────────────────────────────
+  // ── Format reactivation date ────────────────────────────────
   const getReactivationDate = (deactivatedAt) => {
     if (!deactivatedAt) return "—";
     const date = new Date(deactivatedAt);
@@ -293,19 +446,22 @@ const ManageUsers = () => {
     });
   };
 
-  // ── Render table rows ─────────────────────────────────────────
+  // ── Render table rows ───────────────────────────────────────
   const renderRows = () => {
-    if (users.length === 0) {
+    if (paginatedUsers.length === 0) {
       return (
         <tr>
-          <td colSpan={7} className="text-center py-8 text-gray-400 text-sm">
+          <td
+            colSpan={activeTab === "deactivated" ? 7 : 6}
+            className="text-center py-8 text-gray-400 text-sm"
+          >
             No records found
           </td>
         </tr>
       );
     }
 
-    return users.map((u) => (
+    return paginatedUsers.map((u) => (
       <tr key={u.id} className="border-t hover:bg-gray-50 text-sm">
         <td className="px-4 py-3 text-gray-500">{u.id}</td>
         <td className="px-4 py-3 font-medium text-gray-800">
@@ -317,7 +473,6 @@ const ManageUsers = () => {
         <td className="px-4 py-3">
           <StatusBadge status={u.status} />
         </td>
-        {/* Reactivation date — only shown in deactivated tab */}
         {activeTab === "deactivated" && (
           <td className="px-4 py-3 text-xs text-gray-500">
             Auto-reactivates: {getReactivationDate(u.deactivated_at)}
@@ -325,7 +480,6 @@ const ManageUsers = () => {
         )}
         <td className="px-4 py-3">
           <div className="flex gap-2 flex-wrap">
-            {/* All Users tab */}
             {activeTab === "all" && (
               <>
                 <button
@@ -361,7 +515,6 @@ const ManageUsers = () => {
               </>
             )}
 
-            {/* Pending tab */}
             {activeTab === "pending" && (
               <>
                 <button
@@ -379,7 +532,6 @@ const ManageUsers = () => {
               </>
             )}
 
-            {/* Deactivated tab */}
             {activeTab === "deactivated" && (
               <>
                 <button
@@ -402,7 +554,9 @@ const ManageUsers = () => {
     ));
   };
 
-  // ── JSX ───────────────────────────────────────────────────────
+  const tableCols = activeTab === "deactivated" ? 7 : 6;
+
+  // ── JSX ─────────────────────────────────────────────────────
   return (
     <div>
       {/* Header */}
@@ -415,45 +569,41 @@ const ManageUsers = () => {
         </div>
       </div>
 
-      {/* Alerts */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
-          {success}
-        </div>
-      )}
-
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          title="Total Users"
-          value={stats?.total}
-          icon={Users}
-          color="bg-blue-900"
-        />
-        <StatCard
-          title="Pending"
-          value={stats?.pending}
-          icon={ClipboardList}
-          color="bg-yellow-500"
-        />
-        <StatCard
-          title="Deactivated"
-          value={stats?.deactivated}
-          icon={UserX}
-          color="bg-red-500"
-        />
-        <StatCard
-          title="Warned"
-          value={stats?.warned}
-          icon={AlertTriangle}
-          color="bg-orange-500"
-        />
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatCard
+            title="Total Users"
+            value={stats?.total}
+            icon={Users}
+            color="bg-blue-900"
+          />
+          <StatCard
+            title="Pending"
+            value={stats?.pending}
+            icon={ClipboardList}
+            color="bg-yellow-500"
+          />
+          <StatCard
+            title="Deactivated"
+            value={stats?.deactivated}
+            icon={UserX}
+            color="bg-red-500"
+          />
+          <StatCard
+            title="Warned"
+            value={stats?.warned}
+            icon={AlertTriangle}
+            color="bg-orange-500"
+          />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 mb-4 border-b">
@@ -461,12 +611,11 @@ const ManageUsers = () => {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition
-              ${
-                activeTab === tab.key
-                  ? "border-blue-900 text-blue-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+              activeTab === tab.key
+                ? "border-blue-900 text-blue-900"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
           >
             {tab.label}
           </button>
@@ -490,10 +639,6 @@ const ManageUsers = () => {
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         {loading ? (
-          <div className="flex items-center justify-center h-40">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900" />
-          </div>
-        ) : (
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
               <tr>
@@ -508,8 +653,42 @@ const ManageUsers = () => {
                 <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody>{renderRows()}</tbody>
+            <tbody>
+              <SkeletonTableRows rows={5} cols={tableCols} />
+            </tbody>
           </table>
+        ) : (
+          <>
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                <tr>
+                  <SortableHeader label="ID" sortKey="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Username" sortKey="username" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Name" sortKey="name" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Email" sortKey="email" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Status" sortKey="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  {activeTab === "deactivated" && (
+                    <th className="px-4 py-3">Auto-Reactivates</th>
+                  )}
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>{renderRows()}</tbody>
+            </table>
+            {sortedUsers.length > pageSize && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPage={setPage}
+                pageSize={pageSize}
+                onPageSize={(size) => {
+                  setPageSize(size);
+                  setPage(1);
+                }}
+                total={sortedUsers.length}
+              />
+            )}
+          </>
         )}
       </div>
 

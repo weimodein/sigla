@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "../../context/ToastContext.jsx";
 import {
   verifyResetCode,
   resetPassword,
@@ -10,6 +11,7 @@ import api from "../../api/authApi.js";
 
 const AdministratorAccount = () => {
   const { user, logout } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   // ── Profile state ─────────────────────────────────────────
@@ -18,24 +20,15 @@ const AdministratorAccount = () => {
     username: user?.username || "",
   });
   const [profileLoading, setProfileLoading] = useState(false);
-  const [profileError, setProfileError] = useState("");
-  const [profileSuccess, setProfileSuccess] = useState("");
 
   // ── Change password state ─────────────────────────────────
   // step: request | verify | reset
   const [passStep, setPassStep] = useState("request");
   const [passLoading, setPassLoading] = useState(false);
-  const [passError, setPassError] = useState("");
-  const [passSuccess, setPassSuccess] = useState("");
   const [code, setCode] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirm, setConfirm] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
-
-  const clearPassMessages = () => {
-    setPassError("");
-    setPassSuccess("");
-  };
 
   // ── Resend cooldown timer ─────────────────────────────────
   const startCooldown = () => {
@@ -53,18 +46,17 @@ const AdministratorAccount = () => {
 
   // ── Step 1: Request verification code ────────────────────
   const handleRequestCode = async () => {
-    clearPassMessages();
     setPassLoading(true);
     try {
       await api.post("/auth/forgot-password", { email: user?.email });
-      setPassSuccess(
-        `Verification code sent to ${user?.email}. Valid for 5 minutes.`,
+      toast.success(
+        `Verification code sent to ${user?.email}. Valid for 5 minutes.`
       );
       setPassStep("verify");
       startCooldown();
     } catch (err) {
-      setPassError(
-        err.response?.data?.message || "Failed to send verification code",
+      toast.error(
+        err.response?.data?.message || "Failed to send verification code"
       );
     } finally {
       setPassLoading(false);
@@ -74,30 +66,28 @@ const AdministratorAccount = () => {
   // ── Resend code ───────────────────────────────────────────
   const handleResend = async () => {
     if (resendCooldown > 0) return;
-    clearPassMessages();
     try {
       await resendCode(user?.email, "password_reset");
-      setPassSuccess("New verification code sent.");
+      toast.success("New verification code sent.");
       startCooldown();
     } catch (err) {
-      setPassError(err.response?.data?.message || "Failed to resend code");
+      toast.error(err.response?.data?.message || "Failed to resend code");
     }
   };
 
   // ── Step 2: Verify code ───────────────────────────────────
   const handleVerifyCode = async () => {
-    clearPassMessages();
     if (code.length !== 6) {
-      setPassError("Please enter the 6-digit verification code");
+      toast.error("Please enter the 6-digit verification code");
       return;
     }
     setPassLoading(true);
     try {
       await verifyResetCode(user?.email, code);
-      setPassSuccess("Code verified. Please set your new password.");
+      toast.success("Code verified. Please set your new password.");
       setPassStep("reset");
     } catch (err) {
-      setPassError(err.response?.data?.message || "Invalid or expired code");
+      toast.error(err.response?.data?.message || "Invalid or expired code");
     } finally {
       setPassLoading(false);
     }
@@ -105,25 +95,24 @@ const AdministratorAccount = () => {
 
   // ── Step 3: Set new password ──────────────────────────────
   const handleChangePassword = async () => {
-    clearPassMessages();
     if (newPass !== confirm) {
-      setPassError("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
     if (newPass.length < 6) {
-      setPassError("Password must be at least 6 characters");
+      toast.error("Password must be at least 6 characters");
       return;
     }
     setPassLoading(true);
     try {
       await resetPassword(user?.email, newPass);
-      setPassSuccess("Password changed successfully. Please log in again.");
+      toast.success("Password changed successfully. Please log in again.");
       setTimeout(() => {
         logout();
         navigate("/login");
       }, 2000);
     } catch (err) {
-      setPassError(err.response?.data?.message || "Failed to change password");
+      toast.error(err.response?.data?.message || "Failed to change password");
     } finally {
       setPassLoading(false);
     }
@@ -131,15 +120,13 @@ const AdministratorAccount = () => {
 
   // ── Update profile ────────────────────────────────────────
   const handleUpdateProfile = async () => {
-    setProfileError("");
     setProfileLoading(true);
     try {
       await api.put(`/users/${user.id}`, profileForm);
-      setProfileSuccess("Profile updated successfully.");
-      setTimeout(() => setProfileSuccess(""), 3000);
+      toast.success("Profile updated successfully.");
     } catch (err) {
-      setProfileError(
-        err.response?.data?.message || "Failed to update profile",
+      toast.error(
+        err.response?.data?.message || "Failed to update profile"
       );
     } finally {
       setProfileLoading(false);
@@ -195,18 +182,6 @@ const AdministratorAccount = () => {
           Update your name and username. Email address cannot be changed as it
           was verified during registration.
         </p>
-
-        {profileError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
-            {profileError}
-          </div>
-        )}
-        {profileSuccess && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
-            {profileSuccess}
-          </div>
-        )}
-
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -268,17 +243,6 @@ const AdministratorAccount = () => {
           address before you can set a new password.
         </p>
 
-        {passError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
-            {passError}
-          </div>
-        )}
-        {passSuccess && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
-            {passSuccess}
-          </div>
-        )}
-
         {/* Step 1 — Request code */}
         {passStep === "request" && (
           <div className="space-y-4">
@@ -329,7 +293,6 @@ const AdministratorAccount = () => {
               <button
                 onClick={() => {
                   setPassStep("request");
-                  clearPassMessages();
                   setCode("");
                 }}
                 className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
@@ -388,7 +351,6 @@ const AdministratorAccount = () => {
               <button
                 onClick={() => {
                   setPassStep("request");
-                  clearPassMessages();
                   setCode("");
                   setNewPass("");
                   setConfirm("");

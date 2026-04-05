@@ -13,6 +13,7 @@ import { getUserStats, getUserRegistrations } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getAllModels, getModelStats } from "../../api/modelApi.js";
 import { broadcastAnnouncement } from "../../api/notificationApi.js";
+import { useToast } from "../../context/ToastContext.jsx";
 import {
   Users,
   BookOpen,
@@ -61,9 +62,21 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
   </div>
 );
 
+// ── Skeleton Card ─────────────────────────────────────────────
+const SkeletonCard = () => (
+  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+    <div className="space-y-2 flex-1">
+      <div className="h-3 w-16 bg-gray-200 rounded animate-pulse" />
+      <div className="h-7 w-12 bg-gray-200 rounded animate-pulse" />
+    </div>
+  </div>
+);
+
 // ── Dashboard ─────────────────────────────────────────────────
 const Dashboard = () => {
   const navigate = useNavigate();
+  const toast = useToast();
 
   const [userStats, setUserStats] = useState(null);
   const [wordStats, setWordStats] = useState(null);
@@ -73,14 +86,11 @@ const Dashboard = () => {
   const [registrations, setRegistrations] = useState([]);
   const [regPeriod, setRegPeriod] = useState("month");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   // Announcement form
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [sendSuccess, setSendSuccess] = useState("");
-  const [sendError, setSendError] = useState("");
 
   // ── Fetch core data ─────────────────────────────────────────
   useEffect(() => {
@@ -100,7 +110,7 @@ const Dashboard = () => {
         setAllModels(modelsAll.models || []);
         setPendingWords(pendingData.words || []);
       } catch (err) {
-        setError("Failed to load dashboard data");
+        toast.error("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
@@ -125,25 +135,20 @@ const Dashboard = () => {
   // ── Send Announcement ───────────────────────────────────────
   const handleSendAnnouncement = async () => {
     if (!announcementTitle.trim() || !announcementMessage.trim()) {
-      setSendError("Title and message are required");
+      toast.error("Title and message are required");
       return;
     }
     setSending(true);
-    setSendError("");
-    setSendSuccess("");
     try {
       const res = await broadcastAnnouncement({
         title: announcementTitle.trim(),
         message: announcementMessage.trim(),
       });
-      setSendSuccess(`Announcement sent to ${res.sent} users successfully.`);
+      toast.success(`Announcement sent to ${res.sent} users successfully.`);
       setAnnouncementTitle("");
       setAnnouncementMessage("");
-      setTimeout(() => setSendSuccess(""), 4000);
     } catch (err) {
-      setSendError(
-        err.response?.data?.message || "Failed to send announcement",
-      );
+      toast.error(err.response?.data?.message || "Failed to send announcement");
     } finally {
       setSending(false);
     }
@@ -152,16 +157,16 @@ const Dashboard = () => {
   // ── Loading ─────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-900" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3">
-        {error}
+      <div className="space-y-8">
+        <div>
+          <div className="h-8 w-28 bg-gray-200 rounded animate-pulse mb-2" />
+          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -394,19 +399,6 @@ const Dashboard = () => {
           Broadcast a notification to all active users. This will appear in
           their Notifications module.
         </p>
-
-        {sendSuccess && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4 flex items-center gap-2">
-            <CheckCircle size={16} />
-            {sendSuccess}
-          </div>
-        )}
-        {sendError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4 flex items-center gap-2">
-            <XCircle size={16} />
-            {sendError}
-          </div>
-        )}
 
         <div className="space-y-3">
           <div>

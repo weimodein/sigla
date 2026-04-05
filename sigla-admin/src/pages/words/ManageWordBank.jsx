@@ -24,6 +24,7 @@ import {
   getMotionSequences,
   generateVideoFromSequence,
 } from "../../api/wordApi.js";
+import { useToast } from "../../context/ToastContext.jsx";
 import {
   BookOpen,
   CheckCircle,
@@ -107,8 +108,7 @@ const ManageWordBank = () => {
   const [stats, setStats] = useState(null);
   const [words, setWords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const toast = useToast();
   const [search, setSearch] = useState("");
   const [filterSign, setFilterSign] = useState("");
   const [filterCat, setFilterCat] = useState("");
@@ -144,7 +144,6 @@ const ManageWordBank = () => {
 
   const fetchWords = async () => {
     setLoading(true);
-    setError("");
     try {
       const params = {};
       if (activeTab !== "all") params.status = activeTab;
@@ -152,9 +151,9 @@ const ManageWordBank = () => {
       if (filterSign) params.sign_type = filterSign;
       if (filterCat) params.category = filterCat;
       const data = await getAllWords(params);
-      setWords(data.words);
+      setWords(data.words || []);
     } catch {
-      setError("Failed to load words");
+      toast.error("Failed to load words");
     } finally {
       setLoading(false);
     }
@@ -163,14 +162,8 @@ const ManageWordBank = () => {
   useEffect(() => { fetchStats(); }, []);
   useEffect(() => { fetchWords(); }, [activeTab, search, filterSign, filterCat]);
 
-  const showSuccess = (msg) => {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
-  };
-  const showError = (msg) => {
-    setError(msg);
-    setTimeout(() => setError(""), 4000);
-  };
+  const showSuccess = (msg) => toast.success(msg);
+  const showError = (msg) => toast.error(msg);
 
   // ── Reload samples helper ───────────────────────────────────
   const reloadSamples = async (wordId) => {
@@ -628,18 +621,6 @@ const ManageWordBank = () => {
         </button>
       </div>
 
-      {/* Alerts */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
-          {success}
-        </div>
-      )}
-
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard title="Total Words" value={stats?.total} icon={BookOpen} color="bg-blue-900" />
@@ -651,7 +632,7 @@ const ManageWordBank = () => {
       {/* Ready-to-activate banner */}
       {stats?.ready_to_activate > 0 && (
         <div className="mb-6 flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 text-sm text-indigo-800">
-          <span className="text-lg">🧠</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="shrink-0"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/></svg>
           <span>
             <strong>{stats.ready_to_activate}</strong> word{stats.ready_to_activate !== 1 ? "s have" : " has"} enough
             approved samples and will become visible in the mobile app after the next model is trained and deployed.
