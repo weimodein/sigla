@@ -20,15 +20,24 @@ import {
   Cpu,
   ClipboardList,
   Send,
-  Bell,
-  CheckCircle,
-  XCircle,
-  Database,
   FileText,
+  ArrowUpRight,
+  ArrowDownRight,
+  TrendingUp,
+  Database,
+  BarChart2,
 } from "lucide-react";
 
-// ── Helpers ───────────────────────────────────────────────────
+// ── Color palette ──
+const C = {
+  text: "#1f2937",
+  background: "#f3f4f6",
+  primary: "#1e3a8a",
+  secondary: "#1d4ed8",
+  accent: "#3f8efc",
+};
 
+// ── Helpers ──
 const formatActivityDate = (dateStr) => {
   const d = new Date(dateStr);
   const now = new Date();
@@ -49,31 +58,219 @@ const formatChartDate = (dateStr, period) => {
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 };
 
-// ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
+// ── CSS injection ──
+const injectStyles = () => {
+  if (document.getElementById("dash-styles")) return;
+  const s = document.createElement("style");
+  s.id = "dash-styles";
+  s.textContent = `
+    .dash-stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      border: 1px solid #f0f0f0;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .dash-stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+    }
+    .dash-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      border: 1px solid #f0f0f0;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .dash-card-header {
+      padding: 24px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .dash-card-body {
+      padding: 24px;
+    }
+    .dash-card-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #f0f0f0;
+      background: #f9fafb;
+    }
+    .dash-request-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #f0f0f0;
+      transition: all 0.2s ease;
+    }
+    .dash-request-item:hover {
+      background: #f0f0f0;
+      transform: translateX(4px);
+    }
+    .dash-quick-action {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 24px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+      background: none;
+      font: inherit;
+      color: inherit;
+    }
+    .dash-quick-action:hover {
+      border-color: ${C.primary};
+      background: ${C.primary};
+      color: white;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+    }
+    .dash-announcement-item {
+      display: flex;
+      gap: 16px;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #f0f0f0;
+      transition: all 0.2s ease;
+    }
+    .dash-announcement-item:hover {
+      background: #f0f0f0;
+    }
+    .badge-pending { background: #fff3cd; color: #856404; }
+    .badge-processing { background: #cce7ff; color: #004085; }
+    .badge-ready { background: #d1ecf1; color: #0c5460; }
+    .badge-completed { background: #d4edda; color: #155724; }
+    .badge-rejected { background: #f8d7da; color: #721c24; }
+    @keyframes dash-spin { to { transform: rotate(360deg); } }
+  `;
+  document.head.appendChild(s);
+};
 
-// ── Skeleton Card ─────────────────────────────────────────────
+// ── Stat Card ──
+const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor, style, centered }) => {
+  const inner = centered ? (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "16px" }}>
+      <div
+        style={{
+          width: "64px",
+          height: "64px",
+          borderRadius: "12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: iconBg,
+          color: iconColor,
+        }}
+      >
+        <Icon size={28} />
+      </div>
+      <div>
+        <p style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "6px", margin: 0 }}>{title}</p>
+        <p style={{ fontSize: "2rem", fontWeight: 700, color: C.text, margin: 0 }}>{value ?? "—"}</p>
+      </div>
+    </div>
+  ) : (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        <div
+          style={{
+            width: "60px",
+            height: "60px",
+            borderRadius: "12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: iconBg,
+            color: iconColor,
+          }}
+        >
+          <Icon size={24} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "4px" }}>
+            {title}
+          </p>
+          <p style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
+            {value ?? "—"}
+          </p>
+        </div>
+      </div>
+      {trend != null && (
+        <div
+          style={{
+            position: "absolute",
+            top: "24px",
+            right: "24px",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            color: trend > 0 ? "#16a34a" : "#dc2626",
+          }}
+        >
+          {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+          <span>{Math.abs(trend)}%</span>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div
+      className="dash-stat-card"
+      style={{
+        ...(centered
+          ? {
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+            }
+          : {}),
+        ...style,
+      }}
+    >
+      {inner}
+    </div>
+  );
+};
+
+// ── Skeleton Card ──
 const SkeletonCard = () => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
-      <div className="h-3 w-16 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-12 bg-gray-200 rounded animate-pulse" />
+  <div className="dash-stat-card" style={{ opacity: 0.6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+      <div
+        style={{
+          width: "60px",
+          height: "60px",
+          borderRadius: "12px",
+          background: "#e5e7eb",
+        }}
+      />
+      <div style={{ flex: 1 }}>
+        <div
+          style={{
+            width: "64px",
+            height: "12px",
+            background: "#e5e7eb",
+            borderRadius: "4px",
+            marginBottom: "8px",
+          }}
+        />
+        <div style={{ width: "40px", height: "28px", background: "#e5e7eb", borderRadius: "4px" }} />
+      </div>
     </div>
   </div>
 );
 
-// ── Dashboard ─────────────────────────────────────────────────
+// ── Dashboard ──
 const Dashboard = () => {
   const navigate = useNavigate();
   const toast = useToast();
@@ -87,13 +284,12 @@ const Dashboard = () => {
   const [regPeriod, setRegPeriod] = useState("month");
   const [loading, setLoading] = useState(true);
 
-  // Announcement form
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
   const [sending, setSending] = useState(false);
 
-  // ── Fetch core data ─────────────────────────────────────────
   useEffect(() => {
+    injectStyles();
     const fetchAll = async () => {
       try {
         const [users, words, models, modelsAll, pendingData] =
@@ -118,7 +314,6 @@ const Dashboard = () => {
     fetchAll();
   }, []);
 
-  // ── Fetch registration chart data ───────────────────────────
   const fetchRegistrations = useCallback(async (period) => {
     try {
       const res = await getUserRegistrations(period);
@@ -132,7 +327,6 @@ const Dashboard = () => {
     fetchRegistrations(regPeriod);
   }, [regPeriod, fetchRegistrations]);
 
-  // ── Send Announcement ───────────────────────────────────────
   const handleSendAnnouncement = async () => {
     if (!announcementTitle.trim() || !announcementMessage.trim()) {
       toast.error("Title and message are required");
@@ -154,17 +348,32 @@ const Dashboard = () => {
     }
   };
 
-  // ── Loading ─────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="space-y-8">
+      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         <div>
-          <div className="h-8 w-28 bg-gray-200 rounded animate-pulse mb-2" />
-          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse" />
+          <div
+            style={{
+              width: "120px",
+              height: "32px",
+              background: "#e5e7eb",
+              borderRadius: "6px",
+              marginBottom: "8px",
+            }}
+          />
+          <div style={{ width: "200px", height: "16px", background: "#e5e7eb", borderRadius: "6px" }} />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "24px",
+          }}
+        >
           {Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <div key={i} style={{ flex: "1 1 0", minWidth: "180px" }}>
+              <SkeletonCard />
+            </div>
           ))}
         </div>
       </div>
@@ -177,270 +386,500 @@ const Dashboard = () => {
     label: formatChartDate(r.date, regPeriod),
   }));
 
-  // Models with accuracy, sorted newest first, limit 8
   const modelsWithAccuracy = allModels
     .filter((m) => m.accuracy != null)
     .slice(0, 8);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800">Dashboard</h2>
-        <p className="text-gray-500 text-sm mt-1">
-          Overview of SIGLA system activity
+    <div>
+      {/* ── Welcome Header ── */}
+      <div style={{ marginBottom: "32px" }}>
+        <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
+          Admin Dashboard
+        </h1>
+        <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
+          Welcome back! Here's what's happening today.
         </p>
       </div>
 
-      {/* ── Summary — 5 key stats ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard
-          title="Total Users"
-          value={userStats?.total}
-          icon={Users}
-          color="bg-blue-900"
-        />
-        <StatCard
-          title="Total Words"
-          value={wordStats?.total}
-          icon={BookOpen}
-          color="bg-blue-700"
-        />
-        <StatCard
-          title="Pending Submissions"
-          value={wordStats?.pending}
-          icon={ClipboardList}
-          color="bg-yellow-500"
-        />
-        <StatCard
-          title="Gesture Samples"
-          value={wordStats?.total_samples}
-          icon={Database}
-          color="bg-indigo-500"
-        />
-        <StatCard
-          title="Model Version"
-          value={deployedModel?.version_number ?? "None"}
-          icon={Cpu}
-          color="bg-green-600"
-        />
-      </div>
-
-      {/* ── Chart + Model Accuracy ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Registration chart (2/3 width) */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-semibold text-gray-700">
-              New User Registrations
-            </p>
-            <div className="flex gap-1">
-              {["week", "month", "year"].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setRegPeriod(p)}
-                  className={`px-3 py-1 text-xs rounded-lg font-medium transition ${
-                    regPeriod === p
-                      ? "bg-blue-900 text-white"
-                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                  }`}
-                >
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-          {chartData.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
-              No registration data for this period
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={chartData}
-                margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: "#9ca3af" }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: "#9ca3af" }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 12,
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                  }}
-                  cursor={{ fill: "#f3f4f6" }}
-                />
-                <Bar
-                  dataKey="count"
-                  name="Registrations"
-                  fill="#1e3a8a"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+      {/* ── Quick Stats (2x2 + tall right card) ── */}
+      <div
+        style={{
+          display: "flex",
+          gap: "24px",
+          marginBottom: "32px",
+          alignItems: "stretch",
+        }}
+      >
+        {/* Left 2x2 cards */}
+        <div
+          style={{
+            flex: 1,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gridTemplateRows: "auto auto",
+            gap: "24px",
+          }}
+        >
+          <StatCard
+            title="Total Users"
+            value={userStats?.total}
+            icon={Users}
+            trend={12}
+            iconBg={`${C.primary}22`}
+            iconColor={C.primary}
+          />
+          <StatCard
+            title="Total Words"
+            value={wordStats?.total}
+            icon={BookOpen}
+            trend={8}
+            iconBg={`${C.secondary}22`}
+            iconColor={C.secondary}
+          />
+          <StatCard
+            title="Pending Submissions"
+            value={wordStats?.pending}
+            icon={ClipboardList}
+            trend={-3}
+            iconBg="#fbbf2433"
+            iconColor="#d97706"
+          />
+          <StatCard
+            title="Gesture Samples"
+            value={wordStats?.total_samples}
+            icon={Database}
+            iconBg={`${C.accent}22`}
+            iconColor={C.accent}
+          />
         </div>
 
-        {/* Model accuracy list (1/3 width) */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <p className="text-sm font-semibold text-gray-700 mb-4">
-            Model Accuracy by Version
-          </p>
-          {modelsWithAccuracy.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">
-              No trained models yet
-            </p>
-          ) : (
-            <div className="space-y-3 overflow-y-auto max-h-56">
-              {modelsWithAccuracy.map((m) => {
-                const pct = (m.accuracy * 100).toFixed(1);
-                const isDeployed = m.status === "deployed";
-                return (
-                  <div key={m.id} className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-xs font-medium text-gray-700 truncate">
-                          v{m.version_number}
-                        </p>
-                        {isDeployed && (
-                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
-                            deployed
-                          </span>
-                        )}
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full ${isDeployed ? "bg-green-500" : "bg-blue-400"}`}
-                          style={{
-                            width: `${Math.min(parseFloat(pct), 100)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-xs font-semibold text-gray-600 w-10 text-right">
-                      {pct}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        {/* Tall card on right — Model Version */}
+        <div style={{ width: "280px" }}>
+          <StatCard
+            title="Model Version"
+            value={deployedModel?.version_number ?? "None"}
+            icon={Cpu}
+            iconBg="#22c55e33"
+            iconColor="#16a34a"
+            centered
+            style={{ height: "100%" }}
+          />
         </div>
       </div>
 
-      {/* ── Pending Submissions ── */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* Pending word submissions */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <FileText size={16} className="text-gray-400" />
-              <p className="text-sm font-semibold text-gray-700">
-                Words Waiting for Review
+      {/* ── Main Content Grid ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", alignItems: "start" }}>
+        {/* ── Left Column: Chart + Recent Activity ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* Registration chart */}
+          <div className="dash-card" style={{ height: "500px", display: "flex", flexDirection: "column" }}>
+            <div className="dash-card-header">
+              <h2 style={{ fontSize: "1.5rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+                New User Registrations
+              </h2>
+              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+                User signups over time
               </p>
             </div>
-            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
-              {wordStats?.pending ?? 0} pending
-            </span>
-          </div>
-          {pendingWords.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-6">
-              No pending submissions
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {pendingWords.map((word) => (
-                <div
-                  key={word.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">
-                      {word.label}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      by {word.submitter?.username || "—"} ·{" "}
-                      {word.total_samples || 0} samples
-                    </p>
-                  </div>
+            <div
+              className="dash-card-body"
+              style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}
+            >
+              {/* Period toggle */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  marginBottom: "16px",
+                  alignSelf: "flex-end",
+                }}
+              >
+                {["week", "month", "year"].map((p) => (
                   <button
-                    onClick={() => navigate("/words")}
-                    className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded-lg"
+                    key={p}
+                    onClick={() => setRegPeriod(p)}
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: "0.75rem",
+                      borderRadius: "8px",
+                      fontWeight: 600,
+                      border: "none",
+                      cursor: "pointer",
+                      background: regPeriod === p ? C.primary : "#f3f4f6",
+                      color: regPeriod === p ? "white" : "#6b7280",
+                      transition: "all 0.2s ease",
+                      fontFamily: "inherit",
+                    }}
                   >
-                    Review
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
                   </button>
+                ))}
+              </div>
+
+              {chartData.length === 0 ? (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#9ca3af",
+                    textAlign: "center",
+                  }}
+                >
+                  <TrendingUp size={48} style={{ marginBottom: "12px", opacity: 0.4 }} />
+                  <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                    No registration data for this period
+                  </p>
                 </div>
-              ))}
+              ) : (
+                <div style={{ flex: 1, minHeight: "200px" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 11, fill: "#9ca3af" }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 11, fill: "#9ca3af" }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          fontSize: 12,
+                          borderRadius: 8,
+                          border: "1px solid #e5e7eb",
+                        }}
+                        cursor={{ fill: "#f3f4f6" }}
+                      />
+                      <Bar
+                        dataKey="count"
+                        name="Registrations"
+                        fill={C.primary}
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Recent Activity / Pending submissions */}
+          <div className="dash-card">
+            <div className="dash-card-header">
+              <h2 style={{ fontSize: "1.5rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+                Recent Activity
+              </h2>
+              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+                Latest actions in the system
+              </p>
+            </div>
+            <div className="dash-card-body" style={{ maxHeight: "300px", overflowY: "auto" }}>
+              {pendingWords.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    color: "#9ca3af",
+                    padding: "32px 16px",
+                  }}
+                >
+                  <FileText size={40} style={{ marginBottom: "8px", opacity: 0.4 }} />
+                  <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                    No recent activity
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {pendingWords.map((word) => (
+                    <div key={word.id} className="dash-request-item">
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: "16px",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          <h4 style={{ fontSize: "0.95rem", fontWeight: 600, color: C.text, margin: 0, flex: 1 }}>
+                            {word.label}
+                          </h4>
+                          <span className="badge-pending" style={{ padding: "4px 8px", borderRadius: "12px", fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            pending
+                          </span>
+                        </div>
+                        <p style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "4px" }}>
+                          {word.submitter?.username || "—"} · {word.total_samples || 0} samples
+                        </p>
+                        <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                          {formatActivityDate(word.created_at || word.updated_at || Date.now())}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => navigate("/word_bank")}
+                        style={{
+                          background: "none",
+                          border: `2px solid ${C.primary}`,
+                          color: C.primary,
+                          padding: "4px 12px",
+                          borderRadius: "6px",
+                          fontSize: "0.8rem",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          transition: "0.3s",
+                          fontFamily: "inherit",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Review
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right Column ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* Model accuracy */}
+          <div className="dash-card" style={{ height: "500px", display: "flex", flexDirection: "column" }}>
+            <div className="dash-card-header">
+              <h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+                Model Accuracy
+              </h2>
+              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+                By version
+              </p>
+            </div>
+            <div className="dash-card-body" style={{ flex: 1, overflowY: "auto" }}>
+              {modelsWithAccuracy.length === 0 ? (
+                <p style={{ color: "#9ca3af", fontSize: "0.85rem", textAlign: "center", padding: "24px" }}>
+                  No trained models yet
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {modelsWithAccuracy.map((m) => {
+                    const pct = (m.accuracy * 100).toFixed(1);
+                    const isDeployed = m.status === "deployed";
+                    return (
+                      <div key={m.id} style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                          <p style={{ fontSize: "0.8rem", fontWeight: 500, color: C.text, margin: 0 }}>
+                            v{m.version_number}
+                          </p>
+                          {isDeployed && (
+                            <span
+                              style={{
+                                fontSize: "0.65rem",
+                                background: "#dcfce7",
+                                color: "#16a34a",
+                                padding: "2px 6px",
+                                borderRadius: "10px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              deployed
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ width: "100%", background: "#f3f4f6", borderRadius: "4px", height: "6px" }}>
+                          <div
+                            style={{
+                              height: "6px",
+                              borderRadius: "4px",
+                              background: isDeployed ? "#22c55e" : C.accent,
+                              width: `${Math.min(parseFloat(pct), 100)}%`,
+                              transition: "width 0.5s ease",
+                            }}
+                          />
+                        </div>
+                        <p
+                          style={{
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            color: "#6b7280",
+                            marginTop: "2px",
+                            textAlign: "right",
+                            margin: 0,
+                          }}
+                        >
+                          {pct}%
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="dash-card">
+            <div className="dash-card-header">
+              <h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
+                Quick Actions
+              </h2>
+              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+                Frequently used actions
+              </p>
+            </div>
+            <div className="dash-card-body">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <button
+                  className="dash-quick-action"
+                  onClick={() => navigate("/word_bank")}
+                >
+                  <FileText size={24} />
+                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
+                    Review Words
+                  </span>
+                </button>
+                <button
+                  className="dash-quick-action"
+                  onClick={() => navigate("/model")}
+                >
+                  <Cpu size={24} />
+                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
+                    Manage Model
+                  </span>
+                </button>
+                <button
+                  className="dash-quick-action"
+                  onClick={() => navigate("/users")}
+                >
+                  <Users size={24} />
+                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
+                    Manage Users
+                  </span>
+                </button>
+                <button
+                  className="dash-quick-action"
+                  onClick={() => navigate("/reports")}
+                >
+                  <BarChart2 size={24} />
+                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
+                    View Reports
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── Send Announcement ── */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <Bell size={18} className="text-blue-900" />
-          <p className="text-sm font-semibold text-gray-700">
+      <div className="dash-card" style={{ marginTop: "24px" }}>
+        <div className="dash-card-header">
+          <h2 style={{ fontSize: "1.25rem", fontWeight: 600, color: C.text, margin: "0 0 4px" }}>
             Send Announcement
+          </h2>
+          <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+            Broadcast a notification to all active users
           </p>
         </div>
-        <p className="text-xs text-gray-400 mb-4">
-          Broadcast a notification to all active users. This will appear in
-          their Notifications module.
-        </p>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Title
-            </label>
-            <input
-              type="text"
-              value={announcementTitle}
-              onChange={(e) => setAnnouncementTitle(e.target.value)}
-              placeholder="e.g. Scheduled Maintenance"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Message
-            </label>
-            <textarea
-              value={announcementMessage}
-              onChange={(e) => setAnnouncementMessage(e.target.value)}
-              placeholder="Write your announcement here..."
-              rows={3}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 resize-none"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-400">
-              Will be sent to all active users
-            </p>
-            <button
-              onClick={handleSendAnnouncement}
-              disabled={
-                sending ||
-                !announcementTitle.trim() ||
-                !announcementMessage.trim()
-              }
-              className="flex items-center gap-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-5 py-2 rounded-lg transition disabled:opacity-50"
-            >
-              <Send size={15} />
-              {sending ? "Sending..." : "Send to All Users"}
-            </button>
+        <div className="dash-card-body">
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 500, color: "#4b5563", marginBottom: "4px" }}>
+                Title
+              </label>
+              <input
+                type="text"
+                value={announcementTitle}
+                onChange={(e) => setAnnouncementTitle(e.target.value)}
+                placeholder="e.g. Scheduled Maintenance"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  border: `2px solid #e5e7eb`,
+                  borderRadius: "8px",
+                  fontSize: "0.9rem",
+                  color: C.text,
+                  outline: "none",
+                  transition: "border-color 0.3s",
+                  fontFamily: "inherit",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = C.primary;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#e5e7eb";
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 500, color: "#4b5563", marginBottom: "4px" }}>
+                Message
+              </label>
+              <textarea
+                value={announcementMessage}
+                onChange={(e) => setAnnouncementMessage(e.target.value)}
+                placeholder="Write your announcement here..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  border: `2px solid #e5e7eb`,
+                  borderRadius: "8px",
+                  fontSize: "0.9rem",
+                  color: C.text,
+                  outline: "none",
+                  transition: "border-color 0.3s",
+                  fontFamily: "inherit",
+                  resize: "vertical",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = C.primary;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#e5e7eb";
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                onClick={handleSendAnnouncement}
+                disabled={sending || !announcementTitle.trim() || !announcementMessage.trim()}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "10px 20px",
+                  background:
+                    sending || !announcementTitle.trim() || !announcementMessage.trim()
+                      ? "#9ca3af"
+                      : C.primary,
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "0.9rem",
+                  fontWeight: 500,
+                  cursor:
+                    sending || !announcementTitle.trim() || !announcementMessage.trim()
+                      ? "not-allowed"
+                      : "pointer",
+                  transition: "0.3s",
+                  fontFamily: "inherit",
+                }}
+              >
+                <Send size={16} />
+                {sending ? "Sending..." : "Send to All Users"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
