@@ -1,3 +1,4 @@
+// Sidebar.jsx - icons perfectly centered when collapsed
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -38,16 +39,17 @@ const Sidebar = ({ onToggle }) => {
     if (onToggle) onToggle(next);
   };
 
+  const transitionStyle = "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)";
+
   return (
     <aside
       style={{
         width: collapsed ? "70px" : "280px",
-        background: "white",
-        borderRight: "1px solid #e5e7eb",
+        background: "#1e3a8a",
         display: "flex",
         flexDirection: "column",
-        transition: "all 0.3s ease",
-        boxShadow: "0 4px 6px rgba(0,0,0,0.07)",
+        transition: transitionStyle,
+        boxShadow: "2px 0 8px rgba(0, 0, 0, 0.1)",
         zIndex: 1000,
         height: "100vh",
         position: "fixed",
@@ -60,12 +62,13 @@ const Sidebar = ({ onToggle }) => {
       <div
         style={{
           padding: "24px",
-          borderBottom: "1px solid #f0f0f0",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexShrink: 0,
-          background: "white",
+          background: "#1e3a8a",
+          transition: transitionStyle,
         }}
       >
         {!collapsed && (
@@ -73,7 +76,8 @@ const Sidebar = ({ onToggle }) => {
             style={{
               fontSize: "1.5rem",
               fontWeight: 700,
-              color: "#1e3a8a",
+              color: "white",
+              whiteSpace: "nowrap",
             }}
           >
             SIGLA
@@ -85,22 +89,21 @@ const Sidebar = ({ onToggle }) => {
             background: "none",
             border: "none",
             fontSize: "1.25rem",
-            color: "#6b7280",
+            color: "white",
             cursor: "pointer",
             padding: "8px",
             borderRadius: "6px",
-            transition: "all 0.2s ease",
+            transition: transitionStyle,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            marginLeft: collapsed ? "0" : "auto",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#f0f0f0";
-            e.currentTarget.style.color = "#1e3a8a";
+            e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = "none";
-            e.currentTarget.style.color = "#6b7280";
           }}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -112,33 +115,26 @@ const Sidebar = ({ onToggle }) => {
         </button>
       </div>
 
-      {/* User Info */}
-      {!collapsed && (
+      {/* User Info - conditionally rendered */}
+      {!collapsed && user?.name && (
         <div
           style={{
-            padding: "16px 24px",
-            borderBottom: "1px solid #f0f0f0",
+            padding: "12px 24px", // reduced from 16px 24px
+            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
             flexShrink: 0,
+            transition: transitionStyle,
           }}
         >
           <p
             style={{
               fontSize: "0.95rem",
               fontWeight: 600,
-              color: "#1f2937",
-              marginBottom: "4px",
+              color: "white",
+              marginBottom: 0,
+              whiteSpace: "nowrap",
             }}
           >
             {user?.name}
-          </p>
-          <p
-            style={{
-              fontSize: "0.8rem",
-              color: "#6b7280",
-              textTransform: "capitalize",
-            }}
-          >
-            {user?.role?.replace("_", " ")}
           </p>
         </div>
       )}
@@ -157,23 +153,42 @@ const Sidebar = ({ onToggle }) => {
             key={path}
             to={path}
             title={collapsed ? label : undefined}
-            style={({ isActive }) => ({
-              display: "flex",
-              alignItems: "center",
-              gap: collapsed ? 0 : "16px",
-              padding: collapsed ? "12px 0" : "12px 24px",
-              justifyContent: collapsed ? "center" : "flex-start",
-              borderLeft: isActive ? "3px solid #1e3a8a" : "3px solid transparent",
-              textDecoration: "none",
-              transition: "all 0.2s ease",
-              minHeight: "48px",
-              height: "48px",
-              whiteSpace: "nowrap",
-              background: isActive ? "#1e3a8a22" : "transparent",
-              color: isActive ? "#1e3a8a" : "#6b7280",
-            })}
+            style={({ isActive }) => {
+              // Base styles
+              const baseStyles = {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: collapsed ? "center" : "flex-start",
+                gap: collapsed ? 0 : "16px",
+                padding: collapsed ? "12px 0" : "12px 24px",
+                textDecoration: "none",
+                transition: transitionStyle,
+                minHeight: "48px",
+                height: "48px",
+                whiteSpace: "nowrap",
+                background: "transparent",
+                color: "rgba(255, 255, 255, 0.8)",
+                borderLeft: "none",
+              };
+
+              // Active state styling
+              if (isActive) {
+                baseStyles.color = "white";
+                if (collapsed) {
+                  // Collapsed: full background highlight
+                  baseStyles.background = "rgba(255, 255, 255, 0.2)";
+                } else {
+                  // Expanded: left border + subtle background
+                  baseStyles.borderLeft = "3px solid white";
+                  baseStyles.background = "rgba(255, 255, 255, 0.1)";
+                }
+              }
+
+              return baseStyles;
+            }}
           >
             <Icon size={20} style={{ flexShrink: 0 }} />
+            {/* Only render text when not collapsed */}
             {!collapsed && (
               <span
                 style={{
@@ -192,13 +207,13 @@ const Sidebar = ({ onToggle }) => {
         ))}
       </nav>
 
-      {/* Sidebar Footer */}
+      {/* Sidebar Footer - Logout */}
       <div
         style={{
-          borderTop: "1px solid #f0f0f0",
+          borderTop: "1px solid rgba(255, 255, 255, 0.2)",
           padding: "16px 0",
           flexShrink: 0,
-          background: "white",
+          background: "#1e3a8a",
         }}
       >
         <button
@@ -207,31 +222,40 @@ const Sidebar = ({ onToggle }) => {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: collapsed ? 0 : "16px",
             justifyContent: collapsed ? "center" : "flex-start",
+            gap: collapsed ? 0 : "16px",
             width: "100%",
             background: "none",
             border: "none",
             padding: collapsed ? "12px 0" : "12px 24px",
             minHeight: "48px",
             height: "48px",
-            color: "#6b7280",
+            color: "rgba(255, 255, 255, 0.8)",
             cursor: "pointer",
-            transition: "all 0.2s ease",
+            transition: transitionStyle,
             borderRadius: 0,
             fontFamily: "inherit",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#f0f0f0";
-            e.currentTarget.style.color = "#1e3a8a";
+            e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)";
+            e.currentTarget.style.color = "white";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = "none";
-            e.currentTarget.style.color = "#6b7280";
+            e.currentTarget.style.color = "rgba(255, 255, 255, 0.8)";
           }}
         >
           <LogOut size={20} style={{ flexShrink: 0 }} />
-          {!collapsed && <span style={{ fontWeight: 500, fontSize: "0.95rem" }}>Logout</span>}
+          {!collapsed && (
+            <span
+              style={{
+                fontWeight: 500,
+                fontSize: "0.95rem",
+              }}
+            >
+              Logout
+            </span>
+          )}
         </button>
       </div>
     </aside>
