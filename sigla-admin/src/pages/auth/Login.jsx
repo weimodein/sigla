@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -18,6 +18,79 @@ const C = {
   secondary: "#1d4ed8",
   accent: "#3f8efc",
 };
+
+// ── Reusable Floating Input ──
+const FloatingInput = ({
+  id,
+  type,
+  value,
+  onChange,
+  label,
+  maxLength,
+  inputMode,
+  pattern,
+  autoComplete,
+  icon,
+}) => (
+  <div style={S.inputGroup}>
+    <input
+      id={id}
+      type={type}
+      value={value}
+      onChange={onChange}
+      required
+      maxLength={maxLength}
+      inputMode={inputMode}
+      pattern={pattern}
+      autoComplete={autoComplete}
+      className="sigla-input"
+      style={S.input}
+      placeholder=" "
+    />
+    <label style={S.label}>{label}</label>
+    {icon && <span style={S.inputIcon}>{icon}</span>}
+    <span className="sigla-underline" style={S.underline} />
+  </div>
+);
+
+// ── Primary Button ──
+const Button = ({ disabled, loading, children }) => {
+  const isDisabled = loading || disabled;
+  return (
+    <button
+      type="submit"
+      disabled={isDisabled}
+      style={{
+        ...S.btn,
+        ...(isDisabled ? { opacity: 0.7, cursor: "not-allowed" } : {}),
+      }}
+    >
+      {loading && (
+        <Loader2
+          size={16}
+          style={{
+            display: "inline-block",
+            animation: "sigla-spin 0.8s ease-in-out infinite",
+          }}
+        />
+      )}
+      {children}
+    </button>
+  );
+};
+
+// ── Password toggle icon component ──
+const PasswordToggleIcon = ({ showPass, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    style={S.eyeToggle}
+    tabIndex={-1}
+    aria-label={showPass ? "Hide password" : "Show password"}
+  >
+    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+  </button>
+);
 
 const Login = () => {
   const navigate = useNavigate();
@@ -42,7 +115,7 @@ const Login = () => {
   // Resend cooldown
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Inject CSS animations
+  // Inject CSS animations (only once)
   useEffect(() => {
     if (document.getElementById("login-dynamic-styles")) return;
     const style = document.createElement("style");
@@ -76,17 +149,6 @@ const Login = () => {
       @keyframes sigla-spin {
         to { transform: rotate(360deg); }
       }
-      .btn-loading::after {
-        content: '';
-        width: 16px;
-        height: 16px;
-        border: 2px solid #fff;
-        border-top-color: transparent;
-        border-radius: 50%;
-        display: inline-block;
-        animation: sigla-spin 0.8s ease-in-out infinite;
-      }
-
       @media (max-width: 768px) {
         .sigla-login-container {
           flex-direction: column !important;
@@ -104,7 +166,6 @@ const Login = () => {
           padding: 30px 25px !important;
         }
       }
-
       @media (max-width: 480px) {
         .sigla-login-container {
           width: 95% !important;
@@ -117,7 +178,7 @@ const Login = () => {
     document.head.appendChild(style);
   }, []);
 
-  const startCooldown = () => {
+  const startCooldown = useCallback(() => {
     setResendCooldown(60);
     const interval = setInterval(() => {
       setResendCooldown((prev) => {
@@ -128,61 +189,86 @@ const Login = () => {
         return prev - 1;
       });
     }, 1000);
-  };
+  }, []);
 
-  // ── Login ─────────────────────────────────────────────────
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await login(identifier, password);
-      navigate("/dashboard");
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.message || "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ── Login handlers ──
+  const handleIdentifierChange = useCallback(
+    (e) => setIdentifier(e.target.value),
+    [],
+  );
+  const handlePasswordChange = useCallback(
+    (e) => setPassword(e.target.value),
+    [],
+  );
+  const toggleShowPass = useCallback(() => setShowPass((s) => !s), []);
 
-  // ── Forgot password — send code ───────────────────────────
-  const handleForgot = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await forgotPassword(email);
-      toast.success(
-        "Verification code sent to your email. Valid for 5 minutes.",
-      );
-      setStep("verify");
-      startCooldown();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to send code");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleLogin = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      try {
+        await login(identifier, password);
+        navigate("/dashboard");
+      } catch (err) {
+        toast.error(
+          err.response?.data?.message || err.message || "Login failed",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [identifier, password, login, navigate, toast],
+  );
 
-  // ── Verify reset code ─────────────────────────────────────
-  const handleVerify = async (e) => {
-    e.preventDefault();
-    if (code.length !== 6) {
-      toast.error("Please enter the 6-digit verification code");
-      return;
-    }
-    setLoading(true);
-    try {
-      await verifyResetCode(email, code);
-      toast.success("Code verified. Please set your new password.");
-      setStep("reset");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Invalid or expired code");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ── Forgot password handlers ──
+  const handleEmailChange = useCallback((e) => setEmail(e.target.value), []);
+  const handleForgot = useCallback(
+    async (e) => {
+      e.preventDefault();
+      setLoading(true);
+      try {
+        await forgotPassword(email);
+        toast.success(
+          "Verification code sent to your email. Valid for 5 minutes.",
+        );
+        setStep("verify");
+        startCooldown();
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Failed to send code");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [email, toast, startCooldown],
+  );
 
-  // ── Resend code ───────────────────────────────────────────
-  const handleResend = async () => {
+  // ── Verify code handlers ──
+  const handleCodeChange = useCallback((e) => {
+    setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+  }, []);
+  const handleVerify = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (code.length !== 6) {
+        toast.error("Please enter the 6-digit verification code");
+        return;
+      }
+      setLoading(true);
+      try {
+        await verifyResetCode(email, code);
+        toast.success("Code verified. Please set your new password.");
+        setStep("reset");
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Invalid or expired code");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [email, code, toast],
+  );
+
+  // ── Resend code ──
+  const handleResend = useCallback(async () => {
     if (resendCooldown > 0) return;
     try {
       await resendCode(email, "password_reset");
@@ -191,283 +277,57 @@ const Login = () => {
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to resend code");
     }
-  };
+  }, [email, resendCooldown, toast, startCooldown]);
 
-  // ── Reset password ────────────────────────────────────────
-  const handleReset = async (e) => {
-    e.preventDefault();
-    if (newPass !== confirm) {
-      toast.error("Passwords do not match");
-      return;
-    }
-    if (newPass.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
-    setLoading(true);
-    try {
-      await resetPassword(email, newPass);
-      toast.success("Password reset successfully. You can now log in.");
-      setStep("login");
-      setCode("");
-      setNewPass("");
-      setConfirm("");
-      setEmail("");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to reset password");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Reusable floating input ──
-  const FloatingInput = ({
-    id,
-    type,
-    value,
-    onChange,
-    label,
-    maxLength,
-    inputMode,
-    pattern,
-    autoComplete,
-    icon,
-  }) => (
-    <div style={S.inputGroup}>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={onChange}
-        required
-        maxLength={maxLength}
-        inputMode={inputMode}
-        pattern={pattern}
-        autoComplete={autoComplete}
-        className="sigla-input"
-        style={S.input}
-        placeholder=" "
-      />
-      <label style={S.label}>{label}</label>
-      {icon && (
-        <span className="sigla-icon" style={S.inputIcon}>
-          {icon}
-        </span>
-      )}
-      <span className="sigla-underline" style={S.underline} />
-    </div>
+  // ── Reset password handlers ──
+  const handleNewPassChange = useCallback(
+    (e) => setNewPass(e.target.value),
+    [],
+  );
+  const handleConfirmChange = useCallback(
+    (e) => setConfirm(e.target.value),
+    [],
+  );
+  const handleReset = useCallback(
+    async (e) => {
+      e.preventDefault();
+      if (newPass !== confirm) {
+        toast.error("Passwords do not match");
+        return;
+      }
+      if (newPass.length < 6) {
+        toast.error("Password must be at least 6 characters");
+        return;
+      }
+      setLoading(true);
+      try {
+        await resetPassword(email, newPass);
+        toast.success("Password reset successfully. You can now log in.");
+        setStep("login");
+        setCode("");
+        setNewPass("");
+        setConfirm("");
+        setEmail("");
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Failed to reset password");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [newPass, confirm, email, toast],
   );
 
-  // ── Primary button ──
-  const Button = ({ disabled, children }) => (
-    <button
-      type="submit"
-      disabled={disabled}
-      className={loading ? "btn-loading" : ""}
-      style={{
-        ...S.btn,
-        ...(disabled ? S.btnDisabled : {}),
-      }}
-    >
-      {loading && (
-        <Loader2
-          size={16}
-          className="animate-spin"
-          style={{
-            display: "inline-block",
-            animation: "sigla-spin 0.8s ease-in-out infinite",
-          }}
-        />
-      )}
-      {children}
-    </button>
-  );
-
-  // ── Forms ──
-  const LoginForm = () => (
-    <>
-      <h2 style={S.heading}>Login Portal</h2>
-      <div style={S.fields}>
-        <FloatingInput
-          id="identifier"
-          type="text"
-          value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
-          label="Username or Email"
-          autoComplete="username"
-        />
-        <FloatingInput
-          id="password"
-          type={showPass ? "text" : "password"}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          label="Password"
-          autoComplete="current-password"
-          icon={
-            <button
-              type="button"
-              onClick={() => setShowPass((s) => !s)}
-              style={S.eyeToggle}
-              tabIndex={-1}
-              aria-label={showPass ? "Hide password" : "Show password"}
-            >
-              {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          }
-        />
-      </div>
-
-      <label style={S.showPassLabel}>
-        <input
-          type="checkbox"
-          checked={showPass}
-          onChange={() => setShowPass((s) => !s)}
-          style={S.checkbox}
-        />
-        Show Password
-      </label>
-
-      <Button disabled={loading}>{loading ? "Logging in..." : "Login"}</Button>
-
-      <div style={S.footer}>
-        <p style={S.footerP}>Forgot your password?</p>
-        <button
-          type="button"
-          onClick={() => setStep("forgot")}
-          style={S.footerLink}
-        >
-          Reset it here
-        </button>
-      </div>
-    </>
-  );
-
-  const ForgotForm = () => (
-    <>
-      <h2 style={S.heading}>Forgot Password?</h2>
-      <div style={S.fields}>
-        <FloatingInput
-          id="forgot-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          label="Email Address"
-        />
-      </div>
-
-      <Button disabled={loading}>
-        {loading ? "Sending..." : "Send Verification Code"}
-      </Button>
-
-      <div style={S.footer}>
-        <p style={S.footerP}>Remember your password?</p>
-        <button
-          type="button"
-          onClick={() => setStep("login")}
-          style={S.footerLink}
-        >
-          Back to login
-        </button>
-      </div>
-    </>
-  );
-
-  const VerifyForm = () => (
-    <>
-      <h2 style={S.heading}>Verify your email</h2>
-      <div style={S.fields}>
-        <FloatingInput
-          id="code"
-          type="text"
-          value={code}
-          onChange={(e) =>
-            setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-          }
-          label="Verification Code"
-          maxLength={6}
-          inputMode="numeric"
-          pattern="[0-9]{6}"
-        />
-      </div>
-
-      <Button disabled={loading || code.length !== 6}>
-        {loading ? "Verifying..." : "Verify Code"}
-      </Button>
-
-      <div style={S.linkRow}>
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={resendCooldown > 0}
-          style={{
-            ...S.link,
-            ...(resendCooldown > 0 ? S.linkDisabled : {}),
-          }}
-        >
-          {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
-        </button>
-        <button type="button" onClick={() => setStep("login")} style={S.link}>
-          Back to login
-        </button>
-      </div>
-    </>
-  );
-
-  const ResetForm = () => (
-    <>
-      <h2 style={S.heading}>Set New Password</h2>
-      <div style={S.fields}>
-        <FloatingInput
-          id="new-pass"
-          type="password"
-          value={newPass}
-          onChange={(e) => setNewPass(e.target.value)}
-          label="New Password"
-          autoComplete="new-password"
-        />
-        <FloatingInput
-          id="confirm-pass"
-          type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          label="Confirm Password"
-          autoComplete="new-password"
-        />
-      </div>
-
-      <Button disabled={loading}>
-        {loading ? "Resetting..." : "Reset Password"}
-      </Button>
-
-      <div style={S.footer}>
-        <p style={S.footerP}>Done resetting?</p>
-        <button
-          type="button"
-          onClick={() => setStep("login")}
-          style={S.footerLink}
-        >
-          Back to login
-        </button>
-      </div>
-    </>
-  );
-
-  // ── UI ────────────────────────────────────────────────────
+  // ── UI – forms inlined directly ──
   return (
     <div style={S.pageWrapper}>
-      {/* Background layer */}
       <div style={S.background} />
-
-      {/* Login container */}
       <div className="sigla-login-container" style={S.loginContainer}>
-        {/* Left panel — logo (only for login step) */}
         {step === "login" && (
           <div className="sigla-left-panel" style={S.leftPanel}>
             <img src="/logo.png" alt="SIGLA Logo" style={S.logo} />
           </div>
         )}
 
-        {/* Right panel — forms */}
         <div
           className="sigla-right-panel"
           style={
@@ -476,17 +336,191 @@ const Login = () => {
               : { ...S.rightPanel, width: "100%", maxWidth: "440px" }
           }
         >
-          {step === "login" && <LoginForm />}
-          {step === "forgot" && <ForgotForm />}
-          {step === "verify" && <VerifyForm />}
-          {step === "reset" && <ResetForm />}
+          {/* LOGIN FORM */}
+          {step === "login" && (
+            <form onSubmit={handleLogin}>
+              <h2 style={S.heading}>Login Portal</h2>
+              <div style={S.fields}>
+                <FloatingInput
+                  key="login-identifier"
+                  id="identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={handleIdentifierChange}
+                  label="Username or Email"
+                  autoComplete="username"
+                />
+                <FloatingInput
+                  key="login-password"
+                  id="password"
+                  type={showPass ? "text" : "password"}
+                  value={password}
+                  onChange={handlePasswordChange}
+                  label="Password"
+                  autoComplete="current-password"
+                  icon={
+                    <PasswordToggleIcon
+                      showPass={showPass}
+                      onToggle={toggleShowPass}
+                    />
+                  }
+                />
+              </div>
+
+              <label style={S.showPassLabel}>
+                <input
+                  type="checkbox"
+                  checked={showPass}
+                  onChange={toggleShowPass}
+                  style={S.checkbox}
+                />
+                Show Password
+              </label>
+
+              <Button disabled={loading} loading={loading}>
+                {loading ? "Logging in..." : "Login"}
+              </Button>
+
+              <div style={S.footer}>
+                <p style={S.footerP}>Forgot your password?</p>
+                <button
+                  type="button"
+                  onClick={() => setStep("forgot")}
+                  style={S.footerLink}
+                >
+                  Reset it here
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* FORGOT PASSWORD FORM */}
+          {step === "forgot" && (
+            <form onSubmit={handleForgot}>
+              <h2 style={S.heading}>Forgot Password?</h2>
+              <div style={S.fields}>
+                <FloatingInput
+                  key="forgot-email"
+                  id="forgot-email"
+                  type="email"
+                  value={email}
+                  onChange={handleEmailChange}
+                  label="Email Address"
+                />
+              </div>
+
+              <Button disabled={loading} loading={loading}>
+                {loading ? "Sending..." : "Send Verification Code"}
+              </Button>
+
+              <div style={S.footer}>
+                <p style={S.footerP}>Remember your password?</p>
+                <button
+                  type="button"
+                  onClick={() => setStep("login")}
+                  style={S.footerLink}
+                >
+                  Back to login
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* VERIFY CODE FORM */}
+          {step === "verify" && (
+            <form onSubmit={handleVerify}>
+              <h2 style={S.heading}>Verify your email</h2>
+              <div style={S.fields}>
+                <FloatingInput
+                  key="verify-code"
+                  id="code"
+                  type="text"
+                  value={code}
+                  onChange={handleCodeChange}
+                  label="Verification Code"
+                  maxLength={6}
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                />
+              </div>
+
+              <Button disabled={loading || code.length !== 6} loading={loading}>
+                {loading ? "Verifying..." : "Verify Code"}
+              </Button>
+
+              <div style={S.linkRow}>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0}
+                  style={{
+                    ...S.link,
+                    ...(resendCooldown > 0 ? S.linkDisabled : {}),
+                  }}
+                >
+                  {resendCooldown > 0
+                    ? `Resend in ${resendCooldown}s`
+                    : "Resend code"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStep("login")}
+                  style={S.link}
+                >
+                  Back to login
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* RESET PASSWORD FORM */}
+          {step === "reset" && (
+            <form onSubmit={handleReset}>
+              <h2 style={S.heading}>Set New Password</h2>
+              <div style={S.fields}>
+                <FloatingInput
+                  key="reset-newpass"
+                  id="new-pass"
+                  type="password"
+                  value={newPass}
+                  onChange={handleNewPassChange}
+                  label="New Password"
+                  autoComplete="new-password"
+                />
+                <FloatingInput
+                  key="reset-confirm"
+                  id="confirm-pass"
+                  type="password"
+                  value={confirm}
+                  onChange={handleConfirmChange}
+                  label="Confirm Password"
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <Button disabled={loading} loading={loading}>
+                {loading ? "Resetting..." : "Reset Password"}
+              </Button>
+
+              <div style={S.footer}>
+                <p style={S.footerP}>Done resetting?</p>
+                <button
+                  type="button"
+                  onClick={() => setStep("login")}
+                  style={S.footerLink}
+                >
+                  Back to login
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// ── Style objects ──
+// ── Style objects (unchanged from original) ──
 const S = {
   pageWrapper: {
     display: "flex",
@@ -550,8 +584,6 @@ const S = {
     marginBottom: "30px",
     color: C.text,
   },
-
-  // Floating input group
   inputGroup: {
     position: "relative",
     width: "100%",
@@ -606,8 +638,6 @@ const S = {
     alignItems: "center",
     padding: 0,
   },
-
-  // Show password checkbox
   showPassLabel: {
     display: "flex",
     justifyContent: "flex-end",
@@ -623,8 +653,6 @@ const S = {
     accentColor: C.primary,
     cursor: "pointer",
   },
-
-  // Submit button
   btn: {
     width: "100%",
     background: C.primary,
@@ -642,8 +670,6 @@ const S = {
     opacity: 0.7,
     cursor: "not-allowed",
   },
-
-  // Footer text
   footer: {
     marginTop: "15px",
     color: C.text,
@@ -669,8 +695,6 @@ const S = {
     padding: 0,
     textDecoration: "none",
   },
-
-  // Link row (verify/resend)
   linkRow: {
     display: "flex",
     justifyContent: "space-between",
