@@ -25,7 +25,6 @@ import {
   ArrowDownRight,
   TrendingUp,
   Send,
-  BarChart2,
 } from "lucide-react";
 
 // ── Color palette ──
@@ -255,6 +254,7 @@ const Dashboard = () => {
   const [modelStats, setModelStats] = useState(null);
   const [allModels, setAllModels] = useState([]);
   const [pendingWords, setPendingWords] = useState([]);
+
   const [registrations, setRegistrations] = useState([]);
   const [regPeriod, setRegPeriod] = useState("month");
   const [loading, setLoading] = useState(true);
@@ -280,7 +280,7 @@ const Dashboard = () => {
         setModelStats(models);
         setAllModels(modelsAll.models || []);
         setPendingWords(pendingData.words || []);
-      } catch (err) {
+      } catch {
         toast.error("Failed to load dashboard data");
       } finally {
         setLoading(false);
@@ -363,14 +363,43 @@ const Dashboard = () => {
   }
 
   const deployedModel = modelStats?.current_model;
+  const modelsWithAccuracy = (allModels || [])
+    .filter((m) => m.accuracy != null)
+    .slice(0, 8);
+
+  // Compose recent activity from registrations and word actions
+  const recentActivity = (() => {
+    const activities = [];
+
+    registrations.slice(0, 10).forEach((r) => {
+      activities.push({
+        id: `reg-${r.date}`,
+        label: "New User Registration",
+        description: `${r.count} user(s) registered`,
+        badge: "ready",
+        badgeText: "registered",
+        date: r.date,
+      });
+    });
+
+    pendingWords.forEach((word) => {
+      activities.push({
+        id: `word-${word.id}`,
+        label: word.label,
+        description: `${word.total_samples || 0} sample(s) submitted for review`,
+        badge: "pending",
+        badgeText: "pending",
+        date: word.created_at || word.updated_at || Date.now(),
+      });
+    });
+
+    activities.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return activities.slice(0, 10);
+  })();
   const chartData = registrations.map((r) => ({
     ...r,
     label: formatChartDate(r.date, regPeriod),
   }));
-
-  const modelsWithAccuracy = allModels
-    .filter((m) => m.accuracy != null)
-    .slice(0, 8);
 
   return (
     <div>
@@ -507,85 +536,74 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Content: Charts Row */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "2fr 1fr",
           gap: "24px",
-          alignItems: "start",
+          marginBottom: "24px",
         }}
       >
-        {/* Left Column: Chart + Recent Activity */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {/* Registration chart */}
+        {/* Chart */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <h2
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 600,
+                color: C.text,
+                margin: "0 0 4px",
+              }}
+            >
+              New User Registrations
+            </h2>
+            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+              User signups over time
+            </p>
+          </div>
           <div
-            className="dash-card"
+            className="dash-card-body"
             style={{
-              height: "500px",
               display: "flex",
               flexDirection: "column",
             }}
           >
-            <div className="dash-card-header">
-              <h2
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: 600,
-                  color: C.text,
-                  margin: "0 0 4px",
-                }}
-              >
-                New User Registrations
-              </h2>
-              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-                User signups over time
-              </p>
-            </div>
+            {/* Period toggle */}
             <div
-              className="dash-card-body"
               style={{
-                flex: 1,
-                overflowY: "auto",
                 display: "flex",
-                flexDirection: "column",
+                gap: "8px",
+                marginBottom: "16px",
+                alignSelf: "flex-end",
               }}
             >
-              {/* Period toggle */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  marginBottom: "16px",
-                  alignSelf: "flex-end",
-                }}
-              >
-                {["week", "month", "year"].map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setRegPeriod(p)}
-                    style={{
-                      padding: "6px 12px",
-                      fontSize: "0.75rem",
-                      borderRadius: "8px",
-                      fontWeight: 600,
-                      border: "none",
-                      cursor: "pointer",
-                      background: regPeriod === p ? C.primary : "#f3f4f6",
-                      color: regPeriod === p ? "white" : "#6b7280",
-                      transition: "all 0.2s ease",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    {p.charAt(0).toUpperCase() + p.slice(1)}
-                  </button>
-                ))}
-              </div>
-
+              {["week", "month", "year"].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setRegPeriod(p)}
+                  style={{
+                    padding: "6px 12px",
+                    fontSize: "0.75rem",
+                    borderRadius: "8px",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    background: regPeriod === p ? C.primary : "#f3f4f6",
+                    color: regPeriod === p ? "white" : "#6b7280",
+                    transition: "all 0.2s ease",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div style={{ height: "300px" }}>
               {chartData.length === 0 ? (
                 <div
                   style={{
-                    flex: 1,
+                    height: "100%",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
@@ -603,358 +621,395 @@ const Dashboard = () => {
                   </p>
                 </div>
               ) : (
-                <div style={{ flex: 1, minHeight: "200px" }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 11, fill: "#9ca3af" }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11, fill: "#9ca3af" }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          fontSize: 12,
-                          borderRadius: 8,
-                          border: "1px solid #e5e7eb",
-                        }}
-                        cursor={{ fill: "#f3f4f6" }}
-                      />
-                      <Bar
-                        dataKey="count"
-                        name="Registrations"
-                        fill={C.primary}
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Activity / Pending submissions */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h2
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: 600,
-                  color: C.text,
-                  margin: "0 0 4px",
-                }}
-              >
-                Recent Activity
-              </h2>
-              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-                Latest actions in the system
-              </p>
-            </div>
-            <div
-              className="dash-card-body"
-              style={{ maxHeight: "300px", overflowY: "auto" }}
-            >
-              {pendingWords.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: "center",
-                    color: "#9ca3af",
-                    padding: "32px 16px",
-                  }}
-                >
-                  <FileText
-                    size={40}
-                    style={{ marginBottom: "8px", opacity: 0.4 }}
-                  />
-                  <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
-                    No recent activity
-                  </p>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "16px",
-                  }}
-                >
-                  {pendingWords.map((word) => (
-                    <div key={word.id} className="dash-request-item">
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            gap: "16px",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          <h4
-                            style={{
-                              fontSize: "0.95rem",
-                              fontWeight: 600,
-                              color: C.text,
-                              margin: 0,
-                              flex: 1,
-                            }}
-                          >
-                            {word.label}
-                          </h4>
-                          <span
-                            className="badge-pending"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: "12px",
-                              fontSize: "0.7rem",
-                              fontWeight: 600,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                          >
-                            pending
-                          </span>
-                        </div>
-                        <p
-                          style={{
-                            fontSize: "0.85rem",
-                            color: "#6b7280",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          {word.submitter?.username || "—"} ·{" "}
-                          {word.total_samples || 0} samples
-                        </p>
-                        <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
-                          {formatActivityDate(
-                            word.created_at || word.updated_at || Date.now(),
-                          )}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => navigate("/word_bank")}
-                        style={{
-                          background: "none",
-                          border: `2px solid ${C.primary}`,
-                          color: C.primary,
-                          padding: "4px 12px",
-                          borderRadius: "6px",
-                          fontSize: "0.8rem",
-                          fontWeight: 500,
-                          cursor: "pointer",
-                          transition: "0.3s",
-                          fontFamily: "inherit",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Review
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: "#9ca3af" }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 11, fill: "#9ca3af" }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        fontSize: 12,
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                      }}
+                      cursor={{ fill: "#f3f4f6" }}
+                    />
+                    <Bar
+                      dataKey="count"
+                      name="Registrations"
+                      fill={C.primary}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right Column: Model Accuracy + Quick Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {/* Model accuracy */}
+        {/* Model Accuracy */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <h2
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 600,
+                color: C.text,
+                margin: "0 0 4px",
+              }}
+            >
+              Model Accuracy
+            </h2>
+            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+              By version
+            </p>
+          </div>
           <div
-            className="dash-card"
-            style={{
-              height: "500px",
-              display: "flex",
-              flexDirection: "column",
-            }}
+            className="dash-card-body"
+            style={{ maxHeight: "300px", overflowY: "auto" }}
           >
-            <div className="dash-card-header">
-              <h2
+            {modelsWithAccuracy.length === 0 ? (
+              <p
                 style={{
-                  fontSize: "1.25rem",
-                  fontWeight: 600,
-                  color: C.text,
-                  margin: "0 0 4px",
+                  color: "#9ca3af",
+                  fontSize: "0.85rem",
+                  textAlign: "center",
+                  padding: "24px",
                 }}
               >
-                Model Accuracy
-              </h2>
-              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-                By version
+                No trained models yet
               </p>
-            </div>
-            <div
-              className="dash-card-body"
-              style={{ flex: 1, overflowY: "auto" }}
-            >
-              {modelsWithAccuracy.length === 0 ? (
-                <p
-                  style={{
-                    color: "#9ca3af",
-                    fontSize: "0.85rem",
-                    textAlign: "center",
-                    padding: "24px",
-                  }}
-                >
-                  No trained models yet
-                </p>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "14px",
-                  }}
-                >
-                  {modelsWithAccuracy.map((m) => {
-                    const pct = (m.accuracy * 100).toFixed(1);
-                    const isDeployed = m.status === "deployed";
-                    return (
-                      <div key={m.id} style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          <p
-                            style={{
-                              fontSize: "0.8rem",
-                              fontWeight: 500,
-                              color: C.text,
-                              margin: 0,
-                            }}
-                          >
-                            v{m.version_number}
-                          </p>
-                          {isDeployed && (
-                            <span
-                              style={{
-                                fontSize: "0.65rem",
-                                background: "#dcfce7",
-                                color: "#16a34a",
-                                padding: "2px 6px",
-                                borderRadius: "10px",
-                                fontWeight: 600,
-                              }}
-                            >
-                              deployed
-                            </span>
-                          )}
-                        </div>
-                        <div
-                          style={{
-                            width: "100%",
-                            background: "#f3f4f6",
-                            borderRadius: "4px",
-                            height: "6px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: "6px",
-                              borderRadius: "4px",
-                              background: isDeployed ? "#22c55e" : C.accent,
-                              width: `${Math.min(parseFloat(pct), 100)}%`,
-                              transition: "width 0.5s ease",
-                            }}
-                          />
-                        </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                }}
+              >
+                {modelsWithAccuracy.map((m) => {
+                  const pct = (m.accuracy * 100).toFixed(1);
+                  const isDeployed = m.status === "deployed";
+                  return (
+                    <div key={m.id}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginBottom: "4px",
+                        }}
+                      >
                         <p
                           style={{
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                            color: "#6b7280",
-                            marginTop: "2px",
-                            textAlign: "right",
+                            fontSize: "0.8rem",
+                            fontWeight: 500,
+                            color: C.text,
                             margin: 0,
                           }}
                         >
-                          {pct}%
+                          v{m.version_number}
                         </p>
+                        {isDeployed && (
+                          <span
+                            style={{
+                              fontSize: "0.65rem",
+                              background: "#dcfce7",
+                              color: "#16a34a",
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            deployed
+                          </span>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      <div
+                        style={{
+                          width: "100%",
+                          background: "#f3f4f6",
+                          borderRadius: "4px",
+                          height: "6px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "6px",
+                            borderRadius: "4px",
+                            background: isDeployed ? "#22c55e" : C.accent,
+                            width: `${Math.min(parseFloat(pct), 100)}%`,
+                            transition: "width 0.5s ease",
+                          }}
+                        />
+                      </div>
+                      <p
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          color: "#6b7280",
+                          marginTop: "2px",
+                          textAlign: "right",
+                          margin: 0,
+                        }}
+                      >
+                        {pct}%
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+        </div>
+      </div>
 
-          {/* Quick Actions */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h2
-                style={{
-                  fontSize: "1.25rem",
-                  fontWeight: 600,
-                  color: C.text,
-                  margin: "0 0 4px",
-                }}
-              >
-                Quick Actions
-              </h2>
-              <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-                Frequently used actions
-              </p>
-            </div>
-            <div className="dash-card-body">
+      {/* Main Content: Activity Row */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "2fr 1fr",
+          gap: "24px",
+          marginBottom: "24px",
+        }}
+      >
+        {/* Recent Activity */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <h2
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 600,
+                color: C.text,
+                margin: "0 0 4px",
+              }}
+            >
+              Recent Activity
+            </h2>
+            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+              Latest actions in the system
+            </p>
+          </div>
+          <div
+            className="dash-card-body"
+            style={{ maxHeight: "300px", overflowY: "auto" }}
+          >
+            {recentActivity.length === 0 ? (
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "12px",
+                  textAlign: "center",
+                  color: "#9ca3af",
+                  padding: "32px 16px",
                 }}
               >
-                <button
-                  className="dash-quick-action"
-                  onClick={() => navigate("/word_bank")}
-                >
-                  <FileText size={24} />
-                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
-                    Review Words
-                  </span>
-                </button>
-                <button
-                  className="dash-quick-action"
-                  onClick={() => navigate("/model")}
-                >
-                  <Cpu size={24} />
-                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
-                    Manage Model
-                  </span>
-                </button>
-                <button
-                  className="dash-quick-action"
-                  onClick={() => navigate("/users")}
-                >
-                  <Users size={24} />
-                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
-                    Manage Users
-                  </span>
-                </button>
-                <button
-                  className="dash-quick-action"
-                  onClick={() => navigate("/reports")}
-                >
-                  <BarChart2 size={24} />
-                  <span style={{ fontSize: "0.85rem", fontWeight: 500 }}>
-                    View Reports
-                  </span>
-                </button>
+                <FileText
+                  size={40}
+                  style={{ marginBottom: "8px", opacity: 0.4 }}
+                />
+                <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                  No recent activity
+                </p>
               </div>
-            </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
+                {recentActivity.map((item) => (
+                  <div key={item.id} className="dash-request-item">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: "16px",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        <h4
+                          style={{
+                            fontSize: "0.95rem",
+                            fontWeight: 600,
+                            color: C.text,
+                            margin: 0,
+                            flex: 1,
+                          }}
+                        >
+                          {item.label}
+                        </h4>
+                        <span
+                          className={
+                            item.badge ? `badge-${item.badge}` : "badge-pending"
+                          }
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "12px",
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          {item.badgeText ?? item.badge ?? "pending"}
+                        </span>
+                      </div>
+                      <p
+                        style={{
+                          fontSize: "0.85rem",
+                          color: "#6b7280",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        {item.description}
+                      </p>
+                      <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                        {formatActivityDate(item.date)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pending Words */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <h2
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 600,
+                color: C.text,
+                margin: "0 0 4px",
+              }}
+            >
+              Pending Reviews
+            </h2>
+            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
+              Word submissions awaiting review
+            </p>
+          </div>
+          <div
+            className="dash-card-body"
+            style={{ maxHeight: "300px", overflowY: "auto" }}
+          >
+            {pendingWords.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  color: "#9ca3af",
+                  padding: "32px 16px",
+                }}
+              >
+                <FileText
+                  size={40}
+                  style={{ marginBottom: "8px", opacity: 0.4 }}
+                />
+                <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                  No pending reviews
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
+                {pendingWords.map((word) => (
+                  <div key={word.id} className="dash-request-item">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: "16px",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        <h4
+                          style={{
+                            fontSize: "0.95rem",
+                            fontWeight: 600,
+                            color: C.text,
+                            margin: 0,
+                            flex: 1,
+                          }}
+                        >
+                          {word.label}
+                        </h4>
+                        <span
+                          className="badge-pending"
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "12px",
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          pending
+                        </span>
+                      </div>
+                      <p
+                        style={{
+                          fontSize: "0.85rem",
+                          color: "#6b7280",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        {word.submitter?.username || "—"} ·{" "}
+                        {word.total_samples || 0} samples
+                      </p>
+                      <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                        {formatActivityDate(
+                          word.created_at || word.updated_at || Date.now(),
+                        )}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => navigate("/word_bank")}
+                      style={{
+                        background: "none",
+                        border: `2px solid ${C.primary}`,
+                        color: C.primary,
+                        padding: "4px 12px",
+                        borderRadius: "6px",
+                        fontSize: "0.8rem",
+                        fontWeight: 500,
+                        cursor: "pointer",
+                        transition: "0.3s",
+                        fontFamily: "inherit",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Review
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
