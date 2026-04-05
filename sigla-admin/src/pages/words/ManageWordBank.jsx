@@ -130,6 +130,7 @@ const ManageWordBank = () => {
   const [generatingVideo, setGeneratingVideo] = useState(false);
   const [selectedSequences, setSelectedSequences] = useState([]);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
+  const [perSeqVideos, setPerSeqVideos] = useState({}); // sample_id -> video_url
 
   // ── Fetch ───────────────────────────────────────────────────
   const fetchStats = async () => {
@@ -185,6 +186,7 @@ const ManageWordBank = () => {
     setMotionSequences([]);
     setSelectedSequences([]);
     setGeneratedVideoUrl(null);
+    setPerSeqVideos({});
     try {
       const data = await getWordSamples(word.id);
       setSamples(data.samples || []);
@@ -955,10 +957,10 @@ const ManageWordBank = () => {
                       ({motionSequences.length} sequences)
                     </span>
                   </div>
-                  {motionSequences.length > 0 && (
+                  {motionSequences.length > 0 && selectedSequences.length > 0 && (
                     <button
                       onClick={() => handleGenerateVideo()}
-                      disabled={generatingVideo || motionSequences.length === 0}
+                      disabled={generatingVideo}
                       className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 disabled:opacity-50"
                     >
                       {generatingVideo ? (
@@ -969,7 +971,7 @@ const ManageWordBank = () => {
                       ) : (
                         <>
                           <Upload size={12} />
-                          Generate Video
+                          Generate All Selected ({selectedSequences.length})
                         </>
                       )}
                     </button>
@@ -982,30 +984,28 @@ const ManageWordBank = () => {
                   </div>
                 ) : motionSequences.length === 0 ? (
                   <p className="text-center text-gray-400 text-sm py-6">
-                    No motion sequences available yet
+                    No approved motion sequences yet. Approve samples above to see them here.
                   </p>
                 ) : (
                   <div className="p-4 space-y-4">
                     {motionSequences.map((seq) => (
-                      <div key={seq.sequence_id} className="border border-gray-200 rounded-lg p-3 bg-white">
-                        <div className="flex items-center justify-between mb-2">
+                      <div key={seq.sequence_id} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                        {/* Sequence header */}
+                        <div className="flex items-center justify-between bg-gray-50 px-3 py-2">
                           <div className="text-sm font-medium text-gray-700">
                             {seq.submitter_name}
                             <span className="ml-2 text-xs text-gray-400">
-                              {seq.frame_count} frames
+                              {seq.frame_count} frames · {new Date(seq.created_at).toLocaleDateString()}
                             </span>
                           </div>
-                          <span className="text-xs text-gray-400">
-                            {new Date(seq.created_at).toLocaleDateString()}
-                          </span>
                         </div>
 
-                        {/* Frame strip preview */}
-                        <div className="flex gap-1 overflow-x-auto pb-2">
+                        {/* Frame strip */}
+                        <div className="flex gap-1 p-3 overflow-x-auto">
                           {seq.frames.map((frame) => (
                             <div
                               key={frame.frame_index}
-                              className="flex-shrink-0 w-16 h-16 rounded border border-gray-200 bg-gray-50 overflow-hidden"
+                              className="flex-shrink-0 w-16 h-16 rounded border border-gray-200 bg-gray-50 overflow-hidden relative"
                             >
                               {frame.image_url && !frame.image_url.startsWith("landmark_direct_") ? (
                                 <img
@@ -1027,32 +1027,115 @@ const ManageWordBank = () => {
                                   <span className="text-[10px]">F{frame.frame_index + 1}</span>
                                 </div>
                               )}
+                              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-[8px] text-center">
+                                F{frame.frame_index + 1}
+                              </div>
                             </div>
                           ))}
                         </div>
 
-                        {/* Checkbox for video generation */}
-                        <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedSequences.includes(seq.sample_id)}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedSequences(prev => [...prev, seq.sample_id]);
-                              } else {
-                                setSelectedSequences(prev => prev.filter(id => id !== seq.sample_id));
+                        {/* Inline generated video preview */}
+                        {perSeqVideos[seq.sample_id] && (
+                          <div className="border-t border-indigo-200 bg-indigo-50 p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-semibold text-indigo-800">Generated Video</span>
+                            </div>
+                            <video
+                              src={
+                                perSeqVideos[seq.sample_id].startsWith("/")
+                                  ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${perSeqVideos[seq.sample_id]}`
+                                  : perSeqVideos[seq.sample_id]
+                              }
+                              controls
+                              className="w-full max-w-md rounded-lg border border-indigo-300 bg-black"
+                              autoPlay
+                              loop
+                            />
+                            <div className="mt-3 flex gap-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await setWordVideo(galleryModal.id, { video_url: perSeqVideos[seq.sample_id] });
+                                    setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[seq.sample_id] } : prev);
+                                    fetchWords();
+                                    showSuccess("Video set as word bank video");
+                                  } catch (err) {
+                                    showError(err.response?.data?.message || "Failed to set video");
+                                  }
+                                }}
+                                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg"
+                              >
+                                Set as Word Bank Video
+                              </button>
+                              <a
+                                href={
+                                  perSeqVideos[seq.sample_id].startsWith("/")
+                                    ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${perSeqVideos[seq.sample_id]}`
+                                    : perSeqVideos[seq.sample_id]
+                                }
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg"
+                              >
+                                Download
+                              </a>
+                            </div>
+                          </div>
+                        )}
+
+                          {/* Actions */}
+                        <div className="flex items-center justify-between px-3 pb-2 bg-gray-50">
+                          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedSequences.includes(seq.sample_id)}
+                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedSequences(prev => [...prev, seq.sample_id]);
+                                } else {
+                                  setSelectedSequences(prev => prev.filter(id => id !== seq.sample_id));
+                                }
+                              }}
+                            />
+                            Include in bulk video
+                          </label>
+                          <button
+                            onClick={async () => {
+                              setGeneratingVideo(true);
+                              try {
+                                const res = await generateVideoFromSequence(galleryModal.id, [seq.sample_id]);
+                                const vidUrl = res.video_url;
+                                setPerSeqVideos(prev => ({ ...prev, [seq.sample_id]: vidUrl }));
+                                showSuccess("Video generated — watch it below");
+                              } catch (err) {
+                                showError(err.response?.data?.message || "Failed to generate video");
+                              } finally {
+                                setGeneratingVideo(false);
                               }
                             }}
-                          />
-                          Include in video generation
-                        </label>
+                            disabled={generatingVideo}
+                            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {generatingVideo ? (
+                              <>
+                                <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-white" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Upload size={10} />
+                                Generate Video
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Generated Video Preview */}
+                {/* Generated Video Preview (bulk generation) */}
                 {generatedVideoUrl && (
                   <div className="border-t border-indigo-200 bg-indigo-50 p-4">
                     <div className="flex items-center gap-2 mb-3">
@@ -1157,84 +1240,174 @@ const ManageWordBank = () => {
                     </div>
                   </div>
 
-                  {/* Sample images grid */}
-                  <div className="p-3 grid grid-cols-4 sm:grid-cols-6 gap-2">
-                    {group.samples.map((sample) => (
-                      <div key={sample.id} className="relative group">
-                        {sample.file_url && sample.file_url.startsWith("landmark_direct_") ? (
-                          <div
-                            className={`w-full aspect-square rounded-lg border-2 flex flex-col items-center justify-center bg-indigo-50 ${
-                              sample.status === "approved"
-                                ? "border-green-400"
-                                : sample.status === "rejected"
-                                  ? "border-red-400"
-                                  : "border-gray-200"
-                            }`}
-                          >
-                            <span className="text-2xl">🖐</span>
-                            <span className="text-xs text-indigo-500 font-medium mt-1 text-center leading-tight px-1">
-                              Landmark only
-                            </span>
+                  {/* Motion samples: grouped by sequence */}
+                  <div className="p-3 space-y-3">
+                    {group.samples.map((sample) => {
+                      const frameUrls = sample.file_url?.split("|").filter(Boolean) || [];
+                      const isMotionSequence = frameUrls.length > 1;
+
+                      return (
+                        <div key={sample.id} className="border border-gray-100 rounded-lg overflow-hidden bg-white">
+                          {/* Inline generated video preview (user submission area) */}
+                          {perSeqVideos[sample.id] && (
+                            <div className="border-t border-indigo-200 bg-indigo-50 p-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-semibold text-indigo-800">Generated Video</span>
+                              </div>
+                              <video
+                                src={
+                                  perSeqVideos[sample.id].startsWith("/")
+                                    ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${perSeqVideos[sample.id]}`
+                                    : perSeqVideos[sample.id]
+                                }
+                                controls
+                                className="w-full max-w-md rounded-lg border border-indigo-300 bg-black"
+                                autoPlay
+                                loop
+                              />
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await setWordVideo(galleryModal.id, { video_url: perSeqVideos[sample.id] });
+                                      setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[sample.id] } : prev);
+                                      fetchWords();
+                                      showSuccess("Video set as word bank video");
+                                    } catch (err) {
+                                      showError(err.response?.data?.message || "Failed to set video");
+                                    }
+                                  }}
+                                  className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg"
+                                >
+                                  Set as Word Bank Video
+                                </button>
+                                <a
+                                  href={
+                                    perSeqVideos[sample.id].startsWith("/")
+                                      ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${perSeqVideos[sample.id]}`
+                                      : perSeqVideos[sample.id]
+                                  }
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sequence header */}
+                          <div className="flex items-center justify-between bg-gray-50 px-3 py-2">
+                            <div className="text-xs font-medium text-gray-600">
+                              Sequence
+                              <span className="ml-1.5 text-[10px] text-gray-400">
+                                #{sample.id} · {frameUrls.length} frames · {new Date(sample.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <Badge value={sample.status} />
+                            {/* Per-sequence video actions */}
+                            {isMotionSequence && (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={async () => {
+                                    setGeneratingVideo(true);
+                                    try {
+                                      const res = await generateVideoFromSequence(galleryModal.id, [sample.id]);
+                                      setPerSeqVideos(prev => ({ ...prev, [sample.id]: res.video_url }));
+                                      showSuccess("Video generated — watch it below");
+                                    } catch (err) {
+                                      showError(err.response?.data?.message || "Failed to generate video");
+                                    } finally {
+                                      setGeneratingVideo(false);
+                                    }
+                                  }}
+                                  disabled={generatingVideo}
+                                  className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-0.5 rounded-lg flex items-center gap-1 disabled:opacity-50"
+                                >
+                                  {generatingVideo ? (
+                                    <>
+                                      <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-white" />
+                                      Generating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Upload size={10} />
+                                      Generate Video
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          <img
-                            src={`${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${sample.file_url}`}
-                            alt={`sample-${sample.id}`}
-                            className={`w-full aspect-square object-cover rounded-lg border-2 ${
-                              sample.status === "approved"
-                                ? "border-green-400"
-                                : sample.status === "rejected"
-                                  ? "border-red-400"
-                                  : "border-gray-200"
-                            }`}
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = "https://via.placeholder.com/80?text=No+Image";
-                            }}
-                          />
-                        )}
-                        <div
-                          className={`absolute top-1 right-1 w-3 h-3 rounded-full ${
-                            sample.status === "approved"
-                              ? "bg-green-500"
-                              : sample.status === "rejected"
-                                ? "bg-red-500"
-                                : "bg-yellow-400"
-                          }`}
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-lg transition flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 p-1">
-                          <div className="flex gap-1">
+                          {/* Frame grid */}
+                          {isMotionSequence ? (
+                            <div className="flex gap-1 p-2 overflow-x-auto">
+                              {frameUrls.map((url, frameIdx) => {
+                                const fullUrl = `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${url}`;
+                                return (
+                                  <div
+                                    key={frameIdx}
+                                    className="flex-shrink-0 w-16 h-16 relative group rounded overflow-hidden border border-gray-200"
+                                  >
+                                    <img
+                                      src={fullUrl}
+                                      alt={`frame-${frameIdx}`}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = `https://via.placeholder.com/64?text=F${frameIdx + 1}`;
+                                      }}
+                                    />
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-[8px] text-center">
+                                      F{frameIdx + 1}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : frameUrls.length === 1 ? (
+                            <div className="p-2">
+                              <div className="w-16 h-16 relative group rounded-lg overflow-hidden">
+                                <img
+                                  src={`${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`}
+                                  alt={`sample-${sample.id}`}
+                                  className="w-full h-full object-cover border border-gray-200 rounded"
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = "https://via.placeholder.com/64?text=No+Image";
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="w-16 h-16 m-2 flex flex-col items-center justify-center bg-indigo-50 rounded-lg border-2 border-gray-200">
+                              <span className="text-2xl">🖐</span>
+                              <span className="text-[10px] text-indigo-500">Landmark only</span>
+                            </div>
+                          )}
+                          {/* Approve/Reject buttons per sequence */}
+                          <div className="flex gap-1 px-3 pb-2">
                             {sample.status !== "approved" && (
                               <button
                                 onClick={() => handleApproveSample(galleryModal.id, sample.id)}
-                                className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded"
+                                className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-0.5 rounded"
                               >
-                                ✓
+                                ✓ Approve
                               </button>
                             )}
                             {sample.status !== "rejected" && (
                               <button
                                 onClick={() => handleRejectSample(galleryModal.id, sample.id)}
-                                className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded"
+                                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-0.5 rounded"
                               >
-                                ✕
+                                ✕ Reject
                               </button>
                             )}
                           </div>
-                          {galleryModal.gesture_type !== "motion" &&
-                            !sample.file_url?.startsWith("landmark_direct_") && (
-                            <button
-                              onClick={() => handleSetThumbnail(galleryModal, sample.file_url)}
-                              disabled={actionLoading}
-                              title="Set as Word Bank image"
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-2 py-0.5 rounded disabled:opacity-50"
-                            >
-                              Use
-                            </button>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))

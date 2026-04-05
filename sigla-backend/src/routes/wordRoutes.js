@@ -118,13 +118,15 @@ router.patch(
 );
 
 // ── Submission level routes ───────────────────────────────────
+// IMPORTANT: these must come AFTER /:id/samples/user/:userId routes
+// but BEFORE /:id/lock /:id/unlock etc.
 router.patch(
-  "/:id/approve-submission",
+  "/:id/approve-submission/:userId?",
   roleMiddleware("admin"),
   approveSubmission,
 );
 router.patch(
-  "/:id/reject-submission",
+  "/:id/reject-submission/:userId?",
   roleMiddleware("admin"),
   rejectSubmission,
 );

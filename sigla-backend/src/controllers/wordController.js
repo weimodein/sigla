@@ -519,22 +519,50 @@ const uploadSamples = async (req, res) => {
       images,
     } = req.body;
 
+    // DEBUG: Log incoming motion gesture data
+    console.log("=== UPLOAD SAMPLES DEBUG ===");
+    console.log("word_id:", req.params.id);
+    console.log("gesture_type:", word.gesture_type);
+    console.log("sample_count from client:", sample_count);
+    console.log("landmarks array:", Array.isArray(landmarks), landmarks ? landmarks.length : "N/A");
+    console.log("sequence array:", Array.isArray(sequence), sequence ? sequence.length : "N/A");
+    console.log("images array:", Array.isArray(images), images ? (Array.isArray(images[0]) ? "nested (motion)" : "flat (static)") : "N/A");
+    if (sequence && Array.isArray(sequence)) {
+      console.log("sequence[0] type:", typeof sequence[0], Array.isArray(sequence[0]) ? "(is array)" : "(not array)");
+      console.log("sequence structure:", sequence.length > 0 ? (Array.isArray(sequence[0]) ? `Batch of ${sequence.length} sequences` : `Single sequence with ${sequence.length} frames`) : "empty");
+    }
+
     // Either a file_url or direct landmark data must be provided
     const hasLandmarkData =
       (landmarks && Array.isArray(landmarks) && landmarks.length > 0) ||
       (sequence && Array.isArray(sequence) && sequence.length > 0);
 
     if (!file_url && !hasLandmarkData) {
+      console.log("ERROR: No landmark data provided");
       return res.status(400).json({
         message:
           "Either file_url or landmark data (landmarks/sequence) is required",
       });
     }
 
+    // For motion gestures: sample_count is the number of sequences in the batch
+    // sequence structure: List<List<List<Float>>> = batch of sequences, each sequence has frames
+    const isMotionBatch = sequence && Array.isArray(sequence) && sequence.length > 0 && Array.isArray(sequence[0]) && Array.isArray(sequence[0][0]);
+
     // Derive sample count: if landmark data provided directly, count from the array
-    const newCount =
-      parseInt(sample_count) ||
-      (landmarks ? landmarks.length : sequence ? sequence.length : 0);
+    let newCount = parseInt(sample_count) || 0;
+    if (newCount <= 0) {
+      if (isMotionBatch) {
+        // Motion batch: each element is a complete sequence
+        newCount = sequence.length;
+      } else if (landmarks) {
+        // Static batch: each element is a single landmark
+        newCount = landmarks.length;
+      } else if (sequence) {
+        // Single sequence (fallback): count frames
+        newCount = sequence.length;
+      }
+    }
 
     if (newCount <= 0) {
       return res
@@ -588,33 +616,70 @@ const uploadSamples = async (req, res) => {
     // so the admin gallery shows individual entries rather than one batched record.
     if (hasLandmarkData) {
       const hasImages = Array.isArray(images) && images.length > 0;
-      const isMotionSequence =
-        sequence && Array.isArray(sequence) && sequence.length > 0;
 
-      if (isMotionSequence) {
-        // Motion: images should be a list of lists (one per sequence)
+      // Check if this is a motion batch (List<List<List<Float>>>) or single sequence (List<List<Float>>)
+      // Motion batch: sequence[0][0] exists and is an array (batch of sequences)
+      // Single sequence: sequence[0] is an array of landmarks (one sequence with frames)
+      const isMotionBatch = sequence && Array.isArray(sequence) &&
+        sequence.length > 0 && Array.isArray(sequence[0]) &&
+        Array.isArray(sequence[0][0]);
+
+      console.log("isMotionBatch:", isMotionBatch);
+
+      if (isMotionBatch) {
+        // MOTION BATCH: Each sequence[idx] is a complete sequence (array of frames)
+        // images[idx] should be an array of base64 strings for that sequence's frames
+        console.log("Processing MOTION BATCH with", sequence.length, "sequences");
+
         const records = sequence.map((seq, idx) => {
-          const frameImages =
-            hasImages && Array.isArray(images[idx]) ? images[idx] : [];
+          // seq is one complete sequence: array of frames (each frame is 126 floats)
+          const frameImages = hasImages && Array.isArray(images[idx]) ? images[idx] : [];
+          console.log(`  Sequence ${idx}: ${seq.length} frames, ${frameImages.length} images`);
+
           // Save each frame image to disk and join with '|'
-          const imageUrls = frameImages.map((base64, i) =>
-            saveImage(base64, i),
-          );
-          const file_url = imageUrls.join("|"); // e.g., "url1|url2|url3"
+          const imageUrls = frameImages.map((base64, i) => saveImage(base64, i));
+          const file_url = imageUrls.join("|");
+
           return {
             word_id: word.id,
             submitted_by: req.user.id,
             file_url: file_url,
             landmarks: null,
-            sequence: seq,
-            sample_count: seq.length,
+            sequence: seq,  // This is one complete sequence (array of frames)
+            sample_count: seq.length,  // Number of frames in this sequence
             status: "pending",
             is_validated: true,
           };
         });
+
+        console.log("Creating", records.length, "motion sample records");
         await GestureSample.bulkCreate(records);
+      } else if (sequence && Array.isArray(sequence) && sequence.length > 0) {
+        // SINGLE SEQUENCE (fallback): The entire sequence array is ONE sample
+        // This handles the case where client sends one sequence at a time
+        console.log("Processing SINGLE SEQUENCE with", sequence.length, "frames");
+
+        const frameImages = hasImages && Array.isArray(images) && !Array.isArray(images[0]) ? images : [];
+        const imageUrls = frameImages.map((base64, i) => saveImage(base64, i));
+        const file_url = imageUrls.join("|");
+
+        const record = {
+          word_id: word.id,
+          submitted_by: req.user.id,
+          file_url: file_url,
+          landmarks: null,
+          sequence: sequence,  // One complete sequence
+          sample_count: sequence.length,
+          status: "pending",
+          is_validated: true,
+        };
+
+        console.log("Creating 1 motion sample record");
+        await GestureSample.create(record);
       } else {
-        // Static: each sample is a single landmark set
+        // STATIC: each sample is a single landmark set
+        console.log("Processing STATIC batch with", landmarks.length, "samples");
+
         const records = landmarks.map((lm, i) => ({
           word_id: word.id,
           submitted_by: req.user.id,
@@ -632,6 +697,8 @@ const uploadSamples = async (req, res) => {
       }
     } else {
       // Old style: single file upload (not landmark data)
+      console.log("Processing FILE UPLOAD with sample_count:", newCount);
+
       await GestureSample.create({
         word_id: word.id,
         submitted_by: req.user.id,
@@ -642,6 +709,8 @@ const uploadSamples = async (req, res) => {
         is_validated: true,
       });
     }
+
+    console.log("=== END UPLOAD SAMPLES DEBUG ===");
 
     await word.update({ total_samples: (word.total_samples || 0) + newCount });
 
@@ -756,7 +825,10 @@ const rejectAllSamplesByUser = async (req, res) => {
 // Approves all pending samples from a specific user and checks activation threshold
 const approveSubmission = async (req, res) => {
   try {
-    const { user_id } = req.body;
+    const user_id = req.params.userId || req.body.user_id;
+    if (!user_id) {
+      return res.status(400).json({ message: "user_id is required" });
+    }
 
     const word = await Word.findOne({ where: { id: req.params.id } });
     if (!word) {
@@ -818,7 +890,11 @@ const approveSubmission = async (req, res) => {
 // ── PATCH /api/words/:id/reject-submission ────────────────────
 const rejectSubmission = async (req, res) => {
   try {
-    const { user_id, reason } = req.body;
+    const user_id = req.params.userId || req.body.user_id;
+    if (!user_id) {
+      return res.status(400).json({ message: "user_id is required" });
+    }
+    const { reason } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
     if (!word) {
@@ -1144,6 +1220,19 @@ const getSamples = async (req, res) => {
       order: [["created_at", "DESC"]],
     });
 
+    console.log(`GET /api/words/${req.params.id}/samples`);
+    console.log(`  Word: ${word.label} (${word.gesture_type})`);
+    console.log(`  Total samples found: ${samples.length}`);
+    if (samples.length > 0) {
+      console.log(`  Sample types:`, samples.map(s => ({
+        id: s.id,
+        status: s.status,
+        has_sequence: !!s.sequence,
+        sequence_length: s.sequence?.length || 0,
+        file_url: s.file_url?.substring(0, 50)
+      })));
+    }
+
     return res.status(200).json({
       samples,
       total_samples: word.total_samples,
@@ -1285,6 +1374,13 @@ const getMotionSequences = async (req, res) => {
       order: [["created_at", "ASC"]],
     });
 
+    console.log(`GET /api/words/${req.params.id}/motion-sequences`);
+    console.log(`  Word: ${word.label}, gesture_type: ${word.gesture_type}`);
+    console.log(`  Found ${samples.length} approved samples`);
+    if (samples.length > 0) {
+      console.log(`  Samples with sequence data:`, samples.filter(s => s.sequence && s.sequence.length > 0).length);
+    }
+
     const sequences = [];
 
     for (const sample of samples) {
@@ -1336,7 +1432,11 @@ const getMotionSequences = async (req, res) => {
 // Generates a video from motion sequence frames using ffmpeg
 const generateVideo = async (req, res) => {
   try {
-    const { exec } = require("child_process");
+    const ffmpegPath = require("ffmpeg-static");
+    const ffmpeg = require("fluent-ffmpeg");
+
+    ffmpeg.setFfmpegPath(ffmpegPath);
+
     const word = await Word.findOne({ where: { id: req.params.id } });
     if (!word) {
       return res.status(404).json({ message: "Word not found" });
@@ -1403,7 +1503,7 @@ const generateVideo = async (req, res) => {
 
           // If it's a local file, copy it; otherwise download from URL
           if (frameUrl.startsWith("/")) {
-            const sourcePath = path.join(__dirname, "../../..", frameUrl);
+            const sourcePath = path.join(__dirname, "../..", frameUrl.slice(1));
             if (fs.existsSync(sourcePath)) {
               fs.copyFileSync(sourcePath, framePath);
               framePaths.push(framePath);
@@ -1448,7 +1548,7 @@ const generateVideo = async (req, res) => {
         );
 
         if (sample.file_url.startsWith("/")) {
-          const sourcePath = path.join(__dirname, "../../..", sample.file_url);
+          const sourcePath = path.join(__dirname, "../..", sample.file_url.slice(1));
           if (fs.existsSync(sourcePath)) {
             fs.copyFileSync(sourcePath, framePath);
             framePaths.push(framePath);
@@ -1486,37 +1586,67 @@ const generateVideo = async (req, res) => {
     }
 
     if (framePaths.length === 0) {
+      console.error("generateVideo: No frames found after processing");
+      console.error("  Temp dir:", tempDir);
+      console.error("  __dirname:", __dirname);
+      for (const sample of samples) {
+        if (sample.file_url && !sample.file_url.startsWith("landmark_direct_")) {
+          const urls = sample.file_url.split("|");
+          for (const url of urls) {
+            const expectedPath = path.join(__dirname, "../..", url.startsWith("/") ? url.slice(1) : url);
+            console.error("  Looking for:", expectedPath);
+            console.error("  Exists:", fs.existsSync(expectedPath));
+          }
+        }
+      }
       fs.rmSync(tempDir, { recursive: true, force: true });
       return res.status(400).json({ message: "No image frames found" });
     }
 
-    // Generate video using ffmpeg
+    // Generate video using ffmpeg-static binary with concat demuxer
     const timestamp = Date.now();
     const outputPath = path.join(
       UPLOADS_DIR,
       `motion_${word.id}_${timestamp}.mp4`,
     );
 
-    // Create input file list for ffmpeg (handles filenames with spaces)
+    // Use ffmpeg-static binary directly via execFile
+    const { execFile } = require("child_process");
+    const ffmpegBin = require("ffmpeg-static");
+
+    // Create concat list file with forward slashes (ffmpeg requires this on Windows)
     const fileListPath = path.join(tempDir, "frames.txt");
     const fileListContent = framePaths
-      .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
-      .join("\n");
+      .map((p) => `file '${p.replace(/\\/g, "/").replace(/'/g, "'\\\\''")}'`)
+      .join("\r\n");
     fs.writeFileSync(fileListPath, fileListContent);
 
-    // Use ffmpeg concat demuxer for reliable frame stitching
-    const ffmpegCommand = `ffmpeg -y -framerate 15 -f concat -safe 0 -i "${fileListPath}" -c:v libx264 -pix_fmt yuv420p -vf "scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2" "${outputPath}"`;
+    console.log(`Encoding ${framePaths.length} frames to ${outputPath}`);
 
     await new Promise((resolve, reject) => {
-      exec(ffmpegCommand, (err, stdout, stderr) => {
-        if (err) {
-          console.error("FFmpeg error:", stderr);
-          reject(err);
-        } else {
-          console.log("FFmpeg output:", stdout);
-          resolve();
-        }
-      });
+      execFile(
+        ffmpegBin,
+        [
+          "-y",
+          "-f", "concat",
+          "-safe", "0",
+          "-i", fileListPath,
+          "-framerate", "15",
+          "-c:v", "libx264",
+          "-pix_fmt", "yuv420p",
+          "-vf", "scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2",
+          outputPath,
+        ],
+        (err, stdout, stderr) => {
+          if (err) {
+            console.error("FFmpeg stderr:", stderr);
+            reject(err);
+          } else {
+            console.log("FFmpeg stdout:", stdout);
+            resolve();
+          }
+        },
+      );
     });
 
     // Clean up temp directory
