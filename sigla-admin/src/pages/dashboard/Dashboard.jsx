@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart,
@@ -243,6 +243,45 @@ const SkeletonCard = () => (
     </div>
   </div>
 );
+
+// ── Chart that hides during sidebar transition ──
+const TransitionAwareChart = ({ children }) => {
+  const [isTransitioning, setIsTransitioning] = useState(
+    document.body.classList.contains("sidebar-transitioning"),
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsTransitioning(
+        document.body.classList.contains("sidebar-transitioning"),
+      );
+    });
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  if (isTransitioning) {
+    return (
+      <div
+        style={{
+          height: "300px",
+          background: "#f9fafb",
+          borderRadius: "8px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#9ca3af",
+        }}
+      >
+        <TrendingUp size={32} style={{ opacity: 0.4 }} />
+      </div>
+    );
+  }
+  return children;
+};
 
 // ── Dashboard ──
 const Dashboard = () => {
@@ -622,40 +661,42 @@ const Dashboard = () => {
                   </p>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={chartData}
-                    margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 11, fill: "#9ca3af" }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      tick={{ fontSize: 11, fill: "#9ca3af" }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        fontSize: 12,
-                        borderRadius: 8,
-                        border: "1px solid #e5e7eb",
-                      }}
-                      cursor={{ fill: "#f3f4f6" }}
-                    />
-                    <Bar
-                      dataKey="count"
-                      name="Registrations"
-                      fill={C.primary}
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                <TransitionAwareChart>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 11, fill: "#9ca3af" }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 11, fill: "#9ca3af" }}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          fontSize: 12,
+                          borderRadius: 8,
+                          border: "1px solid #e5e7eb",
+                        }}
+                        cursor={{ fill: "#f3f4f6" }}
+                      />
+                      <Bar
+                        dataKey="count"
+                        name="Registrations"
+                        fill={C.primary}
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </TransitionAwareChart>
               )}
             </div>
           </div>
@@ -1154,4 +1195,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default React.memo(Dashboard);

@@ -1,4 +1,3 @@
-// Sidebar.jsx - icons perfectly centered when collapsed
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -48,7 +47,7 @@ const Sidebar = ({ onToggle }) => {
         background: "#1e3a8a",
         display: "flex",
         flexDirection: "column",
-        transition: transitionStyle,
+        transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         boxShadow: "2px 0 8px rgba(0, 0, 0, 0.1)",
         zIndex: 1000,
         height: "100vh",
@@ -56,6 +55,8 @@ const Sidebar = ({ onToggle }) => {
         left: 0,
         top: 0,
         overflow: "hidden",
+        willChange: "width",
+        transform: "translateZ(0)",
       }}
     >
       {/* Sidebar Header */}
@@ -119,7 +120,7 @@ const Sidebar = ({ onToggle }) => {
       {!collapsed && user?.name && (
         <div
           style={{
-            padding: "12px 24px", // reduced from 16px 24px
+            padding: "12px 24px",
             borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
             flexShrink: 0,
             transition: transitionStyle,
@@ -153,42 +154,27 @@ const Sidebar = ({ onToggle }) => {
             key={path}
             to={path}
             title={collapsed ? label : undefined}
-            style={({ isActive }) => {
-              // Base styles
-              const baseStyles = {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: collapsed ? "center" : "flex-start",
-                gap: collapsed ? 0 : "16px",
-                padding: collapsed ? "12px 0" : "12px 24px",
-                textDecoration: "none",
-                transition: transitionStyle,
-                minHeight: "48px",
-                height: "48px",
-                whiteSpace: "nowrap",
-                background: "transparent",
-                color: "rgba(255, 255, 255, 0.8)",
-                borderLeft: "none",
-              };
-
-              // Active state styling
-              if (isActive) {
-                baseStyles.color = "white";
-                if (collapsed) {
-                  // Collapsed: full background highlight
-                  baseStyles.background = "rgba(255, 255, 255, 0.2)";
-                } else {
-                  // Expanded: left border + subtle background
-                  baseStyles.borderLeft = "3px solid white";
-                  baseStyles.background = "rgba(255, 255, 255, 0.1)";
-                }
-              }
-
-              return baseStyles;
-            }}
+            style={({ isActive }) => ({
+              display: "flex",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
+              gap: collapsed ? 0 : "16px",
+              padding: collapsed ? "12px 0" : "12px 24px",
+              textDecoration: "none",
+              transition: transitionStyle,
+              minHeight: "48px",
+              height: "48px",
+              whiteSpace: "nowrap",
+              background: isActive
+                ? collapsed
+                  ? "rgba(255, 255, 255, 0.2)"
+                  : "rgba(255, 255, 255, 0.1)"
+                : "transparent",
+              color: isActive ? "white" : "rgba(255, 255, 255, 0.8)",
+              borderLeft: isActive && !collapsed ? "3px solid white" : "none",
+            })}
           >
             <Icon size={20} style={{ flexShrink: 0 }} />
-            {/* Only render text when not collapsed */}
             {!collapsed && (
               <span
                 style={{
