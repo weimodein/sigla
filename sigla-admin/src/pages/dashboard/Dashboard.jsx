@@ -565,8 +565,8 @@ const Dashboard = () => {
           <div
             className="dash-card-body"
             style={{
-              maxHeight: "300px",
               display: "flex",
+              maxHeight: "300px",
               flexDirection: "column",
             }}
           >
