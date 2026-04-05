@@ -21,6 +21,8 @@ import {
   adminUploadSamples,
   setWordThumbnail,
   setWordVideo,
+  getMotionSequences,
+  generateVideoFromSequence,
 } from "../../api/wordApi.js";
 import {
   BookOpen,
@@ -123,6 +125,11 @@ const ManageWordBank = () => {
   const [rejectReason, setRejectReason] = useState("");
   const [videoInput, setVideoInput] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
+  const [motionSequences, setMotionSequences] = useState([]);
+  const [motionSequencesLoading, setMotionSequencesLoading] = useState(false);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const [selectedSequences, setSelectedSequences] = useState([]);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
 
   // ── Fetch ───────────────────────────────────────────────────
   const fetchStats = async () => {
@@ -175,9 +182,26 @@ const ManageWordBank = () => {
     setGalleryModal(word);
     setSamplesLoading(true);
     setSamples([]);
+    setMotionSequences([]);
+    setSelectedSequences([]);
+    setGeneratedVideoUrl(null);
     try {
       const data = await getWordSamples(word.id);
       setSamples(data.samples || []);
+      // Fetch motion sequences if this is a motion gesture
+      if (word.gesture_type === "motion") {
+        setMotionSequencesLoading(true);
+        try {
+          const seqData = await getMotionSequences(word.id);
+          setMotionSequences(seqData.sequences || []);
+          // Pre-select all sequences
+          setSelectedSequences(seqData.sequences?.map(s => s.sample_id) || []);
+        } catch (err) {
+          console.error("Failed to load motion sequences:", err);
+        } finally {
+          setMotionSequencesLoading(false);
+        }
+      }
     } catch {
       setSamples([]);
     } finally {
@@ -525,6 +549,38 @@ const ManageWordBank = () => {
     };
     reader.readAsDataURL(file);
     e.target.value = "";
+  };
+
+  // ── Generate video from motion sequences ─────────────────────
+  const handleGenerateVideo = async () => {
+    if (selectedSequences.length === 0) {
+      showError("Please select at least one sequence to generate video");
+      return;
+    }
+
+    setGeneratingVideo(true);
+    try {
+      const res = await generateVideoFromSequence(galleryModal.id, selectedSequences);
+      setGeneratedVideoUrl(res.video_url);
+      showSuccess("Video generated successfully!");
+
+      // Optionally auto-set the generated video as the word's video
+      const fullVideoUrl = res.video_url.startsWith("/")
+        ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${res.video_url}`
+        : res.video_url;
+
+      // Ask user if they want to set this as the word bank video
+      if (window.confirm("Video generated! Would you like to set this as the word bank video for the mobile app?")) {
+        await setWordVideo(galleryModal.id, { video_url: res.video_url });
+        setGalleryModal((prev) => prev ? { ...prev, video_url: res.video_url } : prev);
+        fetchWords();
+        showSuccess("Video set as word bank video");
+      }
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to generate video");
+    } finally {
+      setGeneratingVideo(false);
+    }
   };
 
   // ── Group samples by user ────────────────────────────────────
@@ -887,6 +943,165 @@ const ManageWordBank = () => {
                   </div>
                 </div>
               )
+            )}
+
+            {/* Motion Sequences Section - Only for motion gestures */}
+            {galleryModal.gesture_type === "motion" && (
+              <div className="border border-indigo-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between bg-indigo-50 px-4 py-3 flex-wrap gap-2">
+                  <div className="text-sm font-medium text-indigo-800">
+                    Motion Sequences
+                    <span className="ml-2 text-xs text-indigo-500">
+                      ({motionSequences.length} sequences)
+                    </span>
+                  </div>
+                  {motionSequences.length > 0 && (
+                    <button
+                      onClick={() => handleGenerateVideo()}
+                      disabled={generatingVideo || motionSequences.length === 0}
+                      className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {generatingVideo ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={12} />
+                          Generate Video
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {motionSequencesLoading ? (
+                  <div className="flex items-center justify-center h-24">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
+                  </div>
+                ) : motionSequences.length === 0 ? (
+                  <p className="text-center text-gray-400 text-sm py-6">
+                    No motion sequences available yet
+                  </p>
+                ) : (
+                  <div className="p-4 space-y-4">
+                    {motionSequences.map((seq) => (
+                      <div key={seq.sequence_id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-sm font-medium text-gray-700">
+                            {seq.submitter_name}
+                            <span className="ml-2 text-xs text-gray-400">
+                              {seq.frame_count} frames
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">
+                            {new Date(seq.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        {/* Frame strip preview */}
+                        <div className="flex gap-1 overflow-x-auto pb-2">
+                          {seq.frames.map((frame) => (
+                            <div
+                              key={frame.frame_index}
+                              className="flex-shrink-0 w-16 h-16 rounded border border-gray-200 bg-gray-50 overflow-hidden"
+                            >
+                              {frame.image_url && !frame.image_url.startsWith("landmark_direct_") ? (
+                                <img
+                                  src={
+                                    frame.image_url.startsWith("/")
+                                      ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frame.image_url}`
+                                      : frame.image_url
+                                  }
+                                  alt={`Frame ${frame.frame_index + 1}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = "https://via.placeholder.com/64?text=F" + (frame.frame_index + 1);
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center text-xs text-gray-400">
+                                  <span className="text-lg">🖐</span>
+                                  <span className="text-[10px]">F{frame.frame_index + 1}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Checkbox for video generation */}
+                        <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedSequences.includes(seq.sample_id)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSequences(prev => [...prev, seq.sample_id]);
+                              } else {
+                                setSelectedSequences(prev => prev.filter(id => id !== seq.sample_id));
+                              }
+                            }}
+                          />
+                          Include in video generation
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Generated Video Preview */}
+                {generatedVideoUrl && (
+                  <div className="border-t border-indigo-200 bg-indigo-50 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-sm font-semibold text-indigo-800">Generated Video</span>
+                      <span className="text-xs text-indigo-600">Ready to use</span>
+                    </div>
+                    <video
+                      src={
+                        generatedVideoUrl.startsWith("/")
+                          ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${generatedVideoUrl}`
+                          : generatedVideoUrl
+                      }
+                      controls
+                      className="w-full max-w-md rounded-lg border border-indigo-300 bg-black"
+                      autoPlay
+                      loop
+                    />
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await setWordVideo(galleryModal.id, { video_url: generatedVideoUrl });
+                            setGalleryModal((prev) => prev ? { ...prev, video_url: generatedVideoUrl } : prev);
+                            fetchWords();
+                            showSuccess("Video set as word bank video");
+                          } catch (err) {
+                            showError(err.response?.data?.message || "Failed to set video");
+                          }
+                        }}
+                        className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg"
+                      >
+                        Set as Word Bank Video
+                      </button>
+                      <a
+                        href={
+                          generatedVideoUrl.startsWith("/")
+                            ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${generatedVideoUrl}`
+                            : generatedVideoUrl
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg"
+                      >
+                        Download Video
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {samplesLoading ? (

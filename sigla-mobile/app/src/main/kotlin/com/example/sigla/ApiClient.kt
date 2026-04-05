@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 object ApiClient {
 
     // Change to your backend server address
-    private const val BASE_URL = "http://192.168.100.163:3000/api/"
+    private const val BASE_URL = "http://192.168.100.163:8080/api/"
     val SERVER_URL = BASE_URL.removeSuffix("api/")
 
     /** Resolve a server-relative path (e.g. /uploads/…) to a full URL. */

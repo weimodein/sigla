@@ -104,3 +104,15 @@ export const setWordThumbnail = (wordId, thumbnail_url) =>
 
 export const setWordVideo = (wordId, data) =>
   api.patch(`/words/${wordId}/set-video`, data).then((r) => r.data);
+
+export const getMotionSequences = async (wordId) => {
+  const response = await api.get(`/words/${wordId}/motion-sequences`);
+  return response.data;
+};
+
+export const generateVideoFromSequence = async (wordId, sequenceIds) => {
+  const response = await api.post(`/words/${wordId}/generate-video`, {
+    sequence_ids: sequenceIds,
+  });
+  return response.data;
+};

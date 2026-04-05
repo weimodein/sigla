@@ -16,6 +16,8 @@ const {
   deleteWord,
   uploadSamples,
   getSamples,
+  getMotionSequences,
+  generateVideo,
   approveSample,
   rejectSample,
   approveAllSamplesByUser,
@@ -135,6 +137,10 @@ router.get(
   roleMiddleware("admin", "user"),
   getUserSampleCountForWord,
 );
+
+// ── Motion sequence routes (admin only) ───────────────────────
+router.get("/:id/motion-sequences", roleMiddleware("admin"), getMotionSequences);
+router.post("/:id/generate-video", roleMiddleware("admin"), generateVideo);
 
 // ── Admin word management ─────────────────────────────────────
 router.patch("/:id/set-thumbnail", roleMiddleware("admin"), setThumbnail);

@@ -120,6 +120,18 @@ const checkAndActivateWord = async (word, reviewerId = null) => {
   return reachedThreshold;
 };
 
+// ── Helper: save a base64 image to disk, return its public URL path
+const saveImage = (base64, index) => {
+  try {
+    const filename = `sample_${Date.now()}_${Math.random().toString(36).slice(2, 10)}_${index}.jpg`;
+    const filepath = path.join(UPLOADS_DIR, filename);
+    fs.writeFileSync(filepath, Buffer.from(base64, "base64"));
+    return `/uploads/samples/${filename}`;
+  } catch (e) {
+    return `landmark_direct_${Date.now()}_${index}`;
+  }
+};
+
 // ── GET /api/words ────────────────────────────────────────────
 const getAllWords = async (req, res) => {
   try {
@@ -513,25 +525,11 @@ const uploadSamples = async (req, res) => {
       (sequence && Array.isArray(sequence) && sequence.length > 0);
 
     if (!file_url && !hasLandmarkData) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Either file_url or landmark data (landmarks/sequence) is required",
-        });
+      return res.status(400).json({
+        message:
+          "Either file_url or landmark data (landmarks/sequence) is required",
+      });
     }
-
-    // Helper: save a base64 image to disk, return its public URL path
-    const saveImage = (base64, index) => {
-      try {
-        const filename = `sample_${word.id}_${Date.now()}_${index}.jpg`;
-        const filepath = path.join(UPLOADS_DIR, filename);
-        fs.writeFileSync(filepath, Buffer.from(base64, "base64"));
-        return `/uploads/samples/${filename}`;
-      } catch (e) {
-        return `landmark_direct_${Date.now()}_${index}`;
-      }
-    };
 
     // Derive sample count: if landmark data provided directly, count from the array
     const newCount =
@@ -590,36 +588,50 @@ const uploadSamples = async (req, res) => {
     // so the admin gallery shows individual entries rather than one batched record.
     if (hasLandmarkData) {
       const hasImages = Array.isArray(images) && images.length > 0;
-      const records = landmarks
-        ? landmarks.map((lm, i) => ({
+      const isMotionSequence =
+        sequence && Array.isArray(sequence) && sequence.length > 0;
+
+      if (isMotionSequence) {
+        // Motion: images should be a list of lists (one per sequence)
+        const records = sequence.map((seq, idx) => {
+          const frameImages =
+            hasImages && Array.isArray(images[idx]) ? images[idx] : [];
+          // Save each frame image to disk and join with '|'
+          const imageUrls = frameImages.map((base64, i) =>
+            saveImage(base64, i),
+          );
+          const file_url = imageUrls.join("|"); // e.g., "url1|url2|url3"
+          return {
             word_id: word.id,
             submitted_by: req.user.id,
-            file_url:
-              hasImages && images[i]
-                ? saveImage(images[i], i)
-                : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-            landmarks: lm,
-            sequence: null,
-            sample_count: 1,
-            status: "pending",
-            is_validated: true,
-          }))
-        : sequence.map((seq, i) => ({
-            word_id: word.id,
-            submitted_by: req.user.id,
-            file_url:
-              hasImages && images[i]
-                ? saveImage(images[i], i)
-                : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            file_url: file_url,
             landmarks: null,
             sequence: seq,
-            sample_count: 1,
+            sample_count: seq.length,
             status: "pending",
             is_validated: true,
-          }));
-
-      await GestureSample.bulkCreate(records);
+          };
+        });
+        await GestureSample.bulkCreate(records);
+      } else {
+        // Static: each sample is a single landmark set
+        const records = landmarks.map((lm, i) => ({
+          word_id: word.id,
+          submitted_by: req.user.id,
+          file_url:
+            hasImages && images[i]
+              ? saveImage(images[i], i)
+              : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          landmarks: lm,
+          sequence: null,
+          sample_count: 1,
+          status: "pending",
+          is_validated: true,
+        }));
+        await GestureSample.bulkCreate(records);
+      }
     } else {
+      // Old style: single file upload (not landmark data)
       await GestureSample.create({
         word_id: word.id,
         submitted_by: req.user.id,
@@ -1250,32 +1262,277 @@ const rejectAllSamplesForWord = async (req, res) => {
   }
 };
 
-module.exports = {
-  getAllWords,
-  getWordStats,
-  getWordById,
-  submitWord,
-  adminAddWord,
-  adminUploadSamples,
-  approveWord,
-  rejectWord,
-  updateWord,
-  deleteWord,
-  uploadSamples,
-  getSamples,
-  approveSample,
-  rejectSample,
-  approveAllSamplesByUser,
-  rejectAllSamplesByUser,
-  approveAllSamplesForWord,
-  rejectAllSamplesForWord,
-  approveSubmission,
-  rejectSubmission,
-  lockWord,
-  unlockWord,
-  getUserSampleCountForWord,
-  setThumbnail,
-  setVideo,
+// ── GET /api/words/:id/motion-sequences ───────────────────────
+// Returns motion gesture samples grouped by sequence with frame URLs
+const getMotionSequences = async (req, res) => {
+  try {
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) {
+      return res.status(404).json({ message: "Word not found" });
+    }
+
+    if (word.gesture_type !== "motion") {
+      return res
+        .status(400)
+        .json({ message: "Only available for motion gestures" });
+    }
+
+    const samples = await GestureSample.findAll({
+      where: { word_id: word.id, status: "approved" },
+      include: [
+        { model: User, as: "submitter", attributes: ["id", "username"] },
+      ],
+      order: [["created_at", "ASC"]],
+    });
+
+    const sequences = [];
+
+    for (const sample of samples) {
+      if (sample.sequence && Array.isArray(sample.sequence)) {
+        const frameCount = sample.sequence.length;
+        let frameUrls = [];
+
+        // Split file_url by '|' to get individual frame image URLs
+        if (sample.file_url && sample.file_url.includes("|")) {
+          frameUrls = sample.file_url.split("|");
+        } else if (sample.file_url) {
+          // Single URL - use for all frames as fallback
+          frameUrls = Array(frameCount).fill(sample.file_url);
+        }
+
+        // Build frame objects
+        const frames = [];
+        for (let i = 0; i < frameCount; i++) {
+          frames.push({
+            frame_index: i,
+            landmarks: sample.sequence[i],
+            image_url: frameUrls[i] || null,
+          });
+        }
+
+        sequences.push({
+          sequence_id: `seq_${sample.id}`,
+          sample_id: sample.id,
+          submitter_id: sample.submitter?.id || null,
+          submitter_name: sample.submitter?.username || "Admin",
+          frame_count: frames.length,
+          frames: frames,
+          created_at: sample.created_at,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      sequences,
+      total_sequences: sequences.length,
+    });
+  } catch (err) {
+    console.error("Get motion sequences error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ── POST /api/words/:id/generate-video ────────────────────────
+// Generates a video from motion sequence frames using ffmpeg
+const generateVideo = async (req, res) => {
+  try {
+    const { exec } = require("child_process");
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) {
+      return res.status(404).json({ message: "Word not found" });
+    }
+
+    if (word.gesture_type !== "motion") {
+      return res
+        .status(400)
+        .json({ message: "Only available for motion gestures" });
+    }
+
+    const { sequence_ids } = req.body;
+    if (
+      !sequence_ids ||
+      !Array.isArray(sequence_ids) ||
+      sequence_ids.length === 0
+    ) {
+      return res.status(400).json({ message: "sequence_ids is required" });
+    }
+
+    // Get the samples for these sequences
+    const samples = await GestureSample.findAll({
+      where: {
+        word_id: word.id,
+        id: sequence_ids,
+        status: "approved",
+      },
+      order: [["created_at", "ASC"]],
+    });
+
+    if (samples.length === 0) {
+      return res.status(400).json({ message: "No valid samples found" });
+    }
+
+    // Create temp directory for frames
+    const tempDir = path.join(UPLOADS_DIR, "temp", `video_${Date.now()}`);
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+    const framePaths = [];
+    let frameIndex = 0;
+
+    // Process each sample - each sample contains a sequence of frames
+    for (const sample of samples) {
+      if (sample.sequence && Array.isArray(sample.sequence)) {
+        // Parse file_url to extract individual frame URLs (pipe-separated)
+        let frameUrls = [];
+        if (sample.file_url && sample.file_url.includes("|")) {
+          frameUrls = sample.file_url.split("|");
+        } else if (sample.file_url) {
+          // Single URL - replicate for all frames in sequence
+          frameUrls = Array(sample.sequence.length).fill(sample.file_url);
+        }
+
+        // Process each frame in the sequence
+        for (let i = 0; i < sample.sequence.length; i++) {
+          const frameUrl = frameUrls[i] || sample.file_url;
+          if (!frameUrl) continue;
+
+          const ext = path.extname(frameUrl.split("|")[0]) || ".jpg";
+          const framePath = path.join(
+            tempDir,
+            `frame_${frameIndex.toString().padStart(4, "0")}${ext}`,
+          );
+
+          // If it's a local file, copy it; otherwise download from URL
+          if (frameUrl.startsWith("/")) {
+            const sourcePath = path.join(__dirname, "../../..", frameUrl);
+            if (fs.existsSync(sourcePath)) {
+              fs.copyFileSync(sourcePath, framePath);
+              framePaths.push(framePath);
+              frameIndex++;
+            }
+          } else {
+            // Download from URL
+            try {
+              const https = require("https");
+              const file = fs.createWriteStream(framePath);
+              await new Promise((resolve, reject) => {
+                https
+                  .get(frameUrl, (response) => {
+                    response.pipe(file);
+                    file.on("finish", () => {
+                      file.close();
+                      framePaths.push(framePath);
+                      frameIndex++;
+                      resolve();
+                    });
+                  })
+                  .on("error", (err) => {
+                    fs.unlink(framePath, () => {});
+                    reject(err);
+                  });
+              });
+            } catch (downloadErr) {
+              console.error(
+                "Failed to download frame:",
+                frameUrl,
+                downloadErr.message,
+              );
+            }
+          }
+        }
+      } else if (sample.file_url) {
+        // Fallback: sample without sequence data, treat as single frame
+        const ext = path.extname(sample.file_url) || ".jpg";
+        const framePath = path.join(
+          tempDir,
+          `frame_${frameIndex.toString().padStart(4, "0")}${ext}`,
+        );
+
+        if (sample.file_url.startsWith("/")) {
+          const sourcePath = path.join(__dirname, "../../..", sample.file_url);
+          if (fs.existsSync(sourcePath)) {
+            fs.copyFileSync(sourcePath, framePath);
+            framePaths.push(framePath);
+            frameIndex++;
+          }
+        } else {
+          try {
+            const https = require("https");
+            const file = fs.createWriteStream(framePath);
+            await new Promise((resolve, reject) => {
+              https
+                .get(sample.file_url, (response) => {
+                  response.pipe(file);
+                  file.on("finish", () => {
+                    file.close();
+                    framePaths.push(framePath);
+                    frameIndex++;
+                    resolve();
+                  });
+                })
+                .on("error", (err) => {
+                  fs.unlink(framePath, () => {});
+                  reject(err);
+                });
+            });
+          } catch (downloadErr) {
+            console.error(
+              "Failed to download frame:",
+              sample.file_url,
+              downloadErr.message,
+            );
+          }
+        }
+      }
+    }
+
+    if (framePaths.length === 0) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      return res.status(400).json({ message: "No image frames found" });
+    }
+
+    // Generate video using ffmpeg
+    const timestamp = Date.now();
+    const outputPath = path.join(
+      UPLOADS_DIR,
+      `motion_${word.id}_${timestamp}.mp4`,
+    );
+
+    // Create input file list for ffmpeg (handles filenames with spaces)
+    const fileListPath = path.join(tempDir, "frames.txt");
+    const fileListContent = framePaths
+      .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
+      .join("\n");
+    fs.writeFileSync(fileListPath, fileListContent);
+
+    // Use ffmpeg concat demuxer for reliable frame stitching
+    const ffmpegCommand = `ffmpeg -y -framerate 15 -f concat -safe 0 -i "${fileListPath}" -c:v libx264 -pix_fmt yuv420p -vf "scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2" "${outputPath}"`;
+
+    await new Promise((resolve, reject) => {
+      exec(ffmpegCommand, (err, stdout, stderr) => {
+        if (err) {
+          console.error("FFmpeg error:", stderr);
+          reject(err);
+        } else {
+          console.log("FFmpeg output:", stdout);
+          resolve();
+        }
+      });
+    });
+
+    // Clean up temp directory
+    fs.rmSync(tempDir, { recursive: true, force: true });
+
+    // Return the video URL
+    const videoUrl = `/uploads/samples/motion_${word.id}_${timestamp}.mp4`;
+
+    return res.status(200).json({
+      message: "Video generated successfully",
+      video_url: videoUrl,
+    });
+  } catch (err) {
+    console.error("Generate video error:", err);
+    return res.status(500).json({ message: "Server error: " + err.message });
+  }
 };
 
 // ── PATCH /api/words/:id/set-thumbnail ───────────────────────
@@ -1339,3 +1596,33 @@ async function setVideo(req, res) {
     return res.status(500).json({ message: "Server error" });
   }
 }
+
+module.exports = {
+  getAllWords,
+  getWordStats,
+  getWordById,
+  submitWord,
+  adminAddWord,
+  adminUploadSamples,
+  approveWord,
+  rejectWord,
+  updateWord,
+  deleteWord,
+  uploadSamples,
+  getSamples,
+  getMotionSequences,
+  generateVideo,
+  approveSample,
+  rejectSample,
+  approveAllSamplesByUser,
+  rejectAllSamplesByUser,
+  approveAllSamplesForWord,
+  rejectAllSamplesForWord,
+  approveSubmission,
+  rejectSubmission,
+  lockWord,
+  unlockWord,
+  getUserSampleCountForWord,
+  setThumbnail,
+  setVideo,
+};

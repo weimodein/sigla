@@ -72,13 +72,14 @@ data class SubmitWordResponse(
     val exists: Boolean = false
 )
 
+// FIX: Changed images type from List<String>? to Any? to accept both flat and nested lists
 data class UploadSamplesRequest(
     val file_url: String? = null,
     val landmark_url: String? = null,
     val sample_count: Int,
     val landmarks: List<List<Float>>? = null,
     val sequence: List<List<List<Float>>>? = null,
-    val images: List<String>? = null
+    val images: Any? = null   // Can be List<String> (static) or List<List<String>> (motion)
 )
 
 data class ModelInfo(
