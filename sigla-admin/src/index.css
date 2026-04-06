@@ -102,5 +102,6 @@
 .badge-ready { background: #d1ecf1; color: #0c5460; }
 .badge-completed { background: #d4edda; color: #155724; }
 .badge-rejected { background: #f8d7da; color: #721c24; }
+.badge-approved { background: #d4edda; color: #155724; }
 @keyframes dash-spin { to { transform: rotate(360deg); } }
 

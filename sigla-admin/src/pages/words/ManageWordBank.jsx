@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   getAllWords,
   getWordStats,
@@ -103,6 +104,8 @@ const Modal = ({ title, onClose, children, wide = false }) => (
 
 // ── Main Component ────────────────────────────────────────────
 const ManageWordBank = () => {
+  const [searchParams] = useSearchParams();
+  const wordIdRef = useRef(searchParams.get("wordId"));
   const [activeTab, setActiveTab] = useState("all");
   const [stats, setStats] = useState(null);
   const [words, setWords] = useState([]);
@@ -159,6 +162,17 @@ const ManageWordBank = () => {
 
   useEffect(() => { fetchStats(); }, []);
   useEffect(() => { fetchWords(); }, [activeTab, search, filterCat]);
+
+  // Open gallery for wordId from URL query param (e.g. from Dashboard pending reviews)
+  useEffect(() => {
+    if (wordIdRef.current && words.length > 0 && !galleryModal) {
+      const word = words.find((w) => String(w.id) === wordIdRef.current);
+      if (word) {
+        handleOpenGallery(word);
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+  }, [words, galleryModal]);
 
   const showSuccess = (msg) => toast.success(msg);
   const showError = (msg) => toast.error(msg);

@@ -60,6 +60,11 @@ export const updateUser = async (id, data) => {
   return response.data;
 };
 
+export const createUser = async (data) => {
+  const response = await api.post("/users", data);
+  return response.data;
+};
+
 export const getUserRegistrations = async (period = "month") => {
   const response = await api.get("/users/registrations", { params: { period } });
   return response.data;

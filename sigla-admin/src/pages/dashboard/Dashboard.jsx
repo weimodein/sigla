@@ -183,6 +183,8 @@ const Dashboard = () => {
     fetchAll();
   }, [toast]);
 
+  const [recentReviews, setRecentReviews] = useState([]);
+
   const fetchRegistrations = useCallback(async (period) => {
     try {
       const res = await getUserRegistrations(period);
@@ -191,6 +193,38 @@ const Dashboard = () => {
       setRegistrations([]);
     }
   }, []);
+
+  // Fetch recently approved and rejected words
+  const fetchRecentReviews = useCallback(async () => {
+    try {
+      const [approved, rejected] = await Promise.all([
+        getAllWords({ status: "approved", limit: 10 }),
+        getAllWords({ status: "rejected", limit: 10 }),
+      ]);
+      const combined = [
+        ...(approved.words || []).map((w) => ({
+          ...w,
+          reviewStatus: "approved",
+        })),
+        ...(rejected.words || []).map((w) => ({
+          ...w,
+          reviewStatus: "rejected",
+        })),
+      ];
+      combined.sort(
+        (a, b) =>
+          new Date(b.reviewed_at ?? b.updated_at) -
+          new Date(a.reviewed_at ?? a.updated_at),
+      );
+      setRecentReviews(combined.slice(0, 10));
+    } catch {
+      setRecentReviews([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRecentReviews();
+  }, [fetchRecentReviews]);
 
   useEffect(() => {
     fetchRegistrations(regPeriod);
@@ -284,6 +318,17 @@ const Dashboard = () => {
         badge: "pending",
         badgeText: "pending",
         date: word.created_at || word.updated_at || Date.now(),
+      });
+    });
+
+    recentReviews.forEach((word) => {
+      activities.push({
+        id: `review-${word.id}`,
+        label: `${word.reviewStatus === "approved" ? "Approved" : "Rejected"}: ${word.label}`,
+        description: `${word.reviewStatus === "approved" ? "Word approved and added to word bank" : "Word rejected — submitter notified"}`,
+        badge: word.reviewStatus === "approved" ? "approved" : "rejected",
+        badgeText: word.reviewStatus,
+        date: word.reviewed_at || word.updated_at || Date.now(),
       });
     });
 
@@ -854,7 +899,9 @@ const Dashboard = () => {
                       </span>
                     </div>
                     <button
-                      onClick={() => navigate("/word_bank")}
+                      onClick={() =>
+                        navigate(`/word_bank?status=pending&wordId=${word.id}`)
+                      }
                       style={{
                         background: "none",
                         border: `2px solid ${C.primary}`,

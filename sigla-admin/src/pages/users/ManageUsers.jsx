@@ -10,6 +10,7 @@ import {
   reactivateUser,
   deleteUser,
   updateUser,
+  createUser,
 } from "../../api/userApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
@@ -26,6 +27,7 @@ import {
   ChevronsRight,
   ChevronLeft,
   ChevronRight,
+  UserPlus,
 } from "lucide-react";
 
 // ── Color Palette ────────────────────────────────────────────
@@ -340,6 +342,12 @@ const ManageUsers = () => {
 
   // Modal state
   const [editModal, setEditModal] = useState(null);
+  const [createModal, setCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    username: "",
+    email: "",
+    password: "",
+  });
   const [warnModal, setWarnModal] = useState(null);
   const [warnReason, setWarnReason] = useState("");
 
@@ -417,6 +425,31 @@ const ManageUsers = () => {
     (page - 1) * pageSize,
     page * pageSize,
   );
+
+  // ── Create User ──────────────────────────────────────────────
+  const handleCreateUser = async () => {
+    if (!createForm.username.trim() || !createForm.email.trim() || !createForm.password.trim()) {
+      showError("All fields are required");
+      return;
+    }
+    if (createForm.password.length < 6) {
+      showError("Password must be at least 6 characters");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await createUser(createForm);
+      showSuccess("User created successfully");
+      setCreateModal(false);
+      setCreateForm({ username: "", email: "", password: "" });
+      fetchStats();
+      fetchTabData();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to create user");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // ── Actions ─────────────────────────────────────────────────
   const showSuccess = (msg) => toast.success(msg);
@@ -705,6 +738,27 @@ const ManageUsers = () => {
             Manage user accounts and access
           </p>
         </div>
+        <button
+          onClick={() => setCreateModal(true)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "8px 16px",
+            background: C.primary,
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "0.85rem",
+            fontWeight: 500,
+            cursor: "pointer",
+            transition: "background 0.2s",
+            fontFamily: "inherit",
+          }}
+        >
+          <UserPlus size={16} />
+          Create User
+        </button>
       </div>
 
       {/* Stat Cards */}
@@ -1058,6 +1112,97 @@ const ManageUsers = () => {
               </button>
               <button
                 onClick={() => setEditModal(null)}
+                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
+                style={{ borderColor: C.border, color: "#4b5563" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Create User Modal */}
+      {createModal && (
+        <Modal title="Create New User" onClose={() => setCreateModal(false)}>
+          <div className="space-y-3">
+            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
+              Create a user account directly. This bypasses email verification and the account is immediately active.
+            </p>
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Username
+              </label>
+              <input
+                type="text"
+                value={createForm.username}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, username: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+            </div>
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Email
+              </label>
+              <input
+                type="email"
+                value={createForm.email}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, email: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+            </div>
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Password
+              </label>
+              <input
+                type="password"
+                value={createForm.password}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, password: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleCreateUser}
+                disabled={actionLoading}
+                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ background: C.primary, color: "#fff" }}
+              >
+                {actionLoading ? "Creating..." : "Create User"}
+              </button>
+              <button
+                onClick={() => setCreateModal(false)}
                 className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
                 style={{ borderColor: C.border, color: "#4b5563" }}
               >
