@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
@@ -31,7 +32,9 @@ class WordBankActivity : AppCompatActivity() {
     private lateinit var progressLoading: ProgressBar
     private lateinit var spinnerCategory: Spinner
     private lateinit var etSearch: TextInputEditText
+    private lateinit var btnCategoryOptions: MaterialButton
     private lateinit var adapter: WordAdapter
+    private lateinit var customCategoryManager: CustomCategoryManager
 
     private var allWords = listOf<WordBankWord>()
     private var tts: TextToSpeech? = null
@@ -40,7 +43,11 @@ class WordBankActivity : AppCompatActivity() {
     // Active media dialog (kept to stop video on dismiss)
     private var mediaDialog: Dialog? = null
 
-    private val categories = listOf(
+    // Parallel lists: display names and IDs (null = default category, UUID = custom)
+    private var categoryDisplayNames = mutableListOf<String>()
+    private var categoryIds = mutableListOf<String?>()
+
+    private val defaultCategories = listOf(
         "All Categories",
         "Introducing Oneself",
         "Ordering Food",
@@ -66,6 +73,12 @@ class WordBankActivity : AppCompatActivity() {
         progressLoading = findViewById(R.id.progressLoading)
         spinnerCategory = findViewById(R.id.spinnerCategory)
         etSearch = findViewById(R.id.etSearch)
+        btnCategoryOptions = findViewById(R.id.btnCategoryOptions)
+
+        customCategoryManager = CustomCategoryManager.getInstance(this)
+
+        // Back button
+        findViewById<MaterialButton>(R.id.btnBack).setOnClickListener { finish() }
 
         // Sidebar
         val sidebar = drawerLayout.getChildAt(1)
@@ -90,15 +103,28 @@ class WordBankActivity : AppCompatActivity() {
         rvWords.layoutManager = LinearLayoutManager(this)
         rvWords.adapter = adapter
 
-        // Category spinner
-        val spinnerAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, categories)
-        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerCategory.adapter = spinnerAdapter
+        // Category spinner (dynamic)
+        refreshCategorySpinner(keepSelection = false)
         spinnerCategory.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, v: View?, position: Int, id: Long) {
+                val selectedId = categoryIds.getOrNull(position)
+                btnCategoryOptions.visibility = if (selectedId != null) View.VISIBLE else View.GONE
                 applyFilters()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // New category button
+        findViewById<MaterialButton>(R.id.btnNewCategory).setOnClickListener {
+            showCreateCategoryDialog()
+        }
+
+        // Category options button (rename / delete)
+        btnCategoryOptions.setOnClickListener { view ->
+            val position = spinnerCategory.selectedItemPosition
+            val selectedId = categoryIds.getOrNull(position) ?: return@setOnClickListener
+            val selectedName = categoryDisplayNames.getOrNull(position) ?: return@setOnClickListener
+            showCategoryOptionsMenu(view, selectedId, selectedName)
         }
 
         // Search
@@ -110,6 +136,106 @@ class WordBankActivity : AppCompatActivity() {
 
         loadWords()
     }
+
+    // ── Category spinner ──────────────────────────────────────────
+
+    private fun refreshCategorySpinner(keepSelection: Boolean = true) {
+        val previousSelection = if (keepSelection) spinnerCategory.selectedItemPosition else 0
+
+        categoryDisplayNames.clear()
+        categoryIds.clear()
+
+        defaultCategories.forEach { name ->
+            categoryDisplayNames.add(name)
+            categoryIds.add(null)
+        }
+        customCategoryManager.getAll().forEach { cat ->
+            categoryDisplayNames.add(cat.name)
+            categoryIds.add(cat.id)
+        }
+
+        val spinnerAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            categoryDisplayNames
+        )
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerCategory.adapter = spinnerAdapter
+
+        val restorePosition = previousSelection.coerceAtMost(categoryDisplayNames.size - 1)
+        spinnerCategory.setSelection(restorePosition)
+
+        val restoredId = categoryIds.getOrNull(restorePosition)
+        btnCategoryOptions.visibility = if (restoredId != null) View.VISIBLE else View.GONE
+    }
+
+    private fun showCreateCategoryDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_manage_category, null)
+        val etName = view.findViewById<TextInputEditText>(R.id.etCategoryName)
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.create_category))
+            .setView(view)
+            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
+                val name = etName.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    customCategoryManager.create(name)
+                    refreshCategorySpinner(keepSelection = true)
+                    // Select the new category (last item)
+                    spinnerCategory.setSelection(categoryDisplayNames.size - 1)
+                }
+            }
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .show()
+    }
+
+    private fun showCategoryOptionsMenu(anchor: View, categoryId: String, categoryName: String) {
+        val popup = android.widget.PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, getString(R.string.rename_category))
+        popup.menu.add(0, 2, 1, getString(R.string.delete_category))
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> showRenameCategoryDialog(categoryId, categoryName)
+                2 -> showDeleteCategoryDialog(categoryId, categoryName)
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun showRenameCategoryDialog(categoryId: String, currentName: String) {
+        val view = layoutInflater.inflate(R.layout.dialog_manage_category, null)
+        val etName = view.findViewById<TextInputEditText>(R.id.etCategoryName)
+        etName.setText(currentName)
+        etName.setSelection(currentName.length)
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.rename_category))
+            .setView(view)
+            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
+                val newName = etName.text.toString().trim()
+                if (newName.isNotEmpty()) {
+                    customCategoryManager.rename(categoryId, newName)
+                    refreshCategorySpinner(keepSelection = true)
+                }
+            }
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .show()
+    }
+
+    private fun showDeleteCategoryDialog(categoryId: String, categoryName: String) {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.delete_category))
+            .setMessage(getString(R.string.delete_category_confirm, categoryName))
+            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
+                customCategoryManager.delete(categoryId)
+                refreshCategorySpinner(keepSelection = false)
+            }
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .show()
+    }
+
+    // ── Words ─────────────────────────────────────────────────────
 
     private fun loadWords() {
         progressLoading.visibility = View.VISIBLE
@@ -152,12 +278,20 @@ class WordBankActivity : AppCompatActivity() {
     }
 
     private fun applyFilters() {
-        val selectedCategory = spinnerCategory.selectedItem?.toString() ?: "All Categories"
+        val selectedPosition = spinnerCategory.selectedItemPosition
+        val selectedId = categoryIds.getOrNull(selectedPosition)
+        val selectedName = categoryDisplayNames.getOrNull(selectedPosition) ?: "All Categories"
         val searchQuery = etSearch.text.toString().trim().lowercase()
 
         val filtered = allWords.filter { word ->
-            val matchesCategory = selectedCategory == "All Categories" ||
-                    word.category.equals(selectedCategory, ignoreCase = true)
+            val matchesCategory = when {
+                selectedName == "All Categories" -> true
+                selectedId != null -> {
+                    // Custom category: filter by stored word IDs
+                    word.id in customCategoryManager.getWordsFor(selectedId)
+                }
+                else -> word.category.equals(selectedName, ignoreCase = true)
+            }
             val matchesSearch = searchQuery.isEmpty() ||
                     word.label.lowercase().contains(searchQuery) ||
                     word.filipino_translation?.lowercase()?.contains(searchQuery) == true ||
@@ -216,6 +350,11 @@ class WordBankActivity : AppCompatActivity() {
         // Audio button
         view.findViewById<MaterialButton>(R.id.btnMediaAudio).setOnClickListener {
             speakWord(word.label)
+        }
+
+        // Add to category button
+        view.findViewById<MaterialButton>(R.id.btnAddToCategory).setOnClickListener {
+            showAddToCategoryDialog(word)
         }
 
         // Video or image
@@ -278,6 +417,34 @@ class WordBankActivity : AppCompatActivity() {
 
         dialog.show()
         mediaDialog = dialog
+    }
+
+    private fun showAddToCategoryDialog(word: WordBankWord) {
+        val categories = customCategoryManager.getAll()
+        if (categories.isEmpty()) {
+            Toast.makeText(this, getString(R.string.no_custom_categories), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val names = categories.map { it.name }.toTypedArray()
+        val checked = BooleanArray(categories.size) { i -> word.id in categories[i].wordIds }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.add_to_category))
+            .setMultiChoiceItems(names, checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
+                categories.forEachIndexed { i, cat ->
+                    if (checked[i]) customCategoryManager.addWord(cat.id, word.id)
+                    else customCategoryManager.removeWord(cat.id, word.id)
+                }
+                // Refresh list if currently viewing a custom category
+                val selectedId = categoryIds.getOrNull(spinnerCategory.selectedItemPosition)
+                if (selectedId != null) applyFilters()
+            }
+            .setNegativeButton(getString(android.R.string.cancel), null)
+            .show()
     }
 
     private fun speakWord(word: String) {

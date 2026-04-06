@@ -153,5 +153,17 @@
             app:backgroundTint="@color/colorSurfaceVariant"
             android:textColor="@color/colorTextPrimary"
             xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+        <!-- Add to custom category button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddToCategory"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:text="@string/add_to_category"
+            android:textSize="14sp"
+            android:layout_marginTop="8dp"
+            app:backgroundTint="@color/colorSurfaceVariant"
+            android:textColor="@color/colorTextPrimary"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
     </LinearLayout>
 </LinearLayout>

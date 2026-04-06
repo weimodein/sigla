@@ -20,7 +20,18 @@
             android:gravity="center_vertical"
             android:background="@color/colorSurface"
             android:paddingStart="4dp"
-            android:paddingEnd="16dp">
+            android:paddingEnd="4dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnBack"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="&#x2190;"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="20sp"
+                android:padding="0dp"
+                android:contentDescription="Back" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnMenu"
@@ -58,17 +69,49 @@
                 android:textColor="@color/colorTextPrimary" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Category spinner -->
-        <Spinner
-            android:id="@+id/spinnerCategory"
+        <!-- Category row: spinner + new category button + options button -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="48dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:layout_marginStart="12dp"
             android:layout_marginEnd="12dp"
-            android:layout_marginBottom="8dp"
-            android:background="@color/colorSurfaceVariant"
-            android:padding="12dp"
-            android:popupBackground="@color/colorSurface" />
+            android:layout_marginBottom="8dp">
+
+            <Spinner
+                android:id="@+id/spinnerCategory"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@color/colorSurfaceVariant"
+                android:padding="12dp"
+                android:popupBackground="@color/colorSurface" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnNewCategory"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="&#x2b;"
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="20sp"
+                android:padding="0dp"
+                android:layout_marginStart="4dp"
+                android:contentDescription="@string/create_category" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCategoryOptions"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="&#x22EE;"
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="20sp"
+                android:padding="0dp"
+                android:visibility="gone"
+                android:contentDescription="Category options" />
+        </LinearLayout>
 
         <!-- Word list -->
         <androidx.recyclerview.widget.RecyclerView
