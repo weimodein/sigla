@@ -73,7 +73,6 @@ const Badge = ({ value }) => {
     approved: "bg-green-100 text-green-700",
     rejected: "bg-red-100 text-red-700",
     FSL: "bg-blue-100 text-blue-700",
-    ASL: "bg-purple-100 text-purple-700",
     static: "bg-gray-100 text-gray-600",
     motion: "bg-indigo-100 text-indigo-700",
   };
@@ -110,7 +109,7 @@ const ManageWordBank = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState("");
-  const [filterSign, setFilterSign] = useState("");
+
   const [filterCat, setFilterCat] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -148,7 +147,6 @@ const ManageWordBank = () => {
       const params = {};
       if (activeTab !== "all") params.status = activeTab;
       if (search) params.search = search;
-      if (filterSign) params.sign_type = filterSign;
       if (filterCat) params.category = filterCat;
       const data = await getAllWords(params);
       setWords(data.words || []);
@@ -160,7 +158,7 @@ const ManageWordBank = () => {
   };
 
   useEffect(() => { fetchStats(); }, []);
-  useEffect(() => { fetchWords(); }, [activeTab, search, filterSign, filterCat]);
+  useEffect(() => { fetchWords(); }, [activeTab, search, filterCat]);
 
   const showSuccess = (msg) => toast.success(msg);
   const showError = (msg) => toast.error(msg);
@@ -666,15 +664,6 @@ const ManageWordBank = () => {
             className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900"
           />
         </div>
-        <select
-          value={filterSign}
-          onChange={(e) => setFilterSign(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900"
-        >
-          <option value="">All Sign Types</option>
-          <option value="FSL">FSL</option>
-          <option value="ASL">ASL</option>
-        </select>
         <select
           value={filterCat}
           onChange={(e) => setFilterCat(e.target.value)}
