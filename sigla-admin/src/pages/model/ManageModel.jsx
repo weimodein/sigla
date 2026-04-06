@@ -10,7 +10,31 @@ import {
 } from "../../api/modelApi.js";
 import { getWordStats } from "../../api/wordApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
-import { Cpu, CheckCircle, Clock, X, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import {
+  Cpu,
+  CheckCircle,
+  Clock,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
+
+// ── Color Palette ──
+const C = {
+  text: "#1f2937",
+  background: "#f3f4f6",
+  primary: "#1e3a8a",
+  secondary: "#1d4ed8",
+  accent: "#3f8efc",
+  muted: "#9ca3af",
+  border: "#e5e7eb",
+  green: "#22c55e",
+  yellow: "#f59e0b",
+  red: "#ef4444",
+  orange: "#f97316",
+};
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
@@ -36,30 +60,58 @@ const SkeletonCard = () => (
   </div>
 );
 
-const SkeletonTableRows = ({ rows = 5 }) =>
-  Array.from({ length: rows }).map((_, i) => (
-    <tr key={i} className="border-t">
-      {Array.from({ length: 10 }).map((_, j) => (
-        <td key={j} className="px-4 py-3">
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
-        </td>
-      ))}
-    </tr>
-  ));
-
 // ── Badge ─────────────────────────────────────────────────────
 const Badge = ({ value }) => {
-  const styles = {
-    deployed: "bg-green-100 text-green-700",
-    trained: "bg-yellow-100 text-yellow-700",
-    inactive: "bg-gray-100 text-gray-500",
+  const map = {
+    deployed: "#16a34a",
+    trained: "#d97706",
+    inactive: "#6b7280",
   };
+  const bg = map[value] || C.muted;
   return (
     <span
-      className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[value] || "bg-gray-100 text-gray-600"}`}
+      className="px-2.5 py-1 rounded-full text-xs font-semibold"
+      style={{ background: bg + "18", color: bg }}
     >
       {value}
     </span>
+  );
+};
+
+// ── MetricBox (for expanded row) ──────────────────────────────
+const MetricBox = ({ label, value, color }) => (
+  <div style={{ background: "#f3f4f6", borderRadius: "8px", padding: "12px" }}>
+    <p className="text-xs" style={{ color: "#6b7280" }}>
+      {label}
+    </p>
+    <p className="text-lg font-bold" style={{ color }}>
+      {value}
+    </p>
+  </div>
+);
+
+// ── SortableHeader ────────────────────────────────────────────
+const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
+  const active = sortField === sortKey;
+  return (
+    <th
+      className="px-4 py-3 cursor-pointer select-none hover:bg-gray-100"
+      style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280" }}
+      onClick={() => onSort && onSort(sortKey)}
+    >
+      <div className="flex items-center gap-1">
+        <span>{label}</span>
+        {active ? (
+          sortDir === "asc" ? (
+            <ChevronUp size={14} className="text-blue-900" />
+          ) : (
+            <ChevronDown size={14} className="text-blue-900" />
+          )
+        ) : (
+          <ChevronUp size={14} className="opacity-20" />
+        )}
+      </div>
+    </th>
   );
 };
 
@@ -98,6 +150,8 @@ const ManageModel = () => {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -160,9 +214,18 @@ const ManageModel = () => {
     return 0;
   });
 
+  // ── Search filter ───────────────────────────────────────────
+  const filteredModels = searchTerm
+    ? sortedModels.filter(
+        (m) =>
+          m.version_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          m.trainer?.username?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [...sortedModels];
+
   // ── Paginate ────────────────────────────────────────────────
-  const totalPages = Math.ceil(sortedModels.length / pageSize);
-  const paginatedModels = sortedModels.slice(
+  const totalPages = Math.ceil(filteredModels.length / pageSize);
+  const paginatedModels = filteredModels.slice(
     (page - 1) * pageSize,
     page * pageSize
   );
@@ -284,40 +347,45 @@ const ManageModel = () => {
   // ── Format metric ─────────────────────────────────────────
   const fmt = (val) => (val != null ? `${(val * 100).toFixed(1)}%` : "—");
 
-  // ── Sortable Header ───────────────────────────────────────
-  const SortableHeader = ({ label, sortKey }) => {
-    const active = sortField === sortKey;
-    return (
-      <th
-        className="px-4 py-3 cursor-pointer select-none group hover:bg-gray-100"
-        onClick={() => handleSort(sortKey)}
-      >
-        <div className="flex items-center gap-1">
-          {label}
-          <span className="text-gray-400">
-            {active ? (
-              sortDir === "asc" ? (
-                <ChevronLeft size={14} className="rotate-[-90deg]" />
-              ) : (
-                <ChevronLeft size={14} className="rotate-90" />
-              )
-            ) : (
-              <ChevronUp size={14} className="opacity-0 group-hover:opacity-50" />
-            )}
-          </span>
-        </div>
-      </th>
-    );
+  // ── Format metric (for inline use) ──────────────────────────
+  const getMetricColor = (val) => {
+    if (val == null) return "#9ca3af";
+    const pct = val * 100;
+    if (pct >= 80) return "#16a34a";
+    if (pct >= 60) return "#ca8a04";
+    return "#dc2626";
   };
 
   // ── JSX ───────────────────────────────────────────────────
   return (
     <div>
       {/* Header */}
-      <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+      <div
+        style={{
+          marginBottom: "24px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
         <div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>Manage Model</h1>
-          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: 4 }}>
+          <h1
+            style={{
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              color: C.text,
+              margin: 0,
+            }}
+          >
+            Manage Model
+          </h1>
+          <p
+            style={{
+              fontSize: "0.9rem",
+              color: "#6b7280",
+              margin: "4px 0 0",
+            }}
+          >
             Train, test, and deploy sign language models
           </p>
         </div>
@@ -361,31 +429,53 @@ const ManageModel = () => {
 
       {/* Current Deployed Model */}
       {stats?.current_model && (
-        <div className="bg-blue-900 text-white rounded-xl p-5 mb-6">
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-300 mb-3">
+        <div
+          style={{
+            background: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`,
+            borderRadius: "12px",
+            padding: "20px 24px",
+            marginBottom: "20px",
+            color: "#fff",
+          }}
+        >
+          <p
+            className="text-xs font-semibold uppercase tracking-wider mb-3"
+            style={{ color: "rgba(255,255,255,0.6)" }}
+          >
             Currently Deployed
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div
+            className="grid grid-cols-2 sm:grid-cols-4 gap-4"
+            style={{ fontSize: "0.9rem" }}
+          >
             <div>
-              <p className="text-blue-300 text-xs">Version</p>
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                Version
+              </p>
               <p className="font-bold text-lg">
                 {stats.current_model.version_number}
               </p>
             </div>
             <div>
-              <p className="text-blue-300 text-xs">Accuracy</p>
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                Accuracy
+              </p>
               <p className="font-semibold">
                 {fmt(stats.current_model.accuracy)}
               </p>
             </div>
             <div>
-              <p className="text-blue-300 text-xs">Classes</p>
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                Classes
+              </p>
               <p className="font-semibold">
                 {stats.current_model.total_classes ?? "—"}
               </p>
             </div>
             <div>
-              <p className="text-blue-300 text-xs">Deployed At</p>
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+                Deployed At
+              </p>
               <p className="font-semibold">
                 {stats.current_model.deployed_at
                   ? new Date(
@@ -398,152 +488,379 @@ const ManageModel = () => {
         </div>
       )}
 
-      {/* Models Table */}
-      <div className="dash-card overflow-x-auto">
-        <div className="dash-card-header flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-800">All Model Versions</h3>
-          <span className="text-xs text-gray-500">{models.length} version{models.length !== 1 ? "s" : ""}</span>
+      {/* Models Table ────────────────────────────────────────── */}
+      <div className="dash-card">
+        <div
+          className="dash-card-header"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <h3
+            className="text-base font-semibold text-gray-800"
+            style={{ margin: 0 }}
+          >
+            All Model Versions
+          </h3>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            {/* Search */}
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search models..."
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+              style={{ width: "180px" }}
+            />
+            <span className="text-xs text-gray-500">
+              {filteredModels.length} version
+              {filteredModels.length !== 1 ? "s" : ""}
+            </span>
+          </div>
         </div>
+
         {loading ? (
           <table className="w-full text-left">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+            <thead style={{ background: "#f9fafb" }}>
               <tr>
-                <th className="px-4 py-3">Version</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Accuracy</th>
-                <th className="px-4 py-3">Precision</th>
-                <th className="px-4 py-3">Recall</th>
-                <th className="px-4 py-3">F1 Score</th>
-                <th className="px-4 py-3">Classes</th>
-                <th className="px-4 py-3">Trained By</th>
-                <th className="px-4 py-3">Trained At</th>
-                <th className="px-4 py-3">Actions</th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Version
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Status
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Accuracy
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Precision
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Recall
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    F1 Score
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Classes
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Trained By
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Trained At
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Actions
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              <SkeletonTableRows rows={5} />
+              {Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-t">
+                  {Array.from({ length: 10 }).map((_, j) => (
+                    <td key={j} className="px-4 py-3">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
+                    </td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         ) : (
           <>
+            {/* Table header row */}
             <table className="w-full text-left">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+              <thead style={{ background: "#f9fafb" }}>
                 <tr>
-                  <SortableHeader label="Version" sortKey="version_number" />
-                  <SortableHeader label="Status" sortKey="status" />
-                  <SortableHeader label="Accuracy" sortKey="accuracy" />
-                  <SortableHeader label="Precision" sortKey="precision" />
-                  <SortableHeader label="Recall" sortKey="recall" />
-                  <SortableHeader label="F1" sortKey="f1_score" />
-                  <SortableHeader label="Classes" sortKey="total_classes" />
-                  <th className="px-4 py-3">Trained By</th>
-                  <SortableHeader label="Trained At" sortKey="trained_at" />
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3" style={{ width: "36px" }} />
+                  <SortableHeader label="Version" sortKey="version_number" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Status" sortKey="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Accuracy" sortKey="accuracy" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">
+                    Trained By
+                  </th>
+                  <SortableHeader label="Trained At" sortKey="trained_at" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <th
+                    className="px-4 py-3"
+                    style={{ minWidth: "160px" }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedModels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={10}
-                      className="text-center py-8 text-gray-400 text-sm"
+                      colSpan={7}
+                      className="text-center py-10"
+                      style={{ color: C.muted, fontSize: "0.85rem" }}
                     >
-                      No models found. Train your first model to get started.
+                      {searchTerm
+                        ? "No models match your search."
+                        : "No models found. Train your first model to get started."}
                     </td>
                   </tr>
                 ) : (
                   paginatedModels.map((model) => (
-                    <tr
-                      key={model.id}
-                      className="border-t hover:bg-gray-50 text-sm"
-                    >
-                      <td className="px-4 py-3 font-semibold text-gray-800">
-                        {model.version_number}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge value={model.status} />
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {fmt(model.accuracy)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {fmt(model.precision)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {fmt(model.recall)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {fmt(model.f1_score)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {model.total_classes ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {model.trainer?.username || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {model.trained_at
-                          ? new Date(model.trained_at).toLocaleDateString()
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2 flex-wrap">
-                          {model.status === "trained" && (
-                            <>
-                              <button
-                                onClick={() => setTestModal(model)}
-                                className="text-xs bg-yellow-50 text-yellow-700 hover:bg-yellow-100 px-3 py-1 rounded-lg"
+                    <>
+                      {/* Main row */}
+                      <tr
+                        key={model.id}
+                        className="border-t hover:bg-gray-50 text-sm"
+                        style={{
+                          cursor: "pointer",
+                        }}
+                        onClick={() =>
+                          setExpandedRow(
+                            expandedRow === model.id ? null : model.id,
+                          )
+                        }
+                      >
+                        <td className="px-4 py-3">
+                          <ChevronDown
+                            size={16}
+                            className={`transition-transform duration-200 ${
+                              expandedRow === model.id ? "rotate-180" : ""
+                            }`}
+                            style={{ color: C.muted }}
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-gray-800">
+                          {model.version_number}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge value={model.status} />
+                        </td>
+                        <td className="px-4 py-3 font-medium">
+                          <span style={{ color: getMetricColor(model.accuracy) }}>
+                            {fmt(model.accuracy)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">
+                          {model.trainer?.username || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">
+                          {model.trained_at
+                            ? new Date(model.trained_at).toLocaleDateString()
+                            : "—"}
+                        </td>
+                        <td
+                          className="px-4 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex gap-1.5 flex-wrap">
+                            {model.status === "trained" && (
+                              <>
+                                <button
+                                  onClick={() => setTestModal(model)}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  style={{
+                                    background: "#fde68a",
+                                    color: "#92400e",
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#fcd34d")
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#fde68a")
+                                  }
+                                >
+                                  Test
+                                </button>
+                                <button
+                                  onClick={() => setDeployModal(model)}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  style={{
+                                    background: "#bbf7d0",
+                                    color: "#14532d",
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#86efac")
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#bbf7d0")
+                                  }
+                                >
+                                  Deploy
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(model)}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  style={{
+                                    background: "#fecaca",
+                                    color: "#991b1b",
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#fca5a5")
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#fecaca")
+                                  }
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                            {model.status === "inactive" && (
+                              <>
+                                <button
+                                  onClick={() => setRevertModal(model)}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  style={{
+                                    background: "#bfdbfe",
+                                    color: "#1e3a8a",
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#93c5fd")
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#bfdbfe")
+                                  }
+                                >
+                                  Revert
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(model)}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  style={{
+                                    background: "#fecaca",
+                                    color: "#991b1b",
+                                  }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#fca5a5")
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.background =
+                                      "#fecaca")
+                                  }
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                            {model.status === "deployed" && (
+                              <span
+                                className="text-xs font-medium px-3 py-1.5 rounded-full"
+                                style={{
+                                  background: "#bbf7d0",
+                                  color: "#16a34a",
+                                }}
                               >
-                                Test
-                              </button>
-                              <button
-                                onClick={() => setDeployModal(model)}
-                                className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-3 py-1 rounded-lg"
-                              >
-                                Deploy
-                              </button>
-                              <button
-                                onClick={() => handleDelete(model)}
-                                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                          {model.status === "inactive" && (
-                            <>
-                              <button
-                                onClick={() => setRevertModal(model)}
-                                className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1 rounded-lg"
-                              >
-                                Revert
-                              </button>
-                              <button
-                                onClick={() => handleDelete(model)}
-                                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 rounded-lg"
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                          {model.status === "deployed" && (
-                            <span className="text-xs text-green-600 font-medium px-3 py-1">
-                              Active
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                                Currently Active
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Expanded details row */}
+                      {expandedRow === model.id && (
+                        <tr
+                          style={{ background: "#fafafa" }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                              <MetricBox
+                                label="Precision"
+                                value={fmt(model.precision)}
+                                color={getMetricColor(model.precision)}
+                              />
+                              <MetricBox
+                                label="Recall"
+                                value={fmt(model.recall)}
+                                color={getMetricColor(model.recall)}
+                              />
+                              <MetricBox
+                                label="F1 Score"
+                                value={fmt(model.f1_score)}
+                                color={getMetricColor(model.f1_score)}
+                              />
+                              <MetricBox
+                                label="Total Classes"
+                                value={model.total_classes ?? "—"}
+                                color={C.text}
+                              />
+                            </div>
+                            {model.notes && (
+                              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.border}` }}>
+                                <p className="text-xs font-medium text-gray-500 mb-1">
+                                  Notes
+                                </p>
+                                <p className="text-sm text-gray-600">{model.notes}</p>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))
                 )}
               </tbody>
             </table>
+
             {/* Pagination */}
-            {sortedModels.length > pageSize && (
-              <div className="dash-card-footer flex items-center justify-between text-sm text-gray-600">
-                <div className="flex items-center gap-2">
+            {filteredModels.length > pageSize && (
+              <div
+                className="dash-card-footer"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontSize: "0.8rem",
+                  color: "#6b7280",
+                  paddingTop: "12px",
+                  borderTop: `1px solid ${C.border}`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span>
-                    {sortedModels.length} result{sortedModels.length !== 1 ? "s" : ""}
+                    {filteredModels.length} result
+                    {filteredModels.length !== 1 ? "s" : ""}
                   </span>
                   <select
                     value={pageSize}
@@ -551,7 +868,7 @@ const ManageModel = () => {
                       setPageSize(Number(e.target.value));
                       setPage(1);
                     }}
-                    className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-900"
+                    className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-900"
                   >
                     <option value={5}>5 / page</option>
                     <option value={10}>10 / page</option>
@@ -559,14 +876,14 @@ const ManageModel = () => {
                     <option value={50}>50 / page</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span className="text-xs">
                     {page} / {totalPages || 1}
                   </span>
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Previous page"
                   >
                     <ChevronLeft size={16} />
@@ -574,7 +891,7 @@ const ManageModel = () => {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Next page"
                   >
                     <ChevronRight size={16} />
