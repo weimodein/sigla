@@ -28,8 +28,14 @@ const Sidebar = ({ onToggle }) => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    navigate("/login");
+    if (
+      window.confirm(
+        "Are you sure you want to sign out? Any unsaved changes will be lost.",
+      )
+    ) {
+      logout();
+      navigate("/login");
+    }
   };
 
   const handleToggle = () => {
