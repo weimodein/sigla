@@ -27,7 +27,7 @@ import {
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
+  <div className="dash-stat-card flex items-center gap-4">
     <div className={`p-3 rounded-full ${color}`}>
       <Icon size={20} className="text-white" />
     </div>
@@ -326,7 +326,7 @@ const ReportsAnalytics = () => {
 
   // ── Skeleton components ───────────────────────────────────
   const SkeletonCard = () => (
-    <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4 animate-pulse">
+    <div className="dash-stat-card flex items-center gap-4 animate-pulse">
       <div className="w-10 h-10 rounded-full bg-gray-200" />
       <div className="flex-1 space-y-2">
         <div className="h-3 w-20 bg-gray-200 rounded" />
@@ -336,16 +336,22 @@ const ReportsAnalytics = () => {
   );
 
   const SkeletonChart = () => (
-    <div className="bg-white rounded-xl shadow-sm p-5 animate-pulse">
-      <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
-      <div className="h-[220px] bg-gray-100 rounded" />
+    <div className="dash-card animate-pulse">
+      <div className="dash-card-header">
+        <div className="h-4 w-32 bg-gray-200 rounded" />
+      </div>
+      <div className="dash-card-body">
+        <div className="h-[220px] bg-gray-100 rounded" />
+      </div>
     </div>
   );
 
   const SkeletonTable = () => (
-    <div className="bg-white rounded-xl shadow-sm p-5 animate-pulse">
-      <div className="h-4 w-28 bg-gray-200 rounded mb-3" />
-      <div className="rounded-lg border border-gray-200 overflow-hidden">
+    <div className="dash-card animate-pulse">
+      <div className="dash-card-header">
+        <div className="h-4 w-28 bg-gray-200 rounded" />
+      </div>
+      <div className="rounded-lg border border-gray-200 overflow-hidden mx-6 mb-6">
         <div className="h-10 bg-gray-50" />
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-12 border-t px-4 py-3 flex gap-4">
@@ -407,12 +413,12 @@ const ReportsAnalytics = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
             Reports & Analytics
-          </h2>
-          <p className="text-gray-500 text-sm mt-1">
+          </h1>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: 4 }}>
             System activity overview and data exports
           </p>
         </div>
@@ -475,262 +481,290 @@ const ReportsAnalytics = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <SectionHeader title="User Registration Trend" />
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={getRegistrationTrend()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="users" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <SectionHeader title="Word Submission Trend" />
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={getSubmissionTrend()}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="submissions"
-                stroke="#16a34a"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <SectionHeader title="Model Accuracy per Version" />
-          {models.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-10">
-              No model versions available
-            </p>
-          ) : (
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <SectionHeader title="User Registration Trend" />
+          </div>
+          <div className="dash-card-body">
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={getModelAccuracyData()}>
+              <BarChart data={getRegistrationTrend()}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
-                <Tooltip formatter={(v) => `${v}%`} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="users" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <SectionHeader title="Word Submission Trend" />
+          </div>
+          <div className="dash-card-body">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={getSubmissionTrend()}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
                 <Line
                   type="monotone"
-                  dataKey="accuracy"
-                  stroke="#7c3aed"
+                  dataKey="submissions"
+                  stroke="#16a34a"
                   strokeWidth={2}
-                  dot={{ r: 4 }}
+                  dot={{ r: 3 }}
                 />
               </LineChart>
             </ResponsiveContainer>
-          )}
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <SectionHeader title="Gesture Samples per Word (Top 10)" />
-          {words.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-10">
-              No words available
-            </p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={getSamplesPerWord()} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  tick={{ fontSize: 11 }}
-                  width={65}
-                />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar
-                  dataKey="samples"
-                  fill="#bfdbfe"
-                  radius={[0, 4, 4, 0]}
-                  name="Total"
-                />
-                <Bar
-                  dataKey="approved"
-                  fill="#1e3a8a"
-                  radius={[0, 4, 4, 0]}
-                  name="Approved"
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <SectionHeader title="Model Accuracy per Version" />
+          </div>
+          <div className="dash-card-body">
+            {models.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-10">
+                No model versions available
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={getModelAccuracyData()}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
+                  <Tooltip formatter={(v) => `${v}%`} />
+                  <Line
+                    type="monotone"
+                    dataKey="accuracy"
+                    stroke="#7c3aed"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <SectionHeader title="Gesture Samples per Word (Top 10)" />
+          </div>
+          <div className="dash-card-body">
+            {words.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-10">
+                No words available
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={getSamplesPerWord()} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tick={{ fontSize: 11 }}
+                    width={65}
+                  />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar
+                    dataKey="samples"
+                    fill="#bfdbfe"
+                    radius={[0, 4, 4, 0]}
+                    name="Total"
+                  />
+                  <Bar
+                    dataKey="approved"
+                    fill="#1e3a8a"
+                    radius={[0, 4, 4, 0]}
+                    name="Approved"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
       </div>
 
       {/* User Lists */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <SectionHeader title="Warned Users" count={warnedUsers.length} />
-          <SimpleTable
-            headers={["Username", "Email", "Warnings"]}
-            rows={warnedUsers
-              .slice(
-                (warnedPage - 1) * PAGE_SIZE,
-                warnedPage * PAGE_SIZE,
-              )
-              .map((u) => [
-                u.username,
-                u.email,
-                `${u.warning_count}/2`,
-              ])}
-            emptyMessage="No warned users"
-          />
-          {warnedUsers.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-              <span>
-                Page {warnedPage} of{" "}
-                {Math.ceil(warnedUsers.length / PAGE_SIZE)}
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setWarnedPage((p) => Math.max(1, p - 1))}
-                  disabled={warnedPage === 1}
-                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() =>
-                    setWarnedPage((p) =>
-                      Math.min(
-                        Math.ceil(warnedUsers.length / PAGE_SIZE),
-                        p + 1,
-                      ),
-                    )
-                  }
-                  disabled={
-                    warnedPage >= Math.ceil(warnedUsers.length / PAGE_SIZE)
-                  }
-                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                >
-                  Next
-                </button>
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <SectionHeader title="Warned Users" count={warnedUsers.length} />
+          </div>
+          <div className="dash-card-body">
+            <SimpleTable
+              headers={["Username", "Email", "Warnings"]}
+              rows={warnedUsers
+                .slice(
+                  (warnedPage - 1) * PAGE_SIZE,
+                  warnedPage * PAGE_SIZE,
+                )
+                .map((u) => [
+                  u.username,
+                  u.email,
+                  `${u.warning_count}/2`,
+                ])}
+              emptyMessage="No warned users"
+            />
+            {warnedUsers.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+                <span>
+                  Page {warnedPage} of{" "}
+                  {Math.ceil(warnedUsers.length / PAGE_SIZE)}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setWarnedPage((p) => Math.max(1, p - 1))}
+                    disabled={warnedPage === 1}
+                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() =>
+                      setWarnedPage((p) =>
+                        Math.min(
+                          Math.ceil(warnedUsers.length / PAGE_SIZE),
+                          p + 1,
+                        ),
+                      )
+                    }
+                    disabled={
+                      warnedPage >= Math.ceil(warnedUsers.length / PAGE_SIZE)
+                    }
+                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <SectionHeader
-            title="Deactivated Users"
-            count={deactivatedUsers.length}
-          />
-          <SimpleTable
-            headers={["Username", "Email", "Since"]}
-            rows={deactivatedUsers
-              .slice(
-                (deactivatedPage - 1) * PAGE_SIZE,
-                deactivatedPage * PAGE_SIZE,
-              )
-              .map((u) => [
-                u.username,
-                u.email,
-                u.deactivated_at
-                  ? new Date(u.deactivated_at).toLocaleDateString("en-PH")
-                  : "—",
-              ])}
-            emptyMessage="No deactivated users"
-          />
-          {deactivatedUsers.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-              <span>
-                Page {deactivatedPage} of{" "}
-                {Math.ceil(deactivatedUsers.length / PAGE_SIZE)}
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() =>
-                    setDeactivatedPage((p) => Math.max(1, p - 1))
-                  }
-                  disabled={deactivatedPage === 1}
-                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() =>
-                    setDeactivatedPage((p) =>
-                      Math.min(
-                        Math.ceil(deactivatedUsers.length / PAGE_SIZE),
-                        p + 1,
-                      ),
-                    )
-                  }
-                  disabled={
-                    deactivatedPage >=
-                    Math.ceil(deactivatedUsers.length / PAGE_SIZE)
-                  }
-                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                >
-                  Next
-                </button>
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <SectionHeader
+              title="Deactivated Users"
+              count={deactivatedUsers.length}
+            />
+          </div>
+          <div className="dash-card-body">
+            <SimpleTable
+              headers={["Username", "Email", "Since"]}
+              rows={deactivatedUsers
+                .slice(
+                  (deactivatedPage - 1) * PAGE_SIZE,
+                  deactivatedPage * PAGE_SIZE,
+                )
+                .map((u) => [
+                  u.username,
+                  u.email,
+                  u.deactivated_at
+                    ? new Date(u.deactivated_at).toLocaleDateString("en-PH")
+                    : "—",
+                ])}
+              emptyMessage="No deactivated users"
+            />
+            {deactivatedUsers.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+                <span>
+                  Page {deactivatedPage} of{" "}
+                  {Math.ceil(deactivatedUsers.length / PAGE_SIZE)}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() =>
+                      setDeactivatedPage((p) => Math.max(1, p - 1))
+                    }
+                    disabled={deactivatedPage === 1}
+                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() =>
+                      setDeactivatedPage((p) =>
+                        Math.min(
+                          Math.ceil(deactivatedUsers.length / PAGE_SIZE),
+                          p + 1,
+                        ),
+                      )
+                    }
+                    disabled={
+                      deactivatedPage >=
+                      Math.ceil(deactivatedUsers.length / PAGE_SIZE)
+                    }
+                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <SectionHeader title="Deleted Accounts" count={deletedUsers.length} />
-          <SimpleTable
-            headers={["Username", "Email"]}
-            rows={deletedUsers
-              .slice(
-                (deletedPage - 1) * PAGE_SIZE,
-                deletedPage * PAGE_SIZE,
-              )
-              .map((u) => [u.username, u.email])}
-            emptyMessage="No deleted accounts"
-          />
-          {deletedUsers.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-              <span>
-                Page {deletedPage} of{" "}
-                {Math.ceil(deletedUsers.length / PAGE_SIZE)}
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setDeletedPage((p) => Math.max(1, p - 1))}
-                  disabled={deletedPage === 1}
-                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={() =>
-                    setDeletedPage((p) =>
-                      Math.min(
-                        Math.ceil(deletedUsers.length / PAGE_SIZE),
-                        p + 1,
-                      ),
-                    )
-                  }
-                  disabled={
-                    deletedPage >=
-                    Math.ceil(deletedUsers.length / PAGE_SIZE)
-                  }
-                  className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                >
-                  Next
-                </button>
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <SectionHeader title="Deleted Accounts" count={deletedUsers.length} />
+          </div>
+          <div className="dash-card-body">
+            <SimpleTable
+              headers={["Username", "Email"]}
+              rows={deletedUsers
+                .slice(
+                  (deletedPage - 1) * PAGE_SIZE,
+                  deletedPage * PAGE_SIZE,
+                )
+                .map((u) => [u.username, u.email])}
+              emptyMessage="No deleted accounts"
+            />
+            {deletedUsers.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+                <span>
+                  Page {deletedPage} of{" "}
+                  {Math.ceil(deletedUsers.length / PAGE_SIZE)}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setDeletedPage((p) => Math.max(1, p - 1))}
+                    disabled={deletedPage === 1}
+                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() =>
+                      setDeletedPage((p) =>
+                        Math.min(
+                          Math.ceil(deletedUsers.length / PAGE_SIZE),
+                          p + 1,
+                        ),
+                      )
+                    }
+                    disabled={
+                      deletedPage >=
+                      Math.ceil(deletedUsers.length / PAGE_SIZE)
+                    }
+                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Generate Report */}
-      <div className="bg-white rounded-xl shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="dash-card">
+        <div className="dash-card-header flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">
               Generate Report
@@ -750,38 +784,40 @@ const ReportsAnalytics = () => {
             {generating ? "Generating..." : "Generate Report"}
           </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { key: "user_stats", label: "User Statistics" },
-            { key: "word_submissions", label: "Word Submissions" },
-            { key: "sample_counts", label: "Sample Counts" },
-            { key: "registration_trends", label: "Registration Trends" },
-            { key: "model_accuracy", label: "Model Accuracy" },
-            { key: "warned_users", label: "Warned Users" },
-            { key: "deactivated_users", label: "Deactivated Users" },
-            { key: "deleted_users", label: "Deleted Accounts" },
-          ].map(({ key, label }) => (
-            <label
-              key={key}
-              className="flex items-center gap-2 cursor-pointer group"
-            >
-              <input
-                type="checkbox"
-                checked={reportSections[key]}
-                onChange={() => toggleSection(key)}
-                className="w-4 h-4 accent-blue-900 cursor-pointer"
-              />
-              <span className="text-xs text-gray-600 group-hover:text-gray-800">
-                {label}
-              </span>
-            </label>
-          ))}
+        <div className="dash-card-body">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { key: "user_stats", label: "User Statistics" },
+              { key: "word_submissions", label: "Word Submissions" },
+              { key: "sample_counts", label: "Sample Counts" },
+              { key: "registration_trends", label: "Registration Trends" },
+              { key: "model_accuracy", label: "Model Accuracy" },
+              { key: "warned_users", label: "Warned Users" },
+              { key: "deactivated_users", label: "Deactivated Users" },
+              { key: "deleted_users", label: "Deleted Accounts" },
+            ].map(({ key, label }) => (
+              <label
+                key={key}
+                className="flex items-center gap-2 cursor-pointer group"
+              >
+                <input
+                  type="checkbox"
+                  checked={reportSections[key]}
+                  onChange={() => toggleSection(key)}
+                  className="w-4 h-4 accent-blue-900 cursor-pointer"
+                />
+                <span className="text-xs text-gray-600 group-hover:text-gray-800">
+                  {label}
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-3">
+            Filtered by:{" "}
+            <strong className="text-gray-600 capitalize">{filter}</strong>
+            {" · "}Exported as CSV
+          </p>
         </div>
-        <p className="text-xs text-gray-400 mt-3">
-          Filtered by:{" "}
-          <strong className="text-gray-600 capitalize">{filter}</strong>
-          {" · "}Exported as CSV
-        </p>
       </div>
     </div>
   );

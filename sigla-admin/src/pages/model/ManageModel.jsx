@@ -14,7 +14,7 @@ import { Cpu, CheckCircle, Clock, X, ChevronLeft, ChevronRight, ChevronUp } from
 
 // ── Stat Card ─────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
+  <div className="dash-stat-card flex items-center gap-4">
     <div className={`p-3 rounded-full ${color}`}>
       <Icon size={20} className="text-white" />
     </div>
@@ -27,7 +27,7 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
 
 // ── Skeleton Components ───────────────────────────────────────
 const SkeletonCard = () => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
+  <div className="dash-stat-card flex items-center gap-4">
     <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
     <div className="space-y-2 flex-1">
       <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
@@ -314,10 +314,10 @@ const ManageModel = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Manage Model</h2>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>Manage Model</h1>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: 4 }}>
             Train, test, and deploy sign language models
           </p>
         </div>
@@ -399,7 +399,11 @@ const ManageModel = () => {
       )}
 
       {/* Models Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="dash-card overflow-x-auto">
+        <div className="dash-card-header flex items-center justify-between">
+          <h3 className="text-base font-semibold text-gray-800">All Model Versions</h3>
+          <span className="text-xs text-gray-500">{models.length} version{models.length !== 1 ? "s" : ""}</span>
+        </div>
         {loading ? (
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
@@ -536,7 +540,7 @@ const ManageModel = () => {
             </table>
             {/* Pagination */}
             {sortedModels.length > pageSize && (
-              <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600">
+              <div className="dash-card-footer flex items-center justify-between text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                   <span>
                     {sortedModels.length} result{sortedModels.length !== 1 ? "s" : ""}

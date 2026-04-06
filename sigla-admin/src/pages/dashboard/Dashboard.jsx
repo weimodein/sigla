@@ -57,100 +57,6 @@ const formatChartDate = (dateStr, period) => {
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 };
 
-// ── CSS injection ──
-const injectStyles = () => {
-  if (document.getElementById("dash-styles")) return;
-  const s = document.createElement("style");
-  s.id = "dash-styles";
-  s.textContent = `
-    .dash-stat-card {
-      background: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      border: 1px solid #f0f0f0;
-      transition: all 0.3s ease;
-      position: relative;
-    }
-    .dash-stat-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-    }
-    .dash-card {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      border: 1px solid #f0f0f0;
-      margin-bottom: 16px;
-      overflow: hidden;
-    }
-    .dash-card-header {
-      padding: 24px;
-      border-bottom: 1px solid #f0f0f0;
-    }
-    .dash-card-body {
-      padding: 24px;
-    }
-    .dash-card-footer {
-      padding: 16px 24px;
-      border-top: 1px solid #f0f0f0;
-      background: #f9fafb;
-    }
-    .dash-request-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      padding: 16px;
-      border-radius: 8px;
-      border: 1px solid #f0f0f0;
-      transition: all 0.2s ease;
-    }
-    .dash-request-item:hover {
-      background: #f0f0f0;
-      transform: translateX(4px);
-    }
-    .dash-quick-action {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 24px;
-      border: 2px solid #e0e0e0;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      text-align: center;
-      background: none;
-      font: inherit;
-      color: inherit;
-    }
-    .dash-quick-action:hover {
-      border-color: ${C.primary};
-      background: ${C.primary};
-      color: white;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-    }
-    .dash-announcement-item {
-      display: flex;
-      gap: 16px;
-      padding: 16px;
-      border-radius: 8px;
-      border: 1px solid #f0f0f0;
-      transition: all 0.2s ease;
-    }
-    .dash-announcement-item:hover {
-      background: #f0f0f0;
-    }
-    .badge-pending { background: #fff3cd; color: #856404; }
-    .badge-processing { background: #cce7ff; color: #004085; }
-    .badge-ready { background: #d1ecf1; color: #0c5460; }
-    .badge-completed { background: #d4edda; color: #155724; }
-    .badge-rejected { background: #f8d7da; color: #721c24; }
-    @keyframes dash-spin { to { transform: rotate(360deg); } }
-  `;
-  document.head.appendChild(s);
-};
 
 // ── Stat Card ──
 const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor }) => (
@@ -304,7 +210,6 @@ const Dashboard = () => {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    injectStyles();
     const fetchAll = async () => {
       try {
         const [users, words, models, modelsAll, pendingData] =

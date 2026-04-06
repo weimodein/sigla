@@ -137,248 +137,257 @@ const AdministratorAccount = () => {
   return (
     <div className="max-w-2xl">
       {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-800">
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
           Administrator Account
-        </h2>
-        <p className="text-gray-500 text-sm mt-1">
+        </h1>
+        <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: 4 }}>
           Manage your account information and password
         </p>
       </div>
 
       {/* ── Account Info Card ── */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h3 className="text-base font-semibold text-gray-800 mb-4">
-          Account Information
-        </h3>
-        <div className="space-y-3 text-sm">
-          <div className="flex justify-between py-2 border-b">
-            <span className="text-gray-500">Username</span>
-            <span className="font-medium text-gray-800">{user?.username}</span>
-          </div>
-          <div className="flex justify-between py-2 border-b">
-            <span className="text-gray-500">Name</span>
-            <span className="font-medium text-gray-800">{user?.name}</span>
-          </div>
-          <div className="flex justify-between py-2 border-b">
-            <span className="text-gray-500">Email</span>
-            <span className="font-medium text-gray-800">{user?.email}</span>
-          </div>
-          <div className="flex justify-between py-2 border-b">
-            <span className="text-gray-500">Role</span>
-            <span className="font-medium text-gray-800 capitalize">
-              {user?.role?.replace("_", " ")}
-            </span>
+      <div className="dash-card">
+        <div className="dash-card-header">
+          <h3 className="text-base font-semibold text-gray-800">Account Information</h3>
+        </div>
+        <div className="dash-card-body">
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-gray-500">Username</span>
+              <span className="font-medium text-gray-800">{user?.username}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-gray-500">Name</span>
+              <span className="font-medium text-gray-800">{user?.name}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-gray-500">Email</span>
+              <span className="font-medium text-gray-800">{user?.email}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-gray-500">Role</span>
+              <span className="font-medium text-gray-800 capitalize">
+                {user?.role?.replace("_", " ")}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── Edit Profile Card ── */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h3 className="text-base font-semibold text-gray-800 mb-1">
-          Edit Profile
-        </h3>
-        <p className="text-xs text-gray-400 mb-4">
-          Update your name and username. Email address cannot be changed as it
-          was verified during registration.
-        </p>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Name
-            </label>
-            <input
-              type="text"
-              value={profileForm.name}
-              onChange={(e) =>
-                setProfileForm({ ...profileForm, name: e.target.value })
-              }
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-            />
+      <div className="dash-card">
+        <div className="dash-card-header">
+          <h3 className="text-base font-semibold text-gray-800">Edit Profile</h3>
+          <p className="text-xs text-gray-400 mt-1">
+            Update your name and username. Email address cannot be changed as it
+            was verified during registration.
+          </p>
+        </div>
+        <div className="dash-card-body">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                value={profileForm.name}
+                onChange={(e) =>
+                  setProfileForm({ ...profileForm, name: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                value={profileForm.username}
+                onChange={(e) =>
+                  setProfileForm({ ...profileForm, username: e.target.value })
+                }
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={user?.email || ""}
+                disabled
+                className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Email address is fixed and cannot be changed
+              </p>
+            </div>
+            <button
+              onClick={handleUpdateProfile}
+              disabled={profileLoading}
+              className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+            >
+              {profileLoading ? "Saving..." : "Save Changes"}
+            </button>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Username
-            </label>
-            <input
-              type="text"
-              value={profileForm.username}
-              onChange={(e) =>
-                setProfileForm({ ...profileForm, username: e.target.value })
-              }
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={user?.email || ""}
-              disabled
-              className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              Email address is fixed and cannot be changed
-            </p>
-          </div>
-          <button
-            onClick={handleUpdateProfile}
-            disabled={profileLoading}
-            className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-          >
-            {profileLoading ? "Saving..." : "Save Changes"}
-          </button>
         </div>
       </div>
 
       {/* ── Change Password Card ── */}
-      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-        <h3 className="text-base font-semibold text-gray-800 mb-1">
-          Change Password
-        </h3>
-        <p className="text-xs text-gray-400 mb-4">
-          A 6-digit verification code will be sent to your registered email
-          address before you can set a new password.
-        </p>
-
-        {/* Step 1 — Request code */}
-        {passStep === "request" && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Click the button below to send a verification code to{" "}
-              <strong>{user?.email}</strong>.
-            </p>
-            <button
-              onClick={handleRequestCode}
-              disabled={passLoading}
-              className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-            >
-              {passLoading ? "Sending..." : "Send Verification Code"}
-            </button>
-          </div>
-        )}
-
-        {/* Step 2 — Verify code */}
-        {passStep === "verify" && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Enter the 6-digit code sent to <strong>{user?.email}</strong>.
-              Valid for 5 minutes. Maximum 5 attempts.
-            </p>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Verification Code
-              </label>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) =>
-                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                maxLength={6}
-                placeholder="Enter 6-digit code"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 tracking-widest text-center text-lg"
-              />
-            </div>
-            <div className="flex gap-2">
+      <div className="dash-card">
+        <div className="dash-card-header">
+          <h3 className="text-base font-semibold text-gray-800">Change Password</h3>
+          <p className="text-xs text-gray-400 mt-1">
+            A 6-digit verification code will be sent to your registered email
+            address before you can set a new password.
+          </p>
+        </div>
+        <div className="dash-card-body">
+          {/* Step 1 — Request code */}
+          {passStep === "request" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Click the button below to send a verification code to{" "}
+                <strong>{user?.email}</strong>.
+              </p>
               <button
-                onClick={handleVerifyCode}
-                disabled={passLoading || code.length !== 6}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {passLoading ? "Verifying..." : "Verify Code"}
-              </button>
-              <button
-                onClick={() => {
-                  setPassStep("request");
-                  setCode("");
-                }}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Back
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={resendCooldown > 0}
-              className="w-full text-sm text-blue-900 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
-            >
-              {resendCooldown > 0
-                ? `Resend code in ${resendCooldown}s`
-                : "Resend code"}
-            </button>
-          </div>
-        )}
-
-        {/* Step 3 — Set new password */}
-        {passStep === "reset" && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                New Password
-              </label>
-              <input
-                type="password"
-                value={newPass}
-                onChange={(e) => setNewPass(e.target.value)}
-                placeholder="Enter new password"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Confirm new password"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleChangePassword}
+                onClick={handleRequestCode}
                 disabled={passLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
               >
-                {passLoading ? "Saving..." : "Save New Password"}
-              </button>
-              <button
-                onClick={() => {
-                  setPassStep("request");
-                  setCode("");
-                  setNewPass("");
-                  setConfirm("");
-                }}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
+                {passLoading ? "Sending..." : "Send Verification Code"}
               </button>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Step 2 — Verify code */}
+          {passStep === "verify" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Enter the 6-digit code sent to <strong>{user?.email}</strong>.
+                Valid for 5 minutes. Maximum 5 attempts.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) =>
+                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  maxLength={6}
+                  placeholder="Enter 6-digit code"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 tracking-widest text-center text-lg"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleVerifyCode}
+                  disabled={passLoading || code.length !== 6}
+                  className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                >
+                  {passLoading ? "Verifying..." : "Verify Code"}
+                </button>
+                <button
+                  onClick={() => {
+                    setPassStep("request");
+                    setCode("");
+                  }}
+                  className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Back
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendCooldown > 0}
+                className="w-full text-sm text-blue-900 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
+              >
+                {resendCooldown > 0
+                  ? `Resend code in ${resendCooldown}s`
+                  : "Resend code"}
+              </button>
+            </div>
+          )}
+
+          {/* Step 3 — Set new password */}
+          {passStep === "reset" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="Enter new password"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleChangePassword}
+                  disabled={passLoading}
+                  className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                >
+                  {passLoading ? "Saving..." : "Save New Password"}
+                </button>
+                <button
+                  onClick={() => {
+                    setPassStep("request");
+                    setCode("");
+                    setNewPass("");
+                    setConfirm("");
+                  }}
+                  className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Logout ── */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="text-base font-semibold text-gray-800 mb-1">Sign Out</h3>
-        <p className="text-xs text-gray-400 mb-4">
-          Sign out of your administrator account
-        </p>
-        <button
-          onClick={() => {
-            logout();
-            navigate("/login");
-          }}
-          className="w-full border border-red-200 text-red-600 hover:bg-red-50 text-sm font-semibold py-2 rounded-lg transition"
-        >
-          Logout
-        </button>
+      <div className="dash-card">
+        <div className="dash-card-header">
+          <h3 className="text-base font-semibold text-gray-800">Sign Out</h3>
+          <p className="text-xs text-gray-400 mt-1">
+            Sign out of your administrator account
+          </p>
+        </div>
+        <div className="dash-card-body">
+          <button
+            onClick={() => {
+              logout();
+              navigate("/login");
+            }}
+            className="w-full border border-red-200 text-red-600 hover:bg-red-50 text-sm font-semibold py-2 rounded-lg transition"
+          >
+            Logout
+          </button>
+        </div>
       </div>
     </div>
   );

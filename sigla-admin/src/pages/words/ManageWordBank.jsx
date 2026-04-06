@@ -56,7 +56,7 @@ const FSL_CATEGORIES = [
 
 // ── Helpers ───────────────────────────────────────────────────
 const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4">
+  <div className="dash-stat-card flex items-center gap-4">
     <div className={`p-3 rounded-full ${color}`}>
       <Icon size={20} className="text-white" />
     </div>
@@ -606,10 +606,10 @@ const ManageWordBank = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Manage Word Bank</h2>
-          <p className="text-gray-500 text-sm mt-1">
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>Manage Word Bank</h1>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: 4 }}>
             Review and manage gesture word submissions
           </p>
         </div>
@@ -688,7 +688,11 @@ const ManageWordBank = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="dash-card overflow-x-auto">
+        <div className="dash-card-header flex items-center justify-between">
+          <h3 className="text-base font-semibold text-gray-800">Word List</h3>
+          <span className="text-xs text-gray-500">{words.length} word{words.length !== 1 ? "s" : ""}</span>
+        </div>
         {loading ? (
           <div className="flex items-center justify-center h-40">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900" />
