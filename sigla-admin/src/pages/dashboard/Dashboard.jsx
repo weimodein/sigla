@@ -16,11 +16,11 @@ import { broadcastAnnouncement } from "../../api/notificationApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
   Users,
+  UserCheck,
   BookOpen,
   Cpu,
   ClipboardList,
   Database,
-  FileText,
   ArrowUpRight,
   ArrowDownRight,
   TrendingUp,
@@ -59,41 +59,14 @@ const formatChartDate = (dateStr, period) => {
 
 
 // ── Stat Card ──
-const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor }) => (
-  <div className="dash-stat-card">
-    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-      <div
-        style={{
-          padding: "12px",
-          borderRadius: "12px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: iconBg,
-          color: iconColor,
-          minWidth: "44px",
-        }}
-      >
-        <Icon size={20} />
-      </div>
-      <div style={{ flex: 1 }}>
-        <p
-          className="text-xs font-medium mb-0.5"
-          style={{ fontSize: "0.75rem", color: "#9ca3af" }}
-        >
-          {title}
-        </p>
-        <p
-          style={{
-            fontSize: "1.5rem",
-            fontWeight: 700,
-            color: C.text,
-            lineHeight: "1",
-          }}
-        >
-          {value ?? "—"}
-        </p>
-      </div>
+const StatCard = ({ title, value, icon: Icon, color, trend }) => (
+  <div className="dash-stat-card flex items-center gap-4">
+    <div className={`p-3 rounded-full ${color}`}>
+      <Icon size={20} className="text-white" />
+    </div>
+    <div>
+      <p className="text-xs text-gray-500">{title}</p>
+      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
     </div>
     {trend && (
       <div
@@ -109,7 +82,7 @@ const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor }) => (
           color: trend > 0 ? "#16a34a" : "#dc2626",
         }}
       >
-        {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+        {trend > 0 ? <TrendingUp size={14} /> : <ArrowDownRight size={14} />}
         <span>{Math.abs(trend)}%</span>
       </div>
     )}
@@ -118,35 +91,11 @@ const StatCard = ({ title, value, icon: Icon, trend, iconBg, iconColor }) => (
 
 // ── Skeleton Card ──
 const SkeletonCard = () => (
-  <div className="dash-stat-card" style={{ opacity: 0.6 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-      <div
-        style={{
-          width: "44px",
-          height: "44px",
-          borderRadius: "12px",
-          background: "#e5e7eb",
-        }}
-      />
-      <div style={{ flex: 1 }}>
-        <div
-          style={{
-            width: "64px",
-            height: "12px",
-            background: "#e5e7eb",
-            borderRadius: "4px",
-            marginBottom: "8px",
-          }}
-        />
-        <div
-          style={{
-            width: "40px",
-            height: "28px",
-            background: "#e5e7eb",
-            borderRadius: "4px",
-          }}
-        />
-      </div>
+  <div className="dash-stat-card flex items-center gap-4" style={{ opacity: 0.6 }}>
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+    <div className="space-y-2 flex-1">
+      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
     </div>
   </div>
 );
@@ -380,31 +329,27 @@ const Dashboard = () => {
           value={userStats?.total}
           icon={Users}
           trend={12}
-          iconBg={`${C.primary}22`}
-          iconColor={C.primary}
+          color="bg-blue-900"
         />
         <StatCard
           title="Total Words"
           value={wordStats?.total}
           icon={BookOpen}
           trend={8}
-          iconBg={`${C.secondary}22`}
-          iconColor={C.secondary}
+          color="bg-blue-800"
         />
         <StatCard
           title="Pending Submissions"
           value={wordStats?.pending}
           icon={ClipboardList}
           trend={-3}
-          iconBg="#fbbf2433"
-          iconColor="#d97706"
+          color="bg-yellow-500"
         />
         <StatCard
           title="Gesture Samples"
           value={wordStats?.total_samples}
           icon={Database}
-          iconBg={`${C.accent}22`}
-          iconColor={C.accent}
+          color="bg-blue-700"
         />
         {/* Tall card on right — Model Version */}
         <div style={{ gridRow: "1 / 3" }}>
@@ -425,40 +370,12 @@ const Dashboard = () => {
                 justifyContent: "center",
               }}
             >
-              <div
-                style={{
-                  padding: "12px",
-                  borderRadius: "12px",
-                  background: "#22c55e33",
-                  color: "#16a34a",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: "44px",
-                }}
-              >
-                <Cpu size={20} />
+              <div className="p-3 rounded-full bg-green-500">
+                <Cpu size={20} className="text-white" />
               </div>
-              <div style={{ flex: 1 }}>
-                <p
-                  className="text-xs font-medium mb-0.5"
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#9ca3af",
-                  }}
-                >
-                  Model Version
-                </p>
-                <p
-                  style={{
-                    fontSize: "1.5rem",
-                    fontWeight: 700,
-                    color: C.text,
-                    lineHeight: "1",
-                  }}
-                >
-                  {deployedModel?.version_number ?? "None"}
-                </p>
+              <div>
+                <p className="text-xs text-gray-500">Model Version</p>
+                <p className="text-2xl font-bold text-gray-800">{deployedModel?.version_number ?? "None"}</p>
               </div>
             </div>
             <div
@@ -763,7 +680,7 @@ const Dashboard = () => {
                   padding: "32px 16px",
                 }}
               >
-                <FileText
+                <TrendingUp
                   size={40}
                   style={{ marginBottom: "8px", opacity: 0.4 }}
                 />
@@ -867,7 +784,7 @@ const Dashboard = () => {
                   padding: "32px 16px",
                 }}
               >
-                <FileText
+                <BookOpen
                   size={40}
                   style={{ marginBottom: "8px", opacity: 0.4 }}
                 />

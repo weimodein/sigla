@@ -17,6 +17,7 @@ import {
   ClipboardList,
   UserX,
   AlertTriangle,
+  Check,
   Search,
   X,
   ChevronUp,
@@ -77,82 +78,26 @@ const chipStyle = (bg) => ({
   color: bg,
 });
 
-// ── Stat Card (matches Dashboard.jsx) ────────────────────────
-const StatCard = ({ title, value, icon: Icon, iconBg, iconColor }) => (
-  <div className="mv-stat-card">
-    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-      <div
-        style={{
-          padding: "12px",
-          borderRadius: "12px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: iconBg,
-          color: iconColor,
-          minWidth: "44px",
-        }}
-      >
-        <Icon size={20} />
-      </div>
-      <div style={{ flex: 1 }}>
-        <p
-          style={{
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            color: "#9ca3af",
-            marginBottom: "4px",
-          }}
-        >
-          {title}
-        </p>
-        <p
-          style={{
-            fontSize: "1.5rem",
-            fontWeight: 700,
-            color: C.text,
-            margin: 0,
-            lineHeight: "1",
-          }}
-        >
-          {value ?? "—"}
-        </p>
-      </div>
+// ── Stat Card ────────────────────────────────────────────────
+const StatCard = ({ title, value, icon: Icon, color }) => (
+  <div className="mv-stat-card flex items-center gap-4">
+    <div className={`p-3 rounded-full ${color}`}>
+      <Icon size={20} className="text-white" />
+    </div>
+    <div>
+      <p className="text-xs text-gray-500">{title}</p>
+      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
     </div>
   </div>
 );
 
-// ── Skeleton (matches Dashboard.jsx) ─────────────────────────
+// ── Skeleton ─────────────────────────────────────────────────
 const SkeletonCard = () => (
-  <div className="mv-stat-card" style={{ opacity: 0.6 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-      <div
-        style={{
-          width: "44px",
-          height: "44px",
-          borderRadius: "12px",
-          background: "#e5e7eb",
-        }}
-      />
-      <div style={{ flex: 1 }}>
-        <div
-          style={{
-            width: "64px",
-            height: "12px",
-            background: "#e5e7eb",
-            borderRadius: "4px",
-            marginBottom: "8px",
-          }}
-        />
-        <div
-          style={{
-            width: "40px",
-            height: "28px",
-            background: "#e5e7eb",
-            borderRadius: "4px",
-          }}
-        />
-      </div>
+  <div className="mv-stat-card flex items-center gap-4" style={{ opacity: 0.6 }}>
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+    <div className="space-y-2 flex-1">
+      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
     </div>
   </div>
 );
@@ -775,29 +720,25 @@ const ManageUsers = () => {
             title="Total Users"
             value={stats?.total}
             icon={Users}
-            iconBg={`${C.primary}22`}
-            iconColor={C.primary}
+            color="bg-blue-900"
           />
           <StatCard
             title="Active"
             value={stats?.active}
-            icon={Users}
-            iconBg={`${C.green}22`}
-            iconColor={C.green}
+            icon={Check}
+            color="bg-green-500"
           />
           <StatCard
             title="Warned"
             value={stats?.warned}
             icon={AlertTriangle}
-            iconBg={`${C.yellow}22`}
-            iconColor={C.yellow}
+            color="bg-yellow-500"
           />
           <StatCard
             title="Deactivated"
             value={stats?.deactivated}
             icon={UserX}
-            iconBg={`${C.red}22`}
-            iconColor={C.red}
+            color="bg-red-500"
           />
         </div>
       )}

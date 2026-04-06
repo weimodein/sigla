@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const ProtectedRoute = ({ children, superAdminOnly = false }) => {
-  const { isLoggedIn, isSuperAdmin, loading } = useAuth();
+const ProtectedRoute = ({ children }) => {
+  const { isLoggedIn, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,10 +14,6 @@ const ProtectedRoute = ({ children, superAdminOnly = false }) => {
 
   if (!isLoggedIn) {
     return <Navigate to="/login" replace />;
-  }
-
-  if (superAdminOnly && !isSuperAdmin) {
-    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
