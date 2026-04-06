@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   getAllUsers,
-  getPendingUsers,
   getDeactivatedUsers,
+  getWarnedUsers,
   getUserStats,
   approveUser,
   warnUser,
@@ -423,8 +423,8 @@ const ManageUsers = () => {
       if (activeTab === "all") {
         const data = await getAllUsers({ search, limit: 500 });
         setUsers(data.users || []);
-      } else if (activeTab === "pending") {
-        const data = await getPendingUsers();
+      } else if (activeTab === "warned") {
+        const data = await getWarnedUsers();
         setUsers(data.users || []);
       } else if (activeTab === "deactivated") {
         const data = await getDeactivatedUsers();
@@ -600,7 +600,7 @@ const ManageUsers = () => {
   // ── Tabs ────────────────────────────────────────────────────
   const tabs = [
     { key: "all", label: "All Users" },
-    { key: "pending", label: "Pending" },
+    { key: "warned", label: "Warned" },
     { key: "deactivated", label: "Deactivated" },
   ];
 
@@ -698,17 +698,29 @@ const ManageUsers = () => {
                 />
               </>
             )}
-            {activeTab === "pending" && (
+            {activeTab === "warned" && (
               <>
                 <ActionBtn
-                  label="Approve"
-                  bg={C.green}
-                  onClick={() => handleApprove(u.id)}
+                  label="Warn"
+                  bg={C.orange}
+                  onClick={() => handleWarnOpen(u)}
+                  disabled={(u.warning_count || 0) >= 2}
+                  title={
+                    (u.warning_count || 0) >= 2
+                      ? "User already has 2 warnings"
+                      : "Issue a warning"
+                  }
                 />
                 <ActionBtn
-                  label="Deny"
+                  label="Deactivate"
                   bg={C.red}
-                  onClick={() => handleDelete(u.id)}
+                  onClick={() => handleDeactivate(u.id, u.warning_count)}
+                  disabled={(u.warning_count || 0) < 2}
+                  title={
+                    (u.warning_count || 0) < 2
+                      ? `User needs ${2 - (u.warning_count || 0)} more warning(s) before deactivation`
+                      : "Deactivate user"
+                  }
                 />
               </>
             )}
@@ -741,10 +753,10 @@ const ManageUsers = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: C.text }}>
+          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
             Manage Users
           </h2>
-          <p className="text-sm mt-1" style={{ color: C.muted }}>
+          <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
             Manage user accounts and access
           </p>
         </div>
@@ -774,17 +786,18 @@ const ManageUsers = () => {
             iconColor={C.green}
           />
           <StatCard
+            title="Warned"
+            value={stats?.warned}
+            icon={AlertTriangle}
+            iconBg={`${C.yellow}22`}
+            iconColor={C.yellow}
+          />
+          <StatCard
             title="Deactivated"
             value={stats?.deactivated}
             icon={UserX}
             iconBg={`${C.red}22`}
             iconColor={C.red}
-          />
-          <StatCard
-            title="Warned"
-            value={stats?.warned}
-            icon={AlertTriangle}
-            color={C.orange}
           />
         </div>
       )}

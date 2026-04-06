@@ -6,6 +6,7 @@ const {
   getAllUsers,
   getPendingUsers,
   getDeactivatedUsers,
+  getWarnedUsers,
   getUserStats,
   getUserById,
   createUser,
@@ -28,6 +29,7 @@ router.get("/registrations", roleMiddleware("admin"), getUserRegistrations);
 // router.get("/activity", roleMiddleware("admin"), getRecentActivity);
 router.get("/pending", roleMiddleware("admin"), getPendingUsers);
 router.get("/deactivated", roleMiddleware("admin"), getDeactivatedUsers);
+router.get("/warned", roleMiddleware("admin"), getWarnedUsers);
 
 // ── Admin user management routes ──────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllUsers);

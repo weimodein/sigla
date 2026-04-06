@@ -76,6 +76,21 @@ const getDeactivatedUsers = async (req, res) => {
   }
 };
 
+// ── GET /api/users/warned ─────────────────────────────────────
+const getWarnedUsers = async (req, res) => {
+  try {
+    const users = await User.findAll({
+      where: { role_id: 3, warning_count: { [Op.gt]: 0 } },
+      attributes: { exclude: ["password"] },
+      order: [["warning_count", "DESC"]],
+    });
+    return res.status(200).json({ users });
+  } catch (err) {
+    console.error("Get warned users error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ── GET /api/users/stats ──────────────────────────────────────
 const getUserStats = async (req, res) => {
   try {
@@ -586,6 +601,7 @@ module.exports = {
   getAllUsers,
   getPendingUsers,
   getDeactivatedUsers,
+  getWarnedUsers,
   getUserStats,
   getUserById,
   createUser,

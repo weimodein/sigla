@@ -20,6 +20,11 @@ export const getDeactivatedUsers = async () => {
   return response.data;
 };
 
+export const getWarnedUsers = async () => {
+  const response = await api.get("/users/warned");
+  return response.data;
+};
+
 export const getUserById = async (id) => {
   const response = await api.get(`/users/${id}`);
   return response.data;
