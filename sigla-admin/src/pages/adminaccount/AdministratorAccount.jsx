@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
+import { User, Mail, Pencil, Lock, LogOut } from "lucide-react";
 import {
   verifyResetCode,
   resetPassword,
@@ -9,21 +10,42 @@ import {
 } from "../../api/authApi.js";
 import api from "../../api/authApi.js";
 
+// ── Color Palette ──
+const C = {
+  text: "#1f2937",
+  background: "#f3f4f6",
+  primary: "#1e3a8a",
+  secondary: "#1d4ed8",
+  muted: "#9ca3af",
+  border: "#e5e7eb",
+};
+
 const AdministratorAccount = () => {
   const { user, logout } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
   // ── Profile state ─────────────────────────────────────────
+  const [isEditing, setIsEditing] = useState(false);
   const [profileForm, setProfileForm] = useState({
-    name: user?.name || "",
-    username: user?.username || "",
+    username: "",
+    email: "",
   });
   const [profileLoading, setProfileLoading] = useState(false);
 
+  // Sync form with user data once it loads
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        username: user.username || "",
+        email: user.email || "",
+      });
+    }
+  }, [user]);
+
   // ── Change password state ─────────────────────────────────
-  // step: request | verify | reset
-  const [passStep, setPassStep] = useState("request");
+  // step: null | request | verify | reset
+  const [passStep, setPassStep] = useState(null);
   const [passLoading, setPassLoading] = useState(false);
   const [code, setCode] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -124,129 +146,185 @@ const AdministratorAccount = () => {
     try {
       await api.put(`/users/${user.id}`, profileForm);
       toast.success("Profile updated successfully.");
+      setIsEditing(false);
     } catch (err) {
-      toast.error(
-        err.response?.data?.message || "Failed to update profile"
-      );
+      toast.error(err.response?.data?.message || "Failed to update profile");
     } finally {
       setProfileLoading(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setProfileForm({
+      username: user?.username || "",
+      email: user?.email || "",
+    });
+    setIsEditing(false);
   };
 
   // ── JSX ───────────────────────────────────────────────────
   return (
     <div className="max-w-2xl">
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
+      <div style={{ marginBottom: "24px" }}>
+        <h1
+          style={{
+            fontSize: "1.75rem",
+            fontWeight: 700,
+            color: C.text,
+            margin: 0,
+          }}
+        >
           Administrator Account
         </h1>
-        <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: 4 }}>
+        <p
+          style={{
+            fontSize: "0.9rem",
+            color: "#6b7280",
+            margin: "4px 0 0",
+          }}
+        >
           Manage your account information and password
         </p>
       </div>
 
-      {/* ── Account Info Card ── */}
-      <div className="dash-card">
+      {/* ── Account Information Card ── */}
+      <div className="dash-card mb-6">
         <div className="dash-card-header">
-          <h3 className="text-base font-semibold text-gray-800">Account Information</h3>
-        </div>
-        <div className="dash-card-body">
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-500">Username</span>
-              <span className="font-medium text-gray-800">{user?.username}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-500">Name</span>
-              <span className="font-medium text-gray-800">{user?.name}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-500">Email</span>
-              <span className="font-medium text-gray-800">{user?.email}</span>
-            </div>
-            <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-500">Role</span>
-              <span className="font-medium text-gray-800 capitalize">
-                {user?.role?.replace("_", " ")}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Edit Profile Card ── */}
-      <div className="dash-card">
-        <div className="dash-card-header">
-          <h3 className="text-base font-semibold text-gray-800">Edit Profile</h3>
-          <p className="text-xs text-gray-400 mt-1">
-            Update your name and username. Email address cannot be changed as it
-            was verified during registration.
-          </p>
-        </div>
-        <div className="dash-card-body">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Name
-              </label>
-              <input
-                type="text"
-                value={profileForm.name}
-                onChange={(e) =>
-                  setProfileForm({ ...profileForm, name: e.target.value })
-                }
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Username
-              </label>
-              <input
-                type="text"
-                value={profileForm.username}
-                onChange={(e) =>
-                  setProfileForm({ ...profileForm, username: e.target.value })
-                }
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={user?.email || ""}
-                disabled
-                className="w-full border border-gray-200 rounded-lg px-4 py-2 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Email address is fixed and cannot be changed
-              </p>
-            </div>
+          <h3 className="text-base font-semibold text-gray-800">
+            Account Information
+          </h3>
+          {!isEditing && (
             <button
-              onClick={handleUpdateProfile}
-              disabled={profileLoading}
-              className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+              onClick={() => setIsEditing(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-blue-900 hover:underline"
             >
-              {profileLoading ? "Saving..." : "Save Changes"}
+              <Pencil size={14} />
+              Edit Profile
             </button>
-          </div>
+          )}
+        </div>
+        <div className="dash-card-body">
+          {!isEditing ? (
+            <div className="space-y-3 text-sm">
+              <div
+                className="flex items-center justify-between py-2.5"
+                style={{ borderBottom: `1px solid ${C.border}` }}
+              >
+                <div className="flex items-center gap-2 text-gray-500">
+                  <User size={16} />
+                  <span>Username</span>
+                </div>
+                <span className="font-medium text-gray-800">
+                  {user?.username}
+                </span>
+              </div>
+              <div
+                className="flex items-center justify-between py-2.5"
+                style={{ borderBottom: `1px solid ${C.border}` }}
+              >
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Mail size={16} />
+                  <span>Email</span>
+                </div>
+                <span className="font-medium text-gray-800">
+                  {user?.email}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Lock size={16} />
+                  <span>Role</span>
+                </div>
+                <span
+                  className="text-xs font-semibold px-3 py-1 rounded-full"
+                  style={{
+                    background: `${C.primary}22`,
+                    color: C.primary,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  {user?.role?.replace("_", " ")}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.username}
+                  onChange={(e) =>
+                    setProfileForm({
+                      ...profileForm,
+                      username: e.target.value,
+                    })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={profileForm.email}
+                  onChange={(e) =>
+                    setProfileForm({ ...profileForm, email: e.target.value })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleUpdateProfile}
+                  disabled={profileLoading}
+                  className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                >
+                  {profileLoading ? "Saving..." : "Save"}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Change Password Card ── */}
-      <div className="dash-card">
+      <div className="dash-card mb-6">
         <div className="dash-card-header">
-          <h3 className="text-base font-semibold text-gray-800">Change Password</h3>
-          <p className="text-xs text-gray-400 mt-1">
-            A 6-digit verification code will be sent to your registered email
-            address before you can set a new password.
-          </p>
+          <h3 className="text-base font-semibold text-gray-800">
+            Change Password
+          </h3>
         </div>
         <div className="dash-card-body">
+          {/* Not initiated */}
+          {!passStep && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                A 6-digit verification code will be sent to{" "}
+                <strong>{user?.email}</strong> to confirm your identity before
+                setting a new password.
+              </p>
+              <button
+                onClick={() => setPassStep("request")}
+                className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition"
+              >
+                Change Password
+              </button>
+            </div>
+          )}
+
           {/* Step 1 — Request code */}
           {passStep === "request" && (
             <div className="space-y-4">
@@ -254,13 +332,24 @@ const AdministratorAccount = () => {
                 Click the button below to send a verification code to{" "}
                 <strong>{user?.email}</strong>.
               </p>
-              <button
-                onClick={handleRequestCode}
-                disabled={passLoading}
-                className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {passLoading ? "Sending..." : "Send Verification Code"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleRequestCode}
+                  disabled={passLoading}
+                  className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                >
+                  {passLoading ? "Sending..." : "Send Verification Code"}
+                </button>
+                <button
+                  onClick={() => {
+                    setPassStep(null);
+                    setCode("");
+                  }}
+                  className="border border-gray-300 text-gray-600 text-sm font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 
@@ -354,7 +443,7 @@ const AdministratorAccount = () => {
                 </button>
                 <button
                   onClick={() => {
-                    setPassStep("request");
+                    setPassStep(null);
                     setCode("");
                     setNewPass("");
                     setConfirm("");
@@ -369,7 +458,7 @@ const AdministratorAccount = () => {
         </div>
       </div>
 
-      {/* ── Logout ── */}
+      {/* ── Sign Out Card ── */}
       <div className="dash-card">
         <div className="dash-card-header">
           <h3 className="text-base font-semibold text-gray-800">Sign Out</h3>
@@ -383,8 +472,9 @@ const AdministratorAccount = () => {
               logout();
               navigate("/login");
             }}
-            className="w-full border border-red-200 text-red-600 hover:bg-red-50 text-sm font-semibold py-2 rounded-lg transition"
+            className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 text-sm font-semibold py-2 rounded-lg transition"
           >
+            <LogOut size={16} />
             Logout
           </button>
         </div>
