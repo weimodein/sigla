@@ -66,61 +66,96 @@ const Sidebar = ({ onToggle }) => {
       }}
     >
       {/* Sidebar Header */}
-      <div
-        style={{
-          padding: "24px",
-          borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexShrink: 0,
-          background: "#1e3a8a",
-          transition: transitionStyle,
-        }}
-      >
-        {!collapsed && (
+      {collapsed ? (
+        /* ── Collapsed: logo on top, toggle below ── */
+        <div
+          style={{
+            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "8px",
+            padding: "16px 0",
+            flexShrink: 0,
+          }}
+        >
+          <img
+            src="/logo.png"
+            alt="SIGLA logo"
+            style={{ width: "36px", height: "36px", objectFit: "contain" }}
+          />
+          <button
+            onClick={handleToggle}
+            style={{
+              background: "none",
+              border: "none",
+              color: "white",
+              cursor: "pointer",
+              padding: "8px",
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: transitionStyle,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            aria-label="Expand sidebar"
+          >
+            <PanelLeftOpen size={20} />
+          </button>
+        </div>
+      ) : (
+        /* ── Expanded: [logo] [SIGLA] on the left, toggle on the right ── */
+        <div
+          style={{
+            padding: "20px 24px",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            flexShrink: 0,
+          }}
+        >
+          <img
+            src="/logo.png"
+            alt="SIGLA logo"
+            style={{ width: "36px", height: "36px", objectFit: "contain", flexShrink: 0 }}
+          />
           <span
             style={{
               fontSize: "1.5rem",
               fontWeight: 700,
               color: "white",
               whiteSpace: "nowrap",
+              flex: 1,
             }}
           >
             SIGLA
           </span>
-        )}
-        <button
-          onClick={handleToggle}
-          style={{
-            background: "none",
-            border: "none",
-            fontSize: "1.25rem",
-            color: "white",
-            cursor: "pointer",
-            padding: "8px",
-            borderRadius: "6px",
-            transition: transitionStyle,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginLeft: collapsed ? "0" : "auto",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "none";
-          }}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? (
-            <PanelLeftOpen size={20} />
-          ) : (
+          <button
+            onClick={handleToggle}
+            style={{
+              background: "none",
+              border: "none",
+              color: "white",
+              cursor: "pointer",
+              padding: "8px",
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: transitionStyle,
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            aria-label="Collapse sidebar"
+          >
             <PanelLeftClose size={20} />
-          )}
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
 
       {/* User Info - conditionally rendered */}
       {!collapsed && user?.name && (
