@@ -135,6 +135,7 @@ const ManageWordBank = () => {
   const [selectedSequences, setSelectedSequences] = useState([]);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
   const [perSeqVideos, setPerSeqVideos] = useState({}); // sample_id -> video_url
+  const [perSeqSpeeds, setPerSeqSpeeds] = useState({}); // sample_id -> playback speed
   const [galleryWarnModal, setGalleryWarnModal] = useState(null); // { userId, username }
   const [galleryWarnReason, setGalleryWarnReason] = useState("");
 
@@ -196,6 +197,7 @@ const ManageWordBank = () => {
     setSelectedSequences([]);
     setGeneratedVideoUrl(null);
     setPerSeqVideos({});
+    setPerSeqSpeeds({});
     try {
       const data = await getWordSamples(word.id);
       setSamples(data.samples || []);
@@ -1054,6 +1056,7 @@ const ManageWordBank = () => {
                               <span className="text-sm font-semibold text-indigo-800">Generated Video</span>
                             </div>
                             <video
+                              id={`gen-video-${seq.sample_id}`}
                               src={
                                 perSeqVideos[seq.sample_id].startsWith("/")
                                   ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${perSeqVideos[seq.sample_id]}`
@@ -1064,11 +1067,31 @@ const ManageWordBank = () => {
                               autoPlay
                               loop
                             />
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-xs text-indigo-700 font-medium">Playback Speed:</span>
+                              <select
+                                value={perSeqSpeeds[seq.sample_id] ?? 1}
+                                onChange={(e) => {
+                                  const speed = parseFloat(e.target.value);
+                                  setPerSeqSpeeds(prev => ({ ...prev, [seq.sample_id]: speed }));
+                                  const el = document.getElementById(`gen-video-${seq.sample_id}`);
+                                  if (el) el.playbackRate = speed;
+                                }}
+                                className="text-xs border border-indigo-300 rounded px-2 py-1 bg-white"
+                              >
+                                {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2].map(s => (
+                                  <option key={s} value={s}>{s}×</option>
+                                ))}
+                              </select>
+                            </div>
                             <div className="mt-3 flex gap-2">
                               <button
                                 onClick={async () => {
                                   try {
-                                    await setWordVideo(galleryModal.id, { video_url: perSeqVideos[seq.sample_id] });
+                                    await setWordVideo(galleryModal.id, {
+                                      video_url: perSeqVideos[seq.sample_id],
+                                      playback_speed: perSeqSpeeds[seq.sample_id] ?? 1,
+                                    });
                                     setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[seq.sample_id] } : prev);
                                     fetchWords();
                                     showSuccess("Video set as word bank video");
@@ -1274,6 +1297,7 @@ const ManageWordBank = () => {
                                 <span className="text-sm font-semibold text-indigo-800">Generated Video</span>
                               </div>
                               <video
+                                id={`gen-video-${sample.id}`}
                                 src={
                                   perSeqVideos[sample.id].startsWith("/")
                                     ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${perSeqVideos[sample.id]}`
@@ -1284,11 +1308,31 @@ const ManageWordBank = () => {
                                 autoPlay
                                 loop
                               />
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-xs text-indigo-700 font-medium">Playback Speed:</span>
+                                <select
+                                  value={perSeqSpeeds[sample.id] ?? 1}
+                                  onChange={(e) => {
+                                    const speed = parseFloat(e.target.value);
+                                    setPerSeqSpeeds(prev => ({ ...prev, [sample.id]: speed }));
+                                    const el = document.getElementById(`gen-video-${sample.id}`);
+                                    if (el) el.playbackRate = speed;
+                                  }}
+                                  className="text-xs border border-indigo-300 rounded px-2 py-1 bg-white"
+                                >
+                                  {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2].map(s => (
+                                    <option key={s} value={s}>{s}×</option>
+                                  ))}
+                                </select>
+                              </div>
                               <div className="mt-3 flex gap-2">
                                 <button
                                   onClick={async () => {
                                     try {
-                                      await setWordVideo(galleryModal.id, { video_url: perSeqVideos[sample.id] });
+                                      await setWordVideo(galleryModal.id, {
+                                        video_url: perSeqVideos[sample.id],
+                                        playback_speed: perSeqSpeeds[sample.id] ?? 1,
+                                      });
                                       setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[sample.id] } : prev);
                                       fetchWords();
                                       showSuccess("Video set as word bank video");
