@@ -243,7 +243,6 @@ const ReportsAnalytics = () => {
         lines.push("=== USER STATISTICS ===");
         lines.push(`Total Users,${userStats?.total ?? 0}`);
         lines.push(`Active,${userStats?.active ?? 0}`);
-        lines.push(`Pending,${userStats?.pending ?? 0}`);
         lines.push(`Deactivated,${userStats?.deactivated ?? 0}`);
         lines.push(`Warned,${userStats?.warned ?? 0}`);
         lines.push("");

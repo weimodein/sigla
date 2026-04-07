@@ -4,7 +4,6 @@ import {
   getDeactivatedUsers,
   getWarnedUsers,
   getUserStats,
-  approveUser,
   warnUser,
   deactivateUser,
   reactivateUser,
@@ -15,7 +14,6 @@ import {
 import { useToast } from "../../context/ToastContext.jsx";
 import {
   Users,
-  ClipboardList,
   UserX,
   AlertTriangle,
   Check,
@@ -245,7 +243,6 @@ const Pagination = ({
 const StatusBadge = ({ status }) => {
   const map = {
     active: C.green,
-    pending: C.yellow,
     deactivated: C.red,
     deleted: C.muted,
   };
@@ -344,6 +341,7 @@ const ManageUsers = () => {
   const [editModal, setEditModal] = useState(null);
   const [createModal, setCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({
+    name: "",
     username: "",
     email: "",
     password: "",
@@ -428,7 +426,7 @@ const ManageUsers = () => {
 
   // ── Create User ──────────────────────────────────────────────
   const handleCreateUser = async () => {
-    if (!createForm.username.trim() || !createForm.email.trim() || !createForm.password.trim()) {
+    if (!createForm.name.trim() || !createForm.username.trim() || !createForm.email.trim() || !createForm.password.trim()) {
       showError("All fields are required");
       return;
     }
@@ -441,7 +439,7 @@ const ManageUsers = () => {
       await createUser(createForm);
       showSuccess("User created successfully");
       setCreateModal(false);
-      setCreateForm({ username: "", email: "", password: "" });
+      setCreateForm({ name: "", username: "", email: "", password: "" });
       fetchStats();
       fetchTabData();
     } catch (err) {
@@ -454,20 +452,6 @@ const ManageUsers = () => {
   // ── Actions ─────────────────────────────────────────────────
   const showSuccess = (msg) => toast.success(msg);
   const showError = (msg) => toast.error(msg);
-
-  const handleApprove = async (id) => {
-    setActionLoading(true);
-    try {
-      await approveUser(id);
-      showSuccess("User approved successfully");
-      fetchStats();
-      fetchTabData();
-    } catch (err) {
-      showError(err.response?.data?.message || "Failed to approve user");
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   const handleWarnOpen = (user) => {
     setWarnReason("");
@@ -1129,6 +1113,27 @@ const ManageUsers = () => {
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
               Create a user account directly. This bypasses email verification and the account is immediately active.
             </p>
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Name
+              </label>
+              <input
+                type="text"
+                value={createForm.name}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, name: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+            </div>
             <div>
               <label
                 className="block text-xs font-medium mb-1"
