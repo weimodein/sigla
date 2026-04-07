@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart,
@@ -16,25 +16,15 @@ import { broadcastAnnouncement } from "../../api/notificationApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
   Users,
-  UserCheck,
   BookOpen,
   Cpu,
   ClipboardList,
   Database,
-  ArrowUpRight,
-  ArrowDownRight,
   TrendingUp,
   Send,
+  Activity,
+  Clock,
 } from "lucide-react";
-
-// ── Color palette ──
-const C = {
-  text: "#1f2937",
-  background: "#f3f4f6",
-  primary: "#1e3a8a",
-  secondary: "#1d4ed8",
-  accent: "#3f8efc",
-};
 
 // ── Helpers ──
 const formatActivityDate = (dateStr) => {
@@ -51,88 +41,75 @@ const formatActivityDate = (dateStr) => {
 
 const formatChartDate = (dateStr, period) => {
   const d = new Date(dateStr);
-  if (period === "year") {
+  if (period === "year")
     return d.toLocaleDateString("en-PH", { month: "short", year: "2-digit" });
-  }
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 };
 
-
 // ── Stat Card ──
-const StatCard = ({ title, value, icon: Icon, color, trend }) => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
+const StatCard = ({ title, value, icon: Icon, color }) => (
+  <div className="dash-stat-card flex items-center gap-4 min-w-0">
+    <div className={`p-3 rounded-full shrink-0 ${color}`}>
       <Icon size={20} className="text-white" />
     </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
+    <div className="min-w-0">
+      <p className="text-xs text-gray-500 truncate">{title}</p>
       <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
     </div>
-    {trend && (
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          right: "20px",
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-          fontSize: "0.75rem",
-          fontWeight: 600,
-          color: trend > 0 ? "#16a34a" : "#dc2626",
-        }}
-      >
-        {trend > 0 ? <TrendingUp size={14} /> : <ArrowDownRight size={14} />}
-        <span>{Math.abs(trend)}%</span>
-      </div>
-    )}
   </div>
 );
 
 // ── Skeleton Card ──
 const SkeletonCard = () => (
   <div className="dash-stat-card flex items-center gap-4" style={{ opacity: 0.6 }}>
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse shrink-0" />
+    <div className="space-y-2 flex-1 min-w-0">
       <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
       <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
     </div>
   </div>
 );
 
+// ── Activity badge ──
+const ActivityBadge = ({ badge }) => {
+  const map = {
+    registered: "bg-blue-100 text-blue-700",
+    pending:    "bg-yellow-100 text-yellow-700",
+    approved:   "bg-green-100 text-green-700",
+    rejected:   "bg-red-100 text-red-700",
+    ready:      "bg-blue-100 text-blue-700",
+  };
+  const label = {
+    registered: "Registered",
+    pending:    "Pending",
+    approved:   "Approved",
+    rejected:   "Rejected",
+    ready:      "Registered",
+  };
+  return (
+    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${map[badge] ?? "bg-gray-100 text-gray-600"}`}>
+      {label[badge] ?? badge}
+    </span>
+  );
+};
+
 // ── Chart that hides during sidebar transition ──
 const TransitionAwareChart = ({ children }) => {
   const [isTransitioning, setIsTransitioning] = useState(
     document.body.classList.contains("sidebar-transitioning"),
   );
-
   useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsTransitioning(
-        document.body.classList.contains("sidebar-transitioning"),
-      );
-    });
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+    const observer = new MutationObserver(() =>
+      setIsTransitioning(document.body.classList.contains("sidebar-transitioning")),
+    );
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, []);
 
   if (isTransitioning) {
     return (
-      <div
-        style={{
-          height: "300px",
-          background: "#f9fafb",
-          borderRadius: "8px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#9ca3af",
-        }}
-      >
-        <TrendingUp size={32} style={{ opacity: 0.4 }} />
+      <div className="h-full flex items-center justify-center text-gray-300">
+        <TrendingUp size={32} style={{ opacity: 0.35 }} />
       </div>
     );
   }
@@ -144,31 +121,29 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [userStats, setUserStats] = useState(null);
-  const [wordStats, setWordStats] = useState(null);
+  const [userStats, setUserStats]   = useState(null);
+  const [wordStats, setWordStats]   = useState(null);
   const [modelStats, setModelStats] = useState(null);
-  const [allModels, setAllModels] = useState([]);
+  const [allModels, setAllModels]   = useState([]);
   const [pendingWords, setPendingWords] = useState([]);
-
   const [registrations, setRegistrations] = useState([]);
-  const [regPeriod, setRegPeriod] = useState("month");
-  const [loading, setLoading] = useState(true);
-
-  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [recentReviews, setRecentReviews] = useState([]);
+  const [regPeriod, setRegPeriod]   = useState("month");
+  const [loading, setLoading]       = useState(true);
+  const [announcementTitle, setAnnouncementTitle]     = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
-  const [sending, setSending] = useState(false);
+  const [sending, setSending]       = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [users, words, models, modelsAll, pendingData] =
-          await Promise.all([
-            getUserStats(),
-            getWordStats(),
-            getModelStats(),
-            getAllModels(),
-            getAllWords({ status: "pending", limit: 5 }),
-          ]);
+        const [users, words, models, modelsAll, pendingData] = await Promise.all([
+          getUserStats(),
+          getWordStats(),
+          getModelStats(),
+          getAllModels(),
+          getAllWords({ status: "pending", limit: 5 }),
+        ]);
         setUserStats(users);
         setWordStats(words);
         setModelStats(models);
@@ -183,8 +158,6 @@ const Dashboard = () => {
     fetchAll();
   }, [toast]);
 
-  const [recentReviews, setRecentReviews] = useState([]);
-
   const fetchRegistrations = useCallback(async (period) => {
     try {
       const res = await getUserRegistrations(period);
@@ -194,7 +167,6 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Fetch recently approved and rejected words
   const fetchRecentReviews = useCallback(async () => {
     try {
       const [approved, rejected] = await Promise.all([
@@ -202,14 +174,8 @@ const Dashboard = () => {
         getAllWords({ status: "rejected", limit: 10 }),
       ]);
       const combined = [
-        ...(approved.words || []).map((w) => ({
-          ...w,
-          reviewStatus: "approved",
-        })),
-        ...(rejected.words || []).map((w) => ({
-          ...w,
-          reviewStatus: "rejected",
-        })),
+        ...(approved.words || []).map((w) => ({ ...w, reviewStatus: "approved" })),
+        ...(rejected.words || []).map((w) => ({ ...w, reviewStatus: "rejected" })),
       ];
       combined.sort(
         (a, b) =>
@@ -222,13 +188,8 @@ const Dashboard = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchRecentReviews();
-  }, [fetchRecentReviews]);
-
-  useEffect(() => {
-    fetchRegistrations(regPeriod);
-  }, [regPeriod, fetchRegistrations]);
+  useEffect(() => { fetchRecentReviews(); }, [fetchRecentReviews]);
+  useEffect(() => { fetchRegistrations(regPeriod); }, [regPeriod, fetchRegistrations]);
 
   const handleSendAnnouncement = async () => {
     if (!announcementTitle.trim() || !announcementMessage.trim()) {
@@ -251,317 +212,163 @@ const Dashboard = () => {
     }
   };
 
+  // ── Loading skeleton ──
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        <div>
-          <div
-            style={{
-              width: "120px",
-              height: "32px",
-              background: "#e5e7eb",
-              borderRadius: "6px",
-              marginBottom: "8px",
-            }}
-          />
-          <div
-            style={{
-              width: "200px",
-              height: "16px",
-              background: "#e5e7eb",
-              borderRadius: "6px",
-            }}
-          />
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <div className="h-8 w-44 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
         </div>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "24px",
-          }}
-        >
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} style={{ flex: "1 1 0", minWidth: "180px" }}>
-              <SkeletonCard />
+        {/* Stat cards skeleton — 3-col spanning grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 280px", gridTemplateRows: "auto auto", gap: "24px" }}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <div style={{ gridColumn: "3", gridRow: "1 / 3" }} className="dash-stat-card animate-pulse" />
+        </div>
+        {/* Chart skeleton */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
+          <div className="dash-card animate-pulse">
+            <div className="dash-card-header"><div className="h-5 w-40 bg-gray-200 rounded" /></div>
+            <div className="dash-card-body"><div className="h-64 bg-gray-100 rounded" /></div>
+          </div>
+          <div className="dash-card animate-pulse">
+            <div className="dash-card-header"><div className="h-5 w-28 bg-gray-200 rounded" /></div>
+            <div className="dash-card-body space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="h-3 w-24 bg-gray-200 rounded" />
+                  <div className="h-2 bg-gray-100 rounded" />
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
     );
   }
 
-  const deployedModel = modelStats?.current_model;
-  const modelsWithAccuracy = (allModels || [])
-    .filter((m) => m.accuracy != null)
-    .slice(0, 8);
+  const deployedModel      = modelStats?.current_model;
+  const modelsWithAccuracy = (allModels || []).filter((m) => m.accuracy != null).slice(0, 8);
 
-  // Compose recent activity from registrations and word actions
+  // Compose recent activity
   const recentActivity = (() => {
     const activities = [];
-
     registrations.slice(0, 10).forEach((r) => {
       activities.push({
         id: `reg-${r.date}`,
         label: "New User Registration",
         description: `${r.count} user(s) registered`,
-        badge: "ready",
-        badgeText: "registered",
+        badge: "registered",
         date: r.date,
       });
     });
-
     pendingWords.forEach((word) => {
       activities.push({
         id: `word-${word.id}`,
         label: word.label,
         description: `${word.total_samples || 0} sample(s) submitted for review`,
         badge: "pending",
-        badgeText: "pending",
         date: word.created_at || word.updated_at || Date.now(),
       });
     });
-
     recentReviews.forEach((word) => {
       activities.push({
         id: `review-${word.id}`,
         label: `${word.reviewStatus === "approved" ? "Approved" : "Rejected"}: ${word.label}`,
-        description: `${word.reviewStatus === "approved" ? "Word approved and added to word bank" : "Word rejected — submitter notified"}`,
-        badge: word.reviewStatus === "approved" ? "approved" : "rejected",
-        badgeText: word.reviewStatus,
+        description: word.reviewStatus === "approved"
+          ? "Word approved and added to word bank"
+          : "Word rejected — submitter notified",
+        badge: word.reviewStatus,
         date: word.reviewed_at || word.updated_at || Date.now(),
       });
     });
-
     activities.sort((a, b) => new Date(b.date) - new Date(a.date));
     return activities.slice(0, 10);
   })();
+
   const chartData = registrations.map((r) => ({
     ...r,
     label: formatChartDate(r.date, regPeriod),
   }));
 
   return (
-    <div>
-      {/* Welcome Header */}
-      <div style={{ marginBottom: "32px" }}>
-        <h1
-          style={{
-            fontSize: "1.75rem",
-            fontWeight: 700,
-            color: C.text,
-            margin: 0,
-          }}
-        >
-          Admin Dashboard
-        </h1>
-        <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
-          Welcome back! Here's what's happening today.
-        </p>
+    <div className="space-y-6">
+
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Welcome back! Here's what's happening today.</p>
       </div>
 
-      {/* Quick Stats Grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 280px",
-          gridTemplateRows: "auto auto",
-          gap: "24px",
-          marginBottom: "32px",
-        }}
-      >
-        <StatCard
-          title="Total Users"
-          value={userStats?.total}
-          icon={Users}
-          trend={12}
-          color="bg-blue-900"
-        />
-        <StatCard
-          title="Total Words"
-          value={wordStats?.total}
-          icon={BookOpen}
-          trend={8}
-          color="bg-blue-800"
-        />
-        <StatCard
-          title="Pending Submissions"
-          value={wordStats?.pending}
-          icon={ClipboardList}
-          trend={-3}
-          color="bg-yellow-500"
-        />
-        <StatCard
-          title="Gesture Samples"
-          value={wordStats?.total_samples}
-          icon={Database}
-          color="bg-blue-700"
-        />
-        {/* Tall card on right — Model Version */}
-        <div style={{ gridRow: "1 / 3" }}>
-          <div
-            className="dash-stat-card"
-            style={{
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "16px",
-                justifyContent: "center",
-              }}
-            >
-              <div className="p-3 rounded-full bg-green-500">
-                <Cpu size={20} className="text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Model Version</p>
-                <p className="text-2xl font-bold text-gray-800">{deployedModel?.version_number ?? "None"}</p>
-              </div>
+      {/* ── Stat cards — 3-col grid, model version spans both rows on the right ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 280px", gridTemplateRows: "auto auto", gap: "24px" }}>
+        {/* Col 3, rows 1–2 — placed first so auto-placement fills cols 1–2 correctly */}
+        <div style={{ gridColumn: "3", gridRow: "1 / 3" }}>
+          <div className="dash-stat-card h-full flex flex-col items-center justify-center gap-3">
+            <div className="p-4 rounded-full bg-green-600 shrink-0">
+              <Cpu size={24} className="text-white" />
             </div>
-            <div
-              style={{
-                position: "absolute",
-                top: "20px",
-                right: "20px",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#16a34a",
-              }}
-            >
-              <ArrowUpRight size={14} />
-              <span>5%</span>
+            <div className="text-center min-w-0">
+              <p className="text-xs text-gray-500">Active Model Version</p>
+              <p className="text-3xl font-bold text-gray-800 mt-1">
+                {deployedModel?.version_number ?? "None"}
+              </p>
             </div>
           </div>
         </div>
+        {/* 4 auto-placed cards — fill cols 1 & 2, rows 1 & 2 */}
+        <StatCard title="Total Users"         value={userStats?.total}         icon={Users}         color="bg-blue-900" />
+        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800" />
+        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700" />
+        <StatCard title="Pending Submissions" value={wordStats?.pending}       icon={ClipboardList} color="bg-yellow-500" />
       </div>
 
-      {/* Main Content: Charts Row */}
-      <div
-        style={{
-          display: "flex",
-          gap: "24px",
-          marginBottom: "24px",
-          alignItems: "stretch",
-        }}
-      >
-        {/* Chart */}
-        <div className="dash-card" style={{ flex: 1 }}>
-          <div className="dash-card-header">
-            <h2
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: 600,
-                color: C.text,
-                margin: "0 0 4px",
-              }}
-            >
-              New User Registrations
-            </h2>
-            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-              User signups over time
-            </p>
-          </div>
-          <div
-            className="dash-card-body"
-            style={{
-              display: "flex",
-              maxHeight: "300px",
-              flexDirection: "column",
-            }}
-          >
+      {/* ── Charts row: Registration bar chart + Model accuracy list ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6 items-start">
+
+        {/* Registration chart */}
+        <div className="dash-card">
+          <div className="dash-card-header flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">New User Registrations</h2>
+              <p className="text-sm text-gray-500 mt-0.5">User signups over time</p>
+            </div>
             {/* Period toggle */}
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                marginBottom: "16px",
-                alignSelf: "flex-end",
-              }}
-            >
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1 shrink-0">
               {["week", "month", "year"].map((p) => (
                 <button
                   key={p}
                   onClick={() => setRegPeriod(p)}
-                  style={{
-                    padding: "6px 12px",
-                    fontSize: "0.75rem",
-                    borderRadius: "8px",
-                    fontWeight: 600,
-                    border: "none",
-                    cursor: "pointer",
-                    background: regPeriod === p ? C.primary : "#f3f4f6",
-                    color: regPeriod === p ? "white" : "#6b7280",
-                    transition: "all 0.2s ease",
-                    fontFamily: "inherit",
-                  }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition capitalize ${
+                    regPeriod === p
+                      ? "bg-white text-blue-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
                 >
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                  {p}
                 </button>
               ))}
             </div>
-            <div style={{ height: "300px" }}>
+          </div>
+          <div className="dash-card-body">
+            <div style={{ height: 280 }}>
               {chartData.length === 0 ? (
-                <div
-                  style={{
-                    height: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#9ca3af",
-                    textAlign: "center",
-                  }}
-                >
-                  <TrendingUp
-                    size={48}
-                    style={{ marginBottom: "12px", opacity: 0.4 }}
-                  />
-                  <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
-                    No registration data for this period
-                  </p>
+                <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                  <TrendingUp size={40} style={{ opacity: 0.35 }} />
+                  <p className="text-sm font-medium">No registration data for this period</p>
                 </div>
               ) : (
                 <TransitionAwareChart>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
-                    >
+                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fontSize: 11, fill: "#9ca3af" }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11, fill: "#9ca3af" }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          fontSize: 12,
-                          borderRadius: 8,
-                          border: "1px solid #e5e7eb",
-                        }}
-                        cursor={{ fill: "#f3f4f6" }}
-                      />
-                      <Bar
-                        dataKey="count"
-                        name="Registrations"
-                        fill={C.primary}
-                        radius={[4, 4, 0, 0]}
-                      />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} cursor={{ fill: "#f3f4f6" }} />
+                      <Bar dataKey="count" name="Registrations" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </TransitionAwareChart>
@@ -570,228 +377,73 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Model Accuracy */}
-        <div className="dash-card" style={{ width: "280px", minHeight: 0 }}>
+        {/* Model accuracy list */}
+        <div className="dash-card">
           <div className="dash-card-header">
-            <h2
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: 600,
-                color: C.text,
-                margin: "0 0 4px",
-              }}
-            >
-              Model Accuracy
-            </h2>
-            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-              By version
-            </p>
+            <h2 className="text-lg font-semibold text-gray-800">Model Accuracy</h2>
+            <p className="text-sm text-gray-500 mt-0.5">By version</p>
           </div>
-          <div
-            className="dash-card-body"
-            style={{ maxHeight: "300px", overflowY: "auto" }}
-          >
+          <div className="dash-card-body space-y-4 max-h-72 overflow-y-auto">
             {modelsWithAccuracy.length === 0 ? (
-              <p
-                style={{
-                  color: "#9ca3af",
-                  fontSize: "0.85rem",
-                  textAlign: "center",
-                  padding: "24px",
-                }}
-              >
-                No trained models yet
-              </p>
+              <p className="text-sm text-gray-400 text-center py-8">No trained models yet</p>
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "14px",
-                }}
-              >
-                {modelsWithAccuracy.map((m) => {
-                  const pct = (m.accuracy * 100).toFixed(1);
-                  const isDeployed = m.status === "deployed";
-                  return (
-                    <div key={m.id}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        <p
-                          style={{
-                            fontSize: "0.8rem",
-                            fontWeight: 500,
-                            color: C.text,
-                            margin: 0,
-                          }}
-                        >
-                          v{m.version_number}
-                        </p>
-                        {isDeployed && (
-                          <span
-                            style={{
-                              fontSize: "0.65rem",
-                              background: "#dcfce7",
-                              color: "#16a34a",
-                              padding: "2px 6px",
-                              borderRadius: "10px",
-                              fontWeight: 600,
-                            }}
-                          >
-                            deployed
-                          </span>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          width: "100%",
-                          background: "#f3f4f6",
-                          borderRadius: "4px",
-                          height: "6px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: "6px",
-                            borderRadius: "4px",
-                            background: isDeployed ? "#22c55e" : C.accent,
-                            width: `${Math.min(parseFloat(pct), 100)}%`,
-                            transition: "width 0.5s ease",
-                          }}
-                        />
-                      </div>
-                      <p
-                        style={{
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          color: "#6b7280",
-                          marginTop: "2px",
-                          textAlign: "right",
-                          margin: 0,
-                        }}
-                      >
-                        {pct}%
-                      </p>
+              modelsWithAccuracy.map((m) => {
+                const pct = (m.accuracy * 100).toFixed(1);
+                const isDeployed = m.status === "deployed";
+                return (
+                  <div key={m.id}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-gray-700">v{m.version_number}</span>
+                      {isDeployed && (
+                        <span className="text-[11px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                          deployed
+                        </span>
+                      )}
+                      <span className="ml-auto text-xs font-semibold text-gray-500">{pct}%</span>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full transition-all duration-500 ${isDeployed ? "bg-green-500" : "bg-blue-400"}`}
+                        style={{ width: `${Math.min(parseFloat(pct), 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
       </div>
 
-      {/* Main Content: Activity Row */}
-      <div
-        style={{
-          display: "flex",
-          gap: "24px",
-          marginBottom: "24px",
-          alignItems: "stretch",
-        }}
-      >
-        {/* Recent Activity */}
-        <div className="dash-card" style={{ flex: 1 }}>
-          <div className="dash-card-header">
-            <h2
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: 600,
-                color: C.text,
-                margin: "0 0 4px",
-              }}
-            >
-              Recent Activity
-            </h2>
-            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-              Latest actions in the system
-            </p>
+      {/* ── Activity row: Recent activity + Pending reviews ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6 items-start">
+
+        {/* Recent activity */}
+        <div className="dash-card">
+          <div className="dash-card-header flex items-center gap-2">
+            <Activity size={18} className="text-gray-400 shrink-0" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">Recent Activity</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Latest events in the system</p>
+            </div>
           </div>
-          <div
-            className="dash-card-body"
-            style={{ maxHeight: "300px", overflowY: "auto" }}
-          >
+          <div className="dash-card-body max-h-80 overflow-y-auto">
             {recentActivity.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  color: "#9ca3af",
-                  padding: "32px 16px",
-                }}
-              >
-                <TrendingUp
-                  size={40}
-                  style={{ marginBottom: "8px", opacity: 0.4 }}
-                />
-                <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
-                  No recent activity
-                </p>
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
+                <Activity size={36} style={{ opacity: 0.35 }} />
+                <p className="text-sm font-medium">No recent activity</p>
               </div>
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "16px",
-                }}
-              >
+              <div className="space-y-3">
                 {recentActivity.map((item) => (
                   <div key={item.id} className="dash-request-item">
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          gap: "16px",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        <h4
-                          style={{
-                            fontSize: "0.95rem",
-                            fontWeight: 600,
-                            color: C.text,
-                            margin: 0,
-                            flex: 1,
-                          }}
-                        >
-                          {item.label}
-                        </h4>
-                        <span
-                          className={
-                            item.badge ? `badge-${item.badge}` : "badge-pending"
-                          }
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: "12px",
-                            fontSize: "0.7rem",
-                            fontWeight: 600,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.badgeText ?? item.badge ?? "pending"}
-                        </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3 mb-0.5">
+                        <h4 className="text-sm font-semibold text-gray-800 truncate">{item.label}</h4>
+                        <ActivityBadge badge={item.badge} />
                       </div>
-                      <p
-                        style={{
-                          fontSize: "0.85rem",
-                          color: "#6b7280",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        {item.description}
-                      </p>
-                      <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
-                        {formatActivityDate(item.date)}
-                      </span>
+                      <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                      <span className="text-[11px] text-gray-400">{formatActivityDate(item.date)}</span>
                     </div>
                   </div>
                 ))}
@@ -800,121 +452,37 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Pending Words */}
-        <div className="dash-card" style={{ width: "280px", minHeight: 0 }}>
-          <div className="dash-card-header">
-            <h2
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: 600,
-                color: C.text,
-                margin: "0 0 4px",
-              }}
-            >
-              Pending Reviews
-            </h2>
-            <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-              Word submissions awaiting review
-            </p>
+        {/* Pending reviews */}
+        <div className="dash-card">
+          <div className="dash-card-header flex items-center gap-2">
+            <Clock size={18} className="text-gray-400 shrink-0" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800">Pending Reviews</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Submissions awaiting review</p>
+            </div>
           </div>
-          <div
-            className="dash-card-body"
-            style={{ maxHeight: "300px", overflowY: "auto" }}
-          >
+          <div className="dash-card-body max-h-80 overflow-y-auto">
             {pendingWords.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  color: "#9ca3af",
-                  padding: "32px 16px",
-                }}
-              >
-                <BookOpen
-                  size={40}
-                  style={{ marginBottom: "8px", opacity: 0.4 }}
-                />
-                <p style={{ fontSize: "0.9rem", fontWeight: 500 }}>
-                  No pending reviews
-                </p>
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
+                <BookOpen size={36} style={{ opacity: 0.35 }} />
+                <p className="text-sm font-medium">No pending reviews</p>
               </div>
             ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "16px",
-                }}
-              >
+              <div className="space-y-3">
                 {pendingWords.map((word) => (
-                  <div key={word.id} className="dash-request-item">
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          gap: "16px",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        <h4
-                          style={{
-                            fontSize: "0.95rem",
-                            fontWeight: 600,
-                            color: C.text,
-                            margin: 0,
-                            flex: 1,
-                          }}
-                        >
-                          {word.label}
-                        </h4>
-                        <span
-                          className="badge-pending"
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: "12px",
-                            fontSize: "0.7rem",
-                            fontWeight: 600,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          pending
-                        </span>
-                      </div>
-                      <p
-                        style={{
-                          fontSize: "0.85rem",
-                          color: "#6b7280",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        {word.submitter?.username || "—"} ·{" "}
-                        {word.total_samples || 0} samples
+                  <div key={word.id} className="dash-request-item flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-gray-800 truncate">{word.label}</h4>
+                      <p className="text-xs text-gray-500">
+                        {word.submitter?.username || "—"} · {word.total_samples || 0} samples
                       </p>
-                      <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
-                        {formatActivityDate(
-                          word.created_at || word.updated_at || Date.now(),
-                        )}
+                      <span className="text-[11px] text-gray-400">
+                        {formatActivityDate(word.created_at || word.updated_at || Date.now())}
                       </span>
                     </div>
                     <button
-                      onClick={() =>
-                        navigate(`/word_bank?status=pending&wordId=${word.id}`)
-                      }
-                      style={{
-                        background: "none",
-                        border: `2px solid ${C.primary}`,
-                        color: C.primary,
-                        padding: "4px 12px",
-                        borderRadius: "6px",
-                        fontSize: "0.8rem",
-                        fontWeight: 500,
-                        cursor: "pointer",
-                        transition: "0.3s",
-                        fontFamily: "inherit",
-                        whiteSpace: "nowrap",
-                      }}
+                      onClick={() => navigate(`/word_bank?status=pending&wordId=${word.id}`)}
+                      className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border-2 border-blue-900 text-blue-900 hover:bg-blue-900 hover:text-white transition"
                     >
                       Review
                     </button>
@@ -926,141 +494,49 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Send Announcement */}
-      <div className="dash-card" style={{ marginTop: "24px" }}>
-        <div className="dash-card-header">
-          <h2
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: 600,
-              color: C.text,
-              margin: "0 0 4px",
-            }}
-          >
-            Send Announcement
-          </h2>
-          <p style={{ fontSize: "0.85rem", color: "#6b7280", margin: 0 }}>
-            Broadcast a notification to all active users
-          </p>
+      {/* ── Send Announcement ── */}
+      <div className="dash-card">
+        <div className="dash-card-header flex items-center gap-2">
+          <Send size={18} className="text-gray-400 shrink-0" />
+          <div>
+            <h2 className="text-lg font-semibold text-gray-800">Send Announcement</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Broadcast a notification to all active users</p>
+          </div>
         </div>
         <div className="dash-card-body">
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-          >
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-end">
             <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "0.85rem",
-                  fontWeight: 500,
-                  color: "#4b5563",
-                  marginBottom: "4px",
-                }}
-              >
-                Title
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Title</label>
               <input
                 type="text"
                 value={announcementTitle}
                 onChange={(e) => setAnnouncementTitle(e.target.value)}
                 placeholder="e.g. Scheduled Maintenance"
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: `2px solid #e5e7eb`,
-                  borderRadius: "8px",
-                  fontSize: "0.9rem",
-                  color: C.text,
-                  outline: "none",
-                  transition: "border-color 0.3s",
-                  fontFamily: "inherit",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = C.primary;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#e5e7eb";
-                }}
+                className="w-full px-3 py-2.5 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-900 transition"
               />
             </div>
             <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "0.85rem",
-                  fontWeight: 500,
-                  color: "#4b5563",
-                  marginBottom: "4px",
-                }}
-              >
-                Message
-              </label>
-              <textarea
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Message</label>
+              <input
+                type="text"
                 value={announcementMessage}
                 onChange={(e) => setAnnouncementMessage(e.target.value)}
                 placeholder="Write your announcement here..."
-                rows={3}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  border: `2px solid #e5e7eb`,
-                  borderRadius: "8px",
-                  fontSize: "0.9rem",
-                  color: C.text,
-                  outline: "none",
-                  transition: "border-color 0.3s",
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = C.primary;
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#e5e7eb";
-                }}
+                className="w-full px-3 py-2.5 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-900 transition"
               />
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                onClick={handleSendAnnouncement}
-                disabled={
-                  sending ||
-                  !announcementTitle.trim() ||
-                  !announcementMessage.trim()
-                }
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "10px 20px",
-                  background:
-                    sending ||
-                    !announcementTitle.trim() ||
-                    !announcementMessage.trim()
-                      ? "#9ca3af"
-                      : C.primary,
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "0.9rem",
-                  fontWeight: 500,
-                  cursor:
-                    sending ||
-                    !announcementTitle.trim() ||
-                    !announcementMessage.trim()
-                      ? "not-allowed"
-                      : "pointer",
-                  transition: "0.3s",
-                  fontFamily: "inherit",
-                }}
-              >
-                <Send size={16} />
-                {sending ? "Sending..." : "Send to All Users"}
-              </button>
-            </div>
+            <button
+              onClick={handleSendAnnouncement}
+              disabled={sending || !announcementTitle.trim() || !announcementMessage.trim()}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <Send size={15} />
+              {sending ? "Sending..." : "Send to All Users"}
+            </button>
           </div>
         </div>
       </div>
+
     </div>
   );
 };
