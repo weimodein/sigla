@@ -11,6 +11,7 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
 } from "lucide-react";
 
 const navItems = [
@@ -24,18 +25,15 @@ const navItems = [
 
 const Sidebar = ({ onToggle }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    if (
-      window.confirm(
-        "Are you sure you want to sign out? Any unsaved changes will be lost.",
-      )
-    ) {
-      logout();
-      navigate("/login");
-    }
+  const handleLogout = () => setShowLogoutModal(true);
+
+  const confirmLogout = () => {
+    logout();
+    navigate("/login");
   };
 
   const handleToggle = () => {
@@ -47,6 +45,7 @@ const Sidebar = ({ onToggle }) => {
   const transitionStyle = "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)";
 
   return (
+    <>
     <aside
       style={{
         width: collapsed ? "70px" : "280px",
@@ -299,6 +298,85 @@ const Sidebar = ({ onToggle }) => {
         </button>
       </div>
     </aside>
+
+    {/* Logout confirmation modal */}
+    {showLogoutModal && (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 2000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "16px",
+          background: "rgba(0,0,0,0.4)",
+        }}
+        onClick={() => setShowLogoutModal(false)}
+      >
+        <div
+          style={{
+            background: "white",
+            borderRadius: "16px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+            width: "100%",
+            maxWidth: "380px",
+            padding: "24px",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
+              Sign Out
+            </h3>
+            <button
+              onClick={() => setShowLogoutModal(false)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: "4px", borderRadius: "6px", display: "flex" }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <p style={{ fontSize: "0.9rem", color: "#6b7280", marginBottom: "24px" }}>
+            Are you sure you want to sign out? Any unsaved changes will be lost.
+          </p>
+          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => setShowLogoutModal(false)}
+              style={{
+                padding: "8px 18px",
+                borderRadius: "8px",
+                border: "1px solid #e5e7eb",
+                background: "white",
+                color: "#374151",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmLogout}
+              style={{
+                padding: "8px 18px",
+                borderRadius: "8px",
+                border: "none",
+                background: "#1e3a8a",
+                color: "white",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

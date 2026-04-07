@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { getUserStats, getAllUsers } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
@@ -26,8 +27,12 @@ import {
 } from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="dash-stat-card flex items-center gap-4">
+const StatCard = ({ title, value, icon: Icon, color, onClick }) => (
+  <div
+    className="dash-stat-card flex items-center gap-4"
+    onClick={onClick}
+    style={onClick ? { cursor: "pointer" } : undefined}
+  >
     <div className={`p-3 rounded-full ${color}`}>
       <Icon size={20} className="text-white" />
     </div>
@@ -92,6 +97,7 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 // ── Main Component ────────────────────────────────────────────
 const ReportsAnalytics = () => {
   const toast = useToast();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState("month");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -445,36 +451,42 @@ const ReportsAnalytics = () => {
           value={userStats?.total}
           icon={Users}
           color="bg-blue-900"
+          onClick={() => navigate("/users")}
         />
         <StatCard
           title="Total Words"
           value={wordStats?.total}
           icon={BookOpen}
           color="bg-green-600"
+          onClick={() => navigate("/word_bank")}
         />
         <StatCard
           title="Pending Reviews"
           value={wordStats?.pending}
           icon={Clock}
           color="bg-yellow-500"
+          onClick={() => navigate("/word_bank?status=pending")}
         />
         <StatCard
           title="Warned Users"
           value={userStats?.warned}
           icon={AlertTriangle}
           color="bg-orange-500"
+          onClick={() => navigate("/users")}
         />
         <StatCard
           title="Deactivated"
           value={userStats?.deactivated}
           icon={UserX}
           color="bg-red-500"
+          onClick={() => navigate("/users")}
         />
         <StatCard
           title="Deleted Accounts"
           value={deletedUsers.length}
           icon={Trash2}
           color="bg-gray-600"
+          onClick={() => navigate("/users")}
         />
       </div>
 

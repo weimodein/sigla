@@ -47,8 +47,12 @@ const formatChartDate = (dateStr, period) => {
 };
 
 // ── Stat Card ──
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="dash-stat-card flex items-center gap-4 min-w-0">
+const StatCard = ({ title, value, icon: Icon, color, onClick }) => (
+  <div
+    className="dash-stat-card flex items-center gap-4 min-w-0"
+    onClick={onClick}
+    style={onClick ? { cursor: "pointer" } : undefined}
+  >
     <div className={`p-3 rounded-full shrink-0 ${color}`}>
       <Icon size={20} className="text-white" />
     </div>
@@ -307,7 +311,11 @@ const Dashboard = () => {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 280px", gridTemplateRows: "auto auto", gap: "24px" }}>
         {/* Col 3, rows 1–2 — placed first so auto-placement fills cols 1–2 correctly */}
         <div style={{ gridColumn: "3", gridRow: "1 / 3" }}>
-          <div className="dash-stat-card h-full flex flex-col items-center justify-center gap-3">
+          <div
+            className="dash-stat-card h-full flex flex-col items-center justify-center gap-3"
+            onClick={() => navigate("/model")}
+            style={{ cursor: "pointer" }}
+          >
             <div className="p-4 rounded-full bg-green-600 shrink-0">
               <Cpu size={24} className="text-white" />
             </div>
@@ -320,10 +328,10 @@ const Dashboard = () => {
           </div>
         </div>
         {/* 4 auto-placed cards — fill cols 1 & 2, rows 1 & 2 */}
-        <StatCard title="Total Users"         value={userStats?.total}         icon={Users}         color="bg-blue-900" />
-        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800" />
-        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700" />
-        <StatCard title="Pending Submissions" value={wordStats?.pending}       icon={ClipboardList} color="bg-yellow-500" />
+        <StatCard title="Total Users"         value={userStats?.total}         icon={Users}         color="bg-blue-900"    onClick={() => navigate("/users")} />
+        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800"    onClick={() => navigate("/word_bank")} />
+        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700"    onClick={() => navigate("/word_bank")} />
+        <StatCard title="Pending Submissions" value={wordStats?.pending}       icon={ClipboardList} color="bg-yellow-500"  onClick={() => navigate("/word_bank?status=pending")} />
       </div>
 
       {/* ── Charts row: Registration bar chart + Model accuracy list ── */}

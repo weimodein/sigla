@@ -327,6 +327,7 @@ const ManageUsers = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
   // Pagination
@@ -372,7 +373,7 @@ const ManageUsers = () => {
     setLoading(true);
     try {
       if (activeTab === "all") {
-        const data = await getAllUsers({ search, limit: 500 });
+        const data = await getAllUsers({ search: debouncedSearch, limit: 500 });
         setUsers(data.users || []);
       } else if (activeTab === "warned") {
         const data = await getWarnedUsers();
@@ -394,8 +395,12 @@ const ManageUsers = () => {
     fetchStats();
   }, []);
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
     fetchTabData();
-  }, [activeTab, search]);
+  }, [activeTab, debouncedSearch]);
 
   // ── Sort ────────────────────────────────────────────────────
   const handleSort = (field) => {
