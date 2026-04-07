@@ -80,9 +80,9 @@ const Sidebar = ({ onToggle }) => {
           }}
         >
           <img
-            src="/logo.png"
+            src="/logo_without_text_official.png"
             alt="SIGLA logo"
-            style={{ width: "36px", height: "36px", objectFit: "contain" }}
+            style={{ width: "48px", height: "48px", objectFit: "contain" }}
           />
           <button
             onClick={handleToggle}
@@ -98,8 +98,12 @@ const Sidebar = ({ onToggle }) => {
               justifyContent: "center",
               transition: transitionStyle,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "none";
+            }}
             aria-label="Expand sidebar"
           >
             <PanelLeftOpen size={20} />
@@ -118,9 +122,14 @@ const Sidebar = ({ onToggle }) => {
           }}
         >
           <img
-            src="/logo.png"
+            src="/logo_without_text_official.png"
             alt="SIGLA logo"
-            style={{ width: "36px", height: "36px", objectFit: "contain", flexShrink: 0 }}
+            style={{
+              width: "60px",
+              height: "60px",
+              objectFit: "contain",
+              flexShrink: 0,
+            }}
           />
           <span
             style={{
@@ -148,8 +157,12 @@ const Sidebar = ({ onToggle }) => {
               transition: transitionStyle,
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "none";
+            }}
             aria-label="Collapse sidebar"
           >
             <PanelLeftClose size={20} />
