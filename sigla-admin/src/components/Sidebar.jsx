@@ -82,7 +82,7 @@ const Sidebar = ({ onToggle }) => {
           <img
             src="/logo_without_text_official.png"
             alt="SIGLA logo"
-            style={{ width: "48px", height: "48px", objectFit: "contain" }}
+            style={{ width: "72px", height: "72px", objectFit: "contain" }}
           />
           <button
             onClick={handleToggle}
@@ -125,8 +125,8 @@ const Sidebar = ({ onToggle }) => {
             src="/logo_without_text_official.png"
             alt="SIGLA logo"
             style={{
-              width: "60px",
-              height: "60px",
+              width: "72px",
+              height: "72px",
               objectFit: "contain",
               flexShrink: 0,
             }}
