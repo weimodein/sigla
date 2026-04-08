@@ -30,7 +30,6 @@ const Layout = ({ children }) => {
           background: "#f3f4f6",
           transition: "margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
           willChange: "margin-left",
-          transform: "translateZ(0)",
           minHeight: "100vh",
         }}
       >
