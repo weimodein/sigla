@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUserStats, getAllUsers } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
@@ -169,7 +169,7 @@ const ReportsAnalytics = () => {
   }, [filter]);
 
   // ── Chart data helpers ──────────────────────────────────────
-  const getRegistrationTrend = () => {
+  const registrationTrend = useMemo(() => {
     const counts = {};
     allUsers.forEach((u) => {
       const date = new Date(u.created_at);
@@ -189,9 +189,9 @@ const ReportsAnalytics = () => {
       counts[key] = (counts[key] || 0) + 1;
     });
     return Object.entries(counts).map(([name, users]) => ({ name, users }));
-  };
+  }, [allUsers, filter]);
 
-  const getSubmissionTrend = () => {
+  const submissionTrend = useMemo(() => {
     const counts = {};
     words.forEach((w) => {
       const date = new Date(w.created_at);
@@ -214,24 +214,30 @@ const ReportsAnalytics = () => {
       name,
       submissions,
     }));
-  };
+  }, [words, filter]);
 
-  const getModelAccuracyData = () =>
-    models.map((m) => ({
-      name: m.version_number,
-      accuracy: m.accuracy ? parseFloat((m.accuracy * 100).toFixed(1)) : 0,
-    }));
+  const modelAccuracyData = useMemo(
+    () =>
+      models.map((m) => ({
+        name: m.version_number,
+        accuracy: m.accuracy ? parseFloat((m.accuracy * 100).toFixed(1)) : 0,
+      })),
+    [models]
+  );
 
-  const getSamplesPerWord = () =>
-    words
-      .filter((w) => (w.total_samples || 0) > 0)
-      .sort((a, b) => (b.total_samples || 0) - (a.total_samples || 0))
-      .slice(0, 10)
-      .map((w) => ({
-        name: w.label.length > 10 ? w.label.slice(0, 10) + "…" : w.label,
-        samples: w.total_samples || 0,
-        approved: w.approved_sample_count || 0,
-      }));
+  const samplesPerWord = useMemo(
+    () =>
+      words
+        .filter((w) => (w.total_samples || 0) > 0)
+        .sort((a, b) => (b.total_samples || 0) - (a.total_samples || 0))
+        .slice(0, 10)
+        .map((w) => ({
+          name: w.label.length > 10 ? w.label.slice(0, 10) + "…" : w.label,
+          samples: w.total_samples || 0,
+          approved: w.approved_sample_count || 0,
+        })),
+    [words]
+  );
 
   const toggleSection = (key) =>
     setReportSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -274,7 +280,7 @@ const ReportsAnalytics = () => {
       if (reportSections.registration_trends) {
         lines.push("=== REGISTRATION TRENDS ===");
         lines.push("Period,New Users");
-        getRegistrationTrend().forEach((r) =>
+        registrationTrend.forEach((r) =>
           lines.push(`${r.name},${r.users}`),
         );
         lines.push("");
@@ -497,8 +503,8 @@ const ReportsAnalytics = () => {
             <SectionHeader title="User Registration Trend" />
           </div>
           <div className="dash-card-body">
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={getRegistrationTrend()}>
+            <ResponsiveContainer width="100%" height={220} debounce={200}>
+              <BarChart data={registrationTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
@@ -514,8 +520,8 @@ const ReportsAnalytics = () => {
             <SectionHeader title="Word Submission Trend" />
           </div>
           <div className="dash-card-body">
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={getSubmissionTrend()}>
+            <ResponsiveContainer width="100%" height={220} debounce={200}>
+              <LineChart data={submissionTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
@@ -542,8 +548,8 @@ const ReportsAnalytics = () => {
                 No model versions available
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={getModelAccuracyData()}>
+              <ResponsiveContainer width="100%" height={220} debounce={200}>
+                <LineChart data={modelAccuracyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
@@ -571,8 +577,8 @@ const ReportsAnalytics = () => {
                 No words available
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={getSamplesPerWord()} layout="vertical">
+              <ResponsiveContainer width="100%" height={220} debounce={200}>
+                <BarChart data={samplesPerWord} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis
@@ -834,4 +840,4 @@ const ReportsAnalytics = () => {
   );
 };
 
-export default ReportsAnalytics;
+export default memo(ReportsAnalytics);
