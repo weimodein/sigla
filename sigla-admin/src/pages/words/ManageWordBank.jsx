@@ -24,6 +24,7 @@ import {
   setWordVideo,
   getMotionSequences,
   generateVideoFromSequence,
+  activateWord,
 } from "../../api/wordApi.js";
 import { warnUser } from "../../api/userApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -138,6 +139,7 @@ const ManageWordBank = () => {
   const [perSeqSpeeds, setPerSeqSpeeds] = useState({}); // sample_id -> playback speed
   const [galleryWarnModal, setGalleryWarnModal] = useState(null); // { userId, username }
   const [galleryWarnReason, setGalleryWarnReason] = useState("");
+  const [showCriteria, setShowCriteria] = useState(false);
 
   // ── Fetch ───────────────────────────────────────────────────
   const fetchStats = async () => {
@@ -322,7 +324,7 @@ const ManageWordBank = () => {
     setActionLoading(true);
     try {
       await approveSubmission(wordId, { user_id: userId });
-      showSuccess(`Submission from ${username} approved. User notified.`);
+      showSuccess(`Submission from ${username} approved. User notified with approval details.`);
       await reloadSamples(wordId);
       fetchStats();
       fetchWords();
@@ -338,7 +340,7 @@ const ManageWordBank = () => {
     setActionLoading(true);
     try {
       await rejectSubmission(wordId, { user_id: userId });
-      showSuccess(`Submission from ${username} rejected. User notified.`);
+      showSuccess(`Submission from ${username} rejected. User notified to review terms and resubmission instructions.`);
       await reloadSamples(wordId);
       fetchStats();
       fetchWords();
@@ -401,7 +403,7 @@ const ManageWordBank = () => {
     setActionLoading(true);
     try {
       await rejectWord(rejectModal.id, rejectReason);
-      showSuccess("Word rejected");
+      showSuccess("Word rejected. User will be notified.");
       setRejectModal(null);
       fetchStats();
       fetchWords();
@@ -496,22 +498,21 @@ const ManageWordBank = () => {
   };
 
   // ── Admin Upload Samples ──────────────────────────────────────
-  const [uploadForm, setUploadForm] = useState({ file_url: "", sample_count: 1 });
+  const [uploadForm, setUploadForm] = useState({ files: [] });
 
   const handleOpenUpload = (word) => {
-    setUploadForm({ file_url: "", sample_count: 1 });
+    setUploadForm({ files: [] });
     setUploadModal(word);
   };
 
   const handleAdminUpload = async () => {
-    if (!uploadForm.file_url.trim()) { showError("File URL is required"); return; }
+    if (!uploadForm.files.length) { showError("Please select at least one image"); return; }
     setActionLoading(true);
     try {
-      const res = await adminUploadSamples(uploadModal.id, {
-        file_url: uploadForm.file_url.trim(),
-        sample_count: parseInt(uploadForm.sample_count) || 1,
-      });
-      showSuccess(res.message);
+      const formData = new FormData();
+      uploadForm.files.forEach((file) => formData.append("images", file));
+      const res = await adminUploadSamples(uploadModal.id, formData);
+      showSuccess(res.message || `${uploadForm.files.length} sample(s) uploaded successfully`);
       setUploadModal(null);
       fetchStats();
       fetchWords();
@@ -632,6 +633,12 @@ const ManageWordBank = () => {
     { key: "approved", label: "Approved" },
     { key: "rejected", label: "Rejected" },
   ];
+
+  // ── Gallery threshold helpers ────────────────────────────────
+  const motionThreshold = 150;
+  const approvedCount = galleryModal?.approved_sample_count || 0;
+  const thresholdMet = approvedCount >= motionThreshold;
+  const remaining = motionThreshold - approvedCount;
 
   // ── JSX ─────────────────────────────────────────────────────
   return (
@@ -893,6 +900,26 @@ const ManageWordBank = () => {
               </p>
             </div>
 
+            {/* ── Review Criteria ──────────────────────────────── */}
+            <div className="border border-yellow-200 rounded-lg bg-yellow-50">
+              <button
+                onClick={() => setShowCriteria((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-yellow-800 hover:bg-yellow-100 rounded-lg transition"
+              >
+                <span>Review Criteria</span>
+                <span>{showCriteria ? "▲" : "▾"}</span>
+              </button>
+              {showCriteria && (
+                <ol className="px-5 pb-3 pt-1 text-xs text-yellow-900 space-y-1 list-decimal list-inside">
+                  <li>The hand gesture is clearly visible</li>
+                  <li>The gesture formation is correct</li>
+                  <li>The hand is fully visible and not cut off</li>
+                  <li>The camera framing is appropriate</li>
+                  <li>The image does not contain unrelated or inappropriate content</li>
+                </ol>
+              )}
+            </div>
+
             {/* ── Word Bank Media Controls ──────────────────────── */}
             {galleryModal.gesture_type === "motion" ? (
               <div className="border border-indigo-200 rounded-lg p-4 bg-indigo-50 space-y-3">
@@ -984,6 +1011,12 @@ const ManageWordBank = () => {
                     </button>
                   )}
                 </div>
+
+                {!thresholdMet && (
+                  <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-700">
+                    {approvedCount}/{motionThreshold} approved samples — you can generate a video to review the gesture, but activation requires {remaining} more approved sample{remaining !== 1 ? "s" : ""}.
+                  </div>
+                )}
 
                 {motionSequencesLoading ? (
                   <div className="flex items-center justify-center h-24">
@@ -1092,14 +1125,17 @@ const ManageWordBank = () => {
                                       video_url: perSeqVideos[seq.sample_id],
                                       playback_speed: perSeqSpeeds[seq.sample_id] ?? 1,
                                     });
-                                    setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[seq.sample_id] } : prev);
+                                    await activateWord(galleryModal.id);
+                                    setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[seq.sample_id], is_active: true } : prev);
                                     fetchWords();
-                                    showSuccess("Video set as word bank video");
+                                    showSuccess("Video set and word activated");
                                   } catch (err) {
                                     showError(err.response?.data?.message || "Failed to set video");
                                   }
                                 }}
-                                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg"
+                                disabled={!thresholdMet}
+                                title={!thresholdMet ? `Requires ${motionThreshold} approved samples (${remaining} more needed)` : undefined}
+                                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 Set as Word Bank Video
                               </button>
@@ -1194,14 +1230,17 @@ const ManageWordBank = () => {
                         onClick={async () => {
                           try {
                             await setWordVideo(galleryModal.id, { video_url: generatedVideoUrl });
-                            setGalleryModal((prev) => prev ? { ...prev, video_url: generatedVideoUrl } : prev);
+                            await activateWord(galleryModal.id);
+                            setGalleryModal((prev) => prev ? { ...prev, video_url: generatedVideoUrl, is_active: true } : prev);
                             fetchWords();
-                            showSuccess("Video set as word bank video");
+                            showSuccess("Video set and word activated");
                           } catch (err) {
                             showError(err.response?.data?.message || "Failed to set video");
                           }
                         }}
-                        className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg"
+                        disabled={!thresholdMet}
+                        title={!thresholdMet ? `Requires ${motionThreshold} approved samples (${remaining} more needed)` : undefined}
+                        className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Set as Word Bank Video
                       </button>
@@ -1589,36 +1628,30 @@ const ManageWordBank = () => {
         <Modal title={`Upload Samples — ${uploadModal.label}`} onClose={() => setUploadModal(null)}>
           <div className="space-y-3">
             <p className="text-xs text-gray-500">
-              Uploaded samples are automatically marked as approved and count toward the activation threshold
+              Select gesture images from your device. The system will automatically extract hand landmark
+              coordinates from each image using MediaPipe. Uploaded samples are automatically marked as
+              approved and count toward the activation threshold
               ({uploadModal.gesture_type === "motion" ? 150 : 100} samples required).
             </p>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Gesture Sample File URL *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Gesture Images *</label>
               <input
-                type="url"
-                value={uploadForm.file_url}
-                onChange={(e) => setUploadForm({ ...uploadForm, file_url: e.target.value })}
-                placeholder="https://..."
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => setUploadForm({ files: Array.from(e.target.files) })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
               />
-              <p className="text-xs text-gray-400 mt-1">
-                Upload the image to Supabase storage first and paste the public URL here.
-              </p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Sample Count</label>
-              <input
-                type="number"
-                min={1}
-                value={uploadForm.sample_count}
-                onChange={(e) => setUploadForm({ ...uploadForm, sample_count: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              />
+              {uploadForm.files.length > 0 && (
+                <p className="text-xs text-green-600 mt-1">
+                  {uploadForm.files.length} image(s) selected
+                </p>
+              )}
             </div>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={handleAdminUpload}
-                disabled={actionLoading || !uploadForm.file_url.trim()}
+                disabled={actionLoading || !uploadForm.files.length}
                 className="flex-1 bg-purple-700 hover:bg-purple-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
               >
                 {actionLoading ? "Uploading..." : "Upload Samples"}

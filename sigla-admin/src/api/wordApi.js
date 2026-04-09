@@ -88,10 +88,15 @@ export const adminAddWord = async (data) => {
   return response.data;
 };
 
-export const adminUploadSamples = async (wordId, data) => {
-  const response = await api.post(`/words/${wordId}/admin-samples`, data);
+export const adminUploadSamples = async (wordId, formData) => {
+  const response = await api.post(`/words/${wordId}/admin-samples`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
   return response.data;
 };
+
+export const activateWord = (id) =>
+  api.patch(`/words/${id}/activate`).then((r) => r.data);
 
 export const approveAllSamplesForWord = (wordId) =>
   api.patch(`/words/${wordId}/samples/approve-all`).then((r) => r.data);

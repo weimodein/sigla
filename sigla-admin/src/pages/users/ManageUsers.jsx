@@ -467,9 +467,12 @@ const ManageUsers = () => {
     setActionLoading(true);
     try {
       const res = await warnUser(warnModal.id, { reason: warnReason });
-      showSuccess(
-        `Warning issued. User now has ${res.warning_count}/2 warnings.`,
-      );
+      if (res.warning_count >= 2) {
+        await deactivateUser(warnModal.id);
+        showSuccess("Warning issued (2/2). Account automatically suspended for 30 days.");
+      } else {
+        showSuccess(`Warning issued. User now has ${res.warning_count}/2 warnings.`);
+      }
       setWarnModal(null);
       setWarnReason("");
       fetchStats();
