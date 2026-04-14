@@ -1,5 +1,6 @@
 const { Op } = require("sequelize");
 const axios = require("axios");
+const crypto = require("crypto");
 const {
   ModelVersion,
   Word,
@@ -91,6 +92,7 @@ const getLatestModel = async (req, res) => {
         "total_classes",
         "motion_classes",
         "motion_trained",
+        "checksum",
       ],
       order: [["deployed_at", "DESC"]],
     });
@@ -408,6 +410,27 @@ const deployModel = async (req, res) => {
           console.warn(`Skipping optional file ${file.name}: ${err.message}`);
         }
       }
+    }
+
+    // ── Compute SHA256 checksum of the deployed static .tflite ──────────────
+    // Computed from the buffer already in memory — no extra download needed.
+    // Saved so the mobile app can verify the downloaded file is not corrupted.
+    try {
+      const staticFile = possibleFiles.find((f) => f.name === "sign_model_static.tflite");
+      if (staticFile) {
+        const staticResponse = await axios.get(staticFile.url, {
+          responseType: "arraybuffer",
+          timeout: 30000,
+        });
+        const checksumHex = crypto
+          .createHash("sha256")
+          .update(Buffer.from(staticResponse.data))
+          .digest("hex");
+        await model.update({ checksum: checksumHex });
+        console.log(`SHA256 checksum saved: ${checksumHex}`);
+      }
+    } catch (csErr) {
+      console.warn("Checksum computation failed (non-fatal):", csErr.message);
     }
 
     // If the model is already deployed (e.g., stuck from a previous partial failure), skip ML call.

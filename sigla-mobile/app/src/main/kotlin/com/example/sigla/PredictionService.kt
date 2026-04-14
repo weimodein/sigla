@@ -29,7 +29,7 @@ private const val STATIC_SMOOTH_FRAMES   = 6     // frames to average in dual-ra
 private const val BUFFER_CAPACITY        = 90    // supports time-based buffering
 private const val NO_HAND_TIMEOUT        = 6
 private const val BUFFER_FILL_MS         = 1500L // fire dual-race after 1.5s (time-based)
-private const val DETECTION_COOLDOWN_MS  = 3500L  // wait before accepting next gesture
+private const val DETECTION_COOLDOWN_MS  = 2000L  // wait before accepting next gesture
 private const val MOTION_SETTLE_MS       = 2000L  // time after a motion detection before motion probe re-arms
 
 // Key landmark indices for velocity (wrist + fingertips)

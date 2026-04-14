@@ -6,6 +6,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -80,11 +81,27 @@ object ModelUpdateManager {
                     Log.e(TAG, "Backend returned no static model URL — check SUPABASE_URL on server")
                     return@withContext hasLocalModel(context)
                 }
-                val staticOk = downloadToFile(staticUrl, File(context.filesDir, "sign_model_static.tflite"))
+                val staticDest = File(context.filesDir, "sign_model_static.tflite")
+                val staticOk = downloadToFile(staticUrl, staticDest)
                 if (!staticOk) {
                     Log.e(TAG, "Static model download failed")
                     return@withContext hasLocalModel(context)
                 }
+
+                // ── Verify SHA256 integrity before accepting the new model ─────
+                val expectedChecksum = model.checksum
+                if (!expectedChecksum.isNullOrBlank()) {
+                    val actualChecksum = computeSha256(staticDest)
+                    if (actualChecksum != expectedChecksum) {
+                        Log.e(TAG, "Checksum mismatch! Expected=$expectedChecksum Actual=$actualChecksum — discarding download")
+                        staticDest.delete()
+                        return@withContext hasLocalModel(context)
+                    }
+                    Log.i(TAG, "Checksum verified OK")
+                } else {
+                    Log.w(TAG, "No checksum provided by server — skipping integrity check")
+                }
+
                 Log.i(TAG, "Static TFLite downloaded")
 
                 // ── Static labels (required) ──────────────────────────────────
@@ -165,6 +182,18 @@ object ModelUpdateManager {
             Log.e(TAG, "downloadToFile error for $url: ${e.message}", e)
             false
         }
+    }
+
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { stream ->
+            val buffer = ByteArray(8192)
+            var read: Int
+            while (stream.read(buffer).also { read = it } != -1) {
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     fun getLocalFile(context: Context, filename: String): File? {

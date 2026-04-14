@@ -87,6 +87,10 @@ const ModelVersion = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    checksum: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+    },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,

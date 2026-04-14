@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, memo } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
 import { getUserStats, getAllUsers } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
@@ -242,91 +244,161 @@ const ReportsAnalytics = () => {
   const toggleSection = (key) =>
     setReportSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  // ── Generate CSV report ─────────────────────────────────────
+  // ── Generate PDF report ─────────────────────────────────────
   const handleGenerateReport = async () => {
     setGenerating(true);
     try {
-      const lines = [
-        `SIGLA System Report — Filter: ${filter.toUpperCase()}`,
-        "",
-      ];
+      const doc = new jsPDF();
+      const dateStr = new Date().toLocaleDateString("en-US", {
+        year: "numeric", month: "long", day: "numeric",
+      });
+      const filterLabel = filter.charAt(0).toUpperCase() + filter.slice(1);
+
+      // ── Header ───────────────────────────────────────────────
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("SigLa System Report", 14, 20);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Filter: ${filterLabel}   |   Generated: ${dateStr}`, 14, 28);
+      doc.setLineWidth(0.5);
+      doc.line(14, 32, 196, 32);
+
+      let y = 40;
+      const sectionGap = 10;
+
+      const addSectionTitle = (title) => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        doc.setFontSize(13);
+        doc.setFont("helvetica", "bold");
+        doc.text(title, 14, y);
+        y += 6;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+      };
 
       if (reportSections.user_stats) {
-        lines.push("=== USER STATISTICS ===");
-        lines.push(`Total Users,${userStats?.total ?? 0}`);
-        lines.push(`Active,${userStats?.active ?? 0}`);
-        lines.push(`Deactivated,${userStats?.deactivated ?? 0}`);
-        lines.push(`Warned,${userStats?.warned ?? 0}`);
-        lines.push("");
-      }
-      if (reportSections.word_submissions) {
-        lines.push("=== WORD SUBMISSIONS ===");
-        lines.push(`Total Words,${wordStats?.total ?? 0}`);
-        lines.push(`Pending,${wordStats?.pending ?? 0}`);
-        lines.push(`Approved,${wordStats?.approved ?? 0}`);
-        lines.push(`Rejected,${wordStats?.rejected ?? 0}`);
-        lines.push("");
-      }
-      if (reportSections.sample_counts) {
-        lines.push("=== GESTURE SAMPLES PER WORD ===");
-        lines.push("Word,Total Samples,Approved Samples");
-        words.forEach((w) =>
-          lines.push(
-            `${w.label},${w.total_samples || 0},${w.approved_sample_count || 0}`,
-          ),
-        );
-        lines.push("");
-      }
-      if (reportSections.registration_trends) {
-        lines.push("=== REGISTRATION TRENDS ===");
-        lines.push("Period,New Users");
-        registrationTrend.forEach((r) =>
-          lines.push(`${r.name},${r.users}`),
-        );
-        lines.push("");
-      }
-      if (reportSections.model_accuracy) {
-        lines.push("=== MODEL ACCURACY PER VERSION ===");
-        lines.push("Version,Accuracy");
-        models.forEach((m) =>
-          lines.push(
-            `${m.version_number},${m.accuracy ? (m.accuracy * 100).toFixed(1) + "%" : "N/A"}`,
-          ),
-        );
-        lines.push("");
-      }
-      if (reportSections.warned_users) {
-        lines.push("=== WARNED USERS ===");
-        lines.push("Username,Email,Warnings");
-        warnedUsers.forEach((u) =>
-          lines.push(`${u.username},${u.email},${u.warning_count}/2`),
-        );
-        lines.push("");
-      }
-      if (reportSections.deactivated_users) {
-        lines.push("=== DEACTIVATED USERS ===");
-        lines.push("Username,Email,Deactivated At");
-        deactivatedUsers.forEach((u) =>
-          lines.push(
-            `${u.username},${u.email},${u.deactivated_at ? new Date(u.deactivated_at).toLocaleDateString() : "—"}`,
-          ),
-        );
-        lines.push("");
-      }
-      if (reportSections.deleted_users) {
-        lines.push("=== DELETED USERS ===");
-        lines.push("Username,Email");
-        deletedUsers.forEach((u) => lines.push(`${u.username},${u.email}`));
-        lines.push("");
+        addSectionTitle("User Statistics");
+        autoTable(doc, {
+          startY: y,
+          head: [["Metric", "Count"]],
+          body: [
+            ["Total Users", userStats?.total ?? 0],
+            ["Active", userStats?.active ?? 0],
+            ["Deactivated", userStats?.deactivated ?? 0],
+            ["Warned", userStats?.warned ?? 0],
+          ],
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+        y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      const blob = new Blob([lines.join("\n")], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `sigla_report_${filter}_${new Date().toISOString().split("T")[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (reportSections.word_submissions) {
+        addSectionTitle("Word Submissions");
+        autoTable(doc, {
+          startY: y,
+          head: [["Metric", "Count"]],
+          body: [
+            ["Total Words", wordStats?.total ?? 0],
+            ["Pending", wordStats?.pending ?? 0],
+            ["Approved", wordStats?.approved ?? 0],
+            ["Rejected", wordStats?.rejected ?? 0],
+          ],
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+        y = doc.lastAutoTable.finalY + sectionGap;
+      }
+
+      if (reportSections.sample_counts) {
+        addSectionTitle("Gesture Samples per Word");
+        autoTable(doc, {
+          startY: y,
+          head: [["Word", "Total Samples", "Approved Samples"]],
+          body: words.map((w) => [w.label, w.total_samples || 0, w.approved_sample_count || 0]),
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+        y = doc.lastAutoTable.finalY + sectionGap;
+      }
+
+      if (reportSections.registration_trends) {
+        addSectionTitle("Registration Trends");
+        autoTable(doc, {
+          startY: y,
+          head: [["Period", "New Users"]],
+          body: registrationTrend.map((r) => [r.name, r.users]),
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+        y = doc.lastAutoTable.finalY + sectionGap;
+      }
+
+      if (reportSections.model_accuracy) {
+        addSectionTitle("Model Accuracy per Version");
+        autoTable(doc, {
+          startY: y,
+          head: [["Version", "Accuracy"]],
+          body: models.map((m) => [
+            m.version_number,
+            m.accuracy ? `${(m.accuracy * 100).toFixed(1)}%` : "N/A",
+          ]),
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+        y = doc.lastAutoTable.finalY + sectionGap;
+      }
+
+      if (reportSections.warned_users) {
+        addSectionTitle("Warned Users");
+        autoTable(doc, {
+          startY: y,
+          head: [["Username", "Email", "Warnings"]],
+          body: warnedUsers.map((u) => [u.username, u.email, `${u.warning_count}/2`]),
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+        y = doc.lastAutoTable.finalY + sectionGap;
+      }
+
+      if (reportSections.deactivated_users) {
+        addSectionTitle("Deactivated Users");
+        autoTable(doc, {
+          startY: y,
+          head: [["Username", "Email", "Deactivated At"]],
+          body: deactivatedUsers.map((u) => [
+            u.username,
+            u.email,
+            u.deactivated_at ? new Date(u.deactivated_at).toLocaleDateString() : "—",
+          ]),
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+        y = doc.lastAutoTable.finalY + sectionGap;
+      }
+
+      if (reportSections.deleted_users) {
+        addSectionTitle("Deleted Users");
+        autoTable(doc, {
+          startY: y,
+          head: [["Username", "Email"]],
+          body: deletedUsers.map((u) => [u.username, u.email]),
+          theme: "striped",
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14, right: 14 },
+        });
+      }
+
+      const filename = `sigla_report_${filter}_${new Date().toISOString().split("T")[0]}.pdf`;
+      doc.save(filename);
       toast.success("Report downloaded successfully");
     } catch (err) {
       toast.error("Failed to generate report");
