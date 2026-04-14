@@ -1,23 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#667EEA</color>
-    <color name="colorPrimaryDark">#1A237E</color>
-    <color name="colorAccent">#764BA2</color>
-    <color name="colorBackground">#0A0E21</color>
-    <color name="colorSurface">#0D1127</color>
-    <color name="colorSurfaceVariant">#131A3A</color>
-    <color name="colorOnSurface">#FFFFFF</color>
-    <color name="colorOnSurfaceMuted">#888888</color>
+    <color name="colorBackground">#E3F2FD</color>
+    <color name="colorPrimary">#4A90E2</color>
+    <color name="colorTextPrimary">#1A1A2E</color>
+    <color name="colorTextSecondary">#546E7A</color>
+    <color name="colorTextMuted">#90A4AE</color>
+    <color name="colorSurface">#FFFFFF</color>
+    <color name="colorSurfaceVariant">#F5F5F5</color>
+    <color name="colorDivider">#E8E8EE</color>
+    <color name="colorError">#D32F2F</color>
     <color name="colorSuccess">#4CAF50</color>
-    <color name="colorError">#EF5350</color>
     <color name="colorWarning">#FF9800</color>
-    <color name="colorSidebarBg">#0D1127</color>
-    <color name="colorSidebarItem">#1A2340</color>
-    <color name="colorSidebarItemActive">#1E3A8A</color>
-    <color name="colorDivider">#1E2A4A</color>
-    <color name="colorInputBg">#131A3A</color>
-    <color name="colorEmergency">#C62828</color>
-    <color name="colorTextPrimary">#FFFFFF</color>
-    <color name="colorTextSecondary">#90CAF9</color>
-    <color name="colorTextMuted">#666666</color>
+    <color name="colorSidebarBg">#E3F2FD</color>
 </resources>

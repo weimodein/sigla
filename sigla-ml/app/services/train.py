@@ -216,7 +216,7 @@ def train(version_number: str, model_id: int) -> dict:
             X_motion, y_motion, test_size=0.2, random_state=42, stratify=y_motion
         )
 
-        motion_model = build_motion_model(len(motion_dataset))
+        motion_model = build_motion_model(len(motion_label_map))
 
         # Calculate class weights for imbalanced data
         motion_class_weights = compute_class_weight('balanced', classes=np.unique(y_train_m), y=y_train_m)

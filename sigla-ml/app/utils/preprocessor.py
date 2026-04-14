@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
-SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 20))
+SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 
 # Backend API configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
@@ -148,6 +148,22 @@ def save_label_map(label_map: dict, path: str) -> None:
     with open(path, "w") as f:
         json.dump(label_map, f, indent=2)
     print(f"Label map saved to {path}")
+
+
+def augment_static_samples(samples: list, target_count: int = 50) -> list:
+    """
+    Augment static gesture samples by adding small Gaussian noise to landmarks.
+    """
+    augmented = []
+    np.random.seed(42)
+
+    while len(augmented) < target_count - len(samples):
+        base = np.array(samples[np.random.randint(len(samples))], dtype=np.float32)
+        noise = np.random.normal(0, 0.005, base.shape)
+        noisy = np.clip(base + noise, 0.0, 1.0)
+        augmented.append(noisy.tolist())
+
+    return augmented
 
 
 def augment_motion_sequences(sequences: list, target_count: int = 20) -> list:

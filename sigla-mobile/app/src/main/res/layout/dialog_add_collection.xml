@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog_rounded"
+    android:clipToOutline="true">
+
+    <!-- ── HEADER ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#0056A4"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NEW COLLECTION"
+            android:textColor="#90B8D8"
+            android:textSize="10sp"
+            android:letterSpacing="0.12"
+            android:layout_marginBottom="2dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Add Sign Word"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <!-- ── FORM BODY ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#FFFFFF"
+        android:padding="20dp">
+
+        <!-- Label field -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="LABEL"
+            android:textColor="#0056A4"
+            android:textSize="10sp"
+            android:letterSpacing="0.12"
+            android:layout_marginBottom="6dp" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilLabel"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            app:boxStrokeColor="#2F80ED"
+            app:boxBackgroundColor="#F4F9FF"
+            app:hintTextColor="#0056A4">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textCapCharacters"
+                android:hint="e.g. HELLO"
+                android:textColor="#1F1F1F"
+                android:textColorHint="#2F80ED"
+                android:textSize="15sp"
+                android:letterSpacing="0.05" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Displayed as the recognized sign name"
+            android:textColor="#2F80ED"
+            android:textSize="11sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Translation field -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="FILIPINO TRANSLATION"
+            android:textColor="#0056A4"
+            android:textSize="10sp"
+            android:letterSpacing="0.12"
+            android:layout_marginBottom="6dp" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilTranslation"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:boxStrokeColor="#2F80ED"
+            app:boxBackgroundColor="#F4F9FF"
+            app:hintTextColor="#0056A4">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etTranslation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textCapSentences"
+                android:hint="e.g. Kumusta"
+                android:textColor="#1F1F1F"
+                android:textColorHint="#2F80ED"
+                android:textSize="15sp" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Gesture Type -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GESTURE TYPE"
+            android:textColor="#0056A4"
+            android:textSize="10sp"
+            android:letterSpacing="0.12"
+            android:layout_marginBottom="10dp" />
+
+        <RadioGroup
+            android:id="@+id/rgGestureType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <RadioButton
+                android:id="@+id/rbStatic"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="Static"
+                android:textColor="@color/gesture_type_text"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:checked="true"
+                android:buttonTint="#0056A4"
+                android:gravity="center_vertical"
+                android:paddingStart="12dp"
+                android:background="@drawable/bg_gesture_option"
+                android:layout_marginEnd="8dp" />
+
+            <RadioButton
+                android:id="@+id/rbMotion"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="Motion"
+                android:textColor="@color/gesture_type_text"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:buttonTint="#0056A4"
+                android:gravity="center_vertical"
+                android:paddingStart="12dp"
+                android:background="@drawable/bg_gesture_option" />
+
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/tvGestureHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="A held hand position with no movement."
+            android:textColor="#2F80ED"
+            android:textSize="11sp"
+            android:lineSpacingMultiplier="1.5"
+            android:layout_marginBottom="20dp" />
+
+        <!-- Info note -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#E9F2FB"
+            android:padding="12dp"
+            android:layout_marginBottom="20dp">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@android:drawable/ic_dialog_info"
+                app:tint="#0056A4"
+                android:layout_marginTop="1dp"
+                android:layout_marginEnd="10dp"
+                android:contentDescription="Info" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="You'll be asked to record 300 samples for this sign after creation."
+                android:textColor="#0056A4"
+                android:textSize="12sp"
+                android:lineSpacingMultiplier="1.5" />
+
+        </LinearLayout>
+
+        <!-- Error message -->
+        <TextView
+            android:id="@+id/tvDialogError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#D32F2F"
+            android:textSize="12sp"
+            android:visibility="gone"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Action buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancel"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="50dp"
+                android:layout_weight="1"
+                android:text="Cancel"
+                android:textSize="14sp"
+                android:textColor="#2F80ED"
+                app:strokeColor="#C8DCF0"
+                app:strokeWidth="1.5dp"
+                app:cornerRadius="10dp"
+                app:backgroundTint="#FFFFFF"
+                android:layout_marginEnd="10dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCreateCollection"
+                android:layout_width="0dp"
+                android:layout_height="50dp"
+                android:layout_weight="2"
+                android:text="Create Collection"
+                android:textSize="14sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                app:backgroundTint="#0056A4"
+                app:cornerRadius="10dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

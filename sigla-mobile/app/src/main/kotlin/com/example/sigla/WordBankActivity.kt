@@ -1,93 +1,82 @@
 package com.example.sigla
 
-import android.app.Dialog
-import android.net.Uri
+import android.content.Intent
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
-import android.text.Editable
-import android.text.TextWatcher
+import android.text.InputFilter
+import android.text.InputType
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
-import android.widget.*
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import android.widget.VideoView
+import android.widget.ProgressBar
+import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.GravityCompat
+import androidx.core.widget.addTextChangedListener
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 class WordBankActivity : AppCompatActivity() {
 
     private lateinit var drawerLayout: DrawerLayout
-    private lateinit var rvWords: RecyclerView
-    private lateinit var tvEmpty: TextView
-    private lateinit var progressLoading: ProgressBar
-    private lateinit var spinnerCategory: Spinner
+    private lateinit var btnSidebar: MaterialButton
+    private lateinit var btnCreateCategory: MaterialButton
+    private lateinit var actvCategory: AutoCompleteTextView
     private lateinit var etSearch: TextInputEditText
-    private lateinit var btnCategoryOptions: MaterialButton
-    private lateinit var adapter: WordAdapter
-    private lateinit var customCategoryManager: CustomCategoryManager
+    private lateinit var rvWords: RecyclerView
+    private lateinit var emptyState: LinearLayout
+    private lateinit var tvEntryCount: TextView
+    private lateinit var progressLoading: ProgressBar
+    private lateinit var adapter: WordBankAdapter
+    private lateinit var session: SessionManager
 
+    private var selectedCategory = "All Categories"
+    private var searchQuery = ""
     private var allWords = listOf<WordBankWord>()
+    private var isLoading = false
+
+    // TTS
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
 
-    // Active media dialog (kept to stop video on dismiss)
-    private var mediaDialog: Dialog? = null
-
-    // Parallel lists: display names and IDs (null = default category, UUID = custom)
-    private var categoryDisplayNames = mutableListOf<String>()
-    private var categoryIds = mutableListOf<String?>()
-
-    private val defaultCategories = listOf(
-        "All Categories",
-        "Introducing Oneself",
-        "Ordering Food",
-        "Buying Items",
-        "Asking for Prices",
-        "Giving Numbers",
-        "Requesting Assistance",
-        "Asking for Directions",
-        "Confirming Information",
-        "Communicating Basic Needs",
-        "Alphabets",
-        "Numbers",
-        "Additional Words"
-    )
+    // Custom categories management
+    private lateinit var customCategoryManager: CustomCategoryManager
+    private var customCategories = mutableListOf<CustomCategory>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_word_bank)
 
-        drawerLayout = findViewById(R.id.drawerLayout)
-        rvWords = findViewById(R.id.rvWords)
-        tvEmpty = findViewById(R.id.tvEmpty)
-        progressLoading = findViewById(R.id.progressLoading)
-        spinnerCategory = findViewById(R.id.spinnerCategory)
-        etSearch = findViewById(R.id.etSearch)
-        btnCategoryOptions = findViewById(R.id.btnCategoryOptions)
+        session = SessionManager.getInstance(this)    // ← ADD THIS
+        drawerLayout = findViewById(R.id.drawerLayout) // ← ADD THIS
 
-        customCategoryManager = CustomCategoryManager.getInstance(this)
+        bindViews()
+        setupTopBar()
+        setupSidebar()
+        setupRecyclerView()
+        setupCategoryDropdown()
+        setupSearch()
+        wireListeners()
 
-        // Back button
-        findViewById<MaterialButton>(R.id.btnBack).setOnClickListener { finish() }
-
-        // Sidebar
-        val sidebar = drawerLayout.getChildAt(1)
-        NavigationHelper.setup(this, drawerLayout, sidebar, Screen.WORD_BANK)
-        findViewById<MaterialButton>(R.id.btnMenu).setOnClickListener {
-            drawerLayout.openDrawer(sidebar)
-        }
-
-        // TTS
+        // Initialize TTS
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.ENGLISH
@@ -95,367 +84,631 @@ class WordBankActivity : AppCompatActivity() {
             }
         }
 
-        // RecyclerView
-        adapter = WordAdapter(
-            onThumbnailClick = { word -> showMediaDialog(word) },
-            onAudio = { word -> speakWord(word.label) }
-        )
-        rvWords.layoutManager = LinearLayoutManager(this)
-        rvWords.adapter = adapter
+        // Initialize custom category manager
+        customCategoryManager = CustomCategoryManager.getInstance(this)
+        loadCustomCategories()
 
-        // Category spinner (dynamic)
-        refreshCategorySpinner(keepSelection = false)
-        spinnerCategory.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, v: View?, position: Int, id: Long) {
-                val selectedId = categoryIds.getOrNull(position)
-                btnCategoryOptions.visibility = if (selectedId != null) View.VISIBLE else View.GONE
-                applyFilters()
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        // New category button
-        findViewById<MaterialButton>(R.id.btnNewCategory).setOnClickListener {
-            showCreateCategoryDialog()
-        }
-
-        // Category options button (rename / delete)
-        btnCategoryOptions.setOnClickListener { view ->
-            val position = spinnerCategory.selectedItemPosition
-            val selectedId = categoryIds.getOrNull(position) ?: return@setOnClickListener
-            val selectedName = categoryDisplayNames.getOrNull(position) ?: return@setOnClickListener
-            showCategoryOptionsMenu(view, selectedId, selectedName)
-        }
-
-        // Search
-        etSearch.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) { applyFilters() }
-        })
-
+        // Load words from backend
         loadWords()
     }
 
-    // ── Category spinner ──────────────────────────────────────────
+    override fun onResume() {
+        super.onResume()
+        refreshSidebarAuthState()  // ← UPDATE SIDEBAR WHEN ACTIVITY RESUMES
+    }
+    // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
 
-    private fun refreshCategorySpinner(keepSelection: Boolean = true) {
-        val previousSelection = if (keepSelection) spinnerCategory.selectedItemPosition else 0
+    private fun refreshSidebarAuthState() {
+        val sidebar = drawerLayout.getChildAt(1)  // ← USE YOUR drawerLayout VARIABLE NAME
+        val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
+        val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
+        val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
+        val suggestBadge = sidebar.findViewById<TextView>(R.id.tvSuggestWordBadge)
 
-        categoryDisplayNames.clear()
-        categoryIds.clear()
-
-        defaultCategories.forEach { name ->
-            categoryDisplayNames.add(name)
-            categoryIds.add(null)
+        if (session.isLoggedIn) {
+            tvUsername?.text = session.username ?: "User"
+            tvEmail?.text = session.email ?: ""
+            btnSignIn?.visibility = View.GONE
+            suggestBadge?.visibility = View.GONE
+        } else {
+            tvUsername?.text = "Guest User"
+            tvEmail?.text = "Not signed in"
+            btnSignIn?.visibility = View.VISIBLE
+            suggestBadge?.visibility = View.VISIBLE
         }
-        customCategoryManager.getAll().forEach { cat ->
-            categoryDisplayNames.add(cat.name)
-            categoryIds.add(cat.id)
+    }
+
+    private fun openAuthDialog() {
+        val dialog = AuthDialogFragment()
+        dialog.onSignedIn = {
+            refreshSidebarAuthState()
+            // Optional: reload data that requires login
+            // finish()
+            // startActivity(intent)
+        }
+        dialog.show(supportFragmentManager, "auth")
+    }
+
+    private fun bindViews() {
+        drawerLayout = findViewById(R.id.drawerLayout)
+        btnSidebar = findViewById(R.id.btnSidebar)
+        btnCreateCategory = findViewById(R.id.btnCreateCategory)
+        actvCategory = findViewById(R.id.actvCategory)
+        etSearch = findViewById(R.id.etSearch)
+        rvWords = findViewById(R.id.rvWords)
+        emptyState = findViewById(R.id.emptyState)
+        tvEntryCount = findViewById(R.id.tvEntryCount)
+        progressLoading = findViewById(R.id.progressLoading)
+    }
+
+    // ── Top bar ───────────────────────────────────────────────────────────────
+
+    private fun setupTopBar() {
+        findViewById<View>(R.id.btnSidebar).setOnClickListener {
+            drawerLayout.openDrawer(GravityCompat.START)
+        }
+    }
+
+    // ── Sidebar ───────────────────────────────────────────────────────────────
+
+    private fun setupSidebar() {
+        refreshSidebarAuthState()
+        setActiveNavItem(R.id.navWordBank)
+
+        findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
+        findViewById<View>(R.id.navWordBank)?.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+        }
+        findViewById<View>(R.id.navTranslationHistory)?.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+            startActivity(Intent(this, TranslationHistoryActivity::class.java))
+            finish()
+        }
+         // For Suggest Word - ADD LOGIN CHECK
+        findViewById<View>(R.id.navSuggestWord)?.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
+                startActivity(Intent(this, SuggestWordActivity::class.java))
+                finish()
+            } else {
+                openAuthDialog()                         // ← ADD THIS
+            }
         }
 
-        val spinnerAdapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_item,
-            categoryDisplayNames
+        // For Notifications - ADD LOGIN CHECK
+        findViewById<View>(R.id.navNotifications)?.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
+                startActivity(Intent(this, NotificationsActivity::class.java))
+                finish()
+            } else {
+                openAuthDialog()                         // ← ADD THIS
+            }
+        }
+
+        // For Profile - ADD LOGIN CHECK
+        findViewById<View>(R.id.navProfile)?.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
+                startActivity(Intent(this, ProfileActivity::class.java))
+                finish()
+            } else {
+                openAuthDialog()                         // ← ADD THIS
+            }
+        }
+        findViewById<View>(R.id.navSettings)?.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+            startActivity(Intent(this, SettingsActivity::class.java))
+            finish()
+        }
+
+        findViewById<View>(R.id.btnSidebarSignIn)?.setOnClickListener {
+            drawerLayout.closeDrawers()
+            openAuthDialog()
+        }
+    }
+
+    private fun setActiveNavItem(activeId: Int) {
+        val navIds = listOf(
+            R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
+            R.id.navSuggestWord, R.id.navNotifications, R.id.navProfile, R.id.navSettings
         )
-        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerCategory.adapter = spinnerAdapter
-
-        val restorePosition = previousSelection.coerceAtMost(categoryDisplayNames.size - 1)
-        spinnerCategory.setSelection(restorePosition)
-
-        val restoredId = categoryIds.getOrNull(restorePosition)
-        btnCategoryOptions.visibility = if (restoredId != null) View.VISIBLE else View.GONE
-    }
-
-    private fun showCreateCategoryDialog() {
-        val view = layoutInflater.inflate(R.layout.dialog_manage_category, null)
-        val etName = view.findViewById<TextInputEditText>(R.id.etCategoryName)
-
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.create_category))
-            .setView(view)
-            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
-                val name = etName.text.toString().trim()
-                if (name.isNotEmpty()) {
-                    customCategoryManager.create(name)
-                    refreshCategorySpinner(keepSelection = true)
-                    // Select the new category (last item)
-                    spinnerCategory.setSelection(categoryDisplayNames.size - 1)
+        navIds.forEach { id ->
+            val view = findViewById<LinearLayout>(id)
+            if (id == activeId) {
+                view?.setBackgroundResource(R.drawable.bg_nav_item_selected)
+                (view?.getChildAt(0) as? ImageView)?.imageTintList =
+                    android.content.res.ColorStateList.valueOf(0xFF4A90E2.toInt())
+                (view?.getChildAt(1) as? TextView)?.apply {
+                    setTextColor(0xFF4A90E2.toInt())
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                }
+            } else {
+                view?.setBackgroundResource(R.drawable.bg_nav_item_default)
+                (view?.getChildAt(0) as? ImageView)?.imageTintList =
+                    android.content.res.ColorStateList.valueOf(0xFF6C757D.toInt())
+                (view?.getChildAt(1) as? TextView)?.apply {
+                    setTextColor(0xFF6C757D.toInt())
+                    setTypeface(null, android.graphics.Typeface.NORMAL)
                 }
             }
-            .setNegativeButton(getString(android.R.string.cancel), null)
-            .show()
-    }
-
-    private fun showCategoryOptionsMenu(anchor: View, categoryId: String, categoryName: String) {
-        val popup = android.widget.PopupMenu(this, anchor)
-        popup.menu.add(0, 1, 0, getString(R.string.rename_category))
-        popup.menu.add(0, 2, 1, getString(R.string.delete_category))
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                1 -> showRenameCategoryDialog(categoryId, categoryName)
-                2 -> showDeleteCategoryDialog(categoryId, categoryName)
-            }
-            true
         }
-        popup.show()
     }
 
-    private fun showRenameCategoryDialog(categoryId: String, currentName: String) {
-        val view = layoutInflater.inflate(R.layout.dialog_manage_category, null)
-        val etName = view.findViewById<TextInputEditText>(R.id.etCategoryName)
-        etName.setText(currentName)
-        etName.setSelection(currentName.length)
-
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.rename_category))
-            .setView(view)
-            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
-                val newName = etName.text.toString().trim()
-                if (newName.isNotEmpty()) {
-                    customCategoryManager.rename(categoryId, newName)
-                    refreshCategorySpinner(keepSelection = true)
-                }
-            }
-            .setNegativeButton(getString(android.R.string.cancel), null)
-            .show()
-    }
-
-    private fun showDeleteCategoryDialog(categoryId: String, categoryName: String) {
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.delete_category))
-            .setMessage(getString(R.string.delete_category_confirm, categoryName))
-            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
-                customCategoryManager.delete(categoryId)
-                refreshCategorySpinner(keepSelection = false)
-            }
-            .setNegativeButton(getString(android.R.string.cancel), null)
-            .show()
-    }
-
-    // ── Words ─────────────────────────────────────────────────────
+    // ── Load Words from Backend ───────────────────────────────────────────────
 
     private fun loadWords() {
+        if (isLoading) return
+        isLoading = true
         progressLoading.visibility = View.VISIBLE
         rvWords.visibility = View.GONE
-        tvEmpty.visibility = View.GONE
+        emptyState.visibility = View.GONE
 
-        val session = SessionManager.getInstance(this)
         lifecycleScope.launch {
-            // Show local cache immediately (works offline)
+            // Show cached data immediately (offline support)
             val cached = ModelUpdateManager.loadCachedWordBank(this@WordBankActivity)
-            if (cached != null) {
+            if (cached != null && cached.isNotEmpty()) {
                 allWords = cached
                 applyFilters()
                 progressLoading.visibility = View.GONE
-                // Cache any missing thumbnails in the background
+                isLoading = false
+                // Download missing images in background
                 launch { ModelUpdateManager.downloadWordBankImages(this@WordBankActivity, cached) }
             }
 
-            // Always fetch fresh data from API in the background
+            // Fetch fresh data from API
             try {
-                val response = ApiClient.get(session.token).getWordBank()
+                val response = ApiClient.get(session.token ?: "").getWordBank()
                 if (response.isSuccessful) {
                     val fresh = response.body()?.words ?: emptyList()
-                    if (fresh != allWords) {
+                    if (fresh.isNotEmpty() && fresh != allWords) {
                         allWords = fresh
                         applyFilters()
-                        // Cache any thumbnails not yet downloaded
+                        // Cache the fresh data
+                        ModelUpdateManager.cacheWordBank(this@WordBankActivity, fresh)
+                        // Download images in background
                         launch { ModelUpdateManager.downloadWordBankImages(this@WordBankActivity, fresh) }
                     }
+                } else {
+                    Toast.makeText(this@WordBankActivity, "Failed to load words", Toast.LENGTH_SHORT).show()
                 }
-            } catch (_: Exception) {
-                // Network unavailable — cache is still shown
+            } catch (e: Exception) {
+                if (allWords.isEmpty()) {
+                    Toast.makeText(this@WordBankActivity, "Network error. Using cached data if available.", Toast.LENGTH_LONG).show()
+                }
             } finally {
                 progressLoading.visibility = View.GONE
+                isLoading = false
                 if (allWords.isEmpty()) {
-                    tvEmpty.visibility = View.VISIBLE
+                    emptyState.visibility = View.VISIBLE
+                    rvWords.visibility = View.GONE
                 }
             }
         }
     }
 
-    private fun applyFilters() {
-        val selectedPosition = spinnerCategory.selectedItemPosition
-        val selectedId = categoryIds.getOrNull(selectedPosition)
-        val selectedName = categoryDisplayNames.getOrNull(selectedPosition) ?: "All Categories"
-        val searchQuery = etSearch.text.toString().trim().lowercase()
+    // ── Custom Categories ─────────────────────────────────────────────────────
 
+    private fun loadCustomCategories() {
+        customCategories = customCategoryManager.getAll().toMutableList()
+        refreshCategoryDropdown()
+    }
+
+    // ── Category dropdown ─────────────────────────────────────────────────────
+
+    private fun setupCategoryDropdown() {
+        refreshCategoryDropdown()
+        actvCategory.setOnItemClickListener { _, _, position, _ ->
+            val allCategories = getCategoryDisplayList()
+            selectedCategory = allCategories[position]
+            applyFilters()
+        }
+
+        actvCategory.setOnLongClickListener {
+            val currentText = actvCategory.text.toString()
+            val customCat = customCategories.find { it.name == currentText }
+            if (customCat != null) {
+                showManageCategoryDialog(customCat)
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    private fun getCategoryDisplayList(): List<String> {
+        val systemCategories = listOf("All Categories") + getUniqueSystemCategories()
+        val customCategoryNames = customCategories.map { it.name }
+        return systemCategories + customCategoryNames
+    }
+
+    private fun getUniqueSystemCategories(): List<String> {
+        return allWords.map { it.category }.distinct().sorted()
+    }
+
+    private fun refreshCategoryDropdown() {
+        val allCategories = getCategoryDisplayList()
+        val dropdownAdapter = ArrayAdapter(
+            this, android.R.layout.simple_dropdown_item_1line, allCategories
+        )
+        actvCategory.setAdapter(dropdownAdapter)
+    }
+
+    // ── Search ────────────────────────────────────────────────────────────────
+
+    private fun setupSearch() {
+        etSearch.addTextChangedListener { text ->
+            searchQuery = text?.toString()?.trim() ?: ""
+            applyFilters()
+        }
+    }
+
+    // ── Filtering ─────────────────────────────────────────────────────────────
+
+    private fun applyFilters() {
         val filtered = allWords.filter { word ->
             val matchesCategory = when {
-                selectedName == "All Categories" -> true
-                selectedId != null -> {
-                    // Custom category: filter by stored word IDs
-                    word.id in customCategoryManager.getWordsFor(selectedId)
+                selectedCategory == "All Categories" -> true
+                else -> {
+                    // Check if selected category is a custom category
+                    val customCat = customCategories.find { it.name == selectedCategory }
+                    if (customCat != null) {
+                        word.id in customCat.wordIds
+                    } else {
+                        word.category.equals(selectedCategory, ignoreCase = true)
+                    }
                 }
-                else -> word.category.equals(selectedName, ignoreCase = true)
             }
             val matchesSearch = searchQuery.isEmpty() ||
-                    word.label.lowercase().contains(searchQuery) ||
-                    word.filipino_translation?.lowercase()?.contains(searchQuery) == true ||
-                    word.description?.lowercase()?.contains(searchQuery) == true
+                    word.label.contains(searchQuery, ignoreCase = true) ||
+                    (word.filipino_translation?.contains(searchQuery, ignoreCase = true) == true) ||
+                    (word.description?.contains(searchQuery, ignoreCase = true) == true)
             matchesCategory && matchesSearch
         }
 
-        adapter.submitList(filtered)
-        rvWords.visibility = if (filtered.isNotEmpty()) View.VISIBLE else View.GONE
-        tvEmpty.visibility = if (filtered.isEmpty() && progressLoading.visibility != View.VISIBLE) View.VISIBLE else View.GONE
-        tvEmpty.text = getString(R.string.no_words_found)
+        adapter.setWords(filtered.toMutableList())
+        val count = filtered.size
+        tvEntryCount.text = "Showing $count word${if (count != 1) "s" else ""}"
+        emptyState.visibility = if (count == 0 && !isLoading) View.VISIBLE else View.GONE
+        rvWords.visibility = if (count == 0 && !isLoading) View.GONE else View.VISIBLE
     }
 
-    // ── Media dialog ──────────────────────────────────────────────
+    // ── Word detail bottom sheet ──────────────────────────────────────────────
 
-    private fun showMediaDialog(word: WordBankWord) {
-        mediaDialog?.dismiss()
-
-        val dialog = Dialog(this, android.R.style.Theme_Material_Light_NoActionBar)
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        val view = layoutInflater.inflate(R.layout.dialog_word_media, null)
+    private fun showWordDetail(word: WordBankWord) {
+        val dialog = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_word_detail, null)
         dialog.setContentView(view)
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
 
-        // Title
-        view.findViewById<TextView>(R.id.tvMediaTitle).text = word.label
+        view.findViewById<TextView>(R.id.tvDetailWord).text = word.label.uppercase()
+        view.findViewById<TextView>(R.id.tvDetailCategory).text = word.category
 
-        // Filipino translation
-        val tvFilipino = view.findViewById<TextView>(R.id.tvMediaFilipino)
-        if (!word.filipino_translation.isNullOrBlank()) {
-            tvFilipino.text = word.filipino_translation
-            tvFilipino.visibility = View.VISIBLE
-        }
+        val gestureTypeText = "${word.gesture_type} • ${word.hands_count} hand${if (word.hands_count > 1) "s" else ""}"
+        view.findViewById<TextView>(R.id.tvDetailGestureType).text = gestureTypeText
 
-        // Description
-        val tvDesc = view.findViewById<TextView>(R.id.tvMediaDescription)
-        if (!word.description.isNullOrBlank()) {
-            tvDesc.text = word.description
-            tvDesc.visibility = View.VISIBLE
-        }
+        val badgeColor = if (word.gesture_type == "static") 0xFF0056A4 else 0xFF00796B
+        view.findViewById<TextView>(R.id.tvDetailGestureType)
+            .setBackgroundColor(badgeColor.toInt())
 
-        // Tags
-        view.findViewById<TextView>(R.id.tvMediaGesture).text = word.gesture_type
-        view.findViewById<TextView>(R.id.tvMediaHands).text =
-            "${word.hands_count} hand${if (word.hands_count > 1) "s" else ""}"
-        view.findViewById<TextView>(R.id.tvMediaCategory).text = word.category
+        // Audio playback
+        speakWord(word.label)
 
-        // Close button
-        view.findViewById<ImageButton>(R.id.btnCloseMedia).setOnClickListener {
-            dialog.dismiss()
-        }
-
-        // Audio button
-        view.findViewById<MaterialButton>(R.id.btnMediaAudio).setOnClickListener {
+        view.findViewById<MaterialButton>(R.id.btnPlayAudio).setOnClickListener {
             speakWord(word.label)
         }
 
-        // Add to category button
+        // Video/Media setup
+        val videoView = view.findViewById<VideoView>(R.id.videoDemo)
+        val ivThumbnail = view.findViewById<ImageView>(R.id.ivThumbnail)
+
+        val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
+        val localThumb = ModelUpdateManager.getLocalThumb(this, word.id)
+        val thumbSource: Any? = localThumb ?: resolvedThumb
+
+        // Show thumbnail if available
+        if (thumbSource != null) {
+            ivThumbnail.visibility = View.VISIBLE
+            Glide.with(this)
+                .load(thumbSource)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .centerCrop()
+                .into(ivThumbnail)
+        } else {
+            ivThumbnail.visibility = View.GONE
+        }
+
+        if (!word.video_url.isNullOrBlank()) {
+            ivThumbnail.setOnClickListener {
+                Toast.makeText(this, "Video demo available", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         view.findViewById<MaterialButton>(R.id.btnAddToCategory).setOnClickListener {
             showAddToCategoryDialog(word)
-        }
-
-        // Video or image
-        val frameVideo = view.findViewById<FrameLayout>(R.id.frameVideo)
-        val ivImage = view.findViewById<ImageView>(R.id.ivMediaImage)
-        val videoView = view.findViewById<VideoView>(R.id.videoView)
-        val progressVideo = view.findViewById<ProgressBar>(R.id.progressVideo)
-
-        val resolvedDialogThumb = ApiClient.resolveUrl(word.thumbnail_url)
-        val localThumb = ModelUpdateManager.getLocalThumb(this, word.id)
-        // Prefer local file; fall back to remote URL for both image display and video error handler
-        val thumbSource: Any? = localThumb ?: resolvedDialogThumb
-
-        when {
-            !word.video_url.isNullOrBlank() -> {
-                frameVideo.visibility = View.VISIBLE
-                progressVideo.visibility = View.VISIBLE
-
-                val uri = Uri.parse(word.video_url)
-                videoView.setVideoURI(uri)
-                videoView.setOnPreparedListener { mp ->
-                    progressVideo.visibility = View.GONE
-                    mp.isLooping = true
-                    videoView.start()
-                }
-                videoView.setOnErrorListener { _, _, _ ->
-                    // Video unavailable (offline) — show cached/remote thumbnail image instead
-                    progressVideo.visibility = View.GONE
-                    frameVideo.visibility = View.GONE
-                    if (thumbSource != null) {
-                        ivImage.visibility = View.VISIBLE
-                        Glide.with(this)
-                            .load(thumbSource)
-                            .diskCacheStrategy(DiskCacheStrategy.ALL)
-                            .placeholder(android.R.drawable.ic_menu_gallery)
-                            .into(ivImage)
-                    }
-                    true
-                }
-            }
-            thumbSource != null -> {
-                frameVideo.visibility = View.GONE
-                ivImage.visibility = View.VISIBLE
-                Glide.with(this)
-                    .load(thumbSource)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .centerCrop()
-                    .placeholder(android.R.drawable.ic_menu_gallery)
-                    .into(ivImage)
-            }
-            else -> {
-                frameVideo.visibility = View.GONE
-                ivImage.visibility = View.GONE
-            }
-        }
-
-        dialog.setOnDismissListener {
-            videoView.stopPlayback()
+            dialog.dismiss()
         }
 
         dialog.show()
-        mediaDialog = dialog
-    }
-
-    private fun showAddToCategoryDialog(word: WordBankWord) {
-        val categories = customCategoryManager.getAll()
-        if (categories.isEmpty()) {
-            Toast.makeText(this, getString(R.string.no_custom_categories), Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val names = categories.map { it.name }.toTypedArray()
-        val checked = BooleanArray(categories.size) { i -> word.id in categories[i].wordIds }
-
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.add_to_category))
-            .setMultiChoiceItems(names, checked) { _, which, isChecked ->
-                checked[which] = isChecked
-            }
-            .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
-                categories.forEachIndexed { i, cat ->
-                    if (checked[i]) customCategoryManager.addWord(cat.id, word.id)
-                    else customCategoryManager.removeWord(cat.id, word.id)
-                }
-                // Refresh list if currently viewing a custom category
-                val selectedId = categoryIds.getOrNull(spinnerCategory.selectedItemPosition)
-                if (selectedId != null) applyFilters()
-            }
-            .setNegativeButton(getString(android.R.string.cancel), null)
-            .show()
     }
 
     private fun speakWord(word: String) {
         if (isTtsReady) {
             tts?.speak(word, TextToSpeech.QUEUE_FLUSH, null, null)
+        } else {
+            Toast.makeText(this, "🔊 Playing: $word", Toast.LENGTH_SHORT).show()
         }
     }
 
-    override fun onPause() {
-        super.onPause()
-        mediaDialog?.dismiss()
+    // ── Create category ───────────────────────────────────────────────────────
+
+    // FIX: only ONE definition of showCategoryEditDialog (duplicate removed)
+    private fun showCategoryEditDialog(
+        title: String,
+        hint: String,
+        subtitle: String = "",
+        currentValue: String = "",
+        maxLength: Int = 50,
+        extraValidate: ((String) -> String?)? = null,
+        onConfirm: (String) -> Unit
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_edit_field, null, false)
+        val til = dialogView.findViewById<TextInputLayout>(R.id.tilDialogField)
+        val et = dialogView.findViewById<TextInputEditText>(R.id.etDialogField)
+        val tvSub = dialogView.findViewById<TextView>(R.id.tvDialogSubtitle)
+
+        til.hint = hint
+        til.counterMaxLength = maxLength
+        til.isCounterEnabled = true
+        et.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        et.filters = arrayOf(InputFilter.LengthFilter(maxLength))
+        et.setText(currentValue)
+        et.setSelection(currentValue.length)
+
+        et.addTextChangedListener { til.error = null }
+
+        if (subtitle.isNotEmpty()) {
+            tvSub.text = subtitle
+            tvSub.visibility = View.VISIBLE
+        } else {
+            tvSub.visibility = View.GONE
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(dialogView)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            et.requestFocus()
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val newValue = et.text.toString().trim()
+
+                if (newValue.isEmpty()) {
+                    til.error = "$hint cannot be empty"
+                    return@setOnClickListener
+                }
+
+                val extraError = extraValidate?.invoke(newValue)
+                if (extraError != null) {
+                    til.error = extraError
+                    return@setOnClickListener
+                }
+
+                til.error = null
+                dialog.dismiss()
+                onConfirm(newValue)
+            }
+        }
+
+        dialog.show()
+    }
+
+    // FIX: added missing showCreateCategoryDialog referenced at lines 568 and 682
+    private fun showCreateCategoryDialog() {
+        showCategoryEditDialog(
+            title = "Create category",
+            hint = "Category name",
+            subtitle = "Create a new custom category to organize words.",
+            currentValue = "",
+            maxLength = 50,
+            extraValidate = { name ->
+                if (customCategories.any { it.name.equals(name, ignoreCase = true) })
+                    "\"$name\" already exists"
+                else
+                    null
+            }
+        ) { newName ->
+            val newCat = customCategoryManager.create(newName)
+            customCategories.add(newCat)
+            refreshCategoryDropdown()
+            Toast.makeText(this, "Category \"$newName\" created", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ── Manage category (rename / delete) ─────────────────────────────────────
+
+    private fun showManageCategoryDialog(
+        category: CustomCategory,
+        onDone: (() -> Unit)? = null
+    ) {
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_category_actions, null)
+        sheet.setContentView(view)
+
+        view.findViewById<TextView>(R.id.tvSheetCategoryName).text = category.name
+
+        view.findViewById<LinearLayout>(R.id.rowRename).setOnClickListener {
+            sheet.dismiss()
+            showRenameCategoryDialog(category, onDone)
+        }
+
+        view.findViewById<LinearLayout>(R.id.rowDelete).setOnClickListener {
+            sheet.dismiss()
+            showDeleteCategoryDialog(category, onDone)
+        }
+
+        view.findViewById<TextView>(R.id.tvSheetCancel).setOnClickListener {
+            sheet.dismiss()
+            onDone?.invoke()
+        }
+
+        sheet.show()
+    }
+
+    private fun showRenameCategoryDialog(
+        category: CustomCategory,
+        onDone: (() -> Unit)? = null
+    ) {
+        showCategoryEditDialog(
+            title = "Rename category",
+            hint = "Category name",
+            subtitle = "Rename this category. Words inside it will not be affected.",
+            currentValue = category.name,
+            maxLength = 50,
+            extraValidate = { newName: String ->
+                when {
+                    newName.equals(category.name, ignoreCase = true) -> null
+                    customCategories.any { it.name.equals(newName, ignoreCase = true) } ->
+                        "\"$newName\" already exists"
+                    else -> null
+                }
+            }
+        ) { newName ->
+            if (!newName.equals(category.name, ignoreCase = true)) {
+                customCategoryManager.rename(category.id, newName)
+                val index = customCategories.indexOfFirst { it.id == category.id }
+                if (index >= 0) {
+                    customCategories[index] = customCategoryManager.get(category.id)!!
+                }
+
+                if (selectedCategory == category.name) {
+                    selectedCategory = newName
+                    actvCategory.setText(newName, false)
+                }
+
+                refreshCategoryDropdown()
+                applyFilters()
+                Toast.makeText(this, "Category renamed to \"$newName\"", Toast.LENGTH_SHORT).show()
+            }
+            onDone?.invoke()
+        }
+    }
+
+    private fun showDeleteCategoryDialog(
+        category: CustomCategory,
+        onDone: (() -> Unit)? = null
+    ) {
+        val wordCount = category.wordIds.size
+        val message = if (wordCount > 0)
+            "Delete \"${category.name}\"? This will also remove $wordCount " +
+            "word${if (wordCount != 1) "s" else ""} from this category."
+        else
+            "Delete \"${category.name}\"? This action cannot be undone."
+
+        AlertDialog.Builder(this)
+            .setTitle("Delete category")
+            .setMessage(message)
+            .setPositiveButton("Delete") { _, _ ->
+                customCategoryManager.delete(category.id)
+                customCategories.removeAll { it.id == category.id }
+
+                if (selectedCategory == category.name) {
+                    selectedCategory = "All Categories"
+                    actvCategory.setText("", false)
+                }
+
+                refreshCategoryDropdown()
+                applyFilters()
+                Toast.makeText(this, "\"${category.name}\" deleted", Toast.LENGTH_SHORT).show()
+                onDone?.invoke()
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                onDone?.invoke()
+            }
+            .show()
+    }
+
+    // ── Add word to custom category ───────────────────────────────────────────
+
+    private fun showAddToCategoryDialog(word: WordBankWord) {
+        if (customCategories.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("No Custom Categories")
+                .setMessage("You haven't created any custom categories yet. Would you like to create one?")
+                .setPositiveButton("Create") { _, _ -> showCreateCategoryDialog() }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
+
+        val options = customCategories.map { it.name }.toTypedArray()
+        val checked = BooleanArray(customCategories.size) { i ->
+            word.id in customCategories[i].wordIds
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Add \"${word.label}\" to categories")
+            .setMultiChoiceItems(options, checked) { _, which, isChecked ->
+                val category = customCategories[which]
+                if (isChecked) {
+                    customCategoryManager.addWord(category.id, word.id)
+                    customCategories[which] = customCategoryManager.get(category.id)!!
+                    Toast.makeText(this, "Added to \"${category.name}\"", Toast.LENGTH_SHORT).show()
+                } else {
+                    customCategoryManager.removeWord(category.id, word.id)
+                    customCategories[which] = customCategoryManager.get(category.id)!!
+                    Toast.makeText(this, "Removed from \"${category.name}\"", Toast.LENGTH_SHORT).show()
+                }
+                // Refresh if viewing this category
+                if (selectedCategory == category.name) {
+                    applyFilters()
+                }
+            }
+            .setPositiveButton("Done", null)
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ── RecyclerView setup ────────────────────────────────────────────────────
+
+    private fun setupRecyclerView() {
+        adapter = WordBankAdapter(
+            words = mutableListOf(),
+            onWordClick = { word -> showWordDetail(word) },
+            onDemoClick = { word -> showWordDetail(word) }
+        )
+        rvWords.layoutManager = LinearLayoutManager(this)
+        rvWords.adapter = adapter
+    }
+
+    // ── Wire listeners ────────────────────────────────────────────────────────
+
+    private fun wireListeners() {
+        btnCreateCategory.setOnClickListener { showCreateCategoryDialog() }
+        btnCreateCategory.setOnLongClickListener {
+            if (customCategories.isNotEmpty()) {
+                Toast.makeText(this, "Long press on a category in the dropdown to manage it", Toast.LENGTH_LONG).show()
+            }
+            true
+        }
+    }
+
+    // ── Back press ────────────────────────────────────────────────────────────
+
+    @Deprecated("Use OnBackPressedDispatcher instead")
+    override fun onBackPressed() {
+        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START)
+        } else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
+        }
     }
 
     override fun onDestroy() {
@@ -464,96 +717,64 @@ class WordBankActivity : AppCompatActivity() {
     }
 }
 
-// ── Word Adapter ─────────────────────────────────────────────────────────────
+// ── Adapter for WordBankWord ───────────────────────────────────────────────────
 
-class WordAdapter(
-    private val onThumbnailClick: (WordBankWord) -> Unit,
-    private val onAudio: (WordBankWord) -> Unit
-) : RecyclerView.Adapter<WordAdapter.VH>() {
+class WordBankAdapter(
+    private val words: MutableList<WordBankWord>,
+    private val onWordClick: (WordBankWord) -> Unit,
+    private val onDemoClick: (WordBankWord) -> Unit
+) : RecyclerView.Adapter<WordBankAdapter.WordViewHolder>() {
 
-    private var words = listOf<WordBankWord>()
+    class WordViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val tvWord: TextView = view.findViewById(R.id.tvWord)
+        val tvCategory: TextView = view.findViewById(R.id.tvCategory)
+        val tvGestureType: TextView = view.findViewById(R.id.tvGestureType)
+        val btnWatchDemo: MaterialButton = view.findViewById(R.id.btnWatchDemo)
+        val ivThumbnail: ImageView = view.findViewById(R.id.ivThumbnail)
+    }
 
-    fun submitList(list: List<WordBankWord>) {
-        words = list
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): WordViewHolder {
+        val view = LayoutInflater.from(parent.context)
+            .inflate(R.layout.item_word_entry, parent, false)
+        return WordViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: WordViewHolder, position: Int) {
+        val word = words[position]
+        holder.tvWord.text = word.label
+        holder.tvCategory.text = word.category
+        val gestureText = "${word.gesture_type} • ${word.hands_count}H"
+        holder.tvGestureType.text = gestureText
+
+        val badgeColor = if (word.gesture_type == "static") 0xFF0056A4 else 0xFF00796B
+        holder.tvGestureType.setBackgroundColor(badgeColor.toInt())
+
+        // Load thumbnail
+        val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
+        val localThumb = ModelUpdateManager.getLocalThumb(holder.itemView.context, word.id)
+        val thumbSource: Any? = localThumb ?: resolvedThumb
+
+        if (thumbSource != null) {
+            Glide.with(holder.itemView.context)
+                .load(thumbSource)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .centerCrop()
+                .placeholder(android.R.color.darker_gray)
+                .into(holder.ivThumbnail)
+            holder.ivThumbnail.visibility = View.VISIBLE
+        } else {
+            holder.ivThumbnail.visibility = View.GONE
+        }
+
+        holder.itemView.setOnClickListener { onWordClick(word) }
+        holder.btnWatchDemo.setOnClickListener { onDemoClick(word) }
+    }
+
+    override fun getItemCount(): Int = words.size
+
+    fun setWords(newWords: MutableList<WordBankWord>) {
+        words.clear()
+        words.addAll(newWords)
         notifyDataSetChanged()
     }
-
-    class VH(view: View) : RecyclerView.ViewHolder(view) {
-        val layoutThumbnail: FrameLayout = view.findViewById(R.id.layoutThumbnail)
-        val ivThumbnail: ImageView = view.findViewById(R.id.ivThumbnail)
-        val layoutPlayOverlay: FrameLayout = view.findViewById(R.id.layoutPlayOverlay)
-        val tvNoMedia: TextView = view.findViewById(R.id.tvNoMedia)
-        val tvLabel: TextView = view.findViewById(R.id.tvWordLabel)
-        val tvFilipino: TextView = view.findViewById(R.id.tvWordFilipino)
-        val tvCategory: TextView = view.findViewById(R.id.tvWordCategory)
-        val tvGesture: TextView = view.findViewById(R.id.tvWordGesture)
-        val tvHands: TextView = view.findViewById(R.id.tvWordHands)
-        val btnAudio: MaterialButton = view.findViewById(R.id.btnAudio)
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_word, parent, false)
-        return VH(view)
-    }
-
-    override fun onBindViewHolder(holder: VH, position: Int) {
-        val word = words[position]
-
-        holder.tvLabel.text = word.label
-        holder.tvCategory.text = word.category
-        holder.tvGesture.text = word.gesture_type
-        holder.tvHands.text = "${word.hands_count}H"
-
-        // Filipino translation
-        if (!word.filipino_translation.isNullOrBlank()) {
-            holder.tvFilipino.text = word.filipino_translation
-            holder.tvFilipino.visibility = View.VISIBLE
-        } else {
-            holder.tvFilipino.visibility = View.GONE
-        }
-
-        // Prefer locally cached thumbnail (works offline); fall back to remote URL.
-        // For video words the play-overlay is kept so the user still knows it's a motion gesture.
-        val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
-        val localThumb    = ModelUpdateManager.getLocalThumb(holder.itemView.context, word.id)
-        val thumbSource: Any? = localThumb ?: resolvedThumb
-        val isVideo = !word.video_url.isNullOrBlank()
-
-        when {
-            thumbSource != null -> {
-                holder.tvNoMedia.visibility = View.GONE
-                holder.layoutPlayOverlay.visibility = if (isVideo) View.VISIBLE else View.GONE
-                Glide.with(holder.itemView.context)
-                    .load(thumbSource)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .centerCrop()
-                    .placeholder(android.R.color.darker_gray)
-                    .error(android.R.color.darker_gray)
-                    .into(holder.ivThumbnail)
-            }
-            isVideo -> {
-                // No thumbnail cached yet, but has a video — try loading a frame from the video URL
-                holder.tvNoMedia.visibility = View.GONE
-                holder.layoutPlayOverlay.visibility = View.VISIBLE
-                Glide.with(holder.itemView.context)
-                    .load(Uri.parse(word.video_url))
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .centerCrop()
-                    .placeholder(android.R.color.darker_gray)
-                    .error(android.R.color.darker_gray)
-                    .into(holder.ivThumbnail)
-            }
-            else -> {
-                holder.ivThumbnail.setImageDrawable(null)
-                holder.layoutPlayOverlay.visibility = View.GONE
-                holder.tvNoMedia.visibility = View.VISIBLE
-            }
-        }
-
-        holder.layoutThumbnail.setOnClickListener { onThumbnailClick(word) }
-        holder.btnAudio.setOnClickListener { onAudio(word) }
-    }
-
-    override fun getItemCount() = words.size
 }

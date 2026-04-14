@@ -1,0 +1,1056 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    activity_auth.xml
+    Screens handled in a single Activity by toggling visibility:
+      Screen 1 — Sign In
+      Screen 2 — Sign Up (username + email only; password set after email verification)
+      Screen 3 — Email Verification (6-digit OTP, 5-min expiry, max 5 attempts, resend after 1 min)
+      Screen 4 — Set Password (after OTP verified; also reused for Forgot Password reset)
+      Screen 5 — Forgot Password (enter email → triggers OTP flow)
+      Screen 6 — Success splash (registration complete → go to Sign In)
+
+    Scope notes:
+      - Registered email is verified during sign-up and cannot be changed later
+      - Passwords are encrypted before storage
+      - Admin access to user data is restricted to the admin platform only
+      - Forgot Password reuses the same OTP rules (5 min, 5 attempts, 1 min resend cooldown)
+-->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E3F2FD"
+    android:fillViewport="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingBottom="24dp">
+
+        <!-- Close button (dismisses auth without logging in — allowed per scope) -->
+        <ImageButton
+            android:id="@+id/btnCloseAuth"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:background="@drawable/bg_icon_circle_dark"
+            android:contentDescription="Close"
+            android:tint="#FFFFFF"
+            android:layout_margin="16dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- MAIN CONTENT CARD -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/mainAuthCard"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="#FFFFFF"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <!-- BRAND HEADER -->
+                <LinearLayout
+                    android:id="@+id/brandBlock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="24dp"
+                    android:layout_gravity="center_horizontal">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/sigla"
+                        android:contentDescription="SIGLA Logo" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginStart="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="SIGLA"
+                            android:textColor="#1A3A6B"
+                            android:textSize="22sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.2" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Filipino Sign Language"
+                            android:textColor="#4A90E2"
+                            android:textSize="10sp"
+                            android:letterSpacing="0.05" />
+
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- ══════════════════════════════════════
+                     SCREEN 1 — SIGN IN
+                     ══════════════════════════════════════ -->
+                <LinearLayout
+                    android:id="@+id/screenSignIn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="visible">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Welcome back"
+                        android:textColor="#1A1A2E"
+                        android:textSize="26sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Sign in to continue"
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="28dp" />
+
+                    <!-- Email -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilSignInEmail"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:boxStrokeColor="#4A90E2"
+                            app:boxStrokeWidth="1.5dp"
+                            app:boxBackgroundColor="#F8F9FF"
+                            app:boxCornerRadiusTopStart="16dp"
+                            app:boxCornerRadiusTopEnd="16dp"
+                            app:boxCornerRadiusBottomStart="16dp"
+                            app:boxCornerRadiusBottomEnd="16dp"
+                            app:hintEnabled="true"
+                            app:hintTextColor="#4A90E2"
+                            android:hint="Email Address">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etSignInEmail"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textEmailAddress"
+                                android:textColor="#111111"
+                                android:textColorHint="#999999"
+                                android:textSize="14sp"
+                                android:paddingTop="14dp"
+                                android:paddingBottom="14dp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Password -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilSignInPassword"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:boxStrokeColor="#4A90E2"
+                            app:boxStrokeWidth="1.5dp"
+                            app:boxBackgroundColor="#F8F9FF"
+                            app:boxCornerRadiusTopStart="16dp"
+                            app:boxCornerRadiusTopEnd="16dp"
+                            app:boxCornerRadiusBottomStart="16dp"
+                            app:boxCornerRadiusBottomEnd="16dp"
+                            app:endIconMode="password_toggle"
+                            app:endIconTint="#4A90E2"
+                            app:hintEnabled="true"
+                            app:hintTextColor="#4A90E2"
+                            android:hint="Password">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etSignInPassword"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textPassword"
+                                android:textColor="#111111"
+                                android:textColorHint="#999999"
+                                android:textSize="14sp"
+                                android:paddingTop="14dp"
+                                android:paddingBottom="14dp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Forgot Password link -->
+                    <TextView
+                        android:id="@+id/tvForgotPassword"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Forgot password?"
+                        android:textColor="#4A90E2"
+                        android:textSize="12sp"
+                        android:layout_gravity="end"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"
+                        android:layout_marginBottom="24dp" />
+
+                    <TextView
+                        android:id="@+id/tvSignInError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="#D32F2F"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        android:layout_marginBottom="12dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSignIn"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:text="Sign In"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        app:backgroundTint="#4A90E2"
+                        app:cornerRadius="14dp"
+                        android:layout_marginBottom="20dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_marginBottom="4dp">
+
+                        <View
+                            android:layout_width="0dp"
+                            android:layout_height="1dp"
+                            android:layout_weight="1"
+                            android:background="#E8E8EE" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="  or  "
+                            android:textColor="#4A90E2"
+                            android:textSize="12sp" />
+
+                        <View
+                            android:layout_width="0dp"
+                            android:layout_height="1dp"
+                            android:layout_weight="1"
+                            android:background="#E8E8EE" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_marginTop="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Don't have an account? "
+                            android:textColor="#6C757D"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/tvGoToSignUp"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Sign Up"
+                            android:textColor="#4A90E2"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- ══════════════════════════════════════
+                     SCREEN 2 — SIGN UP
+                     Scope: collect username + email only.
+                     Password is set after email verification (Screen 4).
+                     ══════════════════════════════════════ -->
+                <LinearLayout
+                    android:id="@+id/screenSignUp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Create account"
+                        android:textColor="#1A1A2E"
+                        android:textSize="26sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Enter your details to get started"
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="28dp" />
+
+                    <!-- Username -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilSignUpUsername"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:boxStrokeColor="#4A90E2"
+                            app:boxStrokeWidth="1.5dp"
+                            app:boxBackgroundColor="#F8F9FF"
+                            app:boxCornerRadiusTopStart="16dp"
+                            app:boxCornerRadiusTopEnd="16dp"
+                            app:boxCornerRadiusBottomStart="16dp"
+                            app:boxCornerRadiusBottomEnd="16dp"
+                            app:hintEnabled="true"
+                            app:hintTextColor="#4A90E2"
+                            android:hint="Username">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etSignUpUsername"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textPersonName"
+                                android:textColor="#111111"
+                                android:textColorHint="#999999"
+                                android:textSize="14sp"
+                                android:paddingTop="14dp"
+                                android:paddingBottom="14dp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Email -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilSignUpEmail"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:boxStrokeColor="#4A90E2"
+                            app:boxStrokeWidth="1.5dp"
+                            app:boxBackgroundColor="#F8F9FF"
+                            app:boxCornerRadiusTopStart="16dp"
+                            app:boxCornerRadiusTopEnd="16dp"
+                            app:boxCornerRadiusBottomStart="16dp"
+                            app:boxCornerRadiusBottomEnd="16dp"
+                            app:hintEnabled="true"
+                            app:hintTextColor="#4A90E2"
+                            android:hint="Email Address">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etSignUpEmail"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textEmailAddress"
+                                android:textColor="#111111"
+                                android:textColorHint="#999999"
+                                android:textSize="14sp"
+                                android:paddingTop="14dp"
+                                android:paddingBottom="14dp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Info note about verification code -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="20dp"
+                        app:cardCornerRadius="12dp"
+                        app:cardElevation="1dp"
+                        app:cardBackgroundColor="#E3F2FD">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="12dp"
+                            android:gravity="center_vertical">
+
+                            <ImageView
+                                android:layout_width="14dp"
+                                android:layout_height="14dp"
+                                android:src="@android:drawable/ic_dialog_info"
+                                android:tint="#4A90E2"
+                                android:layout_marginEnd="8dp" />
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="A 6-digit verification code will be sent to this email. The code expires in 5 minutes."
+                                android:textColor="#4A90E2"
+                                android:textSize="11sp"
+                                android:lineSpacingMultiplier="1.4" />
+
+                        </LinearLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <TextView
+                        android:id="@+id/tvSignUpError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="#D32F2F"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        android:layout_marginBottom="12dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSendCode"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:text="Send Verification Code"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        app:backgroundTint="#4A90E2"
+                        app:cornerRadius="14dp"
+                        android:layout_marginBottom="20dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Already have an account? "
+                            android:textColor="#6C757D"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/tvGoToSignIn"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Sign In"
+                            android:textColor="#4A90E2"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- ══════════════════════════════════════
+                     SCREEN 3 — EMAIL VERIFICATION (OTP)
+                     Scope: 6 digits, 5 min expiry, max 5 wrong attempts,
+                     resend available after 1 minute.
+                     Shared by: sign-up, forgot password, change password flows.
+                     ══════════════════════════════════════ -->
+                <LinearLayout
+                    android:id="@+id/screenVerify"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@android:drawable/ic_dialog_email"
+                        android:tint="#4A90E2"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginBottom="16dp" />
+
+                    <TextView
+                        android:id="@+id/tvVerifyTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Verify your email"
+                        android:textColor="#1A1A2E"
+                        android:textSize="26sp"
+                        android:textStyle="bold"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/tvVerifySubtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="We sent a 6-digit code to"
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:layout_gravity="center_horizontal"
+                        android:gravity="center"
+                        android:lineSpacingMultiplier="1.5"
+                        android:layout_marginBottom="28dp" />
+
+                    <!-- OTP input boxes (6 digits) -->
+                    <!-- OTP input boxes (6 digits) — replace the existing CardView block -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center"
+                            android:paddingTop="16dp"
+                            android:paddingBottom="16dp"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/otpDigit1"
+                                android:layout_width="0dp"
+                                android:layout_height="50dp"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="5dp"
+                                android:background="@drawable/bg_otp_box"
+                                android:inputType="number"
+                                android:maxLength="1"
+                                android:textColor="#1A1A2E"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:padding="0dp" />
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/otpDigit2"
+                                android:layout_width="0dp"
+                                android:layout_height="50dp"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="5dp"
+                                android:background="@drawable/bg_otp_box"
+                                android:inputType="number"
+                                android:maxLength="1"
+                                android:textColor="#1A1A2E"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:padding="0dp" />
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/otpDigit3"
+                                android:layout_width="0dp"
+                                android:layout_height="50dp"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="12dp"
+                                android:background="@drawable/bg_otp_box"
+                                android:inputType="number"
+                                android:maxLength="1"
+                                android:textColor="#1A1A2E"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:padding="0dp" />
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/otpDigit4"
+                                android:layout_width="0dp"
+                                android:layout_height="50dp"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="5dp"
+                                android:background="@drawable/bg_otp_box"
+                                android:inputType="number"
+                                android:maxLength="1"
+                                android:textColor="#1A1A2E"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:padding="0dp" />
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/otpDigit5"
+                                android:layout_width="0dp"
+                                android:layout_height="50dp"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="5dp"
+                                android:background="@drawable/bg_otp_box"
+                                android:inputType="number"
+                                android:maxLength="1"
+                                android:textColor="#1A1A2E"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:padding="0dp" />
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/otpDigit6"
+                                android:layout_width="0dp"
+                                android:layout_height="50dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_otp_box"
+                                android:inputType="number"
+                                android:maxLength="1"
+                                android:textColor="#1A1A2E"
+                                android:textSize="20sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:padding="0dp" />
+
+                        </LinearLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Attempts remaining + expiry countdown -->
+                    <TextView
+                        android:id="@+id/tvAttemptsLeft"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="5 attempts remaining · Expires in 5:00"
+                        android:textColor="#4A90E2"
+                        android:textSize="11sp"
+                        android:gravity="center"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:id="@+id/tvVerifyError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="#D32F2F"
+                        android:textSize="12sp"
+                        android:gravity="center"
+                        android:visibility="gone"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Resend: available after 1-minute cooldown -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_marginBottom="24dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Didn't receive it? "
+                            android:textColor="#6C757D"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tvResendCode"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Resend code"
+                            android:textColor="#4A90E2"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <!-- Shows countdown "(0:59)" during 1-minute cooldown -->
+                        <TextView
+                            android:id="@+id/tvResendCooldown"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text=" (0:59)"
+                            android:textColor="#4A90E2"
+                            android:textSize="12sp"
+                            android:visibility="gone" />
+
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnVerifyCode"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:text="Verify"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        app:backgroundTint="#4A90E2"
+                        app:cornerRadius="14dp"
+                        android:layout_marginBottom="16dp" />
+
+                    <TextView
+                        android:id="@+id/tvVerifyBack"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="← Back"
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:gravity="center" />
+
+                </LinearLayout>
+
+                <!-- ══════════════════════════════════════
+                     SCREEN 4 — SET PASSWORD
+                     Reused for: post-signup password creation AND forgot-password reset.
+                     tvSetPasswordTitle and tvSetPasswordSubtitle are set programmatically
+                     to differentiate the two contexts.
+                     ══════════════════════════════════════ -->
+                <LinearLayout
+                    android:id="@+id/screenSetPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tvSetPasswordTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Set your password"
+                        android:textColor="#1A1A2E"
+                        android:textSize="26sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/tvSetPasswordSubtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Choose a strong password for your account"
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="28dp" />
+
+                    <!-- New Password -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="16dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilNewPassword"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:boxStrokeColor="#4A90E2"
+                            app:boxStrokeWidth="1.5dp"
+                            app:boxBackgroundColor="#F8F9FF"
+                            app:boxCornerRadiusTopStart="16dp"
+                            app:boxCornerRadiusTopEnd="16dp"
+                            app:boxCornerRadiusBottomStart="16dp"
+                            app:boxCornerRadiusBottomEnd="16dp"
+                            app:endIconMode="password_toggle"
+                            app:endIconTint="#4A90E2"
+                            app:hintEnabled="true"
+                            app:hintTextColor="#4A90E2"
+                            android:hint="Password">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etNewPassword"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textPassword"
+                                android:textColor="#111111"
+                                android:textColorHint="#999999"
+                                android:textSize="14sp"
+                                android:paddingTop="14dp"
+                                android:paddingBottom="14dp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- Confirm Password -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="20dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilConfirmPassword"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:boxStrokeColor="#4A90E2"
+                            app:boxStrokeWidth="1.5dp"
+                            app:boxBackgroundColor="#F8F9FF"
+                            app:boxCornerRadiusTopStart="16dp"
+                            app:boxCornerRadiusTopEnd="16dp"
+                            app:boxCornerRadiusBottomStart="16dp"
+                            app:boxCornerRadiusBottomEnd="16dp"
+                            app:endIconMode="password_toggle"
+                            app:endIconTint="#4A90E2"
+                            app:hintEnabled="true"
+                            app:hintTextColor="#4A90E2"
+                            android:hint="Confirm Password">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etConfirmPassword"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textPassword"
+                                android:textColor="#111111"
+                                android:textColorHint="#999999"
+                                android:textSize="14sp"
+                                android:paddingTop="14dp"
+                                android:paddingBottom="14dp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <TextView
+                        android:id="@+id/tvSetPasswordError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="#D32F2F"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Save: finalizes registration or password reset -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSavePassword"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:text="Save"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        app:backgroundTint="#4A90E2"
+                        app:cornerRadius="14dp" />
+
+                </LinearLayout>
+
+                <!-- ══════════════════════════════════════
+                     SCREEN 5 — FORGOT PASSWORD
+                     User enters registered email → OTP sent → Screen 3 → Screen 4
+                     ══════════════════════════════════════ -->
+                <LinearLayout
+                    android:id="@+id/screenForgotPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@android:drawable/ic_dialog_alert"
+                        android:tint="#4A90E2"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginBottom="16dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Forgot password?"
+                        android:textColor="#1A1A2E"
+                        android:textSize="26sp"
+                        android:textStyle="bold"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Enter your registered email address and we'll send you a verification code."
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:lineSpacingMultiplier="1.5"
+                        android:layout_gravity="center_horizontal"
+                        android:gravity="center"
+                        android:layout_marginBottom="28dp" />
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="20dp"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="2dp"
+                        app:cardBackgroundColor="#FFFFFF"
+                        app:cardPreventCornerOverlap="false">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/tilForgotEmail"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:boxStrokeColor="#4A90E2"
+                            app:boxStrokeWidth="1.5dp"
+                            app:boxBackgroundColor="#F8F9FF"
+                            app:boxCornerRadiusTopStart="16dp"
+                            app:boxCornerRadiusTopEnd="16dp"
+                            app:boxCornerRadiusBottomStart="16dp"
+                            app:boxCornerRadiusBottomEnd="16dp"
+                            app:hintEnabled="true"
+                            app:hintTextColor="#4A90E2"
+                            android:hint="Email Address">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etForgotEmail"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textEmailAddress"
+                                android:textColor="#111111"
+                                android:textColorHint="#999999"
+                                android:textSize="14sp"
+                                android:paddingTop="14dp"
+                                android:paddingBottom="14dp" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <TextView
+                        android:id="@+id/tvForgotError"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textColor="#D32F2F"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        android:layout_marginBottom="12dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnForgotSendCode"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:text="Send Verification Code"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        app:backgroundTint="#4A90E2"
+                        app:cornerRadius="14dp"
+                        android:layout_marginBottom="16dp" />
+
+                    <TextView
+                        android:id="@+id/tvForgotBack"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="← Back to Sign In"
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:gravity="center" />
+
+                </LinearLayout>
+
+                <!-- ══════════════════════════════════════
+                     SCREEN 6 — SUCCESS SPLASH
+                     Shown after successful registration.
+                     Scope: system returns user to Sign In page after registration.
+                     ══════════════════════════════════════ -->
+                <LinearLayout
+                    android:id="@+id/screenSuccess"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:src="@android:drawable/checkbox_on_background"
+                        android:tint="#4A90E2"
+                        android:layout_marginBottom="20dp" />
+
+                    <TextView
+                        android:id="@+id/tvSuccessTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Account created!"
+                        android:textColor="#1A1A2E"
+                        android:textSize="24sp"
+                        android:textStyle="bold"
+                        android:gravity="center"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:id="@+id/tvSuccessSubtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="You can now sign in with your email and password."
+                        android:textColor="#4A90E2"
+                        android:textSize="13sp"
+                        android:gravity="center"
+                        android:lineSpacingMultiplier="1.5"
+                        android:layout_marginBottom="32dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSuccessGoSignIn"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:text="Go to Sign In"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        app:backgroundTint="#4A90E2"
+                        app:cornerRadius="14dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>

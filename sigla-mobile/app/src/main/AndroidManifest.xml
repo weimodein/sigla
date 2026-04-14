@@ -2,12 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <uses-feature android:name="android.hardware.camera" android:required="true" />
 
@@ -17,84 +17,32 @@
         android:label="SIGLA"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.Sigla">
+        android:theme="@style/Theme.Sigla"
+        android:usesCleartextTraffic="true">
 
-        <!-- Splash / entry point -->
+        <!-- Only MainActivity for now -->
         <activity
-            android:name=".SplashActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.Sigla">
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Onboarding -->
-        <activity
-            android:name=".OnboardingActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Auth (sign in / register / forgot password) -->
-        <activity
-            android:name=".AuthActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- Main gesture recognition -->
-        <activity
-            android:name=".MainActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Word Bank -->
-        <activity
-            android:name=".WordBankActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- Translation History -->
-        <activity
-            android:name=".TranslationHistoryActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Suggest a Word -->
-        <activity
-            android:name=".SuggestWordActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- Notifications -->
-        <activity
-            android:name=".NotificationsActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Profile -->
-        <activity
-            android:name=".ProfileActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- Settings -->
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
-
-        <!-- Data collection (developer tool) -->
-        <activity
-            android:name=".CollectionActivity"
-            android:exported="false"
-            android:screenOrientation="portrait" />
+        
+        <activity android:name=".SuggestWordActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".CollectionActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".TranslationHistoryActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".WordBankActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".NotificationsActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".ProfileActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".SettingsActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".TermsActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".AuthActivity" android:exported="false" android:screenOrientation="portrait" />
+        
 
     </application>
 </manifest>

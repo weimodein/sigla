@@ -9,12 +9,12 @@ import java.util.*
 
 data class TranslationEntry(
     val word: String,
-    val confidence: Int,        // percentage 0-100
-    val gestureType: String,    // "static" or "motion"
+    val confidence: Int,
+    val gestureType: String,
     val timestamp: Long = System.currentTimeMillis()
 )
 
-class TranslationHistoryManager(context: Context) {
+class TranslationHistoryManager private constructor(private val context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("sigla_history", Context.MODE_PRIVATE)
@@ -47,30 +47,32 @@ class TranslationHistoryManager(context: Context) {
 
     fun getAll(): List<TranslationEntry> {
         val json = prefs.getString(KEY_HISTORY, null) ?: return emptyList()
-        return try { gson.fromJson(json, listType) } catch (e: Exception) { emptyList() }
+        return try { 
+            gson.fromJson(json, listType) 
+        } catch (e: Exception) { 
+            emptyList() 
+        }
     }
 
     fun add(word: String, confidence: Int, gestureType: String) {
         val list = getAll().toMutableList()
         list.add(0, TranslationEntry(word, confidence, gestureType))
-        // Trim to max
         val trimmed = if (list.size > MAX_ENTRIES) list.take(MAX_ENTRIES) else list
-        prefs.edit().putString(KEY_HISTORY, gson.toJson(trimmed)).apply()
+        saveToPrefs(trimmed)
     }
 
     fun deleteAt(index: Int) {
         val list = getAll().toMutableList()
         if (index in list.indices) {
             list.removeAt(index)
-            prefs.edit().putString(KEY_HISTORY, gson.toJson(list)).apply()
+            saveToPrefs(list)
         }
     }
 
     fun clearAll() {
-        prefs.edit().remove(KEY_HISTORY).apply()
+        saveToPrefs(emptyList())
     }
 
-    /** Groups entries by date string (e.g. "Mar 30, 2026") */
     fun getGrouped(): List<Pair<String, List<TranslationEntry>>> {
         val all = getAll()
         val grouped = LinkedHashMap<String, MutableList<TranslationEntry>>()
@@ -79,5 +81,18 @@ class TranslationHistoryManager(context: Context) {
             grouped.getOrPut(date) { mutableListOf() }.add(entry)
         }
         return grouped.map { (date, entries) -> date to entries }
+    }
+
+    private fun saveToPrefs(entries: List<TranslationEntry>) {
+        val json = gson.toJson(entries)
+        prefs.edit().putString(KEY_HISTORY, json).apply()
+    }
+
+    fun getCount(): Int = getAll().size
+    
+    fun setTranslation(word: String, translation: String) {
+        // Store translations separately
+        val transPrefs = context.getSharedPreferences("sigla_translations", Context.MODE_PRIVATE)
+        transPrefs.edit().putString(word.lowercase(), translation).apply()
     }
 }

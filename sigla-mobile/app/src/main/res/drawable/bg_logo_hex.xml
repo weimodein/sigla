@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/drawable/bg_logo_hex.xml
+     Simple rounded-rectangle stand-in for the SIGLA logo background.
+     Replace with your actual vector logo asset.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#3D5AFE"
+        android:endColor="#667EEA"
+        android:angle="135"
+        android:type="linear" />
+    <corners android:radius="8dp" />
+</shape>

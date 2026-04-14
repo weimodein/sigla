@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- bottom_sheet_word_detail.xml
+     Scope: selecting an entry plays audio + shows demo video of the gesture
+-->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#FFFFFF"
+    android:paddingBottom="32dp">
+
+    <!-- Drag handle -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="16dp"
+        android:background="#CCCCCC" />
+
+    <!-- Word title + badges -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:layout_marginBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvDetailWord"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HELLO"
+                android:textColor="#1A1A2E"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:id="@+id/tvDetailCategory"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Greetings"
+                    android:textColor="#0056A4"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:background="#1A0056A4"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp"
+                    android:layout_marginEnd="6dp" />
+
+                <TextView
+                    android:id="@+id/tvDetailGestureType"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="STATIC"
+                    android:textColor="#FFFFFF"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:background="#0056A4"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Play audio button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPlayAudio"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            app:icon="@android:drawable/ic_lock_silent_mode_off"
+            app:iconTint="#FFFFFF"
+            app:iconSize="24dp"
+            app:iconPadding="0dp"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            app:backgroundTint="#0056A4"
+            app:cornerRadius="26dp"
+            android:contentDescription="Play audio pronunciation" />
+
+    </LinearLayout>
+
+    <!-- Demo video container -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="16dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="3dp"
+        app:cardBackgroundColor="#000000">
+
+        <!-- VideoView for demo video playback -->
+        <VideoView
+            android:id="@+id/videoDemo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Loading indicator shown while video loads -->
+        <ProgressBar
+            android:id="@+id/progressVideo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center"
+            android:indeterminateTint="#FFFFFF"
+            android:visibility="visible" />
+
+        <!-- Play overlay (shown when video is paused) -->
+        <LinearLayout
+            android:id="@+id/playOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:background="#44000000"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@android:drawable/ic_media_play"
+                android:tint="#FFFFFF"
+                android:contentDescription="Play video" />
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Video caption -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Demonstration video — generated from approved gesture samples"
+        android:textColor="#90A4AE"
+        android:textSize="11sp"
+        android:gravity="center"
+        android:layout_marginBottom="20dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp" />
+
+    <!-- Add to custom category button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAddToCategory"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:text="Add to Custom Category"
+        android:textSize="14sp"
+        android:textColor="#0056A4"
+        app:strokeColor="#0056A4"
+        app:strokeWidth="1.5dp"
+        app:cornerRadius="12dp"
+        app:backgroundTint="#00000000" />
+
+</LinearLayout>

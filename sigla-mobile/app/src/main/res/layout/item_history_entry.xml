@@ -5,17 +5,37 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="6dp"
-    app:cardBackgroundColor="@color/colorSurface"
-    app:cardCornerRadius="10dp"
-    app:cardElevation="1dp">
+    app:cardCornerRadius="14dp"
+    app:cardElevation="2dp"
+    app:cardBackgroundColor="#FFFFFF">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="14dp">
+        android:paddingStart="16dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
+        <!-- Gesture type badge: STATIC or MOTION -->
+        <TextView
+            android:id="@+id/tvGestureTypeBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="STATIC"
+            android:textColor="#FFFFFF"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:background="#0056A4"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:layout_marginEnd="12dp" />
+
+        <!-- Word + confidence + time -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -23,10 +43,11 @@
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/tvEntryWord"
+                android:id="@+id/tvWord"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/colorTextPrimary"
+                android:text="HELLO"
+                android:textColor="#1A1A2E"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
@@ -37,27 +58,43 @@
                 android:layout_marginTop="4dp">
 
                 <TextView
-                    android:id="@+id/tvEntryConfidence"
+                    android:id="@+id/tvConfidence"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/colorTextMuted"
+                    android:text="98% confidence"
+                    android:textColor="#4A90E2"
                     android:textSize="12sp" />
 
                 <TextView
-                    android:id="@+id/tvEntryType"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/colorTextMuted"
-                    android:textSize="12sp"
-                    android:layout_marginStart="12dp" />
+                    android:text=" · "
+                    android:textColor="#B0BEC5"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tvTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="2:45 PM"
+                    android:textColor="#90A4AE"
+                    android:textSize="12sp" />
+
             </LinearLayout>
+
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/tvEntryTime"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/colorTextMuted"
-            android:textSize="11sp" />
+        <!-- Delete button using built-in Android drawable only -->
+        <ImageButton
+            android:id="@+id/btnDelete"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@android:drawable/ic_menu_delete"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:tint="#EF5350"
+            android:contentDescription="Delete this entry"
+            android:padding="6dp" />
+
     </LinearLayout>
+
 </androidx.cardview.widget.CardView>

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- item_word_entry.xml
+     Each row shows: word, category badge, gesture type badge, tap to play audio + show video
+-->
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="2dp"
+    app:cardBackgroundColor="#FFFFFF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <!-- Play audio icon -->
+        <LinearLayout
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="#1A0056A4"
+            android:layout_marginEnd="14dp">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@android:drawable/ic_lock_silent_mode_off"
+                android:tint="#0056A4"
+                android:contentDescription="Play audio" />
+
+        </LinearLayout>
+
+        <!-- Word info -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvWord"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hello"
+                android:textColor="#1A1A2E"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <!-- Badges row -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="5dp">
+
+                <!-- Category badge -->
+                <TextView
+                    android:id="@+id/tvCategory"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Greetings"
+                    android:textColor="#0056A4"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:background="#1A0056A4"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:layout_marginEnd="6dp" />
+
+                <!-- Gesture type badge -->
+                <TextView
+                    android:id="@+id/tvGestureType"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="STATIC"
+                    android:textColor="#FFFFFF"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:background="#0056A4"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Thumbnail image -->
+        <ImageView
+            android:id="@+id/ivThumbnail"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:scaleType="centerCrop"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="Word thumbnail"
+            android:visibility="gone" />
+
+        <!-- Video demo button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnWatchDemo"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="▶ Demo"
+            android:textSize="11sp"
+            android:textColor="#0056A4"
+            app:strokeColor="#0056A4"
+            app:strokeWidth="1dp"
+            app:cornerRadius="8dp"
+            app:backgroundTint="#00000000" />
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

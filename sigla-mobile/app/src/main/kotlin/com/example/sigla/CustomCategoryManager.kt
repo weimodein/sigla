@@ -77,6 +77,9 @@ class CustomCategoryManager private constructor(context: Context) {
     fun getWordsFor(categoryId: String): List<Int> =
         getAll().find { it.id == categoryId }?.wordIds ?: emptyList()
 
+    // ADD THIS:
+    fun get(id: String): CustomCategory? = getAll().find { it.id == id }
+
     private fun save(categories: List<CustomCategory>) {
         prefs.edit().putString(prefKey, gson.toJson(categories)).apply()
     }

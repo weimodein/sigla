@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Sigla" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+    <style name="Theme.Sigla" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">#667EEA</item>
         <item name="colorPrimaryVariant">#1A237E</item>
         <item name="colorOnPrimary">#FFFFFF</item>

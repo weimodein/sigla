@@ -4,31 +4,32 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="48dp">
+    android:padding="32dp"
+    android:background="#E3F2FD">
 
     <TextView
         android:id="@+id/tvPageIcon"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="64sp"
-        android:layout_marginBottom="32dp" />
+        android:layout_marginBottom="24dp" />
 
     <TextView
         android:id="@+id/tvPageTitle"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="@color/colorTextPrimary"
         android:textSize="24sp"
         android:textStyle="bold"
-        android:gravity="center"
+        android:textColor="#1A3A6B"
         android:layout_marginBottom="16dp" />
 
     <TextView
         android:id="@+id/tvPageDescription"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="@color/colorTextSecondary"
-        android:textSize="15sp"
+        android:textSize="14sp"
+        android:textColor="#546E7A"
         android:gravity="center"
         android:lineSpacingMultiplier="1.4" />
+
 </LinearLayout>

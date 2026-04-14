@@ -8,33 +8,40 @@ import android.graphics.Matrix
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
-import android.util.Log
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.*
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.example.sigla.databinding.ActivityMainBinding
+import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.Executors
-import retrofit2.Response
 
 private const val TAG               = "MainActivity"
 private const val CAMERA_PERMISSION = 100
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var predictor: PredictionService
+    private lateinit var binding   : ActivityMainBinding
+    private lateinit var predictor : PredictionService
     private lateinit var landmarker: HandLandmarkHelper
+
+    // Backend-related managers
     private lateinit var session: SessionManager
     private lateinit var historyManager: TranslationHistoryManager
     private lateinit var appSettings: AppSettings
@@ -44,23 +51,44 @@ class MainActivity : AppCompatActivity() {
     private val executor      = Executors.newSingleThreadExecutor()
     private var isFrontCamera = false
     private var cameraProvider: ProcessCameraProvider? = null
-    private var showFilipino  = true
+
+    // ── UI state ──────────────────────────────────────────────────────────────
+    private var showFilipino       = true
     private var emergencyHoldStart = 0L
+
+    // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
 
+    // ── Auth state ────────────────────────────────────────────────────────────
+    private var isSignedIn      = false
+    private var currentUsername = ""
+    private var currentEmail    = ""
+
+    // ─────────────────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        session        = SessionManager.getInstance(this)
+        // Initialize managers
+        session = SessionManager.getInstance(this)
         historyManager = TranslationHistoryManager.getInstance(this)
-        appSettings    = AppSettings.getInstance(this)
-        showFilipino   = appSettings.showFilipino
+        appSettings = AppSettings.getInstance(this)
+        showFilipino = appSettings.showFilipino
 
+        // Check first launch / onboarding
+        if (session.isFirstLaunch) {
+            session.isFirstLaunch = false
+            if (!session.isOnboardingDone) {
+                startActivity(Intent(this, OnboardingActivity::class.java))
+                return  // Exit onCreate, onboarding will start MainActivity when done
+            }
+        }
+
+        // Initialize TTS
         initTts()
 
-        predictor = PredictionService(this)
+        predictor  = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
             predictor.processFrame(result.features, result.handsDetected)
             runOnUiThread {
@@ -73,14 +101,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch(Dispatchers.IO) {
+            // Update model from backend if needed
             withContext(Dispatchers.Main) { binding.tvStatus.text = "Downloading model…" }
 
             ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
             predictor.init()
 
-            // If init failed, cached files were corrupt and got deleted — re-download and retry
+            // If init failed, cached files were corrupt — re-download
             if (!predictor.isReady) {
-                Log.w("MainActivity", "Init failed after first download, re-downloading…")
+                Log.w("MainActivity", "Init failed, re-downloading…")
                 withContext(Dispatchers.Main) { binding.tvStatus.text = "Re-downloading model…" }
                 ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
                 predictor.init()
@@ -88,31 +117,30 @@ class MainActivity : AppCompatActivity() {
 
             withContext(Dispatchers.Main) {
                 binding.tvStatus.text = if (predictor.isReady)
-                    getString(R.string.models_ready)
+                    "Models loaded ✓"
                 else
                     "⚠ No model — connect to the internet and reopen the app"
             }
         }
 
+        // Load Filipino translations from backend/cache
+        loadFilipinoTranslations()
+
         setupCallbacks()
         setupButtons()
-        setupDrawer()
+        setupSidebar()
         updateFilipinoToggleLabel()
-        loadFilipinoTranslations()
 
         if (hasCameraPermission()) startCamera()
         else requestCameraPermission()
 
-        // Check first launch / onboarding
-        if (session.isFirstLaunch) {
-            session.isFirstLaunch = false
-            if (!session.isOnboardingDone) {
-                startActivity(Intent(this, OnboardingActivity::class.java))
-            }
-        }
+        // Check if user is already signed in
+        checkAuthState()
     }
 
-    // ── TTS ──────────────────────────────────────────────────────────────────
+
+
+    // ── Backend Initialization ────────────────────────────────────────────────
 
     private fun initTts() {
         tts = TextToSpeech(this) { status ->
@@ -132,118 +160,6 @@ class MainActivity : AppCompatActivity() {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    // ── Callbacks ─────────────────────────────────────────────────────────────
-
-    private fun setupCallbacks() {
-        predictor.onResult = { result ->
-            runOnUiThread {
-                val pct = (result.confidence * 100).toInt()
-                val tag = if (result.isMotion) "MOTION" else "STATIC"
-                val ee  = if (result.earlyExit) " ⚡" else ""
-
-                binding.tvResult.text     = result.label.uppercase()
-                binding.tvConfidence.text = "$pct%  [$tag]$ee"
-                binding.tvResult.textSize = appSettings.textSize.toFloat()
-                binding.cardResult.visibility = View.VISIBLE
-                binding.progressBuffer.progress = 0
-
-                // Filipino translation
-                val filipino = filipinoMap[result.label.lowercase()]
-                if (filipino != null && showFilipino) {
-                    binding.tvFilipinoResult.text = filipino
-                    binding.tvFilipinoResult.visibility = View.VISIBLE
-                } else {
-                    binding.tvFilipinoResult.visibility = View.GONE
-                }
-
-                // Text-to-speech
-                speak(result.label)
-
-                // Save to history
-                historyManager.add(result.label, pct, if (result.isMotion) "motion" else "static")
-
-                binding.cardResult.postDelayed(
-                    { binding.cardResult.visibility = View.INVISIBLE }, 2000)
-            }
-        }
-
-        predictor.onCollecting = { state ->
-            runOnUiThread {
-                binding.progressBuffer.progress = (state.progress * 100).toInt()
-                binding.tvFrames.text = "Frames: ${state.frames}"
-                binding.tvVelocity.text = if (state.isMotion) "● MOTION" else "○ static"
-                binding.tvVelocity.setTextColor(
-                    ContextCompat.getColor(this,
-                        if (state.isMotion) android.R.color.holo_orange_light
-                        else android.R.color.darker_gray))
-                if (state.streak > 0) {
-                    binding.tvStreak.text = "Early-exit: ${state.streak}/5"
-                    binding.tvStreak.visibility = View.VISIBLE
-                } else {
-                    binding.tvStreak.visibility = View.GONE
-                }
-            }
-        }
-
-        predictor.onNoHands = {
-            runOnUiThread {
-                binding.tvFrames.text = "Detecting…"
-                binding.tvVelocity.text = ""
-                binding.tvStreak.visibility = View.GONE
-                binding.progressBuffer.progress = 0
-                binding.overlayView.clear()
-                binding.tvHandsWarning.visibility = View.GONE
-            }
-        }
-    }
-
-    // ── Buttons ───────────────────────────────────────────────────────────────
-
-    private fun setupButtons() {
-        // Flip camera
-        binding.btnFlipCamera.setOnClickListener {
-            isFrontCamera = !isFrontCamera
-            predictor.reset()
-            bindCamera()
-        }
-
-        // Filipino toggle
-        binding.btnToggleFilipino.setOnClickListener {
-            showFilipino = !showFilipino
-            appSettings.showFilipino = showFilipino
-            updateFilipinoToggleLabel()
-            if (!showFilipino) binding.tvFilipinoResult.visibility = View.GONE
-        }
-
-        // Emergency button — hold 2 seconds
-        binding.btnEmergency.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    emergencyHoldStart = SystemClock.elapsedRealtime()
-                    binding.btnEmergency.postDelayed(emergencyRunnable, 2000)
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    binding.btnEmergency.removeCallbacks(emergencyRunnable)
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    private val emergencyRunnable = Runnable {
-        speak("Help me")
-        Toast.makeText(this, "Emergency alert played", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun updateFilipinoToggleLabel() {
-        binding.btnToggleFilipino.text =
-            if (showFilipino) "Hide Filipino" else "Show Filipino"
-    }
-
-    // ── Filipino translations (loaded from API) ────────────────────────────────
-
     private fun loadFilipinoTranslations() {
         lifecycleScope.launch(Dispatchers.IO) {
             val words: List<WordBankWord> = try {
@@ -262,20 +178,254 @@ class MainActivity : AppCompatActivity() {
                     map[word.label.lowercase()] = translation
                 }
             }
-            withContext(Dispatchers.Main) { filipinoMap = map }
+            withContext(Dispatchers.Main) {
+                filipinoMap = map
+                // Also save to history manager if needed
+                words.forEach { word ->
+                    if (!word.filipino_translation.isNullOrBlank()) {
+                        historyManager.setTranslation(word.label.lowercase(), word.filipino_translation)
+                    }
+                }
+            }
         }
     }
 
-    // ── Drawer ────────────────────────────────────────────────────────────────
+    private fun checkAuthState() {
+        // Check if user has a valid token
+        val token = session.token
+        if (!token.isNullOrEmpty()) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val response = ApiClient.get(token).getMe()
+                    if (response.isSuccessful) {
+                        val user = response.body()?.user
+                        if (user != null) {
+                            isSignedIn = true
+                            currentUsername = user.username
+                            currentEmail = user.email
+                            withContext(Dispatchers.Main) {
+                                refreshSidebarAuthState()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Token might be expired
+                    session.clearSession()
+                }
+            }
+        }
+    }
 
-    private fun setupDrawer() {
-        // The sidebar view is the include'd LinearLayout which is the second child of DrawerLayout
-        val sidebar = binding.drawerLayout.getChildAt(1)
-        NavigationHelper.setup(this, binding.drawerLayout, sidebar, Screen.MAIN)
+    // ── Predictor callbacks ───────────────────────────────────────────────────
 
-        // Hamburger opens drawer
-        binding.btnMenu.setOnClickListener {
-            binding.drawerLayout.openDrawer(sidebar)
+    private fun setupCallbacks() {
+        predictor.onResult = { result ->
+            runOnUiThread {
+                val pct = (result.confidence * 100).toInt()
+                val tag = if (result.isMotion) "MOTION" else "STATIC"
+                val ee  = if (result.earlyExit) " ⚡" else ""
+
+                binding.tvResult.text         = result.label.uppercase()
+                binding.tvConfidence.text     = "$pct%  [$tag]$ee"
+                binding.cardResult.visibility = View.VISIBLE
+                binding.progressBuffer.progress = 0
+                binding.tvBufferPercent.text = "0%"
+
+                // Text-to-speech
+                speak(result.label)
+
+                // Save to history
+                historyManager.add(result.label, pct, if (result.isMotion) "motion" else "static")
+
+                // Filipino translation
+                // FIX: removed redundant `filipino?.let` — direct assignment after null check
+                val filipino = getFilipinoTranslation(result.label)
+                if (filipino != null && showFilipino) {
+                    binding.tvFilipinoResult.text = filipino
+                    binding.tvFilipinoResult.visibility = View.VISIBLE
+                } else {
+                    binding.tvFilipinoResult.visibility = View.GONE
+                }
+
+                binding.cardResult.postDelayed(
+                    { binding.cardResult.visibility = View.INVISIBLE }, 2000)
+            }
+        }
+
+        predictor.onCollecting = { state ->
+            runOnUiThread {
+                val pct = (state.progress * 100).toInt()
+                binding.progressBuffer.progress = pct
+                binding.tvBufferPercent.text    = "$pct%"
+
+                // 👐 Hands card
+                binding.tvFrames.text = "${state.frames}"
+
+                // 🎯 Gesture card — tvVelocity shows motion/static indicator
+                binding.tvVelocity.text = if (state.isMotion) "● MOTION" else "○ static"
+                binding.tvVelocity.setTextColor(
+                    ContextCompat.getColor(this,
+                        if (state.isMotion) android.R.color.holo_orange_light
+                        else android.R.color.darker_gray)
+                )
+
+                // 📊 Status card — tvStreak shows early-exit streak
+                if (state.streak > 0) {
+                    binding.tvStreak.text       = "×${state.streak}"
+                    binding.tvStreak.visibility = View.VISIBLE
+                } else {
+                    binding.tvStreak.visibility = View.GONE
+                }
+            }
+        }
+
+        predictor.onNoHands = {
+            runOnUiThread {
+                binding.tvFrames.text             = "No hands"
+                binding.tvVelocity.text           = "—"
+                binding.tvStreak.visibility       = View.GONE
+                binding.progressBuffer.progress   = 0
+                binding.tvBufferPercent.text = "0%"
+                binding.overlayView.clear()
+                binding.tvHandsWarning.visibility = View.GONE
+            }
+        }
+    }
+
+    // ── Buttons ───────────────────────────────────────────────────────────────
+
+    private fun setupButtons() {
+        // Flip camera
+        binding.btnFlipCamera.setOnClickListener {
+            isFrontCamera = !isFrontCamera
+            predictor.reset()
+            bindCamera()
+        }
+
+        // Filipino translation toggle
+        binding.btnToggleFilipino.setOnClickListener {
+            showFilipino = !showFilipino
+            appSettings.showFilipino = showFilipino
+            updateFilipinoToggleLabel()
+            if (!showFilipino) binding.tvFilipinoResult.visibility = View.GONE
+        }
+
+        // Emergency — hold 2 seconds
+        binding.btnEmergency.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    emergencyHoldStart = SystemClock.elapsedRealtime()
+                    binding.btnEmergency.postDelayed(emergencyRunnable, 2000)
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    binding.btnEmergency.removeCallbacks(emergencyRunnable)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private val emergencyRunnable = Runnable {
+        speak("Help me")
+        Toast.makeText(this, "Emergency alert played", Toast.LENGTH_LONG).show()
+    }
+
+    private fun updateFilipinoToggleLabel() {
+        binding.btnToggleFilipino.text =
+            if (showFilipino) "Hide Filipino" else "Show Filipino"
+    }
+
+    // Updated to use cached translations from backend
+    private fun getFilipinoTranslation(label: String): String? {
+        return filipinoMap[label.lowercase()]
+    }
+
+    // ── Sidebar ───────────────────────────────────────────────────────────────
+
+    private fun setupSidebar() {
+        val drawer = binding.drawerLayout
+
+        // btnSidebar replaces btnMenu from the original pattern
+        binding.btnSidebar.setOnClickListener {
+            drawer.openDrawer(GravityCompat.START)
+        }
+
+        findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.START)
+        }
+        findViewById<View>(R.id.navWordBank)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.START)
+            startActivity(Intent(this, WordBankActivity::class.java))
+        }
+        findViewById<View>(R.id.navTranslationHistory)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.START)
+            startActivity(Intent(this, TranslationHistoryActivity::class.java))
+        }
+        findViewById<View>(R.id.navProfile)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.START)
+            if (isSignedIn) {
+                startActivity(Intent(this, ProfileActivity::class.java))
+            } else {
+                openAuthDialog()
+            }
+        }
+        findViewById<View>(R.id.navNotifications)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.START)
+            if (isSignedIn) {
+                startActivity(Intent(this, NotificationsActivity::class.java))
+            } else {
+                openAuthDialog()
+            }
+        }
+        findViewById<View>(R.id.navSettings)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.START)
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        findViewById<View?>(R.id.btnSidebarSignIn)?.setOnClickListener {
+            drawer.closeDrawers()
+            openAuthDialog()
+        }
+        findViewById<View?>(R.id.navSuggestWord)?.setOnClickListener {
+            drawer.closeDrawers()
+            if (isSignedIn) {
+                startActivity(Intent(this, SuggestWordActivity::class.java))
+            } else {
+                openAuthDialog()
+            }
+        }
+
+        refreshSidebarAuthState()
+    }
+
+    private fun openAuthDialog() {
+        val dialog = AuthDialogFragment()
+        dialog.onSignedIn = {
+            // Reload auth state after sign in
+            checkAuthState()
+            refreshSidebarAuthState()
+            loadFilipinoTranslations()
+        }
+        dialog.show(supportFragmentManager, "auth")
+    }
+
+    private fun refreshSidebarAuthState() {
+        val tvUsername = findViewById<TextView?>(R.id.tvSidebarUsername)
+        val tvEmail    = findViewById<TextView?>(R.id.tvSidebarEmail)
+        val btnSignIn  = findViewById<MaterialButton?>(R.id.btnSidebarSignIn)
+        val tvBadge    = findViewById<TextView?>(R.id.tvSuggestWordBadge)
+
+        if (isSignedIn) {
+            tvUsername?.text      = currentUsername.ifBlank { "User" }
+            tvEmail?.text         = currentEmail
+            btnSignIn?.isVisible  = false
+            tvBadge?.isVisible    = false
+        } else {
+            tvUsername?.text      = "Guest User"
+            tvEmail?.text         = "Not signed in"
+            btnSignIn?.isVisible  = true
+            tvBadge?.isVisible    = true
         }
     }
 
@@ -320,7 +470,7 @@ class MainActivity : AppCompatActivity() {
             provider.unbindAll()
             provider.bindToLifecycle(this, selector, preview, analysis)
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Camera bind failed: ${e.message}")
+            Log.e(TAG, "Camera bind failed: ${e.message}")
         }
     }
 
@@ -342,17 +492,30 @@ class MainActivity : AppCompatActivity() {
                 PackageManager.PERMISSION_GRANTED
 
     private fun requestCameraPermission() =
-        ActivityCompat.requestPermissions(this,
-            arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
+        ActivityCompat.requestPermissions(
+            this, arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION)
 
     override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == CAMERA_PERMISSION &&
             grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
             Toast.makeText(this, "Camera permission required", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    @Deprecated("Use OnBackPressedDispatcher instead")
+    override fun onBackPressed() {
+        if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+        } else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
         }
     }
 

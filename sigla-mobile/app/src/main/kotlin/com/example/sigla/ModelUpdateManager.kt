@@ -3,6 +3,8 @@ package com.example.sigla
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,9 +14,10 @@ import java.util.concurrent.TimeUnit
 
 object ModelUpdateManager {
 
-    private const val TAG         = "ModelUpdateManager"
-    private const val PREFS       = "model_cache"
+    private const val TAG = "ModelUpdateManager"
+    private const val PREFS = "model_cache"
     private const val KEY_VERSION = "cached_version"
+    private const val WORD_BANK_CACHE_FILE = "word_bank_cache.json"
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -23,57 +26,25 @@ object ModelUpdateManager {
         .followSslRedirects(true)
         .build()
 
-    // Files downloaded from the deployed/ Supabase folder
-    private val MODEL_FILES = listOf(
-        "tflite_url"        to "sign_model_static.tflite",
-        "motion_tflite_url" to "sign_model_motion.tflite",
-        "labels_static_url" to "labels_static.json",
-        "labels_motion_url" to "labels_motion.json",
-        "word_bank_url"     to "word_bank.json",
-    )
+    private val gson = Gson()
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun deleteAllModelFiles(context: Context) {
-        val filesToDelete = listOf(
-            "sign_model_static.tflite",
-            "sign_model_motion.tflite",
-            "labels_static.json",
-            "labels_motion.json",
-            "word_bank.json"
-        )
-        for (filename in filesToDelete) {
-            val file = File(context.filesDir, filename)
-            if (file.exists()) {
-                file.delete()
-                Log.i(TAG, "Deleted old file: $filename")
-            }
-        }
-        // Delete all cached thumbnail files
-        context.filesDir.listFiles()?.forEach { file ->
-            if (file.name.startsWith("wb_thumb_")) {
-                file.delete()
-                Log.i(TAG, "Deleted old thumbnail: ${file.name}")
-            }
-        }
-    }
-
     fun getCachedVersion(context: Context): String? =
         prefs(context).getString(KEY_VERSION, null)
 
-    /**
-     * Check if a newer model is deployed. If so, download all model files +
-     * word_bank.json to internal storage and save the new version number.
-     * Safe to call on every app launch — no-op if already up-to-date.
-     */
-    /**
-     * Returns true if all required local model files exist on disk.
-     */
     fun hasLocalModel(context: Context): Boolean {
         return listOf(
             "sign_model_static.tflite",
             "labels_static.json"
+        ).all { File(context.filesDir, it).exists() }
+    }
+
+    fun hasLocalMotionModel(context: Context): Boolean {
+        return listOf(
+            "sign_model_motion.tflite",
+            "labels_motion.json"
         ).all { File(context.filesDir, it).exists() }
     }
 
@@ -82,63 +53,75 @@ object ModelUpdateManager {
             try {
                 Log.i(TAG, "Checking for model updates…")
                 val response = ApiClient.get(token).getLatestModel()
-                Log.i(TAG, "getLatestModel HTTP ${response.code()}")
                 if (!response.isSuccessful) {
-                    Log.e(TAG, "getLatestModel failed: ${response.errorBody()?.string()}")
+                    Log.w(TAG, "Failed to fetch model info: ${response.code()}")
+                    return@withContext hasLocalModel(context)
+                }
+                val model = response.body()?.model ?: run {
+                    Log.w(TAG, "No model info in response body")
                     return@withContext hasLocalModel(context)
                 }
 
-                val model = response.body()?.model
-                if (model == null) {
-                    Log.e(TAG, "getLatestModel body is null")
-                    return@withContext hasLocalModel(context)
-                }
-                Log.i(TAG, "Remote: ${model.version_number} tflite=${model.tflite_url} labels=${model.labels_static_url}")
-
-                val remoteVersion    = model.version_number
-                val cachedVersion    = getCachedVersion(context)
-                val versionChanged   = remoteVersion != cachedVersion
+                val remoteVersion = model.version_number
+                val cachedVersion = getCachedVersion(context)
+                val versionChanged = remoteVersion != cachedVersion
                 val modelFileMissing = !hasLocalModel(context)
-
-                // Always re-download word_bank.json — tiny file, updated every deploy
-                model.word_bank_url?.let {
-                    downloadFile(context, it, "word_bank.json")
-                    // Pre-cache thumbnail images so Word Bank works fully offline
-                    loadCachedWordBank(context)?.let { words -> downloadWordBankImages(context, words) }
-                }
 
                 if (!versionChanged && !modelFileMissing) {
                     Log.i(TAG, "Model up-to-date: $remoteVersion")
                     return@withContext true
                 }
 
-                Log.i(TAG, "Downloading model $remoteVersion (newVersion=$versionChanged, missing=$modelFileMissing)")
+                Log.i(TAG, "Downloading model version: $remoteVersion")
 
-                // Delete old model files if version changed
-                if (versionChanged) {
-                    deleteAllModelFiles(context)
+                // ── Static model (required) ───────────────────────────────────
+                val staticUrl = model.tflite_url
+                if (staticUrl.isNullOrBlank()) {
+                    Log.e(TAG, "Backend returned no static model URL — check SUPABASE_URL on server")
+                    return@withContext hasLocalModel(context)
+                }
+                val staticOk = downloadToFile(staticUrl, File(context.filesDir, "sign_model_static.tflite"))
+                if (!staticOk) {
+                    Log.e(TAG, "Static model download failed")
+                    return@withContext hasLocalModel(context)
+                }
+                Log.i(TAG, "Static TFLite downloaded")
+
+                // ── Static labels (required) ──────────────────────────────────
+                val labelsStaticUrl = model.labels_static_url
+                if (labelsStaticUrl.isNullOrBlank()) {
+                    Log.e(TAG, "Backend returned no static labels URL — check SUPABASE_URL on server")
+                    return@withContext false
+                }
+                val labelsStaticOk = downloadToFile(labelsStaticUrl, File(context.filesDir, "labels_static.json"))
+                if (!labelsStaticOk) {
+                    Log.e(TAG, "Static labels download failed — cannot run inference without labels")
+                    return@withContext false
+                }
+                Log.i(TAG, "Static labels downloaded")
+
+                // ── Motion model (optional) ───────────────────────────────────
+                val motionUrl = model.motion_tflite_url
+                if (!motionUrl.isNullOrBlank()) {
+                    val motionOk = downloadToFile(motionUrl, File(context.filesDir, "sign_model_motion.tflite"))
+                    if (motionOk) Log.i(TAG, "Motion TFLite downloaded")
+                    else Log.w(TAG, "Motion model download failed — only static gestures will work")
+                } else {
+                    Log.w(TAG, "No motion model URL provided — skipping motion model")
                 }
 
-                val urlMap = mapOf(
-                    "tflite_url"        to model.tflite_url,
-                    "motion_tflite_url" to model.motion_tflite_url,
-                    "labels_static_url" to model.labels_static_url,
-                    "labels_motion_url" to model.labels_motion_url,
-                )
-
-                for ((key, filename) in MODEL_FILES.filter { it.second != "word_bank.json" }) {
-                    val url = urlMap[key] ?: continue
-                    val ok  = downloadFile(context, url, filename)
-                    if (!ok && (filename == "sign_model_static.tflite" || filename == "labels_static.json")) {
-                        Log.e(TAG, "Critical download failed: $filename")
-                        return@withContext hasLocalModel(context)
-                    }
+                // ── Motion labels (optional, only if motion model downloaded) ─
+                val labelsMotionUrl = model.labels_motion_url
+                if (!labelsMotionUrl.isNullOrBlank() && File(context.filesDir, "sign_model_motion.tflite").exists()) {
+                    val labelsMotionOk = downloadToFile(labelsMotionUrl, File(context.filesDir, "labels_motion.json"))
+                    if (!labelsMotionOk) Log.w(TAG, "Motion labels download failed")
+                    else Log.i(TAG, "Motion labels downloaded")
                 }
 
+                // ── Save version only after all required files succeeded ───────
                 prefs(context).edit().putString(KEY_VERSION, remoteVersion).apply()
-                Log.i(TAG, "Model ready: $remoteVersion")
+                Log.i(TAG, "Model updated to $remoteVersion")
                 true
-
             } catch (e: Exception) {
                 Log.e(TAG, "Model update failed: ${e.message}", e)
                 hasLocalModel(context)
@@ -146,103 +129,78 @@ object ModelUpdateManager {
         }
     }
 
-    private suspend fun downloadFile(context: Context, url: String, filename: String): Boolean =
-        withContext(Dispatchers.IO) {
-            try {
-                Log.i(TAG, "Downloading $filename from $url")
-                val request  = Request.Builder().url(url).build()
-                val response = http.newCall(request).execute()
+    private fun downloadToFile(url: String, dest: File): Boolean {
+        return try {
+            val request = Request.Builder().url(url).build()
+            http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Log.w(TAG, "Skipping $filename — HTTP ${response.code}")
-                    response.close()
-                    return@withContext false
+                    Log.w(TAG, "Download failed for $url: ${response.code}")
+                    return false
                 }
-                val bytes = response.body?.bytes() ?: run {
-                    Log.w(TAG, "Empty body for $filename")
-                    response.close()
-                    return@withContext false
+                val body = response.body ?: run {
+                    Log.w(TAG, "Empty response body for $url")
+                    return false
                 }
-                response.close()
-                File(context.filesDir, filename).writeBytes(bytes)
-                Log.i(TAG, "Saved $filename (${bytes.size / 1024} KB)")
+                val tmp = File(dest.parent, dest.name + ".tmp")
+                tmp.outputStream().use { out -> body.byteStream().copyTo(out) }
+                val renamed = tmp.renameTo(dest)
+                if (!renamed) {
+                    Log.e(TAG, "Failed to rename tmp file to ${dest.name} — disk full or permission error?")
+                    tmp.delete()
+                    return false
+                }
                 true
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to download $filename: ${e.message}")
-                false
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "downloadToFile error for $url: ${e.message}", e)
+            false
         }
+    }
 
-    /**
-     * Returns the local cached file if it exists, otherwise null.
-     * PredictionService uses this to prefer downloaded models over bundled assets.
-     */
     fun getLocalFile(context: Context, filename: String): File? {
         val file = File(context.filesDir, filename)
         return if (file.exists()) file else null
     }
 
-    /**
-     * Returns the locally cached thumbnail for a word, or null if not yet downloaded.
-     */
     fun getLocalThumb(context: Context, wordId: Int): File? {
         val file = File(context.filesDir, "wb_thumb_$wordId")
         return if (file.exists()) file else null
     }
 
-    /**
-     * Downloads thumbnail images for all words that have a thumbnail_url but no local file yet.
-     * Skips words already cached. Safe to call repeatedly.
-     */
     suspend fun downloadWordBankImages(context: Context, words: List<WordBankWord>) {
         withContext(Dispatchers.IO) {
             for (word in words) {
-                val url = ApiClient.resolveUrl(word.thumbnail_url) ?: continue
-                val localFile = File(context.filesDir, "wb_thumb_${word.id}")
-                if (localFile.exists()) continue
-                try {
-                    val request  = Request.Builder().url(url).build()
-                    val response = http.newCall(request).execute()
-                    if (response.isSuccessful) {
-                        val bytes = response.body?.bytes()
-                        if (bytes != null && bytes.isNotEmpty()) {
-                            localFile.writeBytes(bytes)
-                            Log.i(TAG, "Cached thumb for word ${word.id} (${bytes.size / 1024} KB)")
-                        }
-                    }
-                    response.close()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to cache thumb for word ${word.id}: ${e.message}")
-                }
+                val thumbUrl = word.thumbnail_url ?: continue
+                val dest = File(context.filesDir, "wb_thumb_${word.id}")
+                if (dest.exists()) continue
+                val ok = downloadToFile(thumbUrl, dest)
+                if (!ok) Log.w(TAG, "Thumbnail download failed for word ${word.id}")
             }
+            Log.i(TAG, "Word bank thumbnail download complete")
         }
     }
 
-    /**
-     * Load word_bank.json from local cache. Returns null if not cached yet.
-     */
     fun loadCachedWordBank(context: Context): List<WordBankWord>? {
-        val file = getLocalFile(context, "word_bank.json") ?: return null
+        val file = File(context.filesDir, WORD_BANK_CACHE_FILE)
+        if (!file.exists()) return null
         return try {
-            val json  = org.json.JSONObject(file.readText())
-            val array = json.optJSONArray("words") ?: return null
-            (0 until array.length()).map { i ->
-                val obj = array.getJSONObject(i)
-                WordBankWord(
-                    id                   = obj.getInt("id"),
-                    label                = obj.getString("label"),
-                    description          = obj.optString("description").takeIf { it.isNotBlank() },
-                    sign_type            = obj.optString("sign_type", "FSL"),
-                    category             = obj.optString("category", "Additional Words"),
-                    hands_count          = obj.optInt("hands_count", 1),
-                    gesture_type         = obj.optString("gesture_type", "static"),
-                    thumbnail_url        = obj.optString("thumbnail_url").takeIf { it.isNotBlank() },
-                    video_url            = obj.optString("video_url").takeIf { it.isNotBlank() },
-                    filipino_translation = obj.optString("filipino_translation").takeIf { it.isNotBlank() },
-                )
-            }
+            val type = object : TypeToken<List<WordBankWord>>() {}.type
+            gson.fromJson<List<WordBankWord>>(file.readText(), type)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse cached word bank: ${e.message}")
+            Log.w(TAG, "Failed to load cached word bank: ${e.message}")
             null
+        }
+    }
+
+    suspend fun cacheWordBank(context: Context, words: List<WordBankWord>) {
+        withContext(Dispatchers.IO) {
+            try {
+                val file = File(context.filesDir, WORD_BANK_CACHE_FILE)
+                file.writeText(gson.toJson(words))
+                Log.i(TAG, "Word bank cached (${words.size} words)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to cache word bank: ${e.message}")
+            }
         }
     }
 }

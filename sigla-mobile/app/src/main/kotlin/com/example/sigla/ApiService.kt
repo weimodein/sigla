@@ -107,6 +107,29 @@ data class ChangePasswordRequest(
 
 data class MessageResponse(val message: String)
 
+// ── NEW: History models ─────────────────────────────────────────
+
+data class HistoryEntryRequest(
+    val word: String,
+    val confidence: Int,
+    val gesture_type: String,
+    val timestamp: Long
+)
+
+data class HistoryEntryResponse(
+    val id: String,
+    val word: String,
+    val confidence: Int,
+    val gesture_type: String,
+    val timestamp: Long,
+    val created_at: String
+)
+
+data class HistoryResponse(
+    val entries: List<HistoryEntryResponse>,
+    val total: Int? = null
+)
+
 // ── API Service ───────────────────────────────────────────────
 
 interface ApiService {
@@ -179,4 +202,48 @@ interface ApiService {
     // Model (for update check)
     @GET("models/latest")
     suspend fun getLatestModel(): Response<ModelResponse>
+
+    // ── NEW: History endpoints ─────────────────────────────────
+
+    /**
+     * Get user's translation history
+     * Optional query parameters:
+     * @param limit - Number of entries to return (default 50)
+     * @param offset - Pagination offset (default 0)
+     */
+    @GET("history")
+    suspend fun getUserHistory(
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null
+    ): Response<HistoryResponse>
+
+    /**
+     * Save a new translation entry to history
+     */
+    @POST("history")
+    suspend fun saveHistoryEntry(@Body body: HistoryEntryRequest): Response<HistoryEntryResponse>
+
+    /**
+     * Delete a specific history entry by ID
+     */
+    @DELETE("history/{id}")
+    suspend fun deleteHistoryEntry(@Path("id") id: String): Response<MessageResponse>
+
+    /**
+     * Clear all user history
+     */
+    @DELETE("history/clear")
+    suspend fun clearHistory(): Response<MessageResponse>
+
+    /**
+     * Delete multiple history entries at once
+     */
+    @DELETE("history/bulk-delete")
+    suspend fun bulkDeleteHistory(@Body body: Map<String, List<String>>): Response<MessageResponse>
+
+    /**
+     * Get history statistics (total count, most common words, etc.)
+     */
+    @GET("history/stats")
+    suspend fun getHistoryStats(): Response<Map<String, Any>>
 }

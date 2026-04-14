@@ -19,7 +19,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.sigla.databinding.ActivityCollectionBinding
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -30,34 +29,19 @@ import java.util.concurrent.Executors
 
 private const val TAG = "CollectionActivity"
 
-// ── Progress bar colour helpers ───────────────────────────────────────────
-private const val COLOR_GREEN        = 0
-private const val COLOR_YELLOW       = 1
-private const val COLOR_RED_TO_GREEN = 2
-
-// ── Admin/dev collection (large dataset) ──────────────────────────────────
-private const val TARGET_ADMIN    = 300
-private const val COUNTDOWN_ADMIN = 15
-private const val COOLDOWN_STATIC_ADMIN = 10
-private const val COOLDOWN_MOTION_ADMIN = 20
-
-// ── Suggest mode (user contribution — fast) ───────────────────────────────
-private const val TARGET_SUGGEST        = 100
+// Default targets (will be overridden by backend if in suggest mode)
+private const val TARGET_ADMIN = 300
+private const val TARGET_SUGGEST = 100
 private const val TARGET_SUGGEST_MOTION = 75
-private const val COUNTDOWN_SUGGEST     = 2
-private const val COOLDOWN_STATIC_SUGGEST = 1
-private const val COOLDOWN_MOTION_SUGGEST = 1
 
-// ── Shared constants ──────────────────────────────────────────────────────
-private const val SEQUENCE_LENGTH = 20
+// Timing constants
+private const val SEQUENCE_LENGTH = 30
 private const val STATIC_FRAMES_PER_SAMPLE = 5
-private const val MIN_FRAMES      = 8
-private const val NO_HAND_FRAMES  = 5
-private const val BATCH_SIZE      = 5
-
-// Hand validity
-private const val MIN_VALID_COORD = 0.05f
-private const val MAX_VALID_COORD = 0.95f
+private const val MIN_FRAMES = 8
+private const val COUNTDOWN_FRAMES = 15
+private const val COOLDOWN_FRAMES = 20
+private const val NO_HAND_FRAMES = 10
+private const val BATCH_SIZE = 5
 
 private enum class CollectState { WAITING, COUNTDOWN, RECORDING, COOLDOWN, DONE }
 
@@ -65,95 +49,123 @@ class CollectionActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityCollectionBinding
     private lateinit var landmarker: HandLandmarkHelper
-    private lateinit var predictor: PredictionService
+    private lateinit var session: SessionManager
 
     private val executor = Executors.newSingleThreadExecutor()
     private var isProcessing = false
 
-    // Config
-    private var label          = ""
-    private var isMotion       = false
-    private var saveDir: File? = null
-    private var wordId: Int    = 0
-    private var isSuggestMode  = false
-    private var mirrorLeftHand = true
-
-    // Timing
-    private var targetCount     = TARGET_ADMIN
-    private var countdownFrames = COUNTDOWN_ADMIN
-    private var cooldownFrames  = COOLDOWN_MOTION_ADMIN
-
-    // Camera
+    // Camera state
+    private var isFrontCamera = false
     private var cameraProvider: ProcessCameraProvider? = null
-    private var isFrontCamera  = false
+
+    // Config
+    private var label = ""
+    private var isMotion = false
+    private var wordId: Int = 0
+    private var isSuggestMode = false
+    private var mirrorLeftHand = true
+    private var saveDir: File? = null
+
+    // Collection targets
+    private var targetCount = TARGET_ADMIN
+    private var countdownFrames = COUNTDOWN_FRAMES
+    private var cooldownFrames = COOLDOWN_FRAMES
 
     // State machine
-    private var state         = CollectState.WAITING
-    private var count         = 0
+    private var state = CollectState.WAITING
+    private var count = 0
     private var countdownTick = 0
-    private var cooldownTick  = 0
-    private var noHandTick    = 0
-    private var flashTick     = 0
-    private val seqBuffer     = mutableListOf<FloatArray>()
+    private var cooldownTick = 0
+    private var noHandTick = 0
+    private var flashTick = 0
+    private val seqBuffer = mutableListOf<FloatArray>()
     private val seqImageBuffer = mutableListOf<Bitmap>()
     private var staticFrameBuffer = mutableListOf<FloatArray>()
 
-    // In-memory store for suggest mode
+    // In-memory store for suggest mode (batch upload)
     private val pendingStaticLandmarks = mutableListOf<List<Float>>()
     private val pendingMotionSequences = mutableListOf<List<List<Float>>>()
-    private val pendingMotionImages    = mutableListOf<List<String>>()
-    private val pendingStaticImages    = mutableListOf<String>()
+    private val pendingMotionImages = mutableListOf<List<String>>()
+    private val pendingStaticImages = mutableListOf<String>()
     private var uploadError: String? = null
+    private var uploadJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityCollectionBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        session = SessionManager.getInstance(this)
         landmarker = HandLandmarkHelper(this)
-        predictor = PredictionService(this)
 
-        val wordIdExtra  = intent.getIntExtra("word_id", -1)
-        val wordLabel    = intent.getStringExtra("word_label")
-        val gestureType  = intent.getStringExtra("gesture_type")
-        val mode         = intent.getStringExtra("mode")
+        // Get intent extras for suggest mode
+        val wordIdExtra = intent.getIntExtra("word_id", -1)
+        val wordLabel = intent.getStringExtra("word_label")
+        val gestureType = intent.getStringExtra("gesture_type")
+        val mode = intent.getStringExtra("mode")
+        val handsCount = intent.getIntExtra("hands_count", 1)
+        val targetCountExtra = intent.getIntExtra("target_count", -1)
 
         if (mode == "suggest" && wordIdExtra != -1 && !wordLabel.isNullOrEmpty() && !gestureType.isNullOrEmpty()) {
+            // SUGGEST MODE - Skip config dialog, use data from intent
             isSuggestMode = true
-            wordId        = wordIdExtra
-            label         = wordLabel
-            isMotion      = gestureType == "motion"
+            wordId = wordIdExtra
+            label = wordLabel
+            isMotion = gestureType == "motion"
 
-            val sessionMax  = if (isMotion) TARGET_SUGGEST_MOTION else TARGET_SUGGEST
-            val fromBackend = intent.getIntExtra("target_count", -1)
-            targetCount     = if (fromBackend > 0) minOf(fromBackend, sessionMax) else sessionMax
+            val sessionMax = if (isMotion) TARGET_SUGGEST_MOTION else TARGET_SUGGEST
+            targetCount = if (targetCountExtra > 0) minOf(targetCountExtra, sessionMax) else sessionMax
 
-            countdownFrames = COUNTDOWN_SUGGEST
-            cooldownFrames  = if (isMotion) COOLDOWN_MOTION_SUGGEST else COOLDOWN_STATIC_SUGGEST
+            countdownFrames = 2
+            cooldownFrames = if (isMotion) 2 else 1
 
             saveDir = File(
                 getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS),
                 "sigla_dataset/$label"
             ).also { it.mkdirs() }
 
+            count = saveDir!!.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+
             setupUI()
+            setupButtons()
             if (hasCameraPermission()) startCamera()
             else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 200)
         } else {
+            // ADMIN MODE - Show config dialog
             showConfigDialog()
         }
-
-        binding.btnSwitchCamera.setOnClickListener { switchCamera() }
-        binding.btnUndo.setOnClickListener { undoLastSample() }
-        binding.btnBack.setOnClickListener { finish() }
-        binding.btnDoneClose.setOnClickListener { finish() }
     }
 
-    // ── Config dialog ─────────────────────────────────────────────────────
+    private fun setupUI() {
+        binding.tvLabel.text = label
+        binding.tvType.text = if (isMotion) "MOTION" else "STATIC"
+        binding.tvType.setTextColor(
+            ContextCompat.getColor(this,
+                if (isMotion) android.R.color.holo_orange_light
+                else android.R.color.holo_green_light)
+        )
+        updateCountDisplay()
+    }
+
+    private fun setupButtons() {
+        binding.btnSwitchCamera.setOnClickListener {
+            isFrontCamera = !isFrontCamera
+            bindCamera()
+        }
+        binding.btnCancel.setOnClickListener { finish() }
+        binding.btnSubmit.setOnClickListener { finish() }
+    }
+
+    private fun hasCameraPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    }
+
+    // ── Config dialog for admin mode ─────────────────────────────────────────
+
     private fun showConfigDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_collection_config, null)
-        val etLabel    = dialogView.findViewById<android.widget.EditText>(R.id.etLabel)
-        val swMotion   = dialogView.findViewById<android.widget.Switch>(R.id.swMotion)
+        val etLabel = dialogView.findViewById<android.widget.EditText>(R.id.etLabel)
+        val swMotion = dialogView.findViewById<android.widget.Switch>(R.id.swMotion)
 
         AlertDialog.Builder(this)
             .setTitle("Configure Gesture")
@@ -161,14 +173,17 @@ class CollectionActivity : AppCompatActivity() {
             .setCancelable(false)
             .setPositiveButton("Start") { _, _ ->
                 val lbl = etLabel.text.toString().trim().uppercase()
-                if (lbl.isEmpty()) { finish(); return@setPositiveButton }
-                label    = lbl
+                if (lbl.isEmpty()) {
+                    finish()
+                    return@setPositiveButton
+                }
+                label = lbl
                 isMotion = swMotion.isChecked
                 mirrorLeftHand = true
 
-                targetCount     = TARGET_ADMIN
-                countdownFrames = COUNTDOWN_ADMIN
-                cooldownFrames  = if (isMotion) COOLDOWN_MOTION_ADMIN else COOLDOWN_STATIC_ADMIN
+                targetCount = TARGET_ADMIN
+                countdownFrames = COUNTDOWN_FRAMES
+                cooldownFrames = if (isMotion) COOLDOWN_FRAMES else COOLDOWN_FRAMES
 
                 val baseDir = File(
                     getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS),
@@ -209,18 +224,8 @@ class CollectionActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun setupUI() {
-        binding.tvLabel.text = label
-        binding.tvType.text  = if (isMotion) "MOTION" else "STATIC"
-        binding.tvType.setTextColor(
-            ContextCompat.getColor(this,
-                if (isMotion) android.R.color.holo_orange_light
-                else android.R.color.holo_green_light)
-        )
-        updateCountDisplay()
-    }
+    // ── Camera ────────────────────────────────────────────────────────────────
 
-    // ── Camera ────────────────────────────────────────────────────────────
     private fun startCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
@@ -231,63 +236,62 @@ class CollectionActivity : AppCompatActivity() {
 
     private fun bindCamera() {
         val provider = cameraProvider ?: return
+
         val preview = Preview.Builder().build().also {
             it.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
         }
+
         val analysis = ImageAnalysis.Builder()
             .setTargetRotation(binding.cameraPreview.display.rotation)
             .setTargetResolution(android.util.Size(640, 480))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
+
         analysis.setAnalyzer(executor) { imageProxy -> processFrame(imageProxy) }
 
-        val cameraSelector = if (isFrontCamera)
+        val selector = if (isFrontCamera)
             CameraSelector.DEFAULT_FRONT_CAMERA
         else
             CameraSelector.DEFAULT_BACK_CAMERA
 
         try {
             provider.unbindAll()
-            provider.bindToLifecycle(this, cameraSelector, preview, analysis)
+            provider.bindToLifecycle(this, selector, preview, analysis)
         } catch (e: Exception) {
-            Log.e(TAG, "Camera binding error: ${e.message}")
+            Log.e(TAG, "Camera bind failed: ${e.message}")
         }
     }
 
-    private fun switchCamera() {
-        isFrontCamera = !isFrontCamera
-        bindCamera()
-    }
+    // ── Frame processing ──────────────────────────────────────────────────────
 
-    private fun hasCameraPermission() =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-
-    // ── Frame processing ──────────────────────────────────────────────────
     private fun processFrame(imageProxy: ImageProxy) {
         if (isProcessing || state == CollectState.DONE) {
-            imageProxy.close(); return
+            imageProxy.close()
+            return
         }
         isProcessing = true
         try {
             val bitmap = imageProxy.toBitmap()
-            val prepared = prepareBitmap(bitmap, imageProxy.imageInfo.rotationDegrees)
+            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            val prepared = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
             val result = landmarker.detect(prepared)
             val thumb = Bitmap.createScaledBitmap(prepared, 320, 240, true)
+            
+            // Mirror features for front camera
+            val finalFeatures = if (isFrontCamera) {
+                mirrorHandX(result.features)
+            } else {
+                result.features
+            }
+            
             runOnUiThread {
-                val landmarksToDraw = if (isFrontCamera) {
-                    result.landmarks.map { hand ->
-                        hand.map { (x, y) -> Pair(1.0f - x, y) }
-                    }
-                } else {
-                    result.landmarks
-                }
                 binding.overlayView.setLandmarks(
-                    landmarksToDraw,
+                    result.landmarks,  // Pass directly, no mirroring
                     binding.cameraPreview.width.toFloat(),
                     binding.cameraPreview.height.toFloat()
                 )
-                tick(result.handsDetected, result.features, thumb)
+                tick(result.handsDetected, finalFeatures, thumb)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Frame error: ${e.message}")
@@ -297,12 +301,13 @@ class CollectionActivity : AppCompatActivity() {
         }
     }
 
-    private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int): Bitmap {
+    private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
         val maxDim = 640
-        val scale  = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
+        val scale = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
             if (rotationDegrees != 0) postRotate(rotationDegrees.toFloat())
+            if (frontCamera) postScale(-1f, 1f, bitmap.width * scale / 2f, 0f)
         }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
@@ -314,8 +319,7 @@ class CollectionActivity : AppCompatActivity() {
             if (forMotion) {
                 if (x < 0f || x > 1f || y < 0f || y > 1f) return false
             } else {
-                if (x < MIN_VALID_COORD || x > MAX_VALID_COORD || y < MIN_VALID_COORD || y > MAX_VALID_COORD)
-                    return false
+                if (x < 0.05f || x > 0.95f || y < 0.05f || y > 0.95f) return false
             }
         }
         return true
@@ -329,7 +333,14 @@ class CollectionActivity : AppCompatActivity() {
         return mirrored
     }
 
-    // ── State machine ─────────────────────────────────────────────────────
+    private fun bitmapToBase64(bitmap: Bitmap): String {
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 65, out)
+        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }
+
+    // ── State machine ─────────────────────────────────────────────────────────
+
     private fun tick(handsDetected: Int, features: FloatArray, frameBitmap: Bitmap) {
         if (count >= targetCount) {
             state = CollectState.DONE
@@ -338,11 +349,8 @@ class CollectionActivity : AppCompatActivity() {
         }
 
         val handOk = handsDetected > 0 && isHandValid(features, isMotion)
-        val finalFeatures = if (handOk && mirrorLeftHand && !isFrontCamera) {
-            mirrorHandX(features)
-        } else {
-            features
-        }
+        // features are already mirrored for front camera in processFrame() — use as-is
+        val finalFeatures = features
 
         when (state) {
             CollectState.WAITING -> {
@@ -351,7 +359,6 @@ class CollectionActivity : AppCompatActivity() {
                 else
                     "Show your hand to begin…"
                 binding.tvOverlay.visibility = View.VISIBLE
-                if (isMotion) setCaptureBarColor(count.toFloat() / targetCount, COLOR_GREEN)
                 if (handOk) {
                     state = CollectState.COUNTDOWN
                     countdownTick = 0
@@ -365,7 +372,6 @@ class CollectionActivity : AppCompatActivity() {
                     countdownTick++
                     val rem = countdownFrames - countdownTick
                     binding.tvOverlay.text = if (rem > 0) "Get ready… $rem" else "GO!"
-                    if (isMotion) setCaptureBarColor(countdownTick.toFloat() / countdownFrames, COLOR_YELLOW)
                     if (countdownTick >= countdownFrames) {
                         state = CollectState.RECORDING
                         seqBuffer.clear()
@@ -380,6 +386,7 @@ class CollectionActivity : AppCompatActivity() {
 
             CollectState.RECORDING -> {
                 if (!isMotion) {
+                    // STATIC gesture collection
                     if (handOk) {
                         staticFrameBuffer.add(finalFeatures.copyOf())
                         if (staticFrameBuffer.size >= STATIC_FRAMES_PER_SAMPLE) {
@@ -408,14 +415,14 @@ class CollectionActivity : AppCompatActivity() {
                         Toast.makeText(this, "Hand lost, restart", Toast.LENGTH_SHORT).show()
                     }
                 } else {
+                    // MOTION gesture collection
                     if (handOk) {
                         seqBuffer.add(finalFeatures.copyOf())
-                        // FIX: use proper Bitmap.copy() with parameters
                         seqImageBuffer.add(frameBitmap.copy(Bitmap.Config.ARGB_8888, true))
                         noHandTick = 0
 
                         val ratio = seqBuffer.size.toFloat() / SEQUENCE_LENGTH
-                        setCaptureBarColor(ratio, COLOR_RED_TO_GREEN)
+                        binding.progressCapture.progress = (ratio * 100).toInt()
 
                         flashTick = (flashTick + 1) % 20
                         binding.tvRec.visibility = if (flashTick < 10) View.VISIBLE else View.INVISIBLE
@@ -463,12 +470,11 @@ class CollectionActivity : AppCompatActivity() {
             }
 
             CollectState.COOLDOWN -> {
-                if (!isMotion) binding.progressCapture.progress = 0
+                binding.progressCapture.progress = 0
                 cooldownTick++
                 val rem = cooldownFrames - cooldownTick
-                binding.tvOverlay.text = "✓ Saved!  Next in $rem…"
+                binding.tvOverlay.text = "✓ Saved! Next in $rem…"
                 binding.tvOverlay.visibility = View.VISIBLE
-                if (isMotion) setCaptureBarColor(count.toFloat() / targetCount, COLOR_GREEN)
                 if (cooldownTick >= cooldownFrames) {
                     state = if (handOk) CollectState.COUNTDOWN else CollectState.WAITING
                     binding.tvOverlay.visibility = View.GONE
@@ -481,30 +487,10 @@ class CollectionActivity : AppCompatActivity() {
         binding.progressTotal.progress = (count.toFloat() / targetCount * 100).toInt()
     }
 
-    private fun setCaptureBarColor(ratio: Float, mode: Int) {
-        val r = ratio.coerceIn(0f, 1f)
-        val color = when (mode) {
-            COLOR_GREEN  -> android.graphics.Color.rgb(0, 200, 0)
-            COLOR_YELLOW -> android.graphics.Color.rgb(220, 200, 0)
-            else         -> android.graphics.Color.rgb(
-                (255 * (1f - r)).toInt(),
-                (255 * r).toInt(),
-                0
-            )
-        }
-        binding.progressCapture.progress = (r * 100).toInt()
-        binding.progressCapture.progressTintList =
-            android.content.res.ColorStateList.valueOf(color)
-    }
-
-    // ── Save helpers ──────────────────────────────────────────────────────
-    private fun bitmapToBase64(bitmap: Bitmap): String {
-        val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 65, out)
-        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-    }
+    // ── Save helpers with backend upload ──────────────────────────────────────
 
     private fun saveSample(features: FloatArray, frameBitmap: Bitmap) {
+        // For suggest mode, batch upload to backend
         if (isSuggestMode) {
             pendingStaticLandmarks.add(features.toList())
             pendingStaticImages.add(bitmapToBase64(frameBitmap))
@@ -513,6 +499,7 @@ class CollectionActivity : AppCompatActivity() {
             }
         }
 
+        // Also save locally
         try {
             if (saveDir == null) {
                 Log.e(TAG, "saveDir is null, cannot write static sample")
@@ -529,7 +516,6 @@ class CollectionActivity : AppCompatActivity() {
             Log.d(TAG, "Static sample saved to ${file.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save static sample: ${e.message}", e)
-            Toast.makeText(this, "Error saving sample", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -539,12 +525,12 @@ class CollectionActivity : AppCompatActivity() {
         val paddedImages = frameBitmaps.toMutableList()
         while (paddedBuffer.size < SEQUENCE_LENGTH) {
             paddedBuffer.add(paddedBuffer.last().copyOf())
-            // Reuse the last bitmap – no need to copy for padding
             paddedImages.add(paddedImages.last())
         }
         val trimmedBuffer = paddedBuffer.take(SEQUENCE_LENGTH)
         val trimmedImages = paddedImages.take(SEQUENCE_LENGTH)
 
+        // For suggest mode, batch upload to backend
         if (isSuggestMode) {
             pendingMotionSequences.add(trimmedBuffer.map { it.toList() })
             val frameBase64List = trimmedImages.map { bitmapToBase64(it) }
@@ -554,6 +540,7 @@ class CollectionActivity : AppCompatActivity() {
             }
         }
 
+        // Also save locally
         try {
             if (saveDir == null) {
                 Log.e(TAG, "saveDir is null, cannot write motion sample")
@@ -573,38 +560,14 @@ class CollectionActivity : AppCompatActivity() {
             Log.d(TAG, "Motion sample saved to ${file.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save motion sample: ${e.message}", e)
-            Toast.makeText(this, "Error saving motion sample", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private fun undoLastSample() {
-        if (count <= 0) return
-        count--
-        val file = File(saveDir, "$count.json")
-        if (file.exists()) file.delete()
-
-        if (isSuggestMode) {
-            if (!isMotion && pendingStaticLandmarks.isNotEmpty()) {
-                pendingStaticLandmarks.removeLast()
-                if (pendingStaticImages.isNotEmpty()) pendingStaticImages.removeLast()
-            } else if (isMotion && pendingMotionSequences.isNotEmpty()) {
-                pendingMotionSequences.removeLast()
-                if (pendingMotionImages.isNotEmpty()) pendingMotionImages.removeLast()
-            }
-        }
-        updateCountDisplay()
-        Toast.makeText(this, "Deleted sample $count", Toast.LENGTH_SHORT).show()
-        state = CollectState.COOLDOWN
-        cooldownTick = 0
-        flashTick = 0
     }
 
     private fun updateCountDisplay() {
-        binding.tvCount.text = "$count / $targetCount"
+        binding.tvSessionCount.text = "$count / $targetCount"
     }
 
-    // ── Batched upload ────────────────────────────────────────────────────
-    private var uploadJob: kotlinx.coroutines.Job? = null
+    // ── Batched upload to backend ─────────────────────────────────────────────
 
     private fun uploadBatchAsync() {
         if (!isSuggestMode) return
@@ -623,7 +586,6 @@ class CollectionActivity : AppCompatActivity() {
             pendingMotionImages.clear()
 
             try {
-                val session = SessionManager.getInstance(this@CollectionActivity)
                 if (!session.isLoggedIn) {
                     uploadError = "Not logged in"
                     showUploadError(uploadError!!)
@@ -637,8 +599,6 @@ class CollectionActivity : AppCompatActivity() {
                         images = staticImagesBatch.ifEmpty { null }
                     )
                 } else {
-                    // For motion, we pass images as List<List<String>>.
-                    // Your UploadSamplesRequest must have images: Any? = null
                     UploadSamplesRequest(
                         sequence = motionBatch,
                         sample_count = motionBatch.size,
@@ -671,12 +631,14 @@ class CollectionActivity : AppCompatActivity() {
         }
     }
 
-    // ── Done screen ───────────────────────────────────────────────────────
+    // ── Done screen ───────────────────────────────────────────────────────────
+
     private fun showDoneScreen() {
         cameraProvider?.unbindAll()
         binding.overlayDone.visibility = View.VISIBLE
 
         if (isSuggestMode) {
+            binding.tvUploadStatus.visibility = View.VISIBLE
             binding.tvUploadStatus.text = "Uploading samples... Please wait."
             binding.progressUpload.visibility = View.VISIBLE
 
@@ -696,12 +658,12 @@ class CollectionActivity : AppCompatActivity() {
                         binding.tvUploadStatus.text = "✓ Collection complete!\n${count} samples recorded."
                         binding.tvUploadStatus.setTextColor(0xFF00E676.toInt())
                     }
-                    binding.btnDoneClose.visibility = View.VISIBLE
+                    binding.btnSubmit.visibility = View.VISIBLE
                 }
             }
         } else {
             binding.tvDonePath.text = "Files saved to:\n${saveDir?.absolutePath}\n\nTransfer to PC and run:\npython convert_collection.py"
-            binding.btnDoneClose.visibility = View.VISIBLE
+            binding.btnSubmit.visibility = View.VISIBLE
         }
     }
 
@@ -713,7 +675,8 @@ class CollectionActivity : AppCompatActivity() {
         binding.tvDonePath.visibility = View.VISIBLE
     }
 
-    // ── Permissions ───────────────────────────────────────────────────────
+    // ── Permissions ───────────────────────────────────────────────────────────
+
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ) {
@@ -726,7 +689,6 @@ class CollectionActivity : AppCompatActivity() {
         uploadJob?.cancel()
         executor.shutdown()
         landmarker.close()
-        predictor.close()
         super.onDestroy()
     }
 }

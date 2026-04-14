@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>Terms & Conditions — Sign Language Interpreter</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #E3F2FD;  /* matches main background from XML */
+      font-family: 'sans-serif', 'Segoe UI', Roboto, 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+      padding: 20px 16px 48px 16px;
+      color: #1A1A2E;
+    }
+
+    /* main container card - same white card style as mainCard */
+    .terms-card {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #FFFFFF;
+      border-radius: 24px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.05), 0 2px 6px rgba(0,0,0,0.03);
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+
+    /* header area - matches topBarCard colors, but slightly softer */
+    .terms-header {
+      background: #E6001E3D;  /* deep navy from top bar, same as topBarCard */
+      background-color: #001E3D;
+      padding: 16px 24px;      /* reduced padding from 20px to 16px */
+      border-bottom: 1px solid #334A90E2;
+    }
+
+    .terms-header h1 {
+      color: #FFFFFF;
+      font-size: 20px;         /* was 22px, now smaller */
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      margin-bottom: 4px;      /* was 6px */
+      font-family: 'sans-serif-medium', sans-serif;
+    }
+
+    .terms-header .sub {
+      color: #80B0D4FF;
+      font-size: 12px;         /* was 13px */
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    /* content padding */
+    .terms-content {
+      padding: 18px 24px 24px 24px;  /* reduced top padding */
+    }
+
+    /* each clause block */
+    .clause {
+      margin-bottom: 18px;      /* was 22px, tighter spacing */
+      border-left: 3px solid #4A90E2;
+      padding-left: 14px;       /* was 16px */
+      transition: 0.1s;
+    }
+
+    .clause-title {
+      font-size: 15px;          /* was 17px, more compact */
+      font-weight: 700;
+      color: #001E3D;
+      margin-bottom: 4px;       /* was 6px */
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .clause-title .badge {
+      background: #E3F2FD;
+      color: #1976D2;
+      font-size: 10px;          /* was 11px */
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 30px;
+      letter-spacing: 0.2px;
+    }
+
+    .clause-text {
+      font-size: 13px;          /* was 14px */
+      line-height: 1.45;
+      color: #2C3E50;
+      text-align: left;         /* justified can be hard on small screens, left aligned for clarity */
+    }
+
+    /* highlight for important notices */
+    .highlight-note {
+      background: #F0F7FF;
+      border-radius: 16px;
+      padding: 12px 16px;       /* was 14px 18px */
+      margin: 18px 0 14px 0;    /* was 24px 0 16px 0 */
+      border-left: 4px solid #1976D2;
+      font-size: 12px;          /* was 13px */
+      line-height: 1.45;
+      color: #0D3566;
+    }
+
+    .footer-note {
+      margin-top: 22px;         /* was 28px */
+      padding-top: 14px;        /* was 16px */
+      border-top: 1px solid #E8E8EE;
+      font-size: 11px;          /* was 12px */
+      color: #6B7280;
+      text-align: center;
+    }
+
+    /* back / close button - mimics Start Collecting button style */
+    .close-button {
+      display: block;
+      width: calc(100% - 48px);
+      margin: 8px auto 20px auto;   /* was 12px auto 20px auto */
+      background-color: #1976D2;
+      color: white;
+      text-align: center;
+      padding: 11px 0;              /* was 12px 0 */
+      font-weight: 700;
+      font-size: 14px;              /* was 15px */
+      border-radius: 14px;
+      text-decoration: none;
+      transition: background 0.2s;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    .close-button:hover {
+      background-color: #0b5cad;
+    }
+
+    /* responsive spacing */
+    @media (max-width: 480px) {
+      body {
+        padding: 12px 12px 32px 12px;
+      }
+      .terms-content {
+        padding: 14px 16px 20px 16px;
+      }
+      .clause-title {
+        font-size: 14px;        /* even smaller on mobile */
+      }
+      .clause-text {
+        font-size: 12.5px;
+      }
+      .terms-header h1 {
+        font-size: 18px;
+      }
+    }
+
+    /* subtle divider */
+    .soft-divider {
+      height: 1px;
+      background: #E8E8EE;
+      margin: 10px 0 16px 0;     /* was 12px 0 18px 0 */
+    }
+
+    /* additional compact card for submission note */
+    .submission-note {
+      background:#F8F9FF;
+      padding: 10px 14px;        /* was 12px 16px */
+      border-radius: 18px;       /* was 20px */
+      margin: 8px 0 4px 0;
+    }
+    .submission-flex {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .submission-emoji {
+      font-size: 18px;           /* was 20px */
+    }
+    .submission-text {
+      font-size: 12px;           /* was 13px */
+      color: #1A2C42;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+<div class="terms-card">
+  <div class="terms-header">
+    <h1>📜 Terms and Conditions</h1>
+    <div class="sub">Sign Language Interpreter — Contributor Agreement</div>
+  </div>
+
+  <div class="terms-content">
+    <!-- summary info note: resembles "infoNoteCard" style from your layout -->
+    <div class="highlight-note">
+      ⚖️ By using this platform and submitting word suggestions or gesture samples, you agree to the following terms.  
+      Administrators maintain full authority to ensure system integrity and compliance.
+    </div>
+
+    <!-- clause 1 -->
+    <div class="clause">
+      <div class="clause-title">
+        <span>1.</span> User Account Registration
+        <span class="badge">mandatory</span>
+      </div>
+      <div class="clause-text">
+        All users must provide accurate and complete information upon account creation, including name, username, email address, and password. 
+        Any false or misleading information may result in account restriction.
+      </div>
+    </div>
+
+    <!-- clause 2 -->
+    <div class="clause">
+      <div class="clause-title">2. Administrator Control</div>
+      <div class="clause-text">
+        The system administrator reserves the right to manage all user accounts, including viewing, adding, updating, deactivating, reactivating, and deleting accounts when necessary. 
+        This ensures platform security and content quality.
+      </div>
+    </div>
+
+    <!-- clause 3 -->
+    <div class="clause">
+      <div class="clause-title">3. Manual Account Creation</div>
+      <div class="clause-text">
+        The administrator may create user accounts manually without requiring email verification. 
+        Such accounts remain subject to all standard platform policies.
+      </div>
+    </div>
+
+    <!-- clause 4 -->
+    <div class="clause">
+      <div class="clause-title">4. User Responsibilities</div>
+      <div class="clause-text">
+        Users are expected to use the system responsibly and must not engage in any activities that violate system rules, policies, or acceptable standards of behavior. 
+        This includes submitting appropriate content, respecting other contributors, and following gesture submission guidelines.
+      </div>
+    </div>
+
+    <!-- clause 5 -->
+    <div class="clause">
+      <div class="clause-title">5. Warnings for Violations</div>
+      <div class="clause-text">
+        Users who violate the system’s terms and conditions will receive a warning from the administrator. 
+        Warnings serve as notice of improper conduct and provide an opportunity to correct behavior.
+      </div>
+    </div>
+
+    <!-- clause 6 -->
+    <div class="clause">
+      <div class="clause-title">6. Account Suspension</div>
+      <div class="clause-text">
+        A user who receives two (2) warnings may have their account temporarily deactivated by the administrator. 
+        During suspension, access to submission features and word suggestions will be restricted.
+      </div>
+    </div>
+
+    <!-- clause 7 -->
+    <div class="clause">
+      <div class="clause-title">7. Account Reactivation</div>
+      <div class="clause-text">
+        Deactivated accounts will automatically be reactivated after thirty (30) days unless further action is required. 
+        Upon reactivation, full platform privileges are restored, subject to continued compliance.
+      </div>
+    </div>
+
+    <!-- clause 8 -->
+    <div class="clause">
+      <div class="clause-title">8. Repeat Violations</div>
+      <div class="clause-text">
+        If a user violates the terms and conditions again after account reactivation, the administrator reserves the right to permanently delete the account. 
+        Permanent deletion removes all contributed word suggestions and samples.
+      </div>
+    </div>
+
+    <!-- clause 9 -->
+    <div class="clause">
+      <div class="clause-title">9. Account Deletion</div>
+      <div class="clause-text">
+        The administrator may permanently remove a user account from the system at any time if deemed necessary due to serious or repeated violations. 
+        Serious violations include abusive behavior, fraudulent submissions, or attempts to bypass moderation.
+      </div>
+    </div>
+
+    <!-- clause 10 -->
+    <div class="clause">
+      <div class="clause-title">10. Modification of User Information</div>
+      <div class="clause-text">
+        The administrator has the authority to update or edit user account information to maintain system accuracy and integrity. 
+        Users will be notified of significant changes when applicable.
+      </div>
+    </div>
+
+    <!-- clause 11 -->
+    <div class="clause">
+      <div class="clause-title">11. Data Accuracy and Integrity</div>
+      <div class="clause-text">
+        Users are responsible for ensuring that their account details remain accurate and up to date. 
+        Outdated contact information may lead to missed communications regarding warnings or policy updates.
+      </div>
+    </div>
+
+    <!-- clause 12 -->
+    <div class="clause">
+      <div class="clause-title">12. System Authority</div>
+      <div class="clause-text">
+        All decisions made by the administrator regarding user management and enforcement of these terms are final. 
+        The administrator may revise these terms occasionally; continued use implies acceptance.
+      </div>
+    </div>
+
+    <!-- additional platform-specific note: aligns with "All submissions are reviewed" style -->
+    <div class="soft-divider"></div>
+    <div class="submission-note">
+      <div class="submission-flex">
+        <span class="submission-emoji">🗣️</span>
+        <span class="submission-text">All word suggestions and gesture samples are subject to review. Submissions that violate policies will be rejected, and repeated violations may lead to warnings as described above.</span>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Last updated: April 2026 • Sign Language Interpreter platform<br>
+      By checking "I have read the terms and conditions" you acknowledge that you have read, understood, and agreed to this agreement.
+    </div>
+  </div>
+
+  <!-- close / back button that simulates dismissing / returning to app -->
+  <button class="close-button" id="closeTermsBtn">✓ Accept & Close</button>
+</div>
+
+<script>
+  (function() {
+    // This script handles closing the Terms page in a WebView-friendly way.
+    // In your Android app, when you open this HTML inside a WebView, the button will:
+    // - Notify the app that terms have been accepted (optional callback)
+    // - Close the WebView activity / dialog.
+
+    const closeBtn = document.getElementById('closeTermsBtn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        // Method 1: Android can inject JavaScript interface. We will call a global function if available.
+        // Also we can send a message to the parent via window.Android or postMessage.
+        // For maximum compatibility: if the page is opened in a custom WebView, we can use:
+        if (window.AndroidBridge && typeof window.AndroidBridge.closeTermsView === 'function') {
+          window.AndroidBridge.closeTermsView();
+        } 
+        // Alternatively, if using @JavascriptInterface with name "Android", we call a method.
+        else if (window.Android && typeof window.Android.closeTermsDialog === 'function') {
+          window.Android.closeTermsDialog();
+        }
+        else if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+          // For React Native WebView fallback, but not needed. We'll include generic postMessage
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TERMS_CLOSE', accepted: true }));
+        }
+        else {
+          // Fallback for testing in browser or simple WebView: try to close via history / custom scheme.
+          // For a standard WebView that expects a javascript interface, we emulate a close.
+          // The app can override by injecting a function. Here we also let the user know that the page can be closed.
+          // Send an event that the app can listen to via `shouldOverrideUrlLoading` if needed.
+          // But we also provide a simple Android interface detection.
+          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.termsCloseHandler) {
+            // iOS WKWebView bridge pattern (just in case but Android mostly)
+            window.webkit.messageHandlers.termsCloseHandler.postMessage({action: 'close'});
+          } else {
+            // For regular browsers or demo, we show a message and go back.
+            alert('Terms acknowledged. You may close this window (Android app will handle automatically).');
+            // Attempt to close WebView by navigating to a no-op? better to rely on injected JS.
+            if (window.history.length > 1) window.history.back();
+          }
+        }
+        // Additionally, we can send a custom event that the app can listen to using addJavascriptInterface.
+        // If the app injects a global object named "TermsHelper", use it.
+        if (window.TermsHelper && typeof window.TermsHelper.acceptTerms === 'function') {
+          window.TermsHelper.acceptTerms();
+        }
+      });
+    }
+
+    // Optional: Add a small indicator that the user can also tap outside? not needed.
+    // Ensure that any link in terms clauses doesn't break navigation (no external links here).
+    // Also provides a robust behavior for any app using standard WebViewClient.
+  })();
+</script>
+
+<!-- 
+  ==================================================
+  INSTRUCTIONS FOR ANDROID INTEGRATION (to be used in your Kotlin/Java code)
+  ==================================================
+  Based on your "activity_suggest_word.xml" and the requirement that 
+  when the Terms & Condition link is clicked, this HTML page will open.
+
+  ----- WHAT PART OF YOUR ANDROID CODE YOU MUST MODIFY? -----
+
+  1. In your SuggestWordActivity / Fragment, you currently have a checkbox with label:
+     "I have read the terms and conditions". You need to make the entire label OR a dedicated "Terms & Conditions" link tappable.
+
+     Look for the TextView with id `@+id/tvTermsLabel` inside `termsRow` LinearLayout.
+     Currently, it's a simple TextView: `android:text="I have read the terms and conditions"`
+     
+     ✏️ Modify your XML (activity_suggest_word.xml) inside the `termsRow` LinearLayout:
+     
+     Replace the simple TextView with a clickable SpannableString or use a compound TextView + LinkMovementMethod.
+     
+     RECOMMENDED CHANGE (in code / or XML with click listener):
+
+     In your Kotlin/Java:
+     
+        val tvTermsLabel = findViewById<TextView>(R.id.tvTermsLabel)
+        tvTermsLabel.text = HtmlCompat.fromHtml(
+            "I have read the <font color='#1976D2'>terms and conditions</font>",
+            HtmlCompat.FROM_HTML_MODE_LEGACY
+        )
+        tvTermsLabel.movementMethod = LinkMovementMethod.getInstance()
+        tvTermsLabel.setOnClickListener { view ->
+            // Open the HTML terms page
+            openTermsAndConditionsPage()
+        }
+
+     Or better: make a dedicated link using ClickableSpan.
+     
+     Also, you can add a separate "Terms" link next to the checkbox. But the requirement says:
+     "Terms & Conditions link must be tappable" – so the text "terms and conditions" must be tappable.
+
+  2. Implement method `openTermsAndConditionsPage()`:
+     
+        private fun openTermsAndConditionsPage() {
+            // Save the HTML content as an asset or load from raw resource / local file.
+            // Option A: Save this html as "terms_conditions.html" inside your app's assets folder.
+            // Then open it in a WebView dialog or activity.
+            val intent = Intent(this, TermsWebViewActivity::class.java)
+            startActivity(intent)
+        }
+
+  3. Create a simple activity (e.g., TermsWebViewActivity) with a WebView.
+     Load the HTML content either from assets or from the string resource.
+     Make sure to enable JavaScript and inject the bridge if you want the "Accept & Close" button
+     to close the activity automatically.
+     
+     Example TermsWebViewActivity layout:
+     
+        <WebView
+            android:id="@+id/webViewTerms"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+     Then in your activity:
+     
+        val webView = findViewById<WebView>(R.id.webViewTerms)
+        webView.settings.javaScriptEnabled = true
+        // Add JavaScript interface to allow closing
+        webView.addJavascriptInterface(object {
+            @JavascriptInterface
+            fun closeTermsDialog() {
+                runOnUiThread { finish() }
+            }
+        }, "Android")
+        // Load the html file (e.g., from assets)
+        webView.loadUrl("file:///android_asset/terms_conditions.html")
+     
+  4. If you want to reflect that the user "accepted" terms in the SuggestWord screen,
+     you can update a SharedPreference or just rely on checkbox state.
+     But the requirement just needs that the link is tappable and the content opens. No mandatory checkbox auto-check.
+     However, to provide smooth UX: When the user closes the Terms page, you could optionally set the checkbox checked.
+     But the scope requires: Start Collecting button is disabled until all fields + terms checkbox checked.
+     So the user must manually check the checkbox after reading. Or you can auto-check when they close terms page.
+     
+     To auto-check checkbox after reading, from TermsWebViewActivity, you can return a result:
+     setResult(Activity.RESULT_OK) and then in onActivityResult, check the checkbox.
+     
+  ==================================================
+  QUICK SUMMARY OF MODIFICATIONS NEEDED IN YOUR ANDROID CODE:
+  
+  - Modify the TextView (R.id.tvTermsLabel) in activity_suggest_word.xml to become clickable
+    (preferably using a SpannableString with ClickableSpan on "terms and conditions").
+  
+  - Create an asset file "terms_conditions.html" containing this generated HTML.
+  
+  - Create a simple WebView activity (e.g., TermsActivity) that loads the HTML from assets,
+    adds a Javascript interface to let the "Accept & Close" button finish the activity.
+  
+  - In your SuggestWordActivity, handle the click on the terms link by starting TermsActivity.
+  
+  - (Optional) if you want checkbox auto-check after reading, pass a flag.
+  
+  - Ensure the HTML styling matches the color palette (#E3F2FD background, #001E3D headers, #1976D2 accent).
+    Already fully implemented in this HTML.
+  
+  ==================================================
+  NOTE: The above HTML includes a "Accept & Close" button that matches the "Start Collecting" button style,
+  and also provides bridge methods for Android (Android.closeTermsDialog, AndroidBridge, TermsHelper)
+  to easily close the WebView from JavaScript. You can adapt according to your interface naming.
+-->
+</body>
+</html>

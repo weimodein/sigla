@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="260dp"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0D1127"
+    android:layout_gravity="start">
+
+    <!-- ── USER HEADER ── -->
+    <LinearLayout
+        android:id="@+id/sidebarHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:background="#0D1127">
+
+        <!-- Avatar + name row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <ImageView
+                android:id="@+id/ivAvatar"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@android:drawable/ic_menu_myplaces"
+                android:background="@drawable/bg_avatar"
+                android:tint="#90CAF9"
+                android:padding="10dp"
+                android:scaleType="centerInside" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="12dp">
+
+                <TextView
+                    android:id="@+id/tvSidebarUsername"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Guest User"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvSidebarEmail"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Not signed in"
+                    android:textColor="#555E8A"
+                    android:textSize="11sp"
+                    android:layout_marginTop="1dp" />
+
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Sign In button (shown when not logged in) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSidebarSignIn"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:text="Sign In / Sign Up"
+            android:textSize="12sp"
+            android:textColor="#90CAF9"
+            app:backgroundTint="#1A237E"
+            app:strokeColor="#2A3A9E"
+            app:strokeWidth="1dp"
+            app:cornerRadius="8dp"
+            android:visibility="visible" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1E2A50" />
+
+    <!-- ── NAVIGATION SECTION LABEL ── -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="NAVIGATION"
+        android:textColor="#3A4470"
+        android:textSize="9sp"
+        android:letterSpacing="0.15"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="4dp" />
+
+    <!-- Main Interface (active/highlighted) -->
+    <LinearLayout
+        android:id="@+id/navMainInterface"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="@drawable/bg_nav_item_active">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@android:drawable/ic_menu_view"
+            android:tint="#667EEA" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Main Interface"
+            android:textColor="#90CAF9"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginStart="12dp" />
+
+    </LinearLayout>
+
+    <!-- Word Bank -->
+    <LinearLayout
+        android:id="@+id/navWordBank"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="?attr/selectableItemBackground">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@android:drawable/ic_menu_agenda"
+            android:tint="#555E8A" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Word Bank"
+            android:textColor="#888EA8"
+            android:textSize="14sp"
+            android:layout_marginStart="12dp" />
+
+    </LinearLayout>
+
+    <!-- Suggest a Word (dimmed, login required) -->
+    <LinearLayout
+        android:id="@+id/navSuggestWord"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:alpha="0.5"
+        android:background="?attr/selectableItemBackground">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@android:drawable/ic_menu_edit"
+            android:tint="#555E8A" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Suggest a Word"
+            android:textColor="#888EA8"
+            android:textSize="14sp"
+            android:layout_marginStart="12dp" />
+
+        <!-- Login required badge -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Login required"
+            android:textColor="#555E8A"
+            android:textSize="9sp"
+            android:background="@drawable/bg_badge_locked"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp" />
+
+    </LinearLayout>
+
+    <!-- Notifications -->
+    <LinearLayout
+        android:id="@+id/navNotifications"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="?attr/selectableItemBackground">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@android:drawable/ic_popup_reminder"
+            android:tint="#555E8A" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Notifications"
+            android:textColor="#888EA8"
+            android:textSize="14sp"
+            android:layout_marginStart="12dp" />
+
+        <!-- Notification badge (shown when count > 0) -->
+        <TextView
+            android:id="@+id/tvNotifBadge"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:text="3"
+            android:textColor="#FFFFFF"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/bg_notif_badge"
+            android:visibility="visible" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1E2A50"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- ── ACCOUNT SECTION LABEL ── -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ACCOUNT"
+        android:textColor="#3A4470"
+        android:textSize="9sp"
+        android:letterSpacing="0.15"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="4dp" />
+
+    <!-- Profile -->
+    <LinearLayout
+        android:id="@+id/navProfile"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="?attr/selectableItemBackground">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@android:drawable/ic_menu_myplaces"
+            android:tint="#555E8A" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Profile"
+            android:textColor="#888EA8"
+            android:textSize="14sp"
+            android:layout_marginStart="12dp" />
+
+    </LinearLayout>
+
+    <!-- Settings -->
+    <LinearLayout
+        android:id="@+id/navSettings"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:background="?attr/selectableItemBackground">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:tint="#555E8A" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Settings"
+            android:textColor="#888EA8"
+            android:textSize="14sp"
+            android:layout_marginStart="12dp" />
+
+    </LinearLayout>
+
+    <!-- Spacer -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- ── FOOTER ── -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1E2A50" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SIGLA v1.0 · Filipino Sign Language"
+        android:textColor="#2A3460"
+        android:textSize="10sp"
+        android:gravity="center"
+        android:padding="16dp" />
+
+</LinearLayout>

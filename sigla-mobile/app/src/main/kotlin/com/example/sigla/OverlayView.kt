@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
 
-// Hand connections (MediaPipe landmark indices)
 private val CONNECTIONS = listOf(
     0 to 1, 1 to 2, 2 to 3, 3 to 4,
     0 to 5, 5 to 6, 6 to 7, 7 to 8,
@@ -41,16 +40,20 @@ class OverlayView @JvmOverloads constructor(
     }
 
     private var landmarks: List<List<Pair<Float, Float>>> = emptyList()
-    private var srcWidth  = 1f
+    private var srcWidth = 1f
     private var srcHeight = 1f
+    private var isMirrored = false  // NEW: track mirroring state
 
-    fun setLandmarks(lms: List<List<Pair<Float, Float>>>, w: Float, h: Float) {
+    /** Called from MainActivity to update hand landmarks and redraw. */
+    fun setLandmarks(lms: List<List<Pair<Float, Float>>>, w: Float, h: Float, mirrored: Boolean = false) {
         landmarks = lms
-        srcWidth  = w
+        srcWidth = w
         srcHeight = h
+        isMirrored = mirrored
         invalidate()
     }
 
+    /** Called from MainActivity to wipe landmarks when no hands are detected. */
     fun clear() {
         landmarks = emptyList()
         invalidate()
@@ -62,25 +65,36 @@ class OverlayView @JvmOverloads constructor(
         val scaleY = height / srcHeight
 
         for ((handIdx, hand) in landmarks.withIndex()) {
-            val dp = if (handIdx == 0) dotPaint  else dot2Paint
+            val dp = if (handIdx == 0) dotPaint else dot2Paint
             val lp = if (handIdx == 0) linePaint else line2Paint
 
-            // Draw connections
             for ((a, b) in CONNECTIONS) {
                 if (a < hand.size && b < hand.size) {
+                    var x1 = hand[a].first * srcWidth * scaleX
+                    var x2 = hand[b].first * srcWidth * scaleX
+                    
+                    // Mirror X coordinates if needed
+                    if (isMirrored) {
+                        x1 = width - x1
+                        x2 = width - x2
+                    }
+                    
                     canvas.drawLine(
-                        hand[a].first  * srcWidth  * scaleX,
+                        x1,
                         hand[a].second * srcHeight * scaleY,
-                        hand[b].first  * srcWidth  * scaleX,
+                        x2,
                         hand[b].second * srcHeight * scaleY,
                         lp
                     )
                 }
             }
-            // Draw dots
             for ((x, y) in hand) {
+                var drawX = x * srcWidth * scaleX
+                if (isMirrored) {
+                    drawX = width - drawX
+                }
                 canvas.drawCircle(
-                    x * srcWidth  * scaleX,
+                    drawX,
                     y * srcHeight * scaleY,
                     6f, dp
                 )
