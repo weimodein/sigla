@@ -124,7 +124,7 @@ class CollectionActivity : AppCompatActivity() {
                 "sigla_dataset/$label"
             ).also { it.mkdirs() }
 
-            count = saveDir!!.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+            count = 0  // backend tracks submission count; local files may be stale
 
             setupUI()
             setupButtons()
@@ -242,7 +242,7 @@ class CollectionActivity : AppCompatActivity() {
         }
 
         val analysis = ImageAnalysis.Builder()
-            .setTargetRotation(binding.cameraPreview.display.rotation)
+            .setTargetRotation(binding.cameraPreview.display?.rotation ?: android.view.Surface.ROTATION_0)
             .setTargetResolution(android.util.Size(640, 480))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)

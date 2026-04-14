@@ -55,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     // ── UI state ──────────────────────────────────────────────────────────────
     private var showFilipino       = true
     private var emergencyHoldStart = 0L
+    private var frameSkipCounter   = 0
 
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
@@ -454,10 +455,13 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         analysis.setAnalyzer(executor) { imageProxy ->
-            val bitmap          = imageProxy.toBitmap()
-            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-            val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
-            landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
+            frameSkipCounter++
+            if (frameSkipCounter % 2 == 0) {
+                val bitmap          = imageProxy.toBitmap()
+                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
+                landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
+            }
             imageProxy.close()
         }
 

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
@@ -18,7 +19,7 @@ data class LandmarkResult(
 )
 
 class HandLandmarkHelper(
-    context: Context,
+    private val context: Context,
     // Callback invoked on the MediaPipe internal thread — caller must marshal to UI thread if needed
     private val onResult: ((LandmarkResult) -> Unit)? = null
 ) {
@@ -27,31 +28,42 @@ class HandLandmarkHelper(
     // LIVE_STREAM mode: async, non-blocking — fastest for real-time camera feeds
     val isLiveStream: Boolean get() = onResult != null
 
+    private fun buildLandmarker(delegate: Delegate): HandLandmarker {
+        val mode = if (onResult != null) RunningMode.LIVE_STREAM else RunningMode.IMAGE
+        val builder = HandLandmarker.HandLandmarkerOptions.builder()
+            .setBaseOptions(
+                BaseOptions.builder()
+                    .setModelAssetPath("hand_landmarker.task")
+                    .setDelegate(delegate)
+                    .build()
+            )
+            .setRunningMode(mode)
+            .setNumHands(2)
+            .setMinHandDetectionConfidence(0.6f)
+            .setMinHandPresenceConfidence(0.6f)
+            .setMinTrackingConfidence(0.5f)
+        if (onResult != null) {
+            builder.setResultListener { result, _ -> onResult.invoke(parseResult(result)) }
+            builder.setErrorListener { e -> Log.e(TAG, "MediaPipe error: ${e.message}") }
+        }
+        return HandLandmarker.createFromOptions(context, builder.build())
+    }
+
     init {
-        try {
-            val mode = if (onResult != null) RunningMode.LIVE_STREAM else RunningMode.IMAGE
-
-            val builder = HandLandmarker.HandLandmarkerOptions.builder()
-                .setBaseOptions(
-                    BaseOptions.builder()
-                        .setModelAssetPath("hand_landmarker.task")
-                        .build()
-                )
-                .setRunningMode(mode)
-                .setNumHands(2)
-                .setMinHandDetectionConfidence(0.6f)
-                .setMinHandPresenceConfidence(0.6f)
-                .setMinTrackingConfidence(0.5f)
-
-            if (onResult != null) {
-                builder.setResultListener { result, _ -> onResult.invoke(parseResult(result)) }
-                builder.setErrorListener { e -> Log.e(TAG, "MediaPipe error: ${e.message}") }
+        landmarker = try {
+            val lm = buildLandmarker(Delegate.GPU)
+            Log.i(TAG, "HandLandmarker ready [GPU]")
+            lm
+        } catch (e: Throwable) {
+            Log.w(TAG, "GPU delegate failed (${e.message}) — falling back to CPU")
+            try {
+                val lm = buildLandmarker(Delegate.CPU)
+                Log.i(TAG, "HandLandmarker ready [CPU]")
+                lm
+            } catch (e2: Throwable) {
+                Log.e(TAG, "Failed to init HandLandmarker: ${e2.message}")
+                null
             }
-
-            landmarker = HandLandmarker.createFromOptions(context, builder.build())
-            Log.i(TAG, "HandLandmarker ready [${mode.name}]")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to init HandLandmarker: ${e.message}")
         }
     }
 

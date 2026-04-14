@@ -524,7 +524,7 @@
                                     <TextView
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
-                                        android:text="Max 100 samples"
+                                        android:text="Max 50 samples"
                                         android:textColor="#4A90E2"
                                         android:textSize="10sp"
                                         android:layout_marginTop="2dp" />
@@ -560,7 +560,7 @@
                                     <TextView
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
-                                        android:text="Max 150 samples"
+                                        android:text="Max 50 samples"
                                         android:textColor="#4A90E2"
                                         android:textSize="10sp"
                                         android:layout_marginTop="2dp" />

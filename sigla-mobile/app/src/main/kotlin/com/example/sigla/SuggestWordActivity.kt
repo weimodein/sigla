@@ -315,9 +315,9 @@ class SuggestWordActivity : AppCompatActivity() {
 
     private fun updateGestureHint(isMotion: Boolean) {
         tvGestureTypeHint.text = if (isMotion)
-            "Motion gestures involve movement, e.g. waving or swiping. Collection takes approx. 3–5 minutes. Max 150 samples."
+            "Motion gestures involve movement, e.g. waving or swiping. Collection takes approx. 3–5 minutes. Max 50 samples."
         else
-            "Static gestures are held still in one position. Collection takes approx. 3–5 minutes. Max 100 samples."
+            "Static gestures are held still in one position. Collection takes approx. 3–5 minutes. Max 50 samples."
     }
 
     // ── Terms & Conditions label with clickable link ───────────────────────────
@@ -439,11 +439,15 @@ class SuggestWordActivity : AppCompatActivity() {
                 )
 
                 if (response.isSuccessful) {
-                    val body = response.body()!!
+                    val body = response.body()
+                    if (body == null) {
+                        showError("Server returned an empty response")
+                        setLoading(false)
+                        return@launch
+                    }
                     val wordId = body.word_id ?: body.word?.id ?: 0
-                    
-                    // Determine max samples based on gesture type
-                    val sessionMax = if (gestureType == "motion") 150 else 100
+
+                    val sessionMax = 50
                     
                     Toast.makeText(this@SuggestWordActivity,
                         "Word submitted! Now collect gesture samples.", Toast.LENGTH_SHORT).show()
