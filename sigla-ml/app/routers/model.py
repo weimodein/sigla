@@ -62,15 +62,18 @@ async def train_model(request: TrainRequest):
             model_id=request.model_id,
         )
         return {
-            "message": "Model trained successfully",
-            "result":  result,
-            "accuracy":      result.get("accuracy"),
-            "precision":     result.get("precision"),
-            "recall":        result.get("recall"),
-            "f1_score":      result.get("f1_score"),
-            "total_classes": result.get("total_classes"),
-            "tflite_url":    result.get("tflite_url"),
-            "h5_url":        result.get("h5_url"),
+            "message":           "Model trained successfully",
+            "result":            result,
+            "accuracy":          result.get("accuracy"),
+            "total_classes":     result.get("total_classes"),
+            "tflite_url":        result.get("tflite_url"),
+            "h5_url":            result.get("h5_url"),
+            "motion_tflite_url": result.get("motion_tflite_url"),
+            "motion_h5_url":     result.get("motion_h5_url"),
+            "motion_accuracy":   result.get("motion_accuracy"),
+            "motion_trained":    result.get("motion_trained"),
+            "motion_classes":    result.get("motion_classes"),
+            "gesture_config_url": result.get("gesture_config_url"),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

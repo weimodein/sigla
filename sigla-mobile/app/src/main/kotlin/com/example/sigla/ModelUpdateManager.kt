@@ -118,6 +118,16 @@ object ModelUpdateManager {
                     else Log.i(TAG, "Motion labels downloaded")
                 }
 
+                // ── Gesture config (optional) ─────────────────────────────────
+                val gestureConfigUrl = model.gesture_config_url
+                if (!gestureConfigUrl.isNullOrBlank()) {
+                    val ok = downloadToFile(gestureConfigUrl, File(context.filesDir, "gesture_config.json"))
+                    if (ok) Log.i(TAG, "Gesture config downloaded")
+                    else Log.w(TAG, "Gesture config download failed — motion type detection may be inaccurate")
+                } else {
+                    Log.w(TAG, "No gesture config URL — skipping")
+                }
+
                 // ── Save version only after all required files succeeded ───────
                 prefs(context).edit().putString(KEY_VERSION, remoteVersion).apply()
                 Log.i(TAG, "Model updated to $remoteVersion")

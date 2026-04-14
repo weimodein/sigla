@@ -258,7 +258,35 @@ def train(version_number: str, model_id: int) -> dict:
         print(f"\nWARNING: Motion model NOT trained — found {motion_classes_found} motion gesture class(es), need at least 2.")
         print("Motion classes in dataset:", list(motion_dataset.keys()) if motion_dataset else "none")
 
-    # ── Step 4: Upload static model to Supabase ───────────────
+    # ── Step 4: Generate gesture_config.json ──────────────────
+    # Maps each label to its gesture type so the mobile app knows
+    # which labels are motion gestures vs static gestures.
+    gesture_config = {}
+    for label in static_label_map.values():
+        gesture_config[label] = {
+            "one_handed": True,
+            "normalize_hand": True,
+            "motion": False,
+        }
+    if len(motion_dataset) >= 2:
+        for label in motion_label_map.values():
+            if label in gesture_config:
+                gesture_config[label]["motion"] = True
+            else:
+                gesture_config[label] = {
+                    "one_handed": True,
+                    "normalize_hand": True,
+                    "motion": True,
+                }
+
+    gesture_config_path = os.path.join(version_dir, "gesture_config.json")
+    with open(gesture_config_path, "w") as f:
+        json.dump(gesture_config, f, indent=2)
+    print(f"Gesture config saved: {len(gesture_config)} labels")
+
+    gesture_config_url = upload_model_to_supabase(gesture_config_path, version_number, "gesture_config")
+
+    # ── Step 5: Upload static model to Supabase ───────────────
     static_tflite_url = upload_model_to_supabase(static_tflite_path, version_number, "static")
     static_h5_url     = upload_model_to_supabase(static_h5_path,     version_number, "static_h5")
 
@@ -274,15 +302,16 @@ def train(version_number: str, model_id: int) -> dict:
     print(f"{'='*50}\n")
 
     return {
-        "version_number":    version_number,
-        "model_id":          model_id,
-        "total_classes":     total_classes,
-        "accuracy":          round(float(static_accuracy), 4),
-        "motion_accuracy":   round(float(motion_accuracy), 4) if motion_accuracy else None,
-        "motion_trained":    motion_tflite_url is not None,
-        "motion_classes":    len(motion_dataset),
-        "tflite_url":        static_tflite_url,
-        "h5_url":            static_h5_url,
-        "motion_tflite_url": motion_tflite_url,
-        "motion_h5_url":     motion_h5_url,
+        "version_number":     version_number,
+        "model_id":           model_id,
+        "total_classes":      total_classes,
+        "accuracy":           round(float(static_accuracy), 4),
+        "motion_accuracy":    round(float(motion_accuracy), 4) if motion_accuracy else None,
+        "motion_trained":     motion_tflite_url is not None,
+        "motion_classes":     len(motion_dataset),
+        "tflite_url":         static_tflite_url,
+        "h5_url":             static_h5_url,
+        "motion_tflite_url":  motion_tflite_url,
+        "motion_h5_url":      motion_h5_url,
+        "gesture_config_url": gesture_config_url,
     }

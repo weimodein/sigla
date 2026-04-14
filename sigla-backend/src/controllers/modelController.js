@@ -83,10 +83,14 @@ const getLatestModel = async (req, res) => {
         "id",
         "version_number",
         "tflite_url",
+        "motion_tflite_url",
         "word_bank_url",
         "accuracy",
+        "motion_accuracy",
         "deployed_at",
         "total_classes",
+        "motion_classes",
+        "motion_trained",
       ],
       order: [["deployed_at", "DESC"]],
     });
@@ -110,6 +114,7 @@ const getLatestModel = async (req, res) => {
         motion_tflite_url: base ? `${base}/sign_model_motion.tflite` : null,
         labels_static_url: base ? `${base}/labels_static.json` : null,
         labels_motion_url: base ? `${base}/labels_motion.json` : null,
+        gesture_config_url: base ? `${base}/gesture_config.json` : null,
       },
     });
   } catch (err) {
@@ -199,13 +204,14 @@ const trainModel = async (req, res) => {
     // Update model record with training results from FastAPI
     await modelRecord.update({
       accuracy: trainingResult.accuracy || null,
-      precision: trainingResult.precision || null,
-      recall: trainingResult.recall || null,
-      f1_score: trainingResult.f1_score || null,
       total_classes: trainingResult.total_classes || null,
       tflite_url: trainingResult.tflite_url || null,
       h5_url: trainingResult.h5_url || null,
       motion_tflite_url: trainingResult.motion_tflite_url || null,
+      motion_h5_url: trainingResult.motion_h5_url || null,
+      motion_accuracy: trainingResult.motion_accuracy || null,
+      motion_trained: trainingResult.motion_trained || false,
+      motion_classes: trainingResult.motion_classes || null,
       trained_at: new Date(),
     });
 
@@ -354,6 +360,11 @@ const deployModel = async (req, res) => {
       {
         url: model.motion_tflite_url ? `${baseUrl}/labels_motion.json` : null,
         name: "labels_motion.json",
+        required: false,
+      },
+      {
+        url: `${baseUrl}/gesture_config.json`,
+        name: "gesture_config.json",
         required: false,
       },
     ];

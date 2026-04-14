@@ -217,18 +217,39 @@ class PredictionService(private val context: Context) {
     }
 
     private fun loadGestureConfig(): Map<String, GestureConfig> {
-        if (!context.assets.list("")!!.contains("gesture_config.json")) return emptyMap()
-        val json   = JSONObject(context.assets.open("gesture_config.json").bufferedReader().readText())
-        val result = mutableMapOf<String, GestureConfig>()
-        for (key in json.keys()) {
-            val obj = json.getJSONObject(key)
-            result[key] = GestureConfig(
-                oneHanded     = obj.optBoolean("one_handed", true),
-                normalizeHand = obj.optBoolean("normalize_hand", true),
-                motion        = obj.optBoolean("motion", false)
-            )
+        val text = try {
+            val local = File(context.filesDir, "gesture_config.json")
+            if (local.exists()) {
+                Log.d(TAG, "Loading gesture_config.json from filesDir")
+                local.readText()
+            } else if (context.assets.list("")!!.contains("gesture_config.json")) {
+                Log.d(TAG, "Loading gesture_config.json from assets")
+                context.assets.open("gesture_config.json").bufferedReader().readText()
+            } else {
+                Log.w(TAG, "gesture_config.json not found — motion gesture detection disabled")
+                return emptyMap()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load gesture_config.json: ${e.message}")
+            return emptyMap()
         }
-        return result
+        return try {
+            val json   = JSONObject(text)
+            val result = mutableMapOf<String, GestureConfig>()
+            for (key in json.keys()) {
+                val obj = json.getJSONObject(key)
+                result[key] = GestureConfig(
+                    oneHanded     = obj.optBoolean("one_handed", true),
+                    normalizeHand = obj.optBoolean("normalize_hand", true),
+                    motion        = obj.optBoolean("motion", false)
+                )
+            }
+            Log.i(TAG, "Gesture config loaded: ${result.size} labels")
+            result
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse gesture_config.json: ${e.message}")
+            emptyMap()
+        }
     }
 
     // ── Main entry point ──────────────────────────────────────────────────────

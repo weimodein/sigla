@@ -89,6 +89,7 @@ data class ModelInfo(
     val motion_tflite_url: String? = null,
     val labels_static_url: String? = null,
     val labels_motion_url: String? = null,
+    val gesture_config_url: String? = null,
     val word_bank_url: String? = null,
     val accuracy: Double? = null,
     val checksum: String? = null,

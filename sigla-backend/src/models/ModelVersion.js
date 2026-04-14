@@ -26,7 +26,15 @@ const ModelVersion = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    motion_h5_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     accuracy: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    motion_accuracy: {
       type: DataTypes.FLOAT,
       allowNull: true,
     },
@@ -45,6 +53,15 @@ const ModelVersion = sequelize.define(
     total_classes: {
       type: DataTypes.INTEGER,
       allowNull: true,
+    },
+    motion_classes: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    motion_trained: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
     },
     trained_by: {
       type: DataTypes.INTEGER,
