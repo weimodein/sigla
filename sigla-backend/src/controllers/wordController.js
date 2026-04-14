@@ -15,13 +15,13 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // ── Sample caps ───────────────────────────────────────────────
 // Per-user maximums: how many samples ONE user can contribute to a single word.
-const PER_USER_CAP = { static: 100, motion: 75 };
+const PER_USER_CAP = { static: 50, motion: 50 };
 
 // Default total caps across ALL users (used when admin has not set sample_limit).
-const DEFAULT_SAMPLE_CAP = { static: 100, motion: 150 };
+const DEFAULT_SAMPLE_CAP = { static: 50, motion: 50 };
 
 // Activation threshold: approved samples needed before a word is eligible for deploy.
-const ACTIVATION_THRESHOLD = { static: 100, motion: 150 };
+const ACTIVATION_THRESHOLD = { static: 50, motion: 50 };
 
 // ── Helper: normalize word label ──────────────────────────────
 const normalizeLabel = (label) =>

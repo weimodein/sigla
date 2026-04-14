@@ -31,8 +31,8 @@ private const val TAG = "CollectionActivity"
 
 // Default targets (will be overridden by backend if in suggest mode)
 private const val TARGET_ADMIN = 300
-private const val TARGET_SUGGEST = 100
-private const val TARGET_SUGGEST_MOTION = 75
+private const val TARGET_SUGGEST = 50
+private const val TARGET_SUGGEST_MOTION = 50
 
 // Timing constants
 private const val SEQUENCE_LENGTH = 30
