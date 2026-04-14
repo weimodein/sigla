@@ -305,6 +305,7 @@ const login = async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
+        name: user.name || null,
         role: user.role.name,
         profile_image: user.profile_image,
       },

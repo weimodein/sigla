@@ -302,7 +302,7 @@ class AuthDialogFragment : DialogFragment() {
                 if (response.isSuccessful && response.body()?.token != null) {
                     val body = response.body()!!
                     val user = body.user!!
-                    session.saveUser(user.id, user.username, user.email, user.username, body.token!!)
+                    session.saveUser(user.id, user.username, user.email, user.name ?: user.username, body.token!!)
                     onSignedIn?.invoke()
                     dismiss()
                 } else {
@@ -549,7 +549,7 @@ class AuthDialogFragment : DialogFragment() {
                     // If the response includes a token (auto-login after set password)
                     if (body?.token != null && body.user != null) {
                         val user = body.user!!
-                        session.saveUser(user.id, user.username, user.email, user.username, body.token)
+                        session.saveUser(user.id, user.username, user.email, user.name ?: user.username, body.token)
                         onSignedIn?.invoke()
                         dismiss()
                     } else {
