@@ -5,6 +5,7 @@ const { connectDB } = require("./src/config/db.js");
 // module dependencies
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 const cron = require("node-cron");
 const path = require("path");
 const {
@@ -21,13 +22,39 @@ const mlRoutes = require("./src/routes/mlRoutes.js"); // ML service routes (inte
 
 // application setup
 const app = express();
-app.use(cors());
+
+// CORS — restrict to known origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : ["http://localhost:5173"];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
+    credentials: true,
+  }),
+);
+
+// Rate limiting — auth endpoints only (OTP brute-force / email flood protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,                   // max 20 requests per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again later." },
+});
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // route setup
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/words", wordRoutes);
 app.use("/api/models", modelRoutes);

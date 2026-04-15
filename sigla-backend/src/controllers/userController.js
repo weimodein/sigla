@@ -554,11 +554,11 @@ const getUserRegistrations = async (req, res) => {
       `SELECT DATE_TRUNC(:trunc, created_at) AS date, COUNT(*) AS count
        FROM users
        WHERE role_id = 3
-         AND created_at >= NOW() - INTERVAL '${interval}'
+         AND created_at >= NOW() - INTERVAL :interval
        GROUP BY DATE_TRUNC(:trunc, created_at)
        ORDER BY date ASC`,
       {
-        replacements: { trunc },
+        replacements: { trunc, interval },
         type: sequelize.QueryTypes.SELECT,
       },
     );

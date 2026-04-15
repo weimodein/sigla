@@ -22,11 +22,13 @@ android {
             buildConfigField("String", "BASE_URL", "\"http://10.68.18.78:8080/api/\"")
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // TODO: Replace with your actual production server URL before releasing
             buildConfigField("String", "BASE_URL", "\"https://your-production-server.com/api/\"")
         }
     }

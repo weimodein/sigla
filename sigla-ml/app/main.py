@@ -1,7 +1,8 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from app.routers import model   
+from app.routers import model
 
 load_dotenv()
 
@@ -11,12 +12,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS — allow Node.js backend to call this service
+# CORS — restrict to the Node.js backend only (not a browser-facing service)
+_backend_url = os.getenv("BACKEND_URL", "http://localhost:3000")
+_allowed_origin = _backend_url.split("/api")[0]  # strip /api path if present
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[_allowed_origin],
+    allow_methods=["POST", "GET"],
+    allow_headers=["X-API-Key", "Content-Type"],
 )
 
 # ── Include routers ───────────────────────────────────────────

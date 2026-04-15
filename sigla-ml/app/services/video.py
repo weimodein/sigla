@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import httpx
 import cv2
@@ -29,12 +30,18 @@ def get_approved_samples_for_word(word_id: int) -> list:
         return response.json()  # List of {file_url, ...}
 
 
+def sanitize_label(label: str) -> str:
+    """Strip path separators and unsafe characters from a word label."""
+    return re.sub(r"[^\w\-]", "_", label)
+
+
 def generate_word_video(word_id: int, word_label: str) -> str:
     """
     Generate a short demonstration video from approved gesture images.
     Returns public URL of the uploaded video.
     """
-    print(f"Generating video for word: {word_label} (ID: {word_id})")
+    safe_label = sanitize_label(word_label)
+    print(f"Generating video for word: {safe_label} (ID: {word_id})")
 
     # 1. Get approved sample image URLs
     samples = get_approved_samples_for_word(word_id)
@@ -68,7 +75,7 @@ def generate_word_video(word_id: int, word_label: str) -> str:
         raise ValueError("Could not read first image")
     h, w, _ = first_img.shape
 
-    video_path = os.path.join(temp_dir, f"{word_label}.mp4")
+    video_path = os.path.join(temp_dir, f"{safe_label}.mp4")
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(video_path, fourcc, 1.0, (w, h))  # 1 fps
 
@@ -79,7 +86,7 @@ def generate_word_video(word_id: int, word_label: str) -> str:
     out.release()
 
     # 4. Upload video to Supabase
-    storage_path = f"word_videos/{word_id}_{word_label}.mp4"
+    storage_path = f"word_videos/{word_id}_{safe_label}.mp4"
     with open(video_path, "rb") as f:
         video_bytes = f.read()
     video_url = upload_file(BUCKET_MODELS, storage_path, video_bytes, "video/mp4")
