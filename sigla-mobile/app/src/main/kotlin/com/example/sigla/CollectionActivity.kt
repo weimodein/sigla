@@ -327,7 +327,7 @@ class CollectionActivity : AppCompatActivity() {
 
     private fun mirrorHandX(features: FloatArray): FloatArray {
         val mirrored = features.copyOf()
-        for (i in 0 until 21) {
+        for (i in 0 until 42) {  // 2 hands × 21 landmarks
             mirrored[i * 3] = 1.0f - mirrored[i * 3]
         }
         return mirrored

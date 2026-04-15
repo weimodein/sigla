@@ -646,7 +646,7 @@ const uploadSamples = async (req, res) => {
             file_url: file_url,
             landmarks: null,
             sequence: seq,  // This is one complete sequence (array of frames)
-            sample_count: seq.length,  // Number of frames in this sequence
+            sample_count: 1,  // One sequence = one sample
             status: "pending",
             is_validated: true,
           };
@@ -669,7 +669,7 @@ const uploadSamples = async (req, res) => {
           file_url: file_url,
           landmarks: null,
           sequence: sequence,  // One complete sequence
-          sample_count: sequence.length,
+          sample_count: 1,  // One sequence = one sample
           status: "pending",
           is_validated: true,
         };

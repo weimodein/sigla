@@ -91,7 +91,11 @@ class MainActivity : AppCompatActivity() {
 
         predictor  = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
-            predictor.processFrame(result.features, result.handsDetected)
+            // Mirror feature x-coordinates for front camera to match training data orientation.
+            // CollectionActivity flips both the bitmap AND the feature x-coords (double mirror =
+            // natural coords). Prediction must do the same so the model sees consistent input.
+            val features = if (isFrontCamera) mirrorHandX(result.features) else result.features
+            predictor.processFrame(features, result.handsDetected)
             runOnUiThread {
                 binding.overlayView.setLandmarks(
                     result.landmarks,
@@ -476,6 +480,14 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Camera bind failed: ${e.message}")
         }
+    }
+
+    private fun mirrorHandX(features: FloatArray): FloatArray {
+        val mirrored = features.copyOf()
+        for (i in 0 until 42) {  // 2 hands × 21 landmarks
+            mirrored[i * 3] = 1.0f - mirrored[i * 3]
+        }
+        return mirrored
     }
 
     private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
