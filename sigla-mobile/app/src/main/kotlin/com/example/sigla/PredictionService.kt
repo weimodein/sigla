@@ -17,7 +17,7 @@ private const val MIN_MOTION_FRAMES      = 8     // start running motion inferen
 private const val MOTION_SLIDE_INTERVAL  = 2     // re-run motion every N frames
 private const val MOTION_EARLY_CONF      = 0.30f // requires very strong J/Z signal before early exit
 private const val MOTION_EARLY_STREAK    = 4     // more consecutive hits needed to fire early
-private const val MOTION_VELOCITY_STREAK = 10    // more sustained movement required before motion probe runs
+private const val MOTION_VELOCITY_STREAK = 5     // consecutive frames above velocity threshold before motion probe runs
 private const val STATIC_THRESHOLD       = 0.50f
 private const val MOTION_THRESHOLD       = 0.10f // raised — motion must win more decisively in dual-race
 private const val VELOCITY_WINDOW        = 8
@@ -309,8 +309,9 @@ class PredictionService(private val context: Context) {
             val conflictsWithMotion = MOTION_CONFLICTS.containsKey(label)
 
             if (!isMotionGesture && conf >= EARLY_EXIT_THRESHOLD) {
-                // Suppress only conflict labels when hand is moving — all others fire normally
-                if (conflictsWithMotion && velocity >= MOTION_VELOCITY_THRESH) {
+                // Suppress ALL static early-exits when hand is moving — a motion gesture
+                // may be in progress. Only allow static to fire when hand is still.
+                if (velocity >= MOTION_VELOCITY_THRESH) {
                     earlyExitStreak = 0
                     earlyExitLabel  = -1
                 } else {
