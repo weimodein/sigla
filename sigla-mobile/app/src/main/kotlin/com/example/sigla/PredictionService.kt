@@ -15,11 +15,11 @@ private const val TAG                    = "PredictionService"
 private const val SEQUENCE_LENGTH        = 30    // model input size
 private const val MIN_MOTION_FRAMES      = 8     // start running motion inference early
 private const val MOTION_SLIDE_INTERVAL  = 2     // re-run motion every N frames
-private const val MOTION_EARLY_CONF      = 0.92f // requires very strong J/Z signal before early exit
+private const val MOTION_EARLY_CONF      = 0.30f // requires very strong J/Z signal before early exit
 private const val MOTION_EARLY_STREAK    = 4     // more consecutive hits needed to fire early
 private const val MOTION_VELOCITY_STREAK = 10    // more sustained movement required before motion probe runs
 private const val STATIC_THRESHOLD       = 0.50f
-private const val MOTION_THRESHOLD       = 0.50f // raised — motion must win more decisively in dual-race
+private const val MOTION_THRESHOLD       = 0.10f // raised — motion must win more decisively in dual-race
 private const val VELOCITY_WINDOW        = 8
 private const val MOTION_VELOCITY_THRESH = 0.010f // raised — small repositioning movements ignored
 private const val EARLY_EXIT_STREAK      = 4
@@ -426,30 +426,30 @@ class PredictionService(private val context: Context) {
 
     // ── Static inference ──────────────────────────────────────────────────────
 
-    // Average softmax over recent buffer frames — suppresses per-frame noise
-    // so early-exit fires more confidently and sooner
+    // Average input frames first, then run inference once.
+    // Matches training distribution: CollectionActivity saves a 5-frame average
+    // as a single sample, so the model expects averaged/smoothed input — not raw frames.
     private fun runAveragedStaticInference(): Pair<Int, Float>? {
         val interp = staticInterp ?: return null
         if (staticLabels.isEmpty()) return null
         val recent = frameBuffer.takeLast(STATIC_AVG_FRAMES)
         if (recent.isEmpty()) return null
 
-        val sumProbs = FloatArray(staticLabels.size)
-        var count    = 0
+        val avgInput = FloatArray(126)
         for (frame in recent) {
-            val input  = Array(1) { frame }
-            val output = Array(1) { FloatArray(staticLabels.size) }
-            try {
-                interp.run(input, output)
-                for (i in output[0].indices) sumProbs[i] += output[0][i]
-                count++
-            } catch (_: Exception) {}
+            for (i in frame.indices) avgInput[i] += frame[i]
         }
-        if (count == 0) return null
-        val countF = count.toFloat()
-        for (i in sumProbs.indices) sumProbs[i] /= countF
-        val idx = sumProbs.indices.maxByOrNull { sumProbs[it] } ?: return null
-        return Pair(idx, sumProbs[idx])
+        val n = recent.size.toFloat()
+        for (i in avgInput.indices) avgInput[i] /= n
+
+        val input  = Array(1) { avgInput }
+        val output = Array(1) { FloatArray(staticLabels.size) }
+        return try {
+            interp.run(input, output)
+            val probs = output[0]
+            val idx   = probs.indices.maxByOrNull { probs[it] } ?: return null
+            Pair(idx, probs[idx])
+        } catch (_: Exception) { null }
     }
 
     private fun getSmoothedStaticResult(): Pair<Int, Float>? {
@@ -457,22 +457,21 @@ class PredictionService(private val context: Context) {
         val recentFrames = frameBuffer.takeLast(STATIC_SMOOTH_FRAMES)
         if (recentFrames.isEmpty()) return null
 
-        val sumProbs = FloatArray(staticLabels.size)
-        var count    = 0
+        val avgInput = FloatArray(126)
         for (frame in recentFrames) {
-            val input  = Array(1) { frame }
-            val output = Array(1) { FloatArray(staticLabels.size) }
-            try {
-                interp.run(input, output)
-                for (i in output[0].indices) sumProbs[i] += output[0][i]
-                count++
-            } catch (_: Exception) {}
+            for (i in frame.indices) avgInput[i] += frame[i]
         }
-        if (count == 0) return null
-        val countF = count.toFloat()
-        for (i in sumProbs.indices) sumProbs[i] /= countF
-        val idx = sumProbs.indices.maxByOrNull { sumProbs[it] } ?: return null
-        return Pair(idx, sumProbs[idx])
+        val n = recentFrames.size.toFloat()
+        for (i in avgInput.indices) avgInput[i] /= n
+
+        val input  = Array(1) { avgInput }
+        val output = Array(1) { FloatArray(staticLabels.size) }
+        return try {
+            interp.run(input, output)
+            val probs = output[0]
+            val idx   = probs.indices.maxByOrNull { probs[it] } ?: return null
+            Pair(idx, probs[idx])
+        } catch (_: Exception) { null }
     }
 
     // ── Motion inference ──────────────────────────────────────────────────────

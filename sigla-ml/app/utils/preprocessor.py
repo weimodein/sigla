@@ -110,12 +110,11 @@ def prepare_motion_dataset(dataset: dict):
             if not sequence:
                 continue
 
-            # Pad or trim to SEQUENCE_LENGTH
-            if len(sequence) < SEQUENCE_LENGTH:
-                # Pad by repeating last frame
-                while len(sequence) < SEQUENCE_LENGTH:
-                    sequence.append(sequence[-1])
-            elif len(sequence) > SEQUENCE_LENGTH:
+            # Pad or trim to SEQUENCE_LENGTH (copy first to avoid mutating source data)
+            sequence = list(sequence)
+            while len(sequence) < SEQUENCE_LENGTH:
+                sequence.append(sequence[-1])
+            if len(sequence) > SEQUENCE_LENGTH:
                 sequence = sequence[:SEQUENCE_LENGTH]
 
             if len(sequence[0]) != FEATURE_SIZE:
