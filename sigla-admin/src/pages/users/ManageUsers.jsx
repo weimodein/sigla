@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   getAllUsers,
   getDeactivatedUsers,
@@ -262,38 +262,60 @@ const WarningBadge = ({ count }) => {
 
 // ── Modal ────────────────────────────────────────────────────
 const Modal = ({ title, onClose, children }) => {
+  const [closing, setClosing] = useState(false);
+  const panelRef = useRef(null);
+
+  const handleClose = useCallback(() => { if (!closing) setClosing(true); }, [closing]);
+
   useEffect(() => {
-    const h = (e) => e.key === "Escape" && onClose();
+    const h = (e) => { if (e.key === "Escape") handleClose(); };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, [handleClose]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
-      style={{ background: "rgba(0,0,0,0.35)" }}
+      className={`fixed inset-0 flex items-center justify-center px-4 ${closing ? "modal-backdrop-out" : "modal-backdrop-in"}`}
+      style={{
+        zIndex: 1100,
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
-        style={{ background: C.surface }}
+        ref={panelRef}
+        className={`rounded-2xl w-full max-w-md ${closing ? "modal-panel-out" : "modal-panel-in"}`}
+        style={{
+          background: C.surface,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
+        }}
+        onAnimationEnd={(e) => { if (closing && e.target === panelRef.current) onClose(); }}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold" style={{ color: C.text }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #f0f0f0" }}>
+          <h3 className="text-base font-semibold tracking-tight" style={{ color: C.text }}>
             {title}
           </h3>
           <button
-            onClick={onClose}
-            className="p-1 rounded-lg transition hover:bg-gray-100"
+            onClick={handleClose}
+            className="flex items-center justify-center w-7 h-7 rounded-lg transition hover:bg-gray-100"
             style={{ color: C.muted }}
             aria-label="Close dialog"
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         </div>
-        {children}
+        <div className="px-6 py-5">{children}</div>
       </div>
     </div>
   );

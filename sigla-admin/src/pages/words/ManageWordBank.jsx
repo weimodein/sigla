@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   getAllWords,
@@ -89,21 +89,59 @@ const Badge = ({ value }) => {
   );
 };
 
-const Modal = ({ title, onClose, children, wide = false }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4 py-6 overflow-y-auto">
+const Modal = ({ title, onClose, children, wide = false }) => {
+  const [closing, setClosing] = useState(false);
+  const panelRef = useRef(null);
+
+  const handleClose = useCallback(() => { if (!closing) setClosing(true); }, [closing]);
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === "Escape") handleClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [handleClose]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  return (
     <div
-      className={`bg-white rounded-2xl shadow-xl w-full ${wide ? "max-w-4xl" : "max-w-lg"} p-6 my-auto`}
+      className={`fixed inset-0 flex items-center justify-center px-4 py-6 overflow-y-auto ${closing ? "modal-backdrop-out" : "modal-backdrop-in"}`}
+      style={{
+        zIndex: 1100,
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-          <X size={20} />
-        </button>
+      <div
+        ref={panelRef}
+        className={`bg-white rounded-2xl w-full my-auto ${wide ? "max-w-4xl" : "max-w-lg"} ${closing ? "modal-panel-out" : "modal-panel-in"}`}
+        style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}
+        onAnimationEnd={(e) => { if (closing && e.target === panelRef.current) onClose(); }}
+      >
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #f0f0f0" }}>
+          <h3 className="text-base font-semibold text-gray-800 tracking-tight">{title}</h3>
+          <button
+            onClick={handleClose}
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            aria-label="Close dialog"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
       </div>
-      {children}
     </div>
-  </div>
-);
+  );
+};
 
 // ── Main Component ────────────────────────────────────────────
 const ManageWordBank = () => {

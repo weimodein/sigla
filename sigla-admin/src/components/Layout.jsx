@@ -1,14 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar.jsx";
+
+const SIDEBAR_EXPANDED  = "280px";
+const SIDEBAR_COLLAPSED = "70px";
 
 const Layout = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Keep CSS variable in sync so modals can centre themselves within the content area
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-width", SIDEBAR_EXPANDED);
+  }, []);
+
   const handleToggle = (collapsed) => {
-    // Add class to body before transition starts
     document.body.classList.add("sidebar-transitioning");
     setSidebarCollapsed(collapsed);
-    // Remove class after transition ends (250ms)
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED
+    );
     setTimeout(() => {
       document.body.classList.remove("sidebar-transitioning");
     }, 250);
