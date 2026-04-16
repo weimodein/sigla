@@ -23,6 +23,7 @@ import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.launch
 import android.widget.ImageView
 import androidx.core.view.isVisible
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class SuggestWordActivity : AppCompatActivity() {
 
@@ -385,7 +386,7 @@ class SuggestWordActivity : AppCompatActivity() {
             btnStartCollecting.alpha = if (btnStartCollecting.isEnabled) 1f else 0.45f
         }
 
-        btnStartCollecting.setOnClickListener { attemptSubmit() }
+        btnStartCollecting.setOnClickListener { showReviewDialog() }
         
         // Enable/disable based on field changes
         etWord.addTextChangedListener(object : android.text.TextWatcher {
@@ -411,6 +412,35 @@ class SuggestWordActivity : AppCompatActivity() {
     private fun areFieldsValid(): Boolean {
         return etWord.text?.toString()?.trim()?.isNotEmpty() == true &&
                etDescription.text?.toString()?.trim()?.isNotEmpty() == true
+    }
+
+    // ── Review Dialog ─────────────────────────────────────────────────────────
+    private fun showReviewDialog() {
+        val word = etWord.text?.toString()?.trim() ?: ""
+        val description = etDescription.text?.toString()?.trim() ?: ""
+        val handsLabel = if (isTwoHands) "Two Hands" else "One Hand"
+        val gestureLabel = if (isMotion) "Motion" else "Static"
+
+        val message = """
+            Please review your submission before proceeding:
+
+            Word:  $word
+            Description:  $description
+            Hand(s):  $handsLabel
+            Gesture Type:  $gestureLabel
+        """.trimIndent()
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Review Your Submission")
+            .setMessage(message)
+            .setPositiveButton("Confirm & Submit") { dialog, _ ->
+                dialog.dismiss()
+                attemptSubmit()
+            }
+            .setNegativeButton("Edit") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
     }
 
     // ── Submission to Backend ─────────────────────────────────────────────────
