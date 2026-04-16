@@ -402,34 +402,91 @@ class WordBankActivity : AppCompatActivity() {
         }
 
         // Video/Media setup
-        val videoView = view.findViewById<VideoView>(R.id.videoDemo)
-        val ivThumbnail = view.findViewById<ImageView>(R.id.ivThumbnail)
+        val videoView        = view.findViewById<VideoView>(R.id.videoDemo)
+        val ivThumbnail      = view.findViewById<ImageView>(R.id.ivThumbnail)
+        val noMediaPlaceholder = view.findViewById<android.widget.LinearLayout>(R.id.noMediaPlaceholder)
+        val progressVideo    = view.findViewById<ProgressBar>(R.id.progressVideo)
+        val playOverlay      = view.findViewById<android.widget.LinearLayout>(R.id.playOverlay)
 
         val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
-        val localThumb = ModelUpdateManager.getLocalThumb(this, word.id)
+        val localThumb    = ModelUpdateManager.getLocalThumb(this, word.id)
         val thumbSource: Any? = localThumb ?: resolvedThumb
+        val resolvedVideo = ApiClient.resolveUrl(word.video_url)
 
-        // Show thumbnail if available
-        if (thumbSource != null) {
-            ivThumbnail.visibility = View.VISIBLE
-            Glide.with(this)
-                .load(thumbSource)
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .centerCrop()
-                .into(ivThumbnail)
-        } else {
-            ivThumbnail.visibility = View.GONE
+        when {
+            // Motion gesture with a video URL → play video
+            word.gesture_type == "motion" && !resolvedVideo.isNullOrBlank() -> {
+                noMediaPlaceholder.visibility = View.GONE
+                ivThumbnail.visibility        = View.GONE
+                videoView.visibility          = View.VISIBLE
+                progressVideo.visibility      = View.VISIBLE
+
+                videoView.setVideoPath(resolvedVideo)
+                videoView.setOnPreparedListener { mp ->
+                    progressVideo.visibility = View.GONE
+                    mp.isLooping = true
+                    mp.start()
+                }
+                videoView.setOnErrorListener { _, _, _ ->
+                    progressVideo.visibility  = View.GONE
+                    videoView.visibility      = View.GONE
+                    noMediaPlaceholder.visibility = View.VISIBLE
+                    true
+                }
+                // Tap to play/pause
+                videoView.setOnClickListener {
+                    if (videoView.isPlaying) {
+                        videoView.pause()
+                        playOverlay.visibility = View.VISIBLE
+                    } else {
+                        videoView.start()
+                        playOverlay.visibility = View.GONE
+                    }
+                }
+                playOverlay.setOnClickListener {
+                    videoView.start()
+                    playOverlay.visibility = View.GONE
+                }
+            }
+
+            // Static gesture with a thumbnail → show image
+            thumbSource != null -> {
+                noMediaPlaceholder.visibility = View.GONE
+                videoView.visibility          = View.GONE
+                ivThumbnail.visibility        = View.VISIBLE
+                Glide.with(this)
+                    .load(thumbSource)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .centerCrop()
+                    .into(ivThumbnail)
+            }
+
+            // Nothing set yet → show placeholder
+            else -> {
+                ivThumbnail.visibility    = View.GONE
+                videoView.visibility      = View.GONE
+                noMediaPlaceholder.visibility = View.VISIBLE
+            }
         }
 
-        if (!word.video_url.isNullOrBlank()) {
-            ivThumbnail.setOnClickListener {
-                Toast.makeText(this, "Video demo available", Toast.LENGTH_SHORT).show()
-            }
+        // Update media caption
+        val tvMediaCaption = view.findViewById<TextView>(R.id.tvMediaCaption)
+        tvMediaCaption.text = when {
+            word.gesture_type == "motion" && !resolvedVideo.isNullOrBlank() ->
+                "Tap to play · pause · Motion gesture demonstration"
+            thumbSource != null ->
+                "Sample image of how to form this gesture"
+            else ->
+                "No demonstration available yet"
         }
 
         view.findViewById<MaterialButton>(R.id.btnAddToCategory).setOnClickListener {
             showAddToCategoryDialog(word)
             dialog.dismiss()
+        }
+
+        dialog.setOnDismissListener {
+            videoView.stopPlayback()
         }
 
         dialog.show()

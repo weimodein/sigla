@@ -1013,7 +1013,7 @@ const ManageWordBank = () => {
                   />
                   <div>
                     <p className="text-sm font-semibold text-green-800">Current Word Bank Image</p>
-                    <p className="text-xs text-green-600">Hover a sample below and click "Use" to change it.</p>
+                    <p className="text-xs text-green-600">Hover an approved sample below and click <strong>Use</strong>, or click <strong>Set as Word Bank Image</strong> to change it.</p>
                   </div>
                 </div>
               )
@@ -1507,18 +1507,38 @@ const ManageWordBank = () => {
                               })}
                             </div>
                           ) : frameUrls.length === 1 ? (
-                            <div className="p-2">
-                              <div className="w-16 h-16 relative group rounded-lg overflow-hidden">
+                            <div className="p-2 flex flex-col gap-1.5">
+                              <div className="w-20 h-20 relative group rounded-lg overflow-hidden border border-gray-200">
                                 <img
                                   src={`${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`}
                                   alt={`sample-${sample.id}`}
-                                  className="w-full h-full object-cover border border-gray-200 rounded"
+                                  className="w-full h-full object-cover"
                                   onError={(e) => {
                                     e.target.onerror = null;
-                                    e.target.src = "https://via.placeholder.com/64?text=No+Image";
+                                    e.target.src = "https://via.placeholder.com/80?text=No+Image";
                                   }}
                                 />
+                                {sample.status === "approved" && (
+                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => handleSetThumbnail(galleryModal, `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`)}
+                                      disabled={actionLoading}
+                                      className="text-white text-[9px] font-bold bg-green-600 hover:bg-green-700 px-2 py-1 rounded leading-tight"
+                                    >
+                                      Use
+                                    </button>
+                                  </div>
+                                )}
                               </div>
+                              {sample.status === "approved" && (
+                                <button
+                                  onClick={() => handleSetThumbnail(galleryModal, `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`)}
+                                  disabled={actionLoading}
+                                  className="text-[10px] bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-md whitespace-nowrap disabled:opacity-50"
+                                >
+                                  Set as Word Bank Image
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <div className="w-16 h-16 m-2 flex flex-col items-center justify-center bg-indigo-50 rounded-lg border-2 border-gray-200">
