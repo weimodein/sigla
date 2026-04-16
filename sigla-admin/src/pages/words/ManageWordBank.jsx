@@ -815,7 +815,7 @@ const ManageWordBank = () => {
                         {word.approved_sample_count || 0}/{word.total_samples || 0} approved
                       </span>
                       {(() => {
-                        const defaultCap = word.gesture_type === "motion" ? 150 : 100;
+                        const defaultCap = word.gesture_type === "motion" ? 50 : 50;
                         const limit = word.sample_limit != null ? word.sample_limit : defaultCap;
                         const total = word.total_samples || 0;
                         const reached = total >= limit;
@@ -1689,7 +1689,7 @@ const ManageWordBank = () => {
               Select gesture images from your device. The system will automatically extract hand landmark
               coordinates from each image using MediaPipe. Uploaded samples are automatically marked as
               approved and count toward the activation threshold
-              ({uploadModal.gesture_type === "motion" ? 150 : 100} samples required).
+              (50 samples required).
             </p>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Gesture Images *</label>
@@ -1800,11 +1800,11 @@ const ManageWordBank = () => {
                 min="1"
                 value={editForm.sample_limit}
                 onChange={(e) => setEditForm({ ...editForm, sample_limit: e.target.value })}
-                placeholder={`Default: ${editForm.gesture_type === "motion" ? 150 : 100}`}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                placeholder={`Default: 50`}
+className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Total gesture samples to collect across all users. Each user can contribute up to {editForm.gesture_type === "motion" ? "75 (motion)" : "100 (static)"} samples individually. Leave blank to use the default ({editForm.gesture_type === "motion" ? "150 for motion" : "100 for static"}).
+                Total gesture samples to collect across all users. Each user can contribute up to 50 samples individually. Leave blank to use the default (50).
               </p>
             </div>
             <div className="flex gap-2 pt-2">

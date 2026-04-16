@@ -411,6 +411,19 @@ const deleteUser = async (req, res) => {
       );
     }
 
+    // Remove pending and rejected gesture samples submitted by this user.
+    // Approved samples are retained (nullify submitted_by) to preserve the dataset.
+    await GestureSample.destroy({
+      where: {
+        submitted_by: user.id,
+        status: { [Op.in]: ["pending", "rejected"] },
+      },
+    });
+    await GestureSample.update(
+      { submitted_by: null },
+      { where: { submitted_by: user.id, status: "approved" } },
+    );
+
     // Soft delete — preserves logs and gesture sample references
     await user.update({ status: "deleted" });
 
