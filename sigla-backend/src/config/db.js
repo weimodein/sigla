@@ -8,7 +8,7 @@ const sequelize = new Sequelize(process.env.PG_URI, {
 const connectDB = async () => {
   try {
     await sequelize.authenticate();
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
 
     console.log("Database connected successfully...");
   } catch (err) {
