@@ -63,13 +63,13 @@ const ProfileField = ({ icon: Icon, label, value }) => (
   >
     <div
       style={{
-        width: "#f3f4f6",
+        width: 36,
         padding: "8px",
         borderRadius: "8px",
         background: "#f3f4f6",
         color: C.muted,
         display: "flex",
-        minWidth: "#f3f4f6",
+        minWidth: 36,
       }}
     >
       <Icon size={16} />
@@ -220,6 +220,8 @@ const AdministratorAccount = () => {
   };
 
   // ── JSX ───────────────────────────────────────────────────
+  if (!user) return null;
+
   return (
     <div>
       {/* Header */}

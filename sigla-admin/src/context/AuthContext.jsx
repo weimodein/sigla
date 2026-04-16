@@ -7,19 +7,19 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ── On app load: restore session from localStorage ────────
+  // ── On app load: restore session from sessionStorage ────────
   useEffect(() => {
     const restoreSession = async () => {
-      const token = localStorage.getItem("token");
-      const saved = localStorage.getItem("user");
+      const token = sessionStorage.getItem("token");
+      const saved = sessionStorage.getItem("user");
 
       if (token && saved) {
         try {
           const data = await getMe();
           setUser(data.user);
         } catch (err) {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("user");
           setUser(null);
         }
       }
@@ -39,8 +39,8 @@ export const AuthProvider = ({ children }) => {
       throw new Error("Access denied. Admin accounts only.");
     }
 
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    sessionStorage.setItem("token", data.token);
+    sessionStorage.setItem("user", JSON.stringify(data.user));
     setUser(data.user);
 
     return data;
@@ -48,8 +48,8 @@ export const AuthProvider = ({ children }) => {
 
   // ── Logout ────────────────────────────────────────────────
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     setUser(null);
   };
 
