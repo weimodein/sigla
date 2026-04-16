@@ -1039,6 +1039,36 @@ const rejectSubmission = async (req, res) => {
   }
 };
 
+// ── PATCH /api/words/:id/activate ────────────────────────────
+const activateWord = async (req, res) => {
+  try {
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) {
+      return res.status(404).json({ message: "Word not found" });
+    }
+
+    const cap = word.sample_cap != null
+      ? word.sample_cap
+      : word.gesture_type === "motion" ? 150 : 100;
+
+    if ((word.approved_sample_count || 0) < cap) {
+      return res.status(400).json({
+        message: `Cannot activate: needs ${cap} approved samples but only has ${word.approved_sample_count || 0}.`,
+      });
+    }
+
+    await word.update({ is_active: true });
+
+    const wb = await WordBank.findOne({ where: { word_id: word.id } });
+    if (wb) await wb.update({ is_active: true });
+
+    return res.status(200).json({ message: "Word activated successfully." });
+  } catch (err) {
+    console.error("Activate word error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ── PATCH /api/words/:id/lock ─────────────────────────────────
 const lockWord = async (req, res) => {
   try {
@@ -1838,6 +1868,7 @@ module.exports = {
   rejectAllSamplesForWord,
   approveSubmission,
   rejectSubmission,
+  activateWord,
   lockWord,
   unlockWord,
   getUserSampleCountForWord,

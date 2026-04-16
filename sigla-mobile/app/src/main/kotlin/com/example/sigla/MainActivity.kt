@@ -147,10 +147,23 @@ class MainActivity : AppCompatActivity() {
 
     // ── Backend Initialization ────────────────────────────────────────────────
 
+    private fun applyTtsVoice() {
+        val preferFemale = appSettings.voiceType == AppSettings.VOICE_FEMALE
+        val voices = tts?.voices ?: return
+        val match = voices
+            .filter { it.locale.language == "en" && !it.isNetworkConnectionRequired }
+            .firstOrNull { v ->
+                val n = v.name.lowercase()
+                if (preferFemale) n.contains("female") else n.contains("male") && !n.contains("female")
+            }
+        if (match != null) tts?.voice = match
+    }
+
     private fun initTts() {
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.ENGLISH
+                applyTtsVoice()
                 isTtsReady = true
             }
         }
@@ -158,6 +171,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun speak(text: String) {
         if (!isTtsReady) return
+        applyTtsVoice()
         val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val targetVol = (appSettings.volume / 100.0 * maxVol).toInt()

@@ -26,6 +26,7 @@ const {
   rejectAllSamplesForWord,
   approveSubmission,
   rejectSubmission,
+  activateWord,
   lockWord,
   unlockWord,
   getUserSampleCountForWord,
@@ -130,6 +131,7 @@ router.patch(
   roleMiddleware("admin"),
   rejectSubmission,
 );
+router.patch("/:id/activate", roleMiddleware("admin"), activateWord);
 router.patch("/:id/lock", roleMiddleware("admin"), lockWord);
 router.patch("/:id/unlock", roleMiddleware("admin"), unlockWord);
 
