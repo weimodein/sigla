@@ -659,7 +659,7 @@ const uploadSamples = async (req, res) => {
         // images[idx] should be an array of base64 strings for that sequence's frames
         console.log("Processing MOTION BATCH with", sequence.length, "sequences");
 
-        const records = sequence.map((seq, idx) => {
+        const records = await Promise.all(sequence.map(async (seq, idx) => {
           // seq is one complete sequence: array of frames (each frame is 126 floats)
           const frameImages = hasImages && Array.isArray(images[idx]) ? images[idx] : [];
           console.log(`  Sequence ${idx}: ${seq.length} frames, ${frameImages.length} images`);
@@ -678,7 +678,7 @@ const uploadSamples = async (req, res) => {
             status: "pending",
             is_validated: true,
           };
-        });
+        }));
 
         console.log("Creating", records.length, "motion sample records");
         await GestureSample.bulkCreate(records);
