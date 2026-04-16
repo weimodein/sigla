@@ -17,7 +17,7 @@ private const val MIN_MOTION_FRAMES      = 8     // start running motion inferen
 private const val MOTION_SLIDE_INTERVAL  = 2     // re-run motion every N frames
 private const val MOTION_EARLY_CONF      = 0.70f // motion must be confident before early exit fires
 private const val MOTION_EARLY_STREAK    = 8     // more consecutive hits needed to fire early
-private const val MOTION_VELOCITY_STREAK= 14    // more sustained frames of movement required before probing motion
+private const val MOTION_VELOCITY_STREAK= 16    // more sustained frames of movement required before probing motion
 private const val STATIC_THRESHOLD       = 0.50f
 private const val MOTION_THRESHOLD       = 0.65f // motion must win more decisively in dual-race
 private const val VELOCITY_WINDOW        = 8
@@ -113,6 +113,7 @@ class PredictionService(private val context: Context) {
     private var lastDetectionTime        = 0L
     private var lastMotionDetectionTime  = 0L  // tracks when last motion gesture fired — gates re-arm
     private var sustainedMotionFrames    = 0   // consecutive frames above velocity threshold
+    private var maxSustainedMotionFrames = 0   // peak streak seen in the current buffer window
 
     // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -288,6 +289,8 @@ class PredictionService(private val context: Context) {
         // Track consecutive frames of sustained movement
         if (velocity >= MOTION_VELOCITY_THRESH) {
             sustainedMotionFrames++
+            if (sustainedMotionFrames > maxSustainedMotionFrames)
+                maxSustainedMotionFrames = sustainedMotionFrames
         } else {
             sustainedMotionFrames = 0
         }
@@ -404,9 +407,12 @@ class PredictionService(private val context: Context) {
             val (mIdx, mConf)   = motionResult
             val mLabel          = motionLabels.getOrNull(mIdx) ?: return
             val isMotionGesture = gestureConfig[mLabel]?.motion == true
-            // Motion only wins if buffer mean velocity confirms real movement
+            // Motion only wins if the hand was moving continuously for long enough —
+            // brief shakes (e.g. repositioning during a static gesture) are filtered out
+            // by requiring the peak sustained streak to reach MIN_MOTION_FRAMES.
             if (isMotionGesture && mConf >= MOTION_THRESHOLD
-                && meanVel >= MOTION_VELOCITY_THRESH) {
+                && meanVel >= MOTION_VELOCITY_THRESH
+                && maxSustainedMotionFrames >= MIN_MOTION_FRAMES) {
                 lastDetectionTime       = now
                 lastMotionDetectionTime = now
                 onResult?.invoke(PredictionResult(mLabel, mConf, isMotion = true))
@@ -572,7 +578,8 @@ class PredictionService(private val context: Context) {
         motionEarlyStreak     = 0
         motionEarlyLabel      = -1
         framesSinceMotionRun  = 0
-        sustainedMotionFrames = 0
+        sustainedMotionFrames    = 0
+        maxSustainedMotionFrames = 0
     }
 
     fun reset() {
