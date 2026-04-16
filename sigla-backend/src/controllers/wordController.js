@@ -474,14 +474,14 @@ const adminUploadSamples = async (req, res) => {
 
     const newCount = parseInt(sample_count) || 1;
 
-    // Inside uploadSamples, after validating the sample cap, change the create call:
+    // Admin-uploaded samples are automatically approved and counted toward the threshold
     const sample = await GestureSample.create({
       word_id: word.id,
       submitted_by: req.user.id,
       file_url,
       landmark_url: landmark_url || null,
       sample_count: newCount,
-      status: "pending",
+      status: "approved",
       is_validated: true,
       // NEW: store landmarks or sequence
       landmarks:
