@@ -21,21 +21,34 @@
     @com.google.gson.annotations.SerializedName <fields>;
 }
 
-# API response/request data classes — keep all fields for Gson deserialization
--keep class com.example.sigla.**Request { *; }
--keep class com.example.sigla.**Response { *; }
--keep class com.example.sigla.ApiModels** { *; }
+# All app classes — keep everything in the app package
+-keep class com.example.sigla.** { *; }
 
 # TensorFlow Lite
--keep class org.tensorflow.lite.** { *; }
--dontwarn org.tensorflow.lite.**
+-keep class org.tensorflow.** { *; }
+-keep interface org.tensorflow.** { *; }
+-dontwarn org.tensorflow.**
 
 # MediaPipe
 -keep class com.google.mediapipe.** { *; }
+-keep interface com.google.mediapipe.** { *; }
 -dontwarn com.google.mediapipe.**
 
 # AndroidX Security (EncryptedSharedPreferences)
 -keep class androidx.security.crypto.** { *; }
+
+# AndroidX Camera
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
+
+# Glide
+-keep public class * implements com.bumptech.glide.module.GlideModule
+-keep class com.bumptech.glide.** { *; }
+-dontwarn com.bumptech.glide.**
+
+# Coroutines
+-keepclassmembernames class kotlinx.** { volatile <fields>; }
+-dontwarn kotlinx.coroutines.**
 
 # Suppress missing class warnings from annotation processing dependencies (autovalue/javapoet)
 -dontwarn javax.lang.model.SourceVersion
