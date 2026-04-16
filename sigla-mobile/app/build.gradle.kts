@@ -28,8 +28,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // TODO: Replace with your actual production server URL before releasing
-            buildConfigField("String", "BASE_URL", "\"https://your-production-server.com/api/\"")
+            buildConfigField("String", "BASE_URL", "\"https://sigla-backend.onrender.com/api/\"")
         }
     }
     compileOptions {
