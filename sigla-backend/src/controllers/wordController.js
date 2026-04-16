@@ -1047,9 +1047,7 @@ const activateWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    const cap = word.sample_cap != null
-      ? word.sample_cap
-      : word.gesture_type === "motion" ? 150 : 100;
+    const cap = getSampleCap(word);
 
     if ((word.approved_sample_count || 0) < cap) {
       return res.status(400).json({
