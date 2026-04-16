@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 const {
   Word,
   GestureSample,
@@ -10,6 +11,11 @@ const {
   // ActivityLog,
 } = require("../models/index.js");
 
+const SUPABASE_URL         = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_BUCKET      = process.env.SUPABASE_BUCKET_MODELS || "model-files";
+
+// Fall back to local disk only when Supabase env vars are missing (dev without .env)
 const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -120,12 +126,34 @@ const checkAndActivateWord = async (word, reviewerId = null) => {
   return reachedThreshold;
 };
 
-// ── Helper: save a base64 image to disk, return its public URL path
-const saveImage = (base64, index) => {
+// ── Helper: upload a base64 image to Supabase Storage, return its public URL
+// Falls back to local disk when Supabase env vars are not set (local dev).
+const saveImage = async (base64, index) => {
+  const filename = `sample_${Date.now()}_${Math.random().toString(36).slice(2, 10)}_${index}.jpg`;
+  const buffer   = Buffer.from(base64, "base64");
+
+  if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+    try {
+      const storagePath = `gesture-samples/${filename}`;
+      const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${storagePath}`;
+      await axios.post(url, buffer, {
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          "Content-Type": "image/jpeg",
+          "x-upsert": "true",
+        },
+        maxBodyLength: Infinity,
+      });
+      return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${storagePath}`;
+    } catch (e) {
+      console.error("Supabase upload failed, falling back to local disk:", e.message);
+    }
+  }
+
+  // Local fallback
   try {
-    const filename = `sample_${Date.now()}_${Math.random().toString(36).slice(2, 10)}_${index}.jpg`;
     const filepath = path.join(UPLOADS_DIR, filename);
-    fs.writeFileSync(filepath, Buffer.from(base64, "base64"));
+    fs.writeFileSync(filepath, buffer);
     return `/uploads/samples/${filename}`;
   } catch (e) {
     return `landmark_direct_${Date.now()}_${index}`;
@@ -636,8 +664,8 @@ const uploadSamples = async (req, res) => {
           const frameImages = hasImages && Array.isArray(images[idx]) ? images[idx] : [];
           console.log(`  Sequence ${idx}: ${seq.length} frames, ${frameImages.length} images`);
 
-          // Save each frame image to disk and join with '|'
-          const imageUrls = frameImages.map((base64, i) => saveImage(base64, i));
+          // Upload each frame image and join with '|'
+          const imageUrls = await Promise.all(frameImages.map((base64, i) => saveImage(base64, i)));
           const file_url = imageUrls.join("|");
 
           return {
@@ -660,7 +688,7 @@ const uploadSamples = async (req, res) => {
         console.log("Processing SINGLE SEQUENCE with", sequence.length, "frames");
 
         const frameImages = hasImages && Array.isArray(images) && !Array.isArray(images[0]) ? images : [];
-        const imageUrls = frameImages.map((base64, i) => saveImage(base64, i));
+        const imageUrls = await Promise.all(frameImages.map((base64, i) => saveImage(base64, i)));
         const file_url = imageUrls.join("|");
 
         const record = {
@@ -680,19 +708,19 @@ const uploadSamples = async (req, res) => {
         // STATIC: each sample is a single landmark set
         console.log("Processing STATIC batch with", landmarks.length, "samples");
 
-        const records = landmarks.map((lm, i) => ({
+        const records = await Promise.all(landmarks.map(async (lm, i) => ({
           word_id: word.id,
           submitted_by: req.user.id,
           file_url:
             hasImages && images[i]
-              ? saveImage(images[i], i)
+              ? await saveImage(images[i], i)
               : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           landmarks: lm,
           sequence: null,
           sample_count: 1,
           status: "pending",
           is_validated: true,
-        }));
+        })));
         await GestureSample.bulkCreate(records);
       }
     } else {
