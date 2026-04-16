@@ -191,7 +191,7 @@ const trainModel = async (req, res) => {
         const response = await axios.post(
           `${ML_SERVICE_URL}/train`,
           { version_number, model_id: modelRecord.id },
-          { timeout: 20 * 60 * 1000 }, // 20-minute cap
+          { timeout: 20 * 60 * 1000, headers: { "ngrok-skip-browser-warning": "1" } },
         );
         const r = response.data;
         await modelRecord.update({
@@ -269,7 +269,7 @@ const testModel = async (req, res) => {
       const response = await axios.post(`${ML_SERVICE_URL}/test`, {
         version_number: model.version_number,
         model_id: model.id,
-      });
+      }, { headers: { "ngrok-skip-browser-warning": "1" } });
       testResult = response.data;
     } catch (mlErr) {
       if (mlErr.response) {
@@ -444,7 +444,7 @@ const deployModel = async (req, res) => {
           version_number: model.version_number,
           model_id: model.id,
           tflite_url: model.tflite_url,
-        });
+        }, { headers: { "ngrok-skip-browser-warning": "1" } });
       } catch (mlErr) {
         if (mlErr.response) {
           const detail =
