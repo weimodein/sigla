@@ -36,3 +36,12 @@
 
 # AndroidX Security (EncryptedSharedPreferences)
 -keep class androidx.security.crypto.** { *; }
+
+# Suppress missing class warnings from annotation processing dependencies (autovalue/javapoet)
+-dontwarn javax.lang.model.SourceVersion
+-dontwarn javax.lang.model.element.Element
+-dontwarn javax.lang.model.element.ElementKind
+-dontwarn javax.lang.model.element.Modifier
+-dontwarn javax.lang.model.type.TypeMirror
+-dontwarn javax.lang.model.type.TypeVisitor
+-dontwarn javax.lang.model.util.SimpleTypeVisitor8
