@@ -1516,7 +1516,9 @@ const ManageWordBank = () => {
                           {isMotionSequence ? (
                             <div className="flex gap-1 p-2 overflow-x-auto">
                               {frameUrls.map((url, frameIdx) => {
-                                const fullUrl = `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${url}`;
+                                const fullUrl = url.startsWith("/")
+                                  ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${url}`
+                                  : url;
                                 return (
                                   <div
                                     key={frameIdx}
@@ -1542,7 +1544,9 @@ const ManageWordBank = () => {
                             <div className="p-2 flex flex-col gap-1.5">
                               <div className="w-20 h-20 relative group rounded-lg overflow-hidden border border-gray-200">
                                 <img
-                                  src={`${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`}
+                                  src={frameUrls[0].startsWith("/")
+                                    ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`
+                                    : frameUrls[0]}
                                   alt={`sample-${sample.id}`}
                                   className="w-full h-full object-cover"
                                   onError={(e) => {
@@ -1553,7 +1557,12 @@ const ManageWordBank = () => {
                                 {sample.status === "approved" && (
                                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
-                                      onClick={() => handleSetThumbnail(galleryModal, `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`)}
+                                      onClick={() => {
+                                        const imgUrl = frameUrls[0].startsWith("/")
+                                          ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`
+                                          : frameUrls[0];
+                                        handleSetThumbnail(galleryModal, imgUrl);
+                                      }}
                                       disabled={actionLoading}
                                       className="text-white text-[9px] font-bold bg-green-600 hover:bg-green-700 px-2 py-1 rounded leading-tight"
                                     >
@@ -1564,7 +1573,12 @@ const ManageWordBank = () => {
                               </div>
                               {sample.status === "approved" && (
                                 <button
-                                  onClick={() => handleSetThumbnail(galleryModal, `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`)}
+                                  onClick={() => {
+                                    const imgUrl = frameUrls[0].startsWith("/")
+                                      ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frameUrls[0]}`
+                                      : frameUrls[0];
+                                    handleSetThumbnail(galleryModal, imgUrl);
+                                  }}
                                   disabled={actionLoading}
                                   className="text-[10px] bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-md whitespace-nowrap disabled:opacity-50"
                                 >

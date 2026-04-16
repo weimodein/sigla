@@ -3,6 +3,7 @@ import {
   getAllModels,
   getModelStats,
   trainModel,
+  getModelStatus,
   testModel,
   deployModel,
   revertModel,
@@ -199,6 +200,11 @@ const ManageModel = () => {
   // Train form
   const [trainForm, setTrainForm] = useState({ version_number: "", notes: "" });
 
+  // Async training poll state
+  const [trainingModelId, setTrainingModelId] = useState(null);
+  const [trainingVersion, setTrainingVersion] = useState("");
+  const pollingRef = useRef(null);
+
   // ── Fetch data ──────────────────────────────────────────────
   const fetchData = async () => {
     setLoading(true);
@@ -221,6 +227,36 @@ const ManageModel = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Poll training status every 5 seconds when a training job is in progress
+  useEffect(() => {
+    if (!trainingModelId) return;
+    pollingRef.current = setInterval(async () => {
+      try {
+        const { model } = await getModelStatus(trainingModelId);
+        if (model.status === "trained") {
+          clearInterval(pollingRef.current);
+          setTrainingModelId(null);
+          setTrainingVersion("");
+          showSuccess(`Model ${model.version_number} trained successfully`);
+          const motionNote = model.motion_trained
+            ? `Motion model trained (${model.motion_classes} classes).`
+            : `Motion model NOT trained — need at least 2 motion gesture classes.`;
+          setResultModal({ title: "Training Results", data: { message: motionNote, model } });
+          fetchData();
+        } else if (model.status === "failed") {
+          clearInterval(pollingRef.current);
+          setTrainingModelId(null);
+          setTrainingVersion("");
+          showError(`Training failed: ${model.training_error || "Unknown error"}`);
+          fetchData();
+        }
+      } catch {
+        // Network hiccup — keep polling
+      }
+    }, 5000);
+    return () => clearInterval(pollingRef.current);
+  }, [trainingModelId]);
 
   // ── Sort ────────────────────────────────────────────────────
   const handleSort = (field) => {
@@ -274,14 +310,12 @@ const ManageModel = () => {
     }
     setActionLoading(true);
     try {
-      const result = await trainModel(
-        trainForm.version_number,
-        trainForm.notes,
-      );
-      showSuccess(`Model ${trainForm.version_number} trained successfully`);
+      const result = await trainModel(trainForm.version_number, trainForm.notes);
+      // Backend returns 202 — training is running in background, start polling
+      setTrainingModelId(result.model.id);
+      setTrainingVersion(result.model.version_number);
       setTrainModal(false);
       setTrainForm({ version_number: "", notes: "" });
-      setResultModal({ title: "Training Results", data: result });
       fetchData();
     } catch (err) {
       showError(
@@ -419,11 +453,26 @@ const ManageModel = () => {
         </div>
         <button
           onClick={() => setTrainModal(true)}
-          className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+          disabled={!!trainingModelId}
+          className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+          title={trainingModelId ? "Training in progress…" : undefined}
         >
           + Train New Model
         </button>
       </div>
+
+      {/* Training in progress banner */}
+      {trainingModelId && (
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4">
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">
+              Training <span className="font-mono">{trainingVersion}</span> in progress…
+            </p>
+            <p className="text-xs text-blue-500">This may take several minutes. You can safely navigate away — this page will update automatically.</p>
+          </div>
+        </div>
+      )}
 
       {/* Stat Cards */}
       {loading ? (

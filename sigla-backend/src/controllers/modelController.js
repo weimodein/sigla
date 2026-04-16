@@ -146,7 +146,9 @@ const getModelById = async (req, res) => {
 };
 
 // ── POST /api/models/train ────────────────────────────────────
-// Admin triggers model training via FastAPI ML microservice
+// Admin triggers model training via FastAPI ML microservice.
+// Returns 202 immediately so Render's 30-second proxy timeout is never hit.
+// Training runs in a background async job; poll GET /api/models/:id/status.
 const trainModel = async (req, res) => {
   try {
     const { version_number, notes } = req.body;
@@ -169,74 +171,83 @@ const trainModel = async (req, res) => {
       return res.status(409).json({ message: "Version number already exists" });
     }
 
-    // Create a model version record with status "training"
-    const modelRecord = await ModelVersion.create({
-      version_number,
-      notes: notes || null,
-      trained_by: req.user.id,
-      status: "trained",
-    });
-
-    // Call FastAPI ML microservice to start training
-    let trainingResult;
+    // Quick reachability check — fail fast before creating DB record
     try {
-      const response = await axios.post(`${ML_SERVICE_URL}/train`, {
-        version_number,
-        model_id: modelRecord.id,
-      });
-      trainingResult = response.data;
-    } catch (mlErr) {
-      await modelRecord.destroy();
-      if (mlErr.response) {
-        // ML service responded with an error (4xx/5xx) — show the real message
-        const detail =
-          mlErr.response.data?.detail ||
-          mlErr.response.data?.message ||
-          mlErr.message;
-        console.error("ML service training error:", detail);
-        return res.status(mlErr.response.status).json({ message: detail });
-      }
-      // Network error — service is unreachable
-      console.error("ML service unreachable:", mlErr.message);
+      await axios.get(`${ML_SERVICE_URL}/health`, { timeout: 8000 });
+    } catch {
       return res.status(503).json({
         message: "ML service unavailable. Make sure sigla-ml is running.",
       });
     }
 
-    // Update model record with training results from FastAPI
-    await modelRecord.update({
-      accuracy: trainingResult.accuracy || null,
-      total_classes: trainingResult.total_classes || null,
-      tflite_url: trainingResult.tflite_url || null,
-      h5_url: trainingResult.h5_url || null,
-      motion_tflite_url: trainingResult.motion_tflite_url || null,
-      motion_h5_url: trainingResult.motion_h5_url || null,
-      motion_accuracy: trainingResult.motion_accuracy || null,
-      motion_trained: trainingResult.motion_trained || false,
-      motion_classes: trainingResult.motion_classes || null,
-      trained_at: new Date(),
+    // Create record with status "training" — frontend polls this
+    const modelRecord = await ModelVersion.create({
+      version_number,
+      notes: notes || null,
+      trained_by: req.user.id,
+      status: "training",
     });
 
-    // Log activity
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "trained_model",
-    //   target_type: "model",
-    //   target_id: modelRecord.id,
-    //   details: `Trained model version ${version_number}`,
-    // });
-
-    const motionNote = trainingResult.motion_trained
-      ? `Motion model trained (${trainingResult.motion_classes} classes).`
-      : `Motion model NOT trained — only ${trainingResult.motion_classes ?? 0} motion gesture class(es) found in dataset (need at least 2).`;
-
-    return res.status(200).json({
-      message: `Model trained successfully. ${motionNote}`,
+    // Respond immediately — do NOT await training
+    res.status(202).json({
+      message: "Training started. Poll /api/models/:id/status for progress.",
       model: modelRecord,
-      training_result: trainingResult,
     });
+
+    // ── Background training job ───────────────────────────────
+    (async () => {
+      try {
+        const response = await axios.post(
+          `${ML_SERVICE_URL}/train`,
+          { version_number, model_id: modelRecord.id },
+          { timeout: 20 * 60 * 1000 }, // 20-minute cap
+        );
+        const r = response.data;
+        await modelRecord.update({
+          status:            "trained",
+          accuracy:          r.accuracy           || null,
+          total_classes:     r.total_classes       || null,
+          tflite_url:        r.tflite_url          || null,
+          h5_url:            r.h5_url              || null,
+          motion_tflite_url: r.motion_tflite_url   || null,
+          motion_h5_url:     r.motion_h5_url       || null,
+          motion_accuracy:   r.motion_accuracy     || null,
+          motion_trained:    r.motion_trained      || false,
+          motion_classes:    r.motion_classes      || null,
+          trained_at:        new Date(),
+          training_error:    null,
+        });
+        console.log(`[trainModel] version ${version_number} training complete`);
+      } catch (mlErr) {
+        const detail =
+          mlErr.response?.data?.detail ||
+          mlErr.response?.data?.message ||
+          mlErr.message ||
+          "Unknown training error";
+        console.error(`[trainModel] background training failed: ${detail}`);
+        await modelRecord
+          .update({ status: "failed", training_error: detail })
+          .catch(() => {});
+      }
+    })();
   } catch (err) {
     console.error("Train model error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ── GET /api/models/:id/status ────────────────────────────────
+// Frontend polls this while training is in progress
+const getModelStatus = async (req, res) => {
+  try {
+    const model = await ModelVersion.findOne({
+      where: { id: req.params.id },
+      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
+    });
+    if (!model) return res.status(404).json({ message: "Model not found" });
+    return res.status(200).json({ model });
+  } catch (err) {
+    console.error("Get model status error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -695,6 +706,7 @@ module.exports = {
   getLatestModel,
   getModelById,
   trainModel,
+  getModelStatus,
   testModel,
   deployModel,
   revertModel,

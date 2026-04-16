@@ -80,8 +80,12 @@ const ModelVersion = sequelize.define(
       allowNull: false,
       defaultValue: "trained",
       validate: {
-        isIn: [["trained", "deployed", "inactive"]],
+        isIn: [["training", "trained", "deployed", "inactive", "failed"]],
       },
+    },
+    training_error: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     word_bank_url: {
       type: DataTypes.TEXT,

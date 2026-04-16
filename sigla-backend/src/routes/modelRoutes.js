@@ -8,6 +8,7 @@ const {
   getLatestModel,
   getModelById,
   trainModel,
+  getModelStatus,
   testModel,
   deployModel,
   revertModel,
@@ -25,6 +26,7 @@ router.get("/stats", roleMiddleware("admin"), getModelStats);
 
 // ── Admin model management routes ────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllModels);
+router.get("/:id/status", roleMiddleware("admin"), getModelStatus);
 router.get("/:id", roleMiddleware("admin"), getModelById);
 router.post("/train", roleMiddleware("admin"), trainModel);
 router.post("/test", roleMiddleware("admin"), testModel);

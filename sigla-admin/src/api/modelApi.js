@@ -28,6 +28,11 @@ export const trainModel = async (version_number, notes) => {
   return response.data;
 };
 
+export const getModelStatus = async (id) => {
+  const response = await api.get(`/models/${id}/status`);
+  return response.data;
+};
+
 export const testModel = async (model_id) => {
   const response = await api.post("/models/test", { model_id });
   return response.data;
