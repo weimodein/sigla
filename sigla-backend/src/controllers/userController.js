@@ -261,6 +261,19 @@ const warnUser = async (req, res) => {
       delivered: false,
     });
 
+    // Auto-deactivate after 2nd warning
+    if (newWarningCount >= 2) {
+      await user.update({ status: "deactivated", deactivated_at: new Date() });
+      await Notification.create({
+        user_id: user.id,
+        title: "Account Suspended",
+        message: "Your account has been suspended after receiving 2 warnings for violating the system's terms and conditions. Your account will be automatically reactivated after 30 days.",
+        type: "warning",
+        is_read: false,
+        delivered: false,
+      });
+    }
+
     // await ActivityLog.create({
     //   user_id: req.user.id,
     //   action: "warned_user",
@@ -270,9 +283,11 @@ const warnUser = async (req, res) => {
     // });
 
     return res.status(200).json({
-      message: `Warning issued. User now has ${newWarningCount}/2 warnings.`,
+      message: newWarningCount >= 2
+        ? `Warning issued. Account automatically suspended after ${newWarningCount}/2 warnings.`
+        : `Warning issued. User now has ${newWarningCount}/2 warnings.`,
       warning_count: newWarningCount,
-      can_deactivate: newWarningCount >= 2,
+      auto_deactivated: newWarningCount >= 2,
     });
   } catch (err) {
     console.error("Warn user error:", err);

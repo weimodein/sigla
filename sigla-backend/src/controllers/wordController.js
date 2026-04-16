@@ -75,6 +75,7 @@ const sendSubmissionNotification = async (
   approved,
   total,
   maxLimit,
+  totalUserApproved = approved,
 ) => {
   let title, message;
 
@@ -88,7 +89,7 @@ const sendSubmissionNotification = async (
     message = `All ${approved} of your submitted samples for "${wordLabel}" have been accepted. Your contribution has been successfully added to the system.`;
   } else {
     // Partial
-    const remaining = maxLimit - approved;
+    const remaining = Math.max(0, maxLimit - totalUserApproved);
     title = "Submission Partially Approved";
     message = `${approved} out of ${total} submitted samples for "${wordLabel}" were approved. You may still contribute up to ${remaining} more samples for this word.`;
   }
@@ -623,7 +624,19 @@ const uploadSamples = async (req, res) => {
       });
     }
 
-    // ── 2. Per-user cap ───────────────────────────────────────
+    // ── 2. Block resubmission if user's submission was fully approved ─────────
+    const [userApprovedCount, userPendingCount] = await Promise.all([
+      GestureSample.count({ where: { word_id: word.id, submitted_by: req.user.id, status: "approved" } }),
+      GestureSample.count({ where: { word_id: word.id, submitted_by: req.user.id, status: "pending" } }),
+    ]);
+    if (userApprovedCount > 0 && userPendingCount === 0) {
+      return res.status(400).json({
+        message: `Your submission for "${word.label}" has already been fully approved. No further samples can be added for this word.`,
+        user_limit_reached: true,
+      });
+    }
+
+    // ── 3. Per-user cap ───────────────────────────────────────
     if (userTotal >= perUserCap) {
       return res.status(400).json({
         message: `You have already contributed the maximum of ${perUserCap} samples for "${word.label}". Other users can still contribute up to the word's total limit.`,
@@ -803,6 +816,16 @@ const rejectSample = async (req, res) => {
 // ── PATCH /api/words/:id/samples/user/:userId/approve-all ─────
 const approveAllSamplesByUser = async (req, res) => {
   try {
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) return res.status(404).json({ message: "Word not found" });
+
+    // Count pending samples before approving them
+    const userSamplesBefore = await GestureSample.findAll({
+      where: { word_id: req.params.id, submitted_by: req.params.userId },
+    });
+    const approvedBefore = userSamplesBefore.filter((s) => s.status === "approved").length;
+    const pendingCount = userSamplesBefore.filter((s) => s.status === "pending").length;
+
     await GestureSample.update(
       { status: "approved" },
       {
@@ -814,9 +837,21 @@ const approveAllSamplesByUser = async (req, res) => {
       },
     );
 
-    const word = await Word.findOne({ where: { id: req.params.id } });
     await checkAndActivateWord(word, req.user.id);
     const approvedCount = await getApprovedSampleCount(word.id);
+    const cap = getSampleCap(word.gesture_type || "static");
+    const userApprovedAfter = approvedBefore + pendingCount;
+
+    if (pendingCount > 0) {
+      await sendSubmissionNotification(
+        req.params.userId,
+        word.label,
+        pendingCount,
+        pendingCount,
+        cap,
+        userApprovedAfter,
+      );
+    }
 
     return res.status(200).json({
       message: "All samples from user approved",
@@ -831,6 +866,15 @@ const approveAllSamplesByUser = async (req, res) => {
 // ── PATCH /api/words/:id/samples/user/:userId/reject-all ──────
 const rejectAllSamplesByUser = async (req, res) => {
   try {
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) return res.status(404).json({ message: "Word not found" });
+
+    const userSamplesBefore = await GestureSample.findAll({
+      where: { word_id: req.params.id, submitted_by: req.params.userId },
+    });
+    const existingApproved = userSamplesBefore.filter((s) => s.status === "approved").length;
+    const pendingCount = userSamplesBefore.filter((s) => s.status === "pending").length;
+
     await GestureSample.update(
       { status: "rejected" },
       {
@@ -841,6 +885,19 @@ const rejectAllSamplesByUser = async (req, res) => {
         },
       },
     );
+
+    const cap = getSampleCap(word.gesture_type || "static");
+
+    if (pendingCount > 0) {
+      await sendSubmissionNotification(
+        req.params.userId,
+        word.label,
+        0,
+        pendingCount,
+        cap,
+        existingApproved,
+      );
+    }
 
     return res.status(200).json({ message: "All samples from user rejected" });
   } catch (err) {
@@ -868,9 +925,8 @@ const approveSubmission = async (req, res) => {
     });
 
     const totalSubmitted = userSamples.length;
-    const approvedBeforeCount = userSamples.filter(
-      (s) => s.status === "approved",
-    ).length;
+    const approvedBeforeCount = userSamples.filter((s) => s.status === "approved").length;
+    const pendingCount = userSamples.filter((s) => s.status === "pending").length;
 
     // Approve all remaining pending samples from this user
     await GestureSample.update(
@@ -887,13 +943,15 @@ const approveSubmission = async (req, res) => {
     const totalApproved = await getApprovedSampleCount(word.id);
     const cap = getSampleCap(word.gesture_type || "static");
     const activated = await checkAndActivateWord(word, req.user.id);
+    const userApprovedAfter = approvedBeforeCount + pendingCount;
 
     await sendSubmissionNotification(
       user_id,
       word.label,
-      totalSubmitted,
-      totalSubmitted,
+      pendingCount,
+      pendingCount,
       cap,
+      userApprovedAfter,
     );
 
     // await ActivityLog.create({
@@ -954,12 +1012,14 @@ const rejectSubmission = async (req, res) => {
     }
 
     const cap = getSampleCap(word.gesture_type || "static");
+    const userApprovedCount = userSamples.filter((s) => s.status === "approved").length;
     await sendSubmissionNotification(
       user_id,
       word.label,
       0,
       userSamples.length,
       cap,
+      userApprovedCount,
     );
 
     // await ActivityLog.create({
