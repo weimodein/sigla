@@ -128,8 +128,7 @@ class CollectionActivity : AppCompatActivity() {
 
             setupUI()
             setupButtons()
-            if (hasCameraPermission()) startCamera()
-            else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 200)
+            showCollectionInstructionDialog()
         } else {
             // ADMIN MODE - Show config dialog
             showConfigDialog()
@@ -158,6 +157,35 @@ class CollectionActivity : AppCompatActivity() {
 
     private fun hasCameraPermission(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    }
+
+    // ── Instruction dialog shown before collection starts (suggest mode) ──────
+
+    private fun showCollectionInstructionDialog() {
+        val gestureNote = if (isMotion)
+            "Perform the motion gesture naturally and smoothly for each sample."
+        else
+            "Hold each static hand position clearly and steadily for each sample."
+
+        AlertDialog.Builder(this)
+            .setTitle("Before You Start")
+            .setMessage(
+                "To help improve recognition accuracy, please keep the following in mind:\n\n" +
+                "• Capture samples from different angles and hand positions.\n" +
+                "• Make sure your hand is clearly visible and well-lit.\n" +
+                "• $gestureNote\n\n" +
+                "The collection process will approximately take 3 to 5 minutes.\n\n" +
+                "Tap OK to begin."
+            )
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ ->
+                if (hasCameraPermission()) startCamera()
+                else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 200)
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                finish()
+            }
+            .show()
     }
 
     // ── Config dialog for admin mode ─────────────────────────────────────────
