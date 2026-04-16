@@ -136,7 +136,7 @@ const getUserById = async (req, res) => {
 // Account is immediately active, no verification code sent
 const createUser = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, name, email, password } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({
@@ -163,6 +163,7 @@ const createUser = async (req, res) => {
     // email verification is bypassed since the admin is entering the credentials
     const user = await User.create({
       username,
+      name: name || null,
       email,
       password: hashedPassword,
       role_id: 3,

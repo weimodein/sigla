@@ -859,7 +859,7 @@ const ReportsAnalytics = () => {
               Generate Report
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              Select sections to include in the exported CSV
+              Select sections to include in the exported PDF
             </p>
           </div>
           <button
@@ -904,7 +904,7 @@ const ReportsAnalytics = () => {
           <p className="text-xs text-gray-400 mt-3">
             Filtered by:{" "}
             <strong className="text-gray-600 capitalize">{filter}</strong>
-            {" · "}Exported as CSV
+            {" · "}Exported as PDF
           </p>
         </div>
       </div>

@@ -576,6 +576,21 @@ const ManageWordBank = () => {
     }
   };
 
+  // ── Activate static word ──────────────────────────────────────
+  const handleActivateStaticWord = async () => {
+    setActionLoading(true);
+    try {
+      await activateWord(galleryModal.id);
+      setGalleryModal((prev) => prev ? { ...prev, is_active: true } : prev);
+      fetchWords();
+      showSuccess("Word activated and now visible in the mobile app");
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to activate word");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // ── Set word bank video (motion words) ───────────────────────
   const handleSetVideo = async (videoUrl) => {
     if (!videoUrl.trim()) { showError("Please enter a video URL or upload a file"); return; }
@@ -1017,6 +1032,23 @@ const ManageWordBank = () => {
                   </div>
                 </div>
               )
+            )}
+
+            {/* Activate button - Static words only */}
+            {galleryModal.gesture_type === "static" && !galleryModal.is_active && galleryModal.thumbnail_url && (
+              <div className="border border-blue-200 rounded-lg p-3 bg-blue-50 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-blue-800">Ready to Activate</p>
+                  <p className="text-xs text-blue-600">A display image is set. Click Activate to publish this word to the mobile app.</p>
+                </div>
+                <button
+                  onClick={handleActivateStaticWord}
+                  disabled={actionLoading}
+                  className="shrink-0 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
+                >
+                  Activate Word
+                </button>
+              </div>
             )}
 
             {/* Motion Sequences Section - Only for motion gestures */}

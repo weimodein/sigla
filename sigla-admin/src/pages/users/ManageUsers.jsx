@@ -652,6 +652,9 @@ const ManageUsers = () => {
         <td className="px-5 py-3.5">
           <StatusBadge status={u.status} />
         </td>
+        <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 12 }}>
+          {u.created_at ? new Date(u.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—"}
+        </td>
         {activeTab === "deactivated" && (
           <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 12 }}>
             Auto-reactivates: {getReactivationDate(u.deactivated_at)}
@@ -688,6 +691,11 @@ const ManageUsers = () => {
                       : "Deactivate user"
                   }
                 />
+                <ActionBtn
+                  label="Delete"
+                  bg="#6b7280"
+                  onClick={() => handleDelete(u.id)}
+                />
               </>
             )}
             {activeTab === "warned" && (
@@ -714,6 +722,11 @@ const ManageUsers = () => {
                       : "Deactivate user"
                   }
                 />
+                <ActionBtn
+                  label="Delete"
+                  bg="#6b7280"
+                  onClick={() => handleDelete(u.id)}
+                />
               </>
             )}
             {activeTab === "deactivated" && (
@@ -736,7 +749,7 @@ const ManageUsers = () => {
     ));
   };
 
-  const tableCols = activeTab === "deactivated" ? 7 : 6;
+  const tableCols = activeTab === "deactivated" ? 8 : 7;
   const isDeactivated = activeTab === "deactivated";
 
   // ── JSX ─────────────────────────────────────────────────────
@@ -969,6 +982,13 @@ const ManageUsers = () => {
                   <SortableHeader
                     label="Status"
                     sortKey="status"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
+                    label="Registered"
+                    sortKey="created_at"
                     sortField={sortField}
                     sortDir={sortDir}
                     onSort={handleSort}
