@@ -19,7 +19,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"http://10.68.18.78:8080/api/\"")
+            buildConfigField("String", "BASE_URL", "\"https://sigla-backend.onrender.com/api/\"")
         }
         release {
             isMinifyEnabled = true
