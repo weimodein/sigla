@@ -171,15 +171,6 @@ const trainModel = async (req, res) => {
       return res.status(409).json({ message: "Version number already exists" });
     }
 
-    // Quick reachability check — fail fast before creating DB record
-    try {
-      await axios.get(`${ML_SERVICE_URL}/health`, { timeout: 8000 });
-    } catch {
-      return res.status(503).json({
-        message: "ML service unavailable. Make sure sigla-ml is running.",
-      });
-    }
-
     // Create record with status "training" — frontend polls this
     const modelRecord = await ModelVersion.create({
       version_number,
