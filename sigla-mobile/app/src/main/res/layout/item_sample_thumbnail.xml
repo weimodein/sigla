@@ -21,7 +21,7 @@
         android:layout_gravity="bottom|end"
         android:layout_margin="4dp"
         android:src="@android:drawable/ic_media_play"
-        android:imageTintList="@android:color/white"
+        android:tint="@android:color/white"
         android:background="#CC001E3D"
         android:padding="4dp"
         android:visibility="gone" />
