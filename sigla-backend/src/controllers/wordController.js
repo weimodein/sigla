@@ -137,17 +137,23 @@ const saveImage = async (base64, index) => {
     try {
       const storagePath = filename;
       const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${storagePath}`;
-      await axios.post(url, buffer, {
+      const res = await axios.post(url, buffer, {
         headers: {
           Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
           "Content-Type": "image/jpeg",
           "x-upsert": "true",
         },
         maxBodyLength: Infinity,
+        validateStatus: null, // don't throw on non-2xx, log it instead
       });
-      return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${storagePath}`;
+      if (res.status >= 200 && res.status < 300) {
+        return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${storagePath}`;
+      }
+      console.error(`Supabase upload failed [${res.status}]:`, JSON.stringify(res.data));
+      throw new Error(`Supabase ${res.status}: ${JSON.stringify(res.data)}`);
     } catch (e) {
-      console.error("Supabase upload failed, falling back to local disk:", e.message);
+      console.error("Supabase upload error:", e.message);
+      throw e; // propagate so the whole sample upload fails visibly instead of saving broken local paths
     }
   }
 
