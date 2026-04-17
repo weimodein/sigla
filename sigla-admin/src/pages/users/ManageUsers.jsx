@@ -974,7 +974,7 @@ const ManageUsers = () => {
 
       {/* Warn Modal */}
       {warnModal && (
-        <Modal
+        <AppModal
           title={`Issue Warning to ${warnModal.username}`}
           onClose={() => setWarnModal(null)}
         >
