@@ -97,6 +97,13 @@ class CollectionActivity : AppCompatActivity() {
         var reviewBitmaps: List<Bitmap> = emptyList()
         var reviewIsMotion: Boolean = false
         var reviewWordLabel: String = ""
+        // Upload payload — populated before launching ReviewActivity
+        var uploadWordId: Int = 0
+        var uploadToken: String? = null
+        var uploadStaticLandmarks: List<List<Float>> = emptyList()
+        var uploadMotionSequences: List<List<List<Float>>> = emptyList()
+        var uploadStaticImages: List<String> = emptyList()
+        var uploadMotionImages: List<List<String>> = emptyList()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -673,6 +680,12 @@ class CollectionActivity : AppCompatActivity() {
         reviewBitmaps = pendingBitmaps.toList()
         reviewIsMotion = isMotion
         reviewWordLabel = label
+        uploadWordId = wordId
+        uploadToken = session.token
+        uploadStaticLandmarks = pendingStaticLandmarks.toList()
+        uploadMotionSequences = pendingMotionSequences.toList()
+        uploadStaticImages = pendingStaticImages.toList()
+        uploadMotionImages = pendingMotionImages.toList()
         val intent = android.content.Intent(this, ReviewActivity::class.java)
         startActivityForResult(intent, REVIEW_REQUEST_CODE)
     }
@@ -681,8 +694,8 @@ class CollectionActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REVIEW_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
-                // User confirmed — upload everything and show done screen
-                showDoneScreen()
+                // Upload was completed in ReviewActivity — show final done screen
+                showDoneScreen(uploadAlreadyDone = true)
             } else {
                 // User chose retake — clear all pending data and restart collection
                 pendingStaticLandmarks.clear()
@@ -702,34 +715,17 @@ class CollectionActivity : AppCompatActivity() {
 
     // ── Done screen ───────────────────────────────────────────────────────────
 
-    private fun showDoneScreen() {
+    private fun showDoneScreen(uploadAlreadyDone: Boolean = false) {
         cameraProvider?.unbindAll()
         binding.overlayDone.visibility = View.VISIBLE
 
         if (isSuggestMode) {
+            // Upload was handled in ReviewActivity — just show the completion state
             binding.tvUploadStatus.visibility = View.VISIBLE
-            binding.tvUploadStatus.text = "Uploading samples... Please wait."
-            binding.progressUpload.visibility = View.VISIBLE
-
-            lifecycleScope.launch {
-                uploadJob?.join()
-                uploadBatchAsync()
-                uploadJob?.join()
-
-                withContext(Dispatchers.Main) {
-                    binding.progressUpload.visibility = View.GONE
-                    if (uploadError != null) {
-                        binding.tvUploadStatus.text = "⚠ Upload failed: $uploadError\nSamples saved locally."
-                        binding.tvUploadStatus.setTextColor(0xFFFF5252.toInt())
-                        binding.tvDonePath.text = "Local backup: ${saveDir?.absolutePath}"
-                        binding.tvDonePath.visibility = View.VISIBLE
-                    } else {
-                        binding.tvUploadStatus.text = "✓ Collection complete!\n${count} samples recorded."
-                        binding.tvUploadStatus.setTextColor(0xFF00E676.toInt())
-                    }
-                    binding.btnSubmit.visibility = View.VISIBLE
-                }
-            }
+            binding.tvUploadStatus.text = "✓ Samples submitted successfully!\n${count} samples recorded."
+            binding.tvUploadStatus.setTextColor(0xFF00E676.toInt())
+            binding.progressUpload.visibility = View.GONE
+            binding.btnSubmit.visibility = View.VISIBLE
         } else {
             binding.tvDonePath.text = "Files saved to:\n${saveDir?.absolutePath}\n\nTransfer to PC and run:\npython convert_collection.py"
             binding.btnSubmit.visibility = View.VISIBLE
