@@ -788,6 +788,7 @@ class WordBankAdapter(
         val tvGestureType: TextView = view.findViewById(R.id.tvGestureType)
         val btnWatchDemo: MaterialButton = view.findViewById(R.id.btnWatchDemo)
         val ivThumbnail: ImageView = view.findViewById(R.id.ivThumbnail)
+        val llAudioFallback: android.widget.LinearLayout = view.findViewById(R.id.llAudioFallback)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): WordViewHolder {
@@ -817,10 +818,13 @@ class WordBankAdapter(
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .centerCrop()
                 .placeholder(android.R.color.darker_gray)
+                .error(android.R.color.darker_gray)
                 .into(holder.ivThumbnail)
             holder.ivThumbnail.visibility = View.VISIBLE
+            holder.llAudioFallback.visibility = View.GONE
         } else {
             holder.ivThumbnail.visibility = View.GONE
+            holder.llAudioFallback.visibility = View.VISIBLE
         }
 
         holder.itemView.setOnClickListener { onWordClick(word) }

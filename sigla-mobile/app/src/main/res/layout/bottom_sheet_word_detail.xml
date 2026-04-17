@@ -104,20 +104,20 @@
     <!-- Demo video container -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
-        android:layout_height="220dp"
+        android:layout_height="260dp"
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
         android:layout_marginBottom="16dp"
         app:cardCornerRadius="16dp"
         app:cardElevation="3dp"
-        app:cardBackgroundColor="#000000">
+        app:cardBackgroundColor="#0D1B2A">
 
         <!-- Thumbnail image (shown for static gestures) -->
         <ImageView
             android:id="@+id/ivThumbnail"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop"
+            android:scaleType="fitCenter"
             android:contentDescription="Gesture demonstration image"
             android:visibility="gone" />
 
