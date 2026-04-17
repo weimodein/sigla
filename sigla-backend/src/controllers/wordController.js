@@ -13,7 +13,7 @@ const {
 
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const SUPABASE_BUCKET      = process.env.SUPABASE_BUCKET_MODELS || "model-files";
+const SUPABASE_BUCKET      = process.env.SUPABASE_BUCKET_GESTURES || "gesture-samples";
 
 // Fall back to local disk only when Supabase env vars are missing (dev without .env)
 const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
@@ -135,7 +135,7 @@ const saveImage = async (base64, index) => {
 
   if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
     try {
-      const storagePath = `gesture-samples/${filename}`;
+      const storagePath = filename;
       const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${storagePath}`;
       await axios.post(url, buffer, {
         headers: {

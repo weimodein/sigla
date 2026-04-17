@@ -82,13 +82,22 @@ class CollectionActivity : AppCompatActivity() {
     private val seqImageBuffer = mutableListOf<Bitmap>()
     private var staticFrameBuffer = mutableListOf<FloatArray>()
 
-    // In-memory store for suggest mode (batch upload)
+    // In-memory store for suggest mode (held until user confirms on review screen)
     private val pendingStaticLandmarks = mutableListOf<List<Float>>()
     private val pendingMotionSequences = mutableListOf<List<List<Float>>>()
     private val pendingMotionImages = mutableListOf<List<String>>()
     private val pendingStaticImages = mutableListOf<String>()
+    private val pendingBitmaps = mutableListOf<Bitmap>()   // thumbnails for review screen
     private var uploadError: String? = null
     private var uploadJob: kotlinx.coroutines.Job? = null
+
+    private val REVIEW_REQUEST_CODE = 2001
+
+    companion object {
+        var reviewBitmaps: List<Bitmap> = emptyList()
+        var reviewIsMotion: Boolean = false
+        var reviewWordLabel: String = ""
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -372,7 +381,7 @@ class CollectionActivity : AppCompatActivity() {
     private fun tick(handsDetected: Int, features: FloatArray, frameBitmap: Bitmap) {
         if (count >= targetCount) {
             state = CollectState.DONE
-            showDoneScreen()
+            if (isSuggestMode) showReviewScreen() else showDoneScreen()
             return
         }
 
@@ -518,13 +527,11 @@ class CollectionActivity : AppCompatActivity() {
     // ── Save helpers with backend upload ──────────────────────────────────────
 
     private fun saveSample(features: FloatArray, frameBitmap: Bitmap) {
-        // For suggest mode, batch upload to backend
+        // For suggest mode, hold in memory until user confirms on review screen
         if (isSuggestMode) {
             pendingStaticLandmarks.add(features.toList())
             pendingStaticImages.add(bitmapToBase64(frameBitmap))
-            if (pendingStaticLandmarks.size >= BATCH_SIZE) {
-                uploadBatchAsync()
-            }
+            pendingBitmaps.add(frameBitmap.copy(Bitmap.Config.ARGB_8888, true))
         }
 
         // Also save locally
@@ -558,14 +565,14 @@ class CollectionActivity : AppCompatActivity() {
         val trimmedBuffer = paddedBuffer.take(SEQUENCE_LENGTH)
         val trimmedImages = paddedImages.take(SEQUENCE_LENGTH)
 
-        // For suggest mode, batch upload to backend
+        // For suggest mode, hold in memory until user confirms on review screen
         if (isSuggestMode) {
             pendingMotionSequences.add(trimmedBuffer.map { it.toList() })
             val frameBase64List = trimmedImages.map { bitmapToBase64(it) }
             pendingMotionImages.add(frameBase64List)
-            if (pendingMotionSequences.size >= BATCH_SIZE) {
-                uploadBatchAsync()
-            }
+            // Use middle frame as the representative thumbnail
+            val middleFrame = trimmedImages[trimmedImages.size / 2]
+            pendingBitmaps.add(middleFrame.copy(Bitmap.Config.ARGB_8888, true))
         }
 
         // Also save locally
@@ -655,6 +662,40 @@ class CollectionActivity : AppCompatActivity() {
                     uploadError = e.message
                     showUploadError("Connection error: ${e.message}")
                 }
+            }
+        }
+    }
+
+    // ── Review screen (suggest mode) ──────────────────────────────────────────
+
+    private fun showReviewScreen() {
+        cameraProvider?.unbindAll()
+        reviewBitmaps = pendingBitmaps.toList()
+        reviewIsMotion = isMotion
+        reviewWordLabel = label
+        val intent = android.content.Intent(this, ReviewActivity::class.java)
+        startActivityForResult(intent, REVIEW_REQUEST_CODE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REVIEW_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                // User confirmed — upload everything and show done screen
+                showDoneScreen()
+            } else {
+                // User chose retake — clear all pending data and restart collection
+                pendingStaticLandmarks.clear()
+                pendingMotionSequences.clear()
+                pendingStaticImages.clear()
+                pendingMotionImages.clear()
+                pendingBitmaps.clear()
+                reviewBitmaps = emptyList()
+                count = 0
+                state = CollectState.WAITING
+                updateCountDisplay()
+                if (hasCameraPermission()) startCamera()
+                else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 200)
             }
         }
     }
