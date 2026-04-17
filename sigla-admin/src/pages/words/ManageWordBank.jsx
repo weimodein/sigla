@@ -1065,33 +1065,26 @@ const ManageWordBank = () => {
                           )}
                         </div>
 
-                        {/* Frame strip */}
+                        {/* Frame strip — only frames with a real image */}
                         <div className="flex gap-1 p-3 overflow-x-auto">
-                          {seq.frames.map((frame) => (
+                          {seq.frames.filter(f => f.image_url && !f.image_url.startsWith("landmark_direct_")).map((frame) => (
                             <div
                               key={frame.frame_index}
                               className="flex-shrink-0 w-16 h-16 rounded border border-gray-200 bg-gray-50 overflow-hidden relative"
                             >
-                              {frame.image_url && !frame.image_url.startsWith("landmark_direct_") ? (
-                                <img
-                                  src={
-                                    frame.image_url.startsWith("/")
-                                      ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frame.image_url}`
-                                      : frame.image_url
-                                  }
-                                  alt={`Frame ${frame.frame_index + 1}`}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = "https://via.placeholder.com/64?text=F" + (frame.frame_index + 1);
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center text-xs text-gray-400">
-                                  <span className="text-lg">🖐</span>
-                                  <span className="text-[10px]">F{frame.frame_index + 1}</span>
-                                </div>
-                              )}
+                              <img
+                                src={
+                                  frame.image_url.startsWith("/")
+                                    ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${frame.image_url}`
+                                    : frame.image_url
+                                }
+                                alt={`Frame ${frame.frame_index + 1}`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.style.display = "none";
+                                }}
+                              />
                               <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-[8px] text-center">
                                 F{frame.frame_index + 1}
                               </div>
