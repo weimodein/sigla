@@ -10,9 +10,9 @@ const generateCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
 // ── Helper: generate JWT ──────────────────────────────────────
-const generateToken = (user) =>
+const generateToken = ({ id, role_name, status }) =>
   jwt.sign(
-    { id: user.id, role: user.role_name, status: user.status },
+    { id, role: role_name, status },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
   );
