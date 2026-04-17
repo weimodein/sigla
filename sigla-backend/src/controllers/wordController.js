@@ -129,13 +129,13 @@ const checkAndActivateWord = async (word, reviewerId = null) => {
 
 // ── Helper: upload a base64 image to Supabase Storage, return its public URL
 // Falls back to local disk when Supabase env vars are not set (local dev).
-const saveImage = async (base64, index) => {
+const saveImage = async (base64, index, folder = "static") => {
   const filename = `sample_${Date.now()}_${Math.random().toString(36).slice(2, 10)}_${index}.jpg`;
   const buffer   = Buffer.from(base64, "base64");
 
   if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
     try {
-      const storagePath = filename;
+      const storagePath = `${folder}/${filename}`;
       const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${storagePath}`;
       const res = await axios.post(url, buffer, {
         headers: {
@@ -161,7 +161,7 @@ const saveImage = async (base64, index) => {
   try {
     const filepath = path.join(UPLOADS_DIR, filename);
     fs.writeFileSync(filepath, buffer);
-    return `/uploads/samples/${filename}`;
+    return `/uploads/samples/${folder}/${filename}`;
   } catch (e) {
     return `landmark_direct_${Date.now()}_${index}`;
   }
@@ -692,7 +692,7 @@ const uploadSamples = async (req, res) => {
             const picks = Array.from({ length: count }, (_, k) =>
               Math.round((k / (count - 1 || 1)) * (frameImages.length - 1))
             );
-            const imageUrls = await Promise.all(picks.map((fi, k) => saveImage(frameImages[fi], idx * count + k)));
+            const imageUrls = await Promise.all(picks.map((fi, k) => saveImage(frameImages[fi], idx * count + k, "motion")));
             file_url = imageUrls.join("|");
           }
 
@@ -716,7 +716,7 @@ const uploadSamples = async (req, res) => {
         console.log("Processing SINGLE SEQUENCE with", sequence.length, "frames");
 
         const frameImages = hasImages && Array.isArray(images) && !Array.isArray(images[0]) ? images : [];
-        const imageUrls = await Promise.all(frameImages.map((base64, i) => saveImage(base64, i)));
+        const imageUrls = await Promise.all(frameImages.map((base64, i) => saveImage(base64, i, "motion")));
         const file_url = imageUrls.join("|");
 
         const record = {
