@@ -1,11 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
-const {
-  User,
-  EmailVerification,
-  UserSetting,
-} = require("../models/index.js");
+const { User, EmailVerification, UserSetting } = require("../models/index.js");
 const { sendVerificationCode } = require("../utils/mailer.js");
 require("dotenv").config();
 
@@ -303,7 +299,7 @@ const login = async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        name: user.name || null,
+        // name: user.name || null,
         role: user.role.name,
         profile_image: user.profile_image,
       },
