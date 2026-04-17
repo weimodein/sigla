@@ -958,7 +958,7 @@ const ManageModel = () => {
 
       {/* Test Modal */}
       {testModal && (
-        <Modal
+        <AppModal
           title={`Test Model: ${testModal.version_number}`}
           onClose={() => setTestModal(null)}
         >
@@ -988,7 +988,7 @@ const ManageModel = () => {
 
       {/* Deploy Modal */}
       {deployModal && (
-        <Modal
+        <AppModal
           title={`Deploy Model: ${deployModal.version_number}`}
           onClose={() => setDeployModal(null)}
         >
@@ -1031,7 +1031,7 @@ const ManageModel = () => {
 
       {/* Revert Modal */}
       {revertModal && (
-        <Modal
+        <AppModal
           title={`Revert to: ${revertModal.version_number}`}
           onClose={() => setRevertModal(null)}
         >
