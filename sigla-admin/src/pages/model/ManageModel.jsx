@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import AppModal from "../../components/AppModal.jsx";
 import {
   getAllModels,
   getModelStats,
@@ -15,7 +16,6 @@ import {
   Cpu,
   CheckCircle,
   Clock,
-  X,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -116,60 +116,6 @@ const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
   );
 };
 
-// ── Modal ─────────────────────────────────────────────────────
-const Modal = ({ title, onClose, children, wide = false }) => {
-  const [closing, setClosing] = useState(false);
-  const panelRef = useRef(null);
-
-  const handleClose = useCallback(() => { if (!closing) setClosing(true); }, [closing]);
-
-  useEffect(() => {
-    const h = (e) => { if (e.key === "Escape") handleClose(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [handleClose]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, []);
-
-  return (
-    <div
-      className={`fixed inset-0 flex items-center justify-center px-4 ${closing ? "modal-backdrop-out" : "modal-backdrop-in"}`}
-      style={{
-        zIndex: 1100,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(2px)",
-        WebkitBackdropFilter: "blur(2px)",
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-    >
-      <div
-        ref={panelRef}
-        className={`bg-white rounded-2xl w-full ${wide ? "max-w-3xl" : "max-w-md"} ${closing ? "modal-panel-out" : "modal-panel-in"}`}
-        style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}
-        onAnimationEnd={(e) => { if (closing && e.target === panelRef.current) onClose(); }}
-      >
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #f0f0f0" }}>
-          <h3 className="text-base font-semibold text-gray-800 tracking-tight">{title}</h3>
-          <button
-            onClick={handleClose}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            aria-label="Close dialog"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-};
 
 // ── Main Component ────────────────────────────────────────────
 const ManageModel = () => {
@@ -982,7 +928,7 @@ const ManageModel = () => {
 
       {/* Train Modal */}
       {trainModal && (
-        <Modal title="Train New Model" onClose={() => setTrainModal(false)}>
+        <AppModal title="Train New Model" onClose={() => setTrainModal(false)}>
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
               This will fetch all approved gesture samples from Supabase and
@@ -1037,7 +983,7 @@ const ManageModel = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* Test Modal */}
@@ -1067,7 +1013,7 @@ const ManageModel = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* Deploy Modal */}
@@ -1110,7 +1056,7 @@ const ManageModel = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* Revert Modal */}
@@ -1141,12 +1087,12 @@ const ManageModel = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* Results Modal */}
       {resultModal && (
-        <Modal title={resultModal.title} onClose={() => setResultModal(null)}>
+        <AppModal title={resultModal.title} onClose={() => setResultModal(null)}>
           <div className="space-y-3 text-sm">
             {resultModal.data?.accuracy && (
               <div className="grid grid-cols-2 gap-3">
@@ -1189,7 +1135,7 @@ const ManageModel = () => {
               Close
             </button>
           </div>
-        </Modal>
+        </AppModal>
       )}
     </div>
   );

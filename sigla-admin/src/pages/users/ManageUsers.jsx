@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import AppModal from "../../components/AppModal.jsx";
 import {
   getAllUsers,
   getDeactivatedUsers,
@@ -18,7 +19,6 @@ import {
   AlertTriangle,
   Check,
   Search,
-  X,
   ChevronUp,
   ChevronDown,
   ChevronsLeft,
@@ -260,66 +260,6 @@ const WarningBadge = ({ count }) => {
   );
 };
 
-// ── Modal ────────────────────────────────────────────────────
-const Modal = ({ title, onClose, children }) => {
-  const [closing, setClosing] = useState(false);
-  const panelRef = useRef(null);
-
-  const handleClose = useCallback(() => { if (!closing) setClosing(true); }, [closing]);
-
-  useEffect(() => {
-    const h = (e) => { if (e.key === "Escape") handleClose(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [handleClose]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, []);
-
-  return (
-    <div
-      className={`fixed inset-0 flex items-center justify-center px-4 ${closing ? "modal-backdrop-out" : "modal-backdrop-in"}`}
-      style={{
-        zIndex: 1100,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(2px)",
-        WebkitBackdropFilter: "blur(2px)",
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-    >
-      <div
-        ref={panelRef}
-        className={`rounded-2xl w-full max-w-md ${closing ? "modal-panel-out" : "modal-panel-in"}`}
-        style={{
-          background: C.surface,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
-        }}
-        onAnimationEnd={(e) => { if (closing && e.target === panelRef.current) onClose(); }}
-      >
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #f0f0f0" }}>
-          <h3 className="text-base font-semibold tracking-tight" style={{ color: C.text }}>
-            {title}
-          </h3>
-          <button
-            onClick={handleClose}
-            className="flex items-center justify-center w-7 h-7 rounded-lg transition hover:bg-gray-100"
-            style={{ color: C.muted }}
-            aria-label="Close dialog"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-};
 
 // ── Action Button ────────────────────────────────────────────
 const ActionBtn = ({ label, bg, onClick, disabled, title }) => (
@@ -1080,12 +1020,12 @@ const ManageUsers = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* Edit User Modal */}
       {editModal && (
-        <Modal title="Edit User" onClose={() => setEditModal(null)}>
+        <AppModal title="Edit User" onClose={() => setEditModal(null)}>
           <div className="space-y-3">
             {["name", "username", "email", "age"].map((field) => (
               <div key={field}>
@@ -1153,12 +1093,12 @@ const ManageUsers = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* Create User Modal */}
       {createModal && (
-        <Modal title="Create New User" onClose={() => setCreateModal(false)}>
+        <AppModal title="Create New User" onClose={() => setCreateModal(false)}>
           <div className="space-y-3">
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
               Create a user account directly. This bypasses email verification and the account is immediately active.
@@ -1265,7 +1205,7 @@ const ManageUsers = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
     </div>
   );

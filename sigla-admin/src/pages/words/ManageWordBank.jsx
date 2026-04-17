@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   getAllWords,
@@ -28,12 +28,12 @@ import {
 } from "../../api/wordApi.js";
 import { warnUser } from "../../api/userApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import AppModal from "../../components/AppModal.jsx";
 import {
   BookOpen,
   CheckCircle,
   Clock,
   Search,
-  X,
   Lock,
   Unlock,
   Image,
@@ -89,59 +89,6 @@ const Badge = ({ value }) => {
   );
 };
 
-const Modal = ({ title, onClose, children, wide = false }) => {
-  const [closing, setClosing] = useState(false);
-  const panelRef = useRef(null);
-
-  const handleClose = useCallback(() => { if (!closing) setClosing(true); }, [closing]);
-
-  useEffect(() => {
-    const h = (e) => { if (e.key === "Escape") handleClose(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [handleClose]);
-
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, []);
-
-  return (
-    <div
-      className={`fixed inset-0 flex items-center justify-center px-4 py-6 overflow-y-auto ${closing ? "modal-backdrop-out" : "modal-backdrop-in"}`}
-      style={{
-        zIndex: 1100,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(2px)",
-        WebkitBackdropFilter: "blur(2px)",
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-    >
-      <div
-        ref={panelRef}
-        className={`bg-white rounded-2xl w-full my-auto ${wide ? "max-w-4xl" : "max-w-lg"} ${closing ? "modal-panel-out" : "modal-panel-in"}`}
-        style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}
-        onAnimationEnd={(e) => { if (closing && e.target === panelRef.current) onClose(); }}
-      >
-        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid #f0f0f0" }}>
-          <h3 className="text-base font-semibold text-gray-800 tracking-tight">{title}</h3>
-          <button
-            onClick={handleClose}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            aria-label="Close dialog"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        <div className="px-6 py-5">{children}</div>
-      </div>
-    </div>
-  );
-};
 
 // ── Main Component ────────────────────────────────────────────
 const ManageWordBank = () => {
@@ -688,7 +635,7 @@ const ManageWordBank = () => {
   ];
 
   // ── Gallery threshold helpers ────────────────────────────────
-  const motionThreshold = 50;
+  const motionThreshold = 25;
   const approvedCount = galleryModal?.approved_sample_count || 0;
   const thresholdMet = approvedCount >= motionThreshold;
   const remaining = motionThreshold - approvedCount;
@@ -830,7 +777,7 @@ const ManageWordBank = () => {
                         {word.approved_sample_count || 0}/{word.total_samples || 0} approved
                       </span>
                       {(() => {
-                        const defaultCap = word.gesture_type === "motion" ? 50 : 50;
+                        const defaultCap = 25;
                         const limit = word.sample_limit != null ? word.sample_limit : defaultCap;
                         const total = word.total_samples || 0;
                         const reached = total >= limit;
@@ -915,7 +862,7 @@ const ManageWordBank = () => {
 
       {/* ── Gallery Modal ──────────────────────────────────────── */}
       {galleryModal && (
-        <Modal title={`Gesture Samples — ${galleryModal.label}`} onClose={() => setGalleryModal(null)} wide>
+        <AppModal title={`Gesture Samples — ${galleryModal.label}`} onClose={() => setGalleryModal(null)} wide>
           <div className="space-y-4">
             {/* Word-level header: stats + approve/reject ALL */}
             <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
@@ -1632,12 +1579,12 @@ const ManageWordBank = () => {
               </span>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* ── Add Word Modal ─────────────────────────────────────── */}
       {addModal && (
-        <Modal title="Add Word" onClose={() => setAddModal(false)}>
+        <AppModal title="Add Word" onClose={() => setAddModal(false)}>
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Label *</label>
@@ -1724,18 +1671,18 @@ const ManageWordBank = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* ── Admin Upload Samples Modal ─────────────────────────── */}
       {uploadModal && (
-        <Modal title={`Upload Samples — ${uploadModal.label}`} onClose={() => setUploadModal(null)}>
+        <AppModal title={`Upload Samples — ${uploadModal.label}`} onClose={() => setUploadModal(null)}>
           <div className="space-y-3">
             <p className="text-xs text-gray-500">
               Select gesture images from your device. The system will automatically extract hand landmark
               coordinates from each image using MediaPipe. Uploaded samples are automatically marked as
               approved and count toward the activation threshold
-              (50 samples required).
+              (25 samples required).
             </p>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Gesture Images *</label>
@@ -1768,12 +1715,12 @@ const ManageWordBank = () => {
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* ── Edit Modal ─────────────────────────────────────────── */}
       {editModal && (
-        <Modal title="Edit Word" onClose={() => setEditModal(null)}>
+        <AppModal title="Edit Word" onClose={() => setEditModal(null)}>
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
@@ -1846,11 +1793,11 @@ const ManageWordBank = () => {
                 min="1"
                 value={editForm.sample_limit}
                 onChange={(e) => setEditForm({ ...editForm, sample_limit: e.target.value })}
-                placeholder={`Default: 50`}
+                placeholder={`Default: 25`}
 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Total gesture samples to collect across all users. Each user can contribute up to 50 samples individually. Leave blank to use the default (50).
+                Total gesture samples to collect across all users. Each user can contribute up to 25 samples individually. Leave blank to use the default (25).
               </p>
             </div>
             <div className="flex gap-2 pt-2">
@@ -1869,12 +1816,12 @@ className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outl
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* ── Warn User from Gallery Modal ──────────────────────── */}
       {galleryWarnModal && (
-        <Modal title={`Issue Warning to ${galleryWarnModal.username}`} onClose={() => setGalleryWarnModal(null)}>
+        <AppModal title={`Issue Warning to ${galleryWarnModal.username}`} onClose={() => setGalleryWarnModal(null)}>
           <div className="space-y-3">
             <p className="text-sm text-gray-600 leading-relaxed">
               Issue a warning to <strong>{galleryWarnModal.username}</strong> for submitting
@@ -1907,12 +1854,12 @@ className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outl
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
 
       {/* ── Reject Word Modal ──────────────────────────────────── */}
       {rejectModal && (
-        <Modal title="Reject Word" onClose={() => setRejectModal(null)}>
+        <AppModal title="Reject Word" onClose={() => setRejectModal(null)}>
           <div className="space-y-3">
             <p className="text-sm text-gray-600">
               Rejecting <strong>{rejectModal.label}</strong>. Optionally provide a reason:
@@ -1940,7 +1887,7 @@ className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outl
               </button>
             </div>
           </div>
-        </Modal>
+        </AppModal>
       )}
     </div>
   );
