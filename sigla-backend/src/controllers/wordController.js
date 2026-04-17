@@ -672,8 +672,10 @@ const uploadSamples = async (req, res) => {
         // images[idx] should be an array of base64 strings for that sequence's frames
         console.log("Processing MOTION BATCH with", sequence.length, "sequences");
 
-        const records = await Promise.all(sequence.map(async (seq, idx) => {
-          // seq is one complete sequence: array of frames (each frame is 126 floats)
+        // Process sequences one at a time to avoid overwhelming Supabase with concurrent uploads
+        const records = [];
+        for (let idx = 0; idx < sequence.length; idx++) {
+          const seq = sequence[idx];
           const frameImages = hasImages && Array.isArray(images[idx]) ? images[idx] : [];
           console.log(`  Sequence ${idx}: ${seq.length} frames, ${frameImages.length} images`);
 
@@ -688,17 +690,17 @@ const uploadSamples = async (req, res) => {
             file_url = imageUrls.join("|");
           }
 
-          return {
+          records.push({
             word_id: word.id,
             submitted_by: req.user.id,
             file_url: file_url,
             landmarks: null,
-            sequence: seq,  // This is one complete sequence (array of frames)
-            sample_count: 1,  // One sequence = one sample
+            sequence: seq,
+            sample_count: 1,
             status: "pending",
             is_validated: true,
-          };
-        }));
+          });
+        }
 
         console.log("Creating", records.length, "motion sample records");
         await GestureSample.bulkCreate(records);
