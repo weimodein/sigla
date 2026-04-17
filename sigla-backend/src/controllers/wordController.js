@@ -473,7 +473,7 @@ const adminUploadSamples = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    const { file_url, landmark_url, sample_count } = req.body;
+    const { file_url, sample_count } = req.body;
 
     if (!file_url) {
       return res.status(400).json({ message: "File URL is required" });
@@ -486,7 +486,6 @@ const adminUploadSamples = async (req, res) => {
       word_id: word.id,
       submitted_by: req.user.id,
       file_url,
-      landmark_url: landmark_url || null,
       sample_count: newCount,
       status: "approved",
       is_validated: true,
@@ -547,7 +546,6 @@ const uploadSamples = async (req, res) => {
 
     const {
       file_url,
-      landmark_url,
       sample_count,
       landmarks,
       sequence,
@@ -759,7 +757,6 @@ const uploadSamples = async (req, res) => {
         word_id: word.id,
         submitted_by: req.user.id,
         file_url,
-        landmark_url: landmark_url || null,
         sample_count: newCount,
         status: "pending",
         is_validated: true,

@@ -24,11 +24,6 @@ const GestureSample = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    // Supabase Storage URL of the extracted landmark JSON file
-    landmark_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
     // Number of images in this submission batch
     sample_count: {
       type: DataTypes.INTEGER,

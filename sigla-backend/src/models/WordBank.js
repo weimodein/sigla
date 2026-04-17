@@ -34,10 +34,6 @@ const WordBank = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    audio_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
     hands_count: {
       type: DataTypes.INTEGER,
       defaultValue: 1,

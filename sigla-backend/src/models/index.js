@@ -1,4 +1,3 @@
-const Role = require("./Role.js");
 const User = require("./User.js");
 const EmailVerification = require("./EmailVerification.js");
 const Word = require("./Word.js");
@@ -11,10 +10,6 @@ const UserSetting = require("./UserSetting.js");
 // const ActivityLog = require("./ActivityLog.js");
 
 // ── Associations ──────────────────────────────────────────────
-
-// User belongs to Role
-User.belongsTo(Role, { foreignKey: "role_id", as: "role" });
-Role.hasMany(User, { foreignKey: "role_id", as: "users" });
 
 // EmailVerification belongs to User
 EmailVerification.belongsTo(User, { foreignKey: "user_id", as: "user" });
@@ -53,7 +48,6 @@ User.hasOne(UserSetting, { foreignKey: "user_id", as: "settings" });
 // User.hasMany(ActivityLog, { foreignKey: "user_id", as: "logs" });
 
 module.exports = {
-  Role,
   User,
   EmailVerification,
   Word,

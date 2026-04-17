@@ -289,9 +289,6 @@ const testModel = async (req, res) => {
     // Update model stats with test results
     await model.update({
       accuracy: testResult.accuracy || model.accuracy,
-      precision: testResult.precision || model.precision,
-      recall: testResult.recall || model.recall,
-      f1_score: testResult.f1_score || model.f1_score,
     });
 
     // Log activity

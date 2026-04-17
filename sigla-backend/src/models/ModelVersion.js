@@ -38,18 +38,6 @@ const ModelVersion = sequelize.define(
       type: DataTypes.FLOAT,
       allowNull: true,
     },
-    precision: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-    },
-    recall: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-    },
-    f1_score: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-    },
     total_classes: {
       type: DataTypes.INTEGER,
       allowNull: true,

@@ -3,7 +3,7 @@ import re
 import json
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_class_weight
+from sklearn.utils.class_weight import compute_class_weight  # noqa: F401 (used inside train())
 from app.utils.preprocessor import (
     fetch_approved_samples,
     prepare_static_dataset,
@@ -21,20 +21,20 @@ MODELS_DIR      = "models"
 
 
 def build_static_model(num_classes: int):
-    import tensorflow as tf
     from tensorflow import keras
+    reg = keras.regularizers.l2(1e-4)
     model = keras.Sequential([
         keras.layers.Input(shape=(FEATURE_SIZE,)),
-        keras.layers.Dense(512, activation="relu"),
+        keras.layers.Dense(512, activation="relu", kernel_regularizer=reg),
         keras.layers.BatchNormalization(),
         keras.layers.Dropout(0.4),
-        keras.layers.Dense(256, activation="relu"),
+        keras.layers.Dense(256, activation="relu", kernel_regularizer=reg),
         keras.layers.BatchNormalization(),
         keras.layers.Dropout(0.4),
-        keras.layers.Dense(128, activation="relu"),
+        keras.layers.Dense(128, activation="relu", kernel_regularizer=reg),
         keras.layers.BatchNormalization(),
         keras.layers.Dropout(0.3),
-        keras.layers.Dense(64, activation="relu"),
+        keras.layers.Dense(64, activation="relu", kernel_regularizer=reg),
         keras.layers.Dropout(0.2),
         keras.layers.Dense(num_classes, activation="softmax"),
     ], name="sigla_static_model")
@@ -48,17 +48,18 @@ def build_static_model(num_classes: int):
 
 
 def build_motion_model(num_classes: int):
-    import tensorflow as tf
     from tensorflow import keras
+    reg = keras.regularizers.l2(1e-4)
+    # Reduced LSTM units (256→128→64 → 128→64→32) — prevents overfitting on limited sequences
     model = keras.Sequential([
         keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_SIZE)),
-        keras.layers.LSTM(256, return_sequences=True),
+        keras.layers.LSTM(128, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg),
         keras.layers.Dropout(0.4),
-        keras.layers.LSTM(128, return_sequences=True),
+        keras.layers.LSTM(64, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg),
         keras.layers.Dropout(0.4),
-        keras.layers.LSTM(64, return_sequences=False),
+        keras.layers.LSTM(32, return_sequences=False, kernel_regularizer=reg, recurrent_regularizer=reg),
         keras.layers.Dropout(0.3),
-        keras.layers.Dense(128, activation="relu"),
+        keras.layers.Dense(64, activation="relu", kernel_regularizer=reg),
         keras.layers.Dropout(0.2),
         keras.layers.Dense(num_classes, activation="softmax"),
     ], name="sigla_motion_model")
@@ -181,7 +182,7 @@ def train(version_number: str, model_id: int) -> dict:
         X_train_s, y_train_s,
         validation_data=(X_val_s, y_val_s),
         epochs=200,
-        batch_size=16,
+        batch_size=32,
         callbacks=static_callbacks,
         class_weight=class_weight_dict,
         verbose=1,
@@ -235,7 +236,7 @@ def train(version_number: str, model_id: int) -> dict:
             X_train_m, y_train_m,
             validation_data=(X_val_m, y_val_m),
             epochs=200,
-            batch_size=16,
+            batch_size=32,
             callbacks=motion_callbacks,
             class_weight=motion_class_weight_dict,
             verbose=1,

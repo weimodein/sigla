@@ -15,17 +15,19 @@ private const val TAG                    = "PredictionService"
 private const val SEQUENCE_LENGTH        = 30    // model input size
 private const val MIN_MOTION_FRAMES      = 8     // start running motion inference early
 private const val MOTION_SLIDE_INTERVAL  = 2     // re-run motion every N frames
-private const val MOTION_EARLY_CONF      = 0.70f // motion must be confident before early exit fires
-private const val MOTION_EARLY_STREAK    = 8     // more consecutive hits needed to fire early
-private const val MOTION_VELOCITY_STREAK= 16    // more sustained frames of movement required before probing motion
-private const val STATIC_THRESHOLD       = 0.50f
-private const val MOTION_THRESHOLD       = 0.65f // motion must win more decisively in dual-race
-private const val VELOCITY_WINDOW        = 8
-private const val MOTION_VELOCITY_THRESH = 0.022f // higher — filters out small hand repositioning
-private const val EARLY_EXIT_STREAK      = 4
-private const val EARLY_EXIT_THRESHOLD   = 0.95f
-private const val STATIC_AVG_FRAMES      = 6     // frames to average for static early-exit
-private const val STATIC_SMOOTH_FRAMES   = 6     // frames to average in dual-race static result
+private const val MOTION_EARLY_CONF      = 0.80f // motion must be confident before early exit fires
+private const val MOTION_EARLY_STREAK    = 7     // more consecutive hits needed to fire early
+private const val MOTION_VELOCITY_STREAK = 17    // more sustained frames of movement required before probing motion
+private const val STATIC_THRESHOLD          = 0.55f
+private const val MOTION_THRESHOLD          = 0.70f // raised — motion must win decisively in dual-race
+private const val MOTION_DOMINANCE_MARGIN   = 0.15f // motion must exceed static confidence by this margin
+private const val STATIC_SUPPRESS_STREAK    = 8     // sustained high-velocity frames needed before suppressing static early-exit
+private const val VELOCITY_WINDOW           = 8
+private const val MOTION_VELOCITY_THRESH    = 0.030f // higher — filters out small hand repositioning
+private const val EARLY_EXIT_STREAK         = 4
+private const val EARLY_EXIT_THRESHOLD      = 0.95f
+private const val STATIC_AVG_FRAMES      = 7     // matches STATIC_FRAMES_PER_SAMPLE in CollectionActivity
+private const val STATIC_INFERENCE_INTERVAL = 2  // run static model every N frames to halve CPU cost
 private const val BUFFER_CAPACITY        = 90    // supports time-based buffering
 private const val NO_HAND_TIMEOUT        = 6
 private const val BUFFER_FILL_MS         = 1500L // fire dual-race after 1.5s (time-based)
@@ -104,6 +106,10 @@ class PredictionService(private val context: Context) {
     private var earlyExitStreak  = 0
     private var earlyExitLabel   = -1
 
+    // Cached static result — reused in dual-race to avoid running the model twice
+    private var lastStaticResult: Pair<Int, Float>? = null
+    private var framesSinceStaticRun = 0
+
     // Motion early-exit (sliding window)
     private var motionEarlyStreak    = 0
     private var motionEarlyLabel     = -1
@@ -114,6 +120,12 @@ class PredictionService(private val context: Context) {
     private var lastMotionDetectionTime  = 0L  // tracks when last motion gesture fired — gates re-arm
     private var sustainedMotionFrames    = 0   // consecutive frames above velocity threshold
     private var maxSustainedMotionFrames = 0   // peak streak seen in the current buffer window
+
+    // Pre-allocated inference arrays — reused every call to reduce GC pressure
+    private var staticAvgInput:  FloatArray          = FloatArray(126)
+    private var staticInputArr:  Array<FloatArray>   = arrayOf(staticAvgInput)
+    private var staticOutputArr: Array<FloatArray>   = arrayOf(FloatArray(1))
+    private var motionOutputArr: Array<FloatArray>   = arrayOf(FloatArray(1))
 
     // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -146,6 +158,14 @@ class PredictionService(private val context: Context) {
                 }
             } else {
                 emptyList()
+            }
+
+            // Initialize pre-allocated inference arrays now that label counts are known
+            staticAvgInput  = FloatArray(126)
+            staticInputArr  = arrayOf(staticAvgInput)
+            staticOutputArr = arrayOf(FloatArray(staticLabels.size))
+            if (motionLabels.isNotEmpty()) {
+                motionOutputArr = arrayOf(FloatArray(motionLabels.size))
             }
 
             gestureConfig = loadGestureConfig()
@@ -273,6 +293,9 @@ class PredictionService(private val context: Context) {
             return
         }
 
+        // Guard against corrupt MediaPipe frames (NaN/Inf landmarks)
+        if (features.any { !it.isFinite() }) return
+
         noHandFrames = 0
         collecting   = true
 
@@ -285,6 +308,7 @@ class PredictionService(private val context: Context) {
         val velocity = computeVelocity(features)
         val isMotion = velocity > MOTION_VELOCITY_THRESH
         framesSinceMotionRun++
+        framesSinceStaticRun++
 
         // Track consecutive frames of sustained movement
         if (velocity >= MOTION_VELOCITY_THRESH) {
@@ -295,26 +319,35 @@ class PredictionService(private val context: Context) {
             sustainedMotionFrames = 0
         }
 
+        // Compute buffer mean velocity once per frame — reused in motion probe and dual-race
+        val meanVel = bufferMeanVelocity()
+
         // Motion probe only re-arms after MOTION_SETTLE_MS has passed since the
         // last motion detection. This is time-based so it works correctly even
         // during cooldown when processFrame returns early — no frame counting needed.
         val motionProbeArmed = (now - lastMotionDetectionTime) >= MOTION_SETTLE_MS
 
-        // ── Static early-exit (averaged over recent frames) ───────────────────
-        val staticResult = runAveragedStaticInference()
+        // ── Static early-exit (throttled: run every STATIC_INFERENCE_INTERVAL frames) ─
+        // Matches training distribution: CollectionActivity saves a 5-frame average
+        // as a single sample, so the model expects averaged/smoothed input.
+        if (framesSinceStaticRun >= STATIC_INFERENCE_INTERVAL) {
+            framesSinceStaticRun = 0
+            lastStaticResult = runAveragedStaticInference()
+        }
+
+        val staticResult = lastStaticResult
         if (staticResult != null) {
             staticVoteBuffer.addLast(staticResult)
-            if (staticVoteBuffer.size > STATIC_SMOOTH_FRAMES) staticVoteBuffer.removeFirst()
+            if (staticVoteBuffer.size > STATIC_AVG_FRAMES) staticVoteBuffer.removeFirst()
 
             val (idx, conf)         = staticResult
             val label               = staticLabels.getOrNull(idx) ?: ""
             val isMotionGesture     = gestureConfig[label]?.motion == true
-            val conflictsWithMotion = MOTION_CONFLICTS.containsKey(label)
 
             if (!isMotionGesture && conf >= EARLY_EXIT_THRESHOLD) {
-                // Suppress ALL static early-exits when hand is moving — a motion gesture
-                // may be in progress. Only allow static to fire when hand is still.
-                if (velocity >= MOTION_VELOCITY_THRESH) {
+                // Only suppress static early-exit when movement is genuinely sustained —
+                // a single jittery frame above threshold shouldn't reset a confident static streak.
+                if (velocity >= MOTION_VELOCITY_THRESH && sustainedMotionFrames >= STATIC_SUPPRESS_STREAK) {
                     earlyExitStreak = 0
                     earlyExitLabel  = -1
                 } else {
@@ -345,7 +378,7 @@ class PredictionService(private val context: Context) {
             && framesSinceMotionRun >= MOTION_SLIDE_INTERVAL
             && sustainedMotionFrames >= MOTION_VELOCITY_STREAK
             && motionProbeArmed
-            && bufferMeanVelocity() >= MOTION_VELOCITY_THRESH) {
+            && meanVel >= MOTION_VELOCITY_THRESH) {
 
             framesSinceMotionRun = 0
             val motionResult = runMotionInference(frameBuffer.toList())
@@ -367,10 +400,6 @@ class PredictionService(private val context: Context) {
                     if (mIdx != motionEarlyLabel) { motionEarlyStreak = 0; motionEarlyLabel = mIdx }
                 }
             }
-        } else if (velocity < MOTION_VELOCITY_THRESH) {
-            // Hand is still — reset motion early-exit streak so it doesn't
-            // carry over from a previous frame where hand happened to move
-            framesSinceMotionRun++
         }
 
         // ── Time-based dual-race trigger ──────────────────────────────────────
@@ -386,21 +415,21 @@ class PredictionService(private val context: Context) {
         ))
 
         if (elapsed >= BUFFER_FILL_MS && frameBuffer.size >= MIN_MOTION_FRAMES) {
-            runDualRace(now)
+            runDualRace(now, meanVel)
             resetBuffers()
         }
     }
 
     // ── Dual-race inference ───────────────────────────────────────────────────
 
-    private fun runDualRace(now: Long) {
-        val frames  = frameBuffer.toList()
-        val meanVel = bufferMeanVelocity()
+    private fun runDualRace(now: Long, meanVel: Float) {
+        val frames = frameBuffer.toList()
 
         // Motion only allowed in dual-race if settle time has passed since last motion detection
         val motionProbeArmed = (now - lastMotionDetectionTime) >= MOTION_SETTLE_MS
 
-        val staticResult = getSmoothedStaticResult()
+        // Reuse the last cached static result — avoids running the model a second time
+        val staticResult = lastStaticResult
         val motionResult = if (motionProbeArmed) runMotionInference(frames) else null
 
         if (motionResult != null) {
@@ -410,7 +439,9 @@ class PredictionService(private val context: Context) {
             // Motion only wins if the hand was moving continuously for long enough —
             // brief shakes (e.g. repositioning during a static gesture) are filtered out
             // by requiring the peak sustained streak to reach MIN_MOTION_FRAMES.
+            val sConfForMargin = staticResult?.second ?: 0f
             if (isMotionGesture && mConf >= MOTION_THRESHOLD
+                && mConf >= sConfForMargin + MOTION_DOMINANCE_MARGIN
                 && meanVel >= MOTION_VELOCITY_THRESH
                 && maxSustainedMotionFrames >= MIN_MOTION_FRAMES) {
                 lastDetectionTime       = now
@@ -433,7 +464,7 @@ class PredictionService(private val context: Context) {
 
     // ── Static inference ──────────────────────────────────────────────────────
 
-    // Average input frames first, then run inference once.
+    // Average input frames first, then run inference once using pre-allocated arrays.
     // Matches training distribution: CollectionActivity saves a 5-frame average
     // as a single sample, so the model expects averaged/smoothed input — not raw frames.
     private fun runAveragedStaticInference(): Pair<Int, Float>? {
@@ -442,40 +473,18 @@ class PredictionService(private val context: Context) {
         val recent = frameBuffer.takeLast(STATIC_AVG_FRAMES)
         if (recent.isEmpty()) return null
 
-        val avgInput = FloatArray(126)
+        // Zero and accumulate into pre-allocated buffer
+        staticAvgInput.fill(0f)
         for (frame in recent) {
-            for (i in frame.indices) avgInput[i] += frame[i]
+            for (i in frame.indices) staticAvgInput[i] += frame[i]
         }
         val n = recent.size.toFloat()
-        for (i in avgInput.indices) avgInput[i] /= n
+        for (i in staticAvgInput.indices) staticAvgInput[i] /= n
 
-        val input  = Array(1) { avgInput }
-        val output = Array(1) { FloatArray(staticLabels.size) }
+        // staticInputArr[0] is already staticAvgInput — no new allocation needed
         return try {
-            interp.run(input, output)
-            val probs = output[0]
-            val idx   = probs.indices.maxByOrNull { probs[it] } ?: return null
-            Pair(idx, probs[idx])
-        } catch (_: Exception) { null }
-    }
-
-    private fun getSmoothedStaticResult(): Pair<Int, Float>? {
-        val interp       = staticInterp ?: return null
-        val recentFrames = frameBuffer.takeLast(STATIC_SMOOTH_FRAMES)
-        if (recentFrames.isEmpty()) return null
-
-        val avgInput = FloatArray(126)
-        for (frame in recentFrames) {
-            for (i in frame.indices) avgInput[i] += frame[i]
-        }
-        val n = recentFrames.size.toFloat()
-        for (i in avgInput.indices) avgInput[i] /= n
-
-        val input  = Array(1) { avgInput }
-        val output = Array(1) { FloatArray(staticLabels.size) }
-        return try {
-            interp.run(input, output)
-            val probs = output[0]
+            interp.run(staticInputArr, staticOutputArr)
+            val probs = staticOutputArr[0]
             val idx   = probs.indices.maxByOrNull { probs[it] } ?: return null
             Pair(idx, probs[idx])
         } catch (_: Exception) { null }
@@ -484,17 +493,18 @@ class PredictionService(private val context: Context) {
     // ── Motion inference ──────────────────────────────────────────────────────
 
     // Mean frame-to-frame velocity across the whole buffer.
-    // Used in dual-race to confirm the buffer actually contains real movement
-    // before letting the motion model win.
+    // Uses direct index access to avoid list/array allocations in the inner loop.
     private fun bufferMeanVelocity(): Float {
         val frames = frameBuffer.toList()
         if (frames.size < 2) return 0f
         var total = 0f
         for (i in 1 until frames.size) {
-            total += euclideanDist(
-                KEY_XY.map { frames[i][it] }.toFloatArray(),
-                KEY_XY.map { frames[i - 1][it] }.toFloatArray()
-            )
+            var sum = 0f
+            for (j in KEY_XY) {
+                val d = frames[i][j] - frames[i - 1][j]
+                sum += d * d
+            }
+            total += sqrt(sum)
         }
         return total / (frames.size - 1)
     }
@@ -508,11 +518,10 @@ class PredictionService(private val context: Context) {
             Log.w(TAG, "Motion inference skipped — frame with wrong feature size detected (expected 126)")
             return null
         }
-        val input  = Array(1) { Array(SEQUENCE_LENGTH) { i -> seq[i] } }
-        val output = Array(1) { FloatArray(motionLabels.size) }
+        val input = Array(1) { Array(SEQUENCE_LENGTH) { i -> seq[i] } }
         return try {
-            interp.run(input, output)
-            val probs = output[0]
+            interp.run(input, motionOutputArr)
+            val probs = motionOutputArr[0]
             val idx   = probs.indices.maxByOrNull { probs[it] } ?: return null
             Pair(idx, probs[idx])
         } catch (_: Exception) { null }
@@ -525,10 +534,12 @@ class PredictionService(private val context: Context) {
         var peakIdx = frames.size / 2
         var peakVel = 0f
         for (i in 1 until frames.size) {
-            val v = euclideanDist(
-                KEY_XY.map { frames[i][it] }.toFloatArray(),
-                KEY_XY.map { frames[i - 1][it] }.toFloatArray()
-            )
+            var sum = 0f
+            for (j in KEY_XY) {
+                val d = frames[i][j] - frames[i - 1][j]
+                sum += d * d
+            }
+            val v = sqrt(sum)
             if (v > peakVel) { peakVel = v; peakIdx = i }
         }
 
@@ -570,14 +581,16 @@ class PredictionService(private val context: Context) {
         frameBuffer.clear()
         staticVoteBuffer.clear()
         velocityHistory.clear()
-        lastKeyXY             = null
-        collecting            = false
-        bufStartTime          = 0L
-        earlyExitStreak       = 0
-        earlyExitLabel        = -1
-        motionEarlyStreak     = 0
-        motionEarlyLabel      = -1
-        framesSinceMotionRun  = 0
+        lastKeyXY                = null
+        collecting               = false
+        bufStartTime             = 0L
+        earlyExitStreak          = 0
+        earlyExitLabel           = -1
+        motionEarlyStreak        = 0
+        motionEarlyLabel         = -1
+        framesSinceMotionRun     = 0
+        framesSinceStaticRun     = 0
+        lastStaticResult         = null
         sustainedMotionFrames    = 0
         maxSustainedMotionFrames = 0
     }

@@ -36,7 +36,7 @@ private const val TARGET_SUGGEST_MOTION = 50
 
 // Timing constants
 private const val SEQUENCE_LENGTH = 30
-private const val STATIC_FRAMES_PER_SAMPLE = 5
+private const val STATIC_FRAMES_PER_SAMPLE = 7  // more frames → more stable averaged feature vector
 private const val MIN_FRAMES = 8
 private const val COUNTDOWN_FRAMES = 15
 private const val COOLDOWN_FRAMES = 20
@@ -361,7 +361,7 @@ class CollectionActivity : AppCompatActivity() {
             val x = features[i * 3]
             val y = features[i * 3 + 1]
             if (forMotion) {
-                if (x < 0f || x > 1f || y < 0f || y > 1f) return false
+                if (x < 0.03f || x > 0.97f || y < 0.03f || y > 0.97f) return false
             } else {
                 if (x < 0.05f || x > 0.95f || y < 0.05f || y > 0.95f) return false
             }
@@ -561,16 +561,40 @@ class CollectionActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveSequence(buffer: List<FloatArray>, frameBitmaps: List<Bitmap>) {
-        // Pad/trim to SEQUENCE_LENGTH
-        val paddedBuffer = buffer.toMutableList()
-        val paddedImages = frameBitmaps.toMutableList()
-        while (paddedBuffer.size < SEQUENCE_LENGTH) {
-            paddedBuffer.add(paddedBuffer.last().copyOf())
-            paddedImages.add(paddedImages.last())
+    // Key landmarks (wrist + fingertips) x,y indices for velocity computation — matches PredictionService
+    private val keyXYIndices = listOf(0,4,8,12,16,20).flatMap { i -> listOf(i*3, i*3+1) }
+
+    private fun peakVelocityIndex(frames: List<FloatArray>): Int {
+        var peakIdx = frames.size / 2
+        var peakVel = 0f
+        for (i in 1 until frames.size) {
+            var sum = 0f
+            for (j in keyXYIndices) { val d = frames[i][j] - frames[i-1][j]; sum += d * d }
+            val v = kotlin.math.sqrt(sum)
+            if (v > peakVel) { peakVel = v; peakIdx = i }
         }
-        val trimmedBuffer = paddedBuffer.take(SEQUENCE_LENGTH)
-        val trimmedImages = paddedImages.take(SEQUENCE_LENGTH)
+        return peakIdx
+    }
+
+    private fun saveSequence(buffer: List<FloatArray>, frameBitmaps: List<Bitmap>) {
+        // Center the 30-frame window on peak-velocity frame so training data matches
+        // inference's extractMotionWindow() centering — eliminates training-inference mismatch
+        val peakIdx = peakVelocityIndex(buffer)
+        val half = SEQUENCE_LENGTH / 2
+        var start = (peakIdx - half).coerceAtLeast(0)
+        var end = start + SEQUENCE_LENGTH
+        if (end > buffer.size) { end = buffer.size; start = (end - SEQUENCE_LENGTH).coerceAtLeast(0) }
+
+        val centeredBuffer = buffer.subList(start, end).toMutableList()
+        val centeredImages = frameBitmaps.subList(start.coerceAtMost(frameBitmaps.lastIndex),
+            end.coerceAtMost(frameBitmaps.size)).toMutableList()
+
+        // Pad to exactly SEQUENCE_LENGTH if shorter than window
+        while (centeredBuffer.size < SEQUENCE_LENGTH) centeredBuffer.add(centeredBuffer.last().copyOf())
+        while (centeredImages.size < SEQUENCE_LENGTH) centeredImages.add(centeredImages.last())
+
+        val trimmedBuffer = centeredBuffer.take(SEQUENCE_LENGTH)
+        val trimmedImages = centeredImages.take(SEQUENCE_LENGTH)
 
         // For suggest mode, hold in memory until user confirms on review screen
         if (isSuggestMode) {
