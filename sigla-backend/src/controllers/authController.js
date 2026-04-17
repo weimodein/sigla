@@ -3,7 +3,6 @@ const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 const {
   User,
-  Role,
   EmailVerification,
   UserSetting,
 } = require("../models/index.js");
@@ -273,7 +272,6 @@ const login = async (req, res) => {
       where: {
         [Op.or]: [{ email: identifier }, { username: identifier }],
       },
-      include: [{ model: Role, as: "role", attributes: ["name"] }],
     });
 
     if (!user) {
@@ -468,7 +466,6 @@ const getMe = async (req, res) => {
     const user = await User.findOne({
       where: { id: req.user.id },
       attributes: { exclude: ["password"] },
-      include: [{ model: Role, as: "role", attributes: ["name"] }],
     });
 
     if (!user) {

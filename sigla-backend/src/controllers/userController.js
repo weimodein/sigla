@@ -2,9 +2,7 @@ const bcrypt = require("bcrypt");
 const { Op } = require("sequelize");
 const {
   User,
-  Role,
   UserSetting,
-  // ActivityLog,
   Notification,
   Word,
   GestureSample,
@@ -28,7 +26,6 @@ const getAllUsers = async (req, res) => {
     const { count, rows } = await User.findAndCountAll({
       where,
       attributes: { exclude: ["password"] },
-      include: [{ model: Role, as: "role", attributes: ["name"] }],
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [["created_at", "DESC"]],
@@ -117,7 +114,6 @@ const getUserById = async (req, res) => {
     const user = await User.findOne({
       where: { id: req.params.id },
       attributes: { exclude: ["password"] },
-      include: [{ model: Role, as: "role", attributes: ["name"] }],
     });
 
     if (!user) {
