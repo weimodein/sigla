@@ -576,21 +576,6 @@ const ManageModel = () => {
                 </th>
                 <th className="px-4 py-3">
                   <span className="text-xs font-semibold text-gray-500">
-                    Precision
-                  </span>
-                </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
-                    Recall
-                  </span>
-                </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
-                    F1 Score
-                  </span>
-                </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
                     Classes
                   </span>
                 </th>
@@ -649,7 +634,7 @@ const ManageModel = () => {
                 {paginatedModels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={4}
                       className="text-center py-10"
                       style={{ color: C.muted, fontSize: "0.85rem" }}
                     >
@@ -826,23 +811,8 @@ const ManageModel = () => {
                           style={{ background: "#fafafa" }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <td colSpan={7} className="px-4 py-4">
+                          <td colSpan={4} className="px-4 py-4">
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                              <MetricBox
-                                label="Precision"
-                                value={fmt(model.precision)}
-                                color={getMetricColor(model.precision)}
-                              />
-                              <MetricBox
-                                label="Recall"
-                                value={fmt(model.recall)}
-                                color={getMetricColor(model.recall)}
-                              />
-                              <MetricBox
-                                label="F1 Score"
-                                value={fmt(model.f1_score)}
-                                color={getMetricColor(model.f1_score)}
-                              />
                               <MetricBox
                                 label="Total Classes"
                                 value={model.total_classes ?? "—"}
@@ -1100,24 +1070,6 @@ const ManageModel = () => {
                   <p className="text-xs text-gray-500">Accuracy</p>
                   <p className="font-bold text-lg text-blue-900">
                     {fmt(resultModal.data.accuracy)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">F1 Score</p>
-                  <p className="font-bold text-lg text-blue-900">
-                    {fmt(resultModal.data.f1_score)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Precision</p>
-                  <p className="font-bold text-lg text-blue-900">
-                    {fmt(resultModal.data.precision)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Recall</p>
-                  <p className="font-bold text-lg text-blue-900">
-                    {fmt(resultModal.data.recall)}
                   </p>
                 </div>
               </div>

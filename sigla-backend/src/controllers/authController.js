@@ -286,9 +286,12 @@ const login = async (req, res) => {
       return res.status(403).json({ message: "Account no longer exists" });
     }
 
+    const ROLE_MAP = { 1: "admin", 2: "moderator", 3: "user" };
+    const roleName = ROLE_MAP[user.role_id] ?? "user";
+
     const token = generateToken({
       id: user.id,
-      role_name: user.role.name,
+      role_name: roleName,
       status: user.status,
     });
 
@@ -299,8 +302,7 @@ const login = async (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        // name: user.name || null,
-        role: user.role.name,
+        role: roleName,
         profile_image: user.profile_image,
       },
     });
