@@ -108,8 +108,8 @@ def prepare_static_dataset(dataset: dict):
                 continue
             samples_for_label.append(features)
 
-        # Always augment to at least 3× the collected count for better generalization
-        target = max(len(samples_for_label) * 3, 150)
+        # 25 samples × 7 = 175 augmented + 25 real = 200 total (matches 50-sample baseline volume)
+        target = max(len(samples_for_label) * 7, 175)
         augmented = augment_static_samples(samples_for_label, target_count=target)
         samples_for_label.extend(augmented)
 
@@ -153,8 +153,8 @@ def prepare_motion_dataset(dataset: dict):
 
             sequences_for_label.append(seq)
 
-        # Always augment to at least 3× the collected count for better generalization
-        target = max(len(sequences_for_label) * 3, 100)
+        # 25 sequences × 6 = 150 augmented + 25 real = 175 total
+        target = max(len(sequences_for_label) * 6, 150)
         augmented = augment_motion_sequences(
             [s.tolist() for s in sequences_for_label], target_count=target
         )
@@ -196,11 +196,11 @@ def augment_static_samples(samples: list, target_count: int = 150) -> list:
         aug_type = rng.integers(3)
         if aug_type == 0:
             # Gaussian noise
-            noise = rng.normal(0, 0.008, base.shape)
+            noise = rng.normal(0, 0.010, base.shape)
             result = np.clip(base + noise, 0.0, 1.0)
         elif aug_type == 1:
             # Slight scaling around hand centre
-            scale = rng.uniform(0.92, 1.08)
+            scale = rng.uniform(0.90, 1.10)
             cx = float(np.mean(base[0::3]))   # mean x of all landmarks
             cy = float(np.mean(base[1::3]))   # mean y of all landmarks
             result = base.copy()
@@ -208,8 +208,8 @@ def augment_static_samples(samples: list, target_count: int = 150) -> list:
             result[1::3] = np.clip(cy + (base[1::3] - cy) * scale, 0.0, 1.0)
         else:
             # Slight translation
-            tx = rng.uniform(-0.03, 0.03)
-            ty = rng.uniform(-0.03, 0.03)
+            tx = rng.uniform(-0.04, 0.04)
+            ty = rng.uniform(-0.04, 0.04)
             result = base.copy()
             result[0::3] = np.clip(base[0::3] + tx, 0.0, 1.0)
             result[1::3] = np.clip(base[1::3] + ty, 0.0, 1.0)
@@ -235,8 +235,8 @@ def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:
 
         aug_type = rng.integers(3)
         if aug_type == 0:
-            # Temporal speed variation (±15%)
-            stretch = rng.uniform(0.85, 1.15)
+            # Temporal speed variation (±20%)
+            stretch = rng.uniform(0.80, 1.20)
             new_len = int(SEQUENCE_LENGTH * stretch)
             indices = np.linspace(0, SEQUENCE_LENGTH - 1, new_len)
             stretched = np.array([
@@ -247,12 +247,12 @@ def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:
             result = center_on_peak_velocity(stretched)
         elif aug_type == 1:
             # Per-frame Gaussian noise
-            noise = rng.normal(0, 0.008, base.shape)
+            noise = rng.normal(0, 0.010, base.shape)
             result = np.clip(base + noise, 0.0, 1.0)
         else:
-            # Random frame dropout — replace up to 3 frames with adjacent frame
+            # Random frame dropout — replace up to 4 frames with adjacent frame
             result = base.copy()
-            n_drop = rng.integers(1, 4)
+            n_drop = rng.integers(1, 5)
             drop_indices = rng.choice(SEQUENCE_LENGTH - 1, size=n_drop, replace=False)
             for idx in drop_indices:
                 result[idx] = result[idx + 1]

@@ -22,19 +22,19 @@ MODELS_DIR      = "models"
 
 def build_static_model(num_classes: int):
     from tensorflow import keras
-    reg = keras.regularizers.l2(1e-4)
+    reg = keras.regularizers.l2(2e-4)
     model = keras.Sequential([
         keras.layers.Input(shape=(FEATURE_SIZE,)),
-        keras.layers.Dense(512, activation="relu", kernel_regularizer=reg),
-        keras.layers.BatchNormalization(),
-        keras.layers.Dropout(0.4),
         keras.layers.Dense(256, activation="relu", kernel_regularizer=reg),
         keras.layers.BatchNormalization(),
         keras.layers.Dropout(0.4),
         keras.layers.Dense(128, activation="relu", kernel_regularizer=reg),
         keras.layers.BatchNormalization(),
-        keras.layers.Dropout(0.3),
+        keras.layers.Dropout(0.4),
         keras.layers.Dense(64, activation="relu", kernel_regularizer=reg),
+        keras.layers.BatchNormalization(),
+        keras.layers.Dropout(0.3),
+        keras.layers.Dense(32, activation="relu", kernel_regularizer=reg),
         keras.layers.Dropout(0.2),
         keras.layers.Dense(num_classes, activation="softmax"),
     ], name="sigla_static_model")
@@ -49,7 +49,7 @@ def build_static_model(num_classes: int):
 
 def build_motion_model(num_classes: int):
     from tensorflow import keras
-    reg = keras.regularizers.l2(1e-4)
+    reg = keras.regularizers.l2(2e-4)
     # Reduced LSTM units (256→128→64 → 128→64→32) — prevents overfitting on limited sequences
     model = keras.Sequential([
         keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_SIZE)),
@@ -171,10 +171,10 @@ def train(version_number: str, model_id: int) -> dict:
 
     static_callbacks = [
         keras.callbacks.EarlyStopping(
-            monitor="val_accuracy", patience=15, restore_best_weights=True
+            monitor="val_accuracy", patience=20, restore_best_weights=True
         ),
         keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss", factor=0.5, patience=7
+            monitor="val_loss", factor=0.5, patience=10
         ),
     ]
 
@@ -225,10 +225,10 @@ def train(version_number: str, model_id: int) -> dict:
 
         motion_callbacks = [
             keras.callbacks.EarlyStopping(
-                monitor="val_accuracy", patience=15, restore_best_weights=True
+                monitor="val_accuracy", patience=20, restore_best_weights=True
             ),
             keras.callbacks.ReduceLROnPlateau(
-                monitor="val_loss", factor=0.5, patience=7
+                monitor="val_loss", factor=0.5, patience=10
             ),
         ]
 
