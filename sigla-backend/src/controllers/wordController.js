@@ -677,9 +677,17 @@ const uploadSamples = async (req, res) => {
           const frameImages = hasImages && Array.isArray(images[idx]) ? images[idx] : [];
           console.log(`  Sequence ${idx}: ${seq.length} frames, ${frameImages.length} images`);
 
-          // Upload each frame image and join with '|'
-          const imageUrls = await Promise.all(frameImages.map((base64, i) => saveImage(base64, i)));
-          const file_url = imageUrls.join("|");
+          // Upload 5 evenly-spaced frames per sequence so the admin can review motion quality
+          // Frames at 0%, 25%, 50%, 75%, 100% of the sequence
+          let file_url = "";
+          if (frameImages.length > 0) {
+            const count = Math.min(5, frameImages.length);
+            const picks = Array.from({ length: count }, (_, k) =>
+              Math.round((k / (count - 1 || 1)) * (frameImages.length - 1))
+            );
+            const imageUrls = await Promise.all(picks.map((fi, k) => saveImage(frameImages[fi], idx * count + k)));
+            file_url = imageUrls.join("|");
+          }
 
           return {
             word_id: word.id,
