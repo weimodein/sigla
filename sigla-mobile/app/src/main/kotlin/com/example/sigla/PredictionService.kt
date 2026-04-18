@@ -243,7 +243,7 @@ class PredictionService(private val context: Context) {
             if (local.exists()) {
                 Log.d(TAG, "Loading gesture_config.json from filesDir")
                 local.readText()
-            } else if (context.assets.list("")!!.contains("gesture_config.json")) {
+            } else if (context.assets.list("")?.contains("gesture_config.json") == true) {
                 Log.d(TAG, "Loading gesture_config.json from assets")
                 context.assets.open("gesture_config.json").bufferedReader().readText()
             } else {

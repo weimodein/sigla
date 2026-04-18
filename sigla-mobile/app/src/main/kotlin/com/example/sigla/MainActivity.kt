@@ -494,7 +494,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val analysis = ImageAnalysis.Builder()
-            .setTargetRotation(binding.cameraPreview.display.rotation)
+            .setTargetRotation(binding.cameraPreview.display?.rotation ?: android.view.Surface.ROTATION_0)
             .setTargetResolution(android.util.Size(320, 240))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
