@@ -104,12 +104,14 @@ const ManageWordBank = () => {
   const [filterCat, setFilterCat] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Modal state
-  const [galleryModal, setGalleryModal] = useState(null);
-  const [editModal, setEditModal] = useState(null);
-  const [rejectModal, setRejectModal] = useState(null);
-  const [addModal, setAddModal] = useState(false);
-  const [uploadModal, setUploadModal] = useState(null); // word object
+  // Modal state — single object to prevent concurrent conflicts
+  const [modal, setModal] = useState({ type: null, data: null });
+  const closeModal = () => setModal({ type: null, data: null });
+  const galleryModal  = modal.type === "gallery" ? modal.data : null;
+  const editModal     = modal.type === "edit"    ? modal.data : null;
+  const rejectModal   = modal.type === "reject"  ? modal.data : null;
+  const addModal      = modal.type === "add";
+  const uploadModal   = modal.type === "upload"  ? modal.data : null;
   const [samples, setSamples] = useState([]);
   const [samplesLoading, setSamplesLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -118,8 +120,6 @@ const ManageWordBank = () => {
   const [motionSequences, setMotionSequences] = useState([]);
   const [motionSequencesLoading, setMotionSequencesLoading] = useState(false);
   const [generatingVideo, setGeneratingVideo] = useState(false);
-  const [selectedSequences, setSelectedSequences] = useState([]);
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState(null);
   const [perSeqVideos, setPerSeqVideos] = useState({}); // sample_id -> video_url
   const [perSeqSpeeds, setPerSeqSpeeds] = useState({}); // sample_id -> playback speed
   const [galleryWarnModal, setGalleryWarnModal] = useState(null); // { userId, username }
@@ -177,12 +177,10 @@ const ManageWordBank = () => {
 
   // ── Open image gallery ──────────────────────────────────────
   const handleOpenGallery = async (word) => {
-    setGalleryModal(word);
+    setModal({ type: "gallery", data: word });
     setSamplesLoading(true);
     setSamples([]);
     setMotionSequences([]);
-    setSelectedSequences([]);
-    setGeneratedVideoUrl(null);
     setPerSeqVideos({});
     setPerSeqSpeeds({});
     try {
@@ -194,8 +192,6 @@ const ManageWordBank = () => {
         try {
           const seqData = await getMotionSequences(word.id);
           setMotionSequences(seqData.sequences || []);
-          // Pre-select all sequences
-          setSelectedSequences(seqData.sequences?.map(s => s.sample_id) || []);
         } catch (err) {
           console.error("Failed to load motion sequences:", err);
         } finally {
@@ -383,7 +379,7 @@ const ManageWordBank = () => {
 
   const handleRejectOpen = (word) => {
     setRejectReason("");
-    setRejectModal(word);
+    setModal({ type: "reject", data: word });
   };
 
   const handleRejectConfirm = async () => {
@@ -391,7 +387,7 @@ const ManageWordBank = () => {
     try {
       await rejectWord(rejectModal.id, rejectReason);
       showSuccess("Word rejected. User will be notified.");
-      setRejectModal(null);
+      closeModal();
       fetchStats();
       fetchWords();
     } catch (err) {
@@ -419,7 +415,7 @@ const ManageWordBank = () => {
       filipino_translation: word.filipino_translation || "",
       sample_limit: word.sample_limit != null ? String(word.sample_limit) : "",
     });
-    setEditModal(word);
+    setModal({ type: "edit", data: word });
   };
 
   const handleEditSave = async () => {
@@ -435,7 +431,7 @@ const ManageWordBank = () => {
         sample_limit: limitVal === "" ? null : parseInt(limitVal),
       });
       showSuccess("Word updated successfully");
-      setEditModal(null);
+      closeModal();
       fetchWords();
     } catch (err) {
       showError(err.response?.data?.message || "Failed to update word");
@@ -473,7 +469,7 @@ const ManageWordBank = () => {
     try {
       await adminAddWord(addForm);
       showSuccess(`Word "${addForm.label}" added. Upload gesture samples to activate it.`);
-      setAddModal(false);
+      closeModal();
       setAddForm({ label: "", description: "", hands_count: 1, sign_type: "FSL", category: "additional words", gesture_type: "static", filipino_translation: "" });
       fetchStats();
       fetchWords();
@@ -489,7 +485,7 @@ const ManageWordBank = () => {
 
   const handleOpenUpload = (word) => {
     setUploadForm({ files: [] });
-    setUploadModal(word);
+    setModal({ type: "upload", data: word });
   };
 
   const handleAdminUpload = async () => {
@@ -505,7 +501,7 @@ const ManageWordBank = () => {
       const images = await Promise.all(uploadForm.files.map(toBase64));
       const res = await adminUploadSamples(uploadModal.id, { images });
       showSuccess(res.message || `${uploadForm.files.length} sample(s) uploaded successfully`);
-      setUploadModal(null);
+      closeModal();
       fetchStats();
       fetchWords();
       if (galleryModal) await reloadSamples(galleryModal.id);
@@ -521,7 +517,7 @@ const ManageWordBank = () => {
     setActionLoading(true);
     try {
       await setWordThumbnail(word.id, imageUrl);
-      setGalleryModal((prev) => prev ? { ...prev, thumbnail_url: imageUrl } : prev);
+      setModal((prev) => prev.type === "gallery" ? { type: "gallery", data: { ...prev.data, thumbnail_url: imageUrl } } : prev);
       fetchWords();
       showSuccess("Word bank image updated");
     } catch (err) {
@@ -536,7 +532,7 @@ const ManageWordBank = () => {
     setActionLoading(true);
     try {
       await activateWord(galleryModal.id);
-      setGalleryModal((prev) => prev ? { ...prev, is_active: true } : prev);
+      setModal((prev) => prev.type === "gallery" ? { type: "gallery", data: { ...prev.data, is_active: true } } : prev);
       fetchWords();
       showSuccess("Word activated and now visible in the mobile app");
     } catch (err) {
@@ -552,7 +548,7 @@ const ManageWordBank = () => {
     setVideoLoading(true);
     try {
       await setWordVideo(galleryModal.id, { video_url: videoUrl.trim() });
-      setGalleryModal((prev) => prev ? { ...prev, video_url: videoUrl.trim() } : prev);
+      setModal((prev) => prev.type === "gallery" ? { type: "gallery", data: { ...prev.data, video_url: videoUrl.trim() } } : prev);
       setVideoInput("");
       fetchWords();
       showSuccess("Gesture video updated");
@@ -573,7 +569,7 @@ const ManageWordBank = () => {
       setVideoLoading(true);
       try {
         const res = await setWordVideo(galleryModal.id, { video_base64: base64, video_ext: ext });
-        setGalleryModal((prev) => prev ? { ...prev, video_url: res.video_url } : prev);
+        setModal((prev) => prev.type === "gallery" ? { type: "gallery", data: { ...prev.data, video_url: res.video_url } } : prev);
         fetchWords();
         showSuccess("Gesture video uploaded");
       } catch (err) {
@@ -584,38 +580,6 @@ const ManageWordBank = () => {
     };
     reader.readAsDataURL(file);
     e.target.value = "";
-  };
-
-  // ── Generate video from motion sequences ─────────────────────
-  const handleGenerateVideo = async () => {
-    if (selectedSequences.length === 0) {
-      showError("Please select at least one sequence to generate video");
-      return;
-    }
-
-    setGeneratingVideo(true);
-    try {
-      const res = await generateVideoFromSequence(galleryModal.id, selectedSequences);
-      setGeneratedVideoUrl(res.video_url);
-      showSuccess("Video generated successfully!");
-
-      // Optionally auto-set the generated video as the word's video
-      const fullVideoUrl = res.video_url.startsWith("/")
-        ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${res.video_url}`
-        : res.video_url;
-
-      // Ask user if they want to set this as the word bank video
-      if (window.confirm("Video generated! Would you like to set this as the word bank video for the mobile app?")) {
-        await setWordVideo(galleryModal.id, { video_url: res.video_url });
-        setGalleryModal((prev) => prev ? { ...prev, video_url: res.video_url } : prev);
-        fetchWords();
-        showSuccess("Video set as word bank video");
-      }
-    } catch (err) {
-      showError(err.response?.data?.message || "Failed to generate video");
-    } finally {
-      setGeneratingVideo(false);
-    }
   };
 
   // ── Group samples by user ────────────────────────────────────
@@ -660,7 +624,7 @@ const ManageWordBank = () => {
           </p>
         </div>
         <button
-          onClick={() => setAddModal(true)}
+          onClick={() => setModal({ type: "add", data: null })}
           className="flex items-center gap-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
         >
           <Plus size={16} /> Add Word
@@ -870,7 +834,7 @@ const ManageWordBank = () => {
 
       {/* ── Gallery Modal ──────────────────────────────────────── */}
       {galleryModal && (
-        <AppModal title={`Gesture Samples — ${galleryModal.label}`} onClose={() => setGalleryModal(null)} wide>
+        <AppModal title={`Gesture Samples — ${galleryModal.label}`} onClose={closeModal} wide>
           <div className="space-y-4">
             {/* Word-level header: stats + approve/reject ALL */}
             <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
@@ -1016,25 +980,6 @@ const ManageWordBank = () => {
                       ({motionSequences.length} sequences)
                     </span>
                   </div>
-                  {motionSequences.length > 0 && selectedSequences.length > 0 && (
-                    <button
-                      onClick={() => handleGenerateVideo()}
-                      disabled={generatingVideo}
-                      className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {generatingVideo ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={12} />
-                          Generate All Selected ({selectedSequences.length})
-                        </>
-                      )}
-                    </button>
-                  )}
                 </div>
 
                 {!thresholdMet && (
@@ -1144,7 +1089,7 @@ const ManageWordBank = () => {
                                       playback_speed: perSeqSpeeds[seq.sample_id] ?? 1,
                                     });
                                     await activateWord(galleryModal.id);
-                                    setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[seq.sample_id], is_active: true } : prev);
+                                    setModal((prev) => prev.type === "gallery" ? { type: "gallery", data: { ...prev.data, video_url: perSeqVideos[seq.sample_id], is_active: true } } : prev);
                                     fetchWords();
                                     showSuccess("Video set and word activated");
                                   } catch (err) {
@@ -1174,22 +1119,7 @@ const ManageWordBank = () => {
                         )}
 
                           {/* Actions */}
-                        <div className="flex items-center justify-between px-3 pb-2 bg-gray-50">
-                          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedSequences.includes(seq.sample_id)}
-                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedSequences(prev => [...prev, seq.sample_id]);
-                                } else {
-                                  setSelectedSequences(prev => prev.filter(id => id !== seq.sample_id));
-                                }
-                              }}
-                            />
-                            Include in bulk video
-                          </label>
+                        <div className="flex items-center justify-end px-3 pb-2 bg-gray-50">
                           <button
                             onClick={async () => {
                               setGeneratingVideo(true);
@@ -1225,58 +1155,6 @@ const ManageWordBank = () => {
                   </div>
                 )}
 
-                {/* Generated Video Preview (bulk generation) */}
-                {generatedVideoUrl && (
-                  <div className="border-t border-indigo-200 bg-indigo-50 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-sm font-semibold text-indigo-800">Generated Video</span>
-                      <span className="text-xs text-indigo-600">Ready to use</span>
-                    </div>
-                    <video
-                      src={
-                        generatedVideoUrl.startsWith("/")
-                          ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${generatedVideoUrl}`
-                          : generatedVideoUrl
-                      }
-                      controls
-                      className="w-full max-w-md rounded-lg border border-indigo-300 bg-black"
-                      autoPlay
-                      loop
-                    />
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={async () => {
-                          try {
-                            await setWordVideo(galleryModal.id, { video_url: generatedVideoUrl });
-                            await activateWord(galleryModal.id);
-                            setGalleryModal((prev) => prev ? { ...prev, video_url: generatedVideoUrl, is_active: true } : prev);
-                            fetchWords();
-                            showSuccess("Video set and word activated");
-                          } catch (err) {
-                            showError(err.response?.data?.message || "Failed to set video");
-                          }
-                        }}
-                        disabled={!thresholdMet}
-                        title={!thresholdMet ? `Requires ${motionThreshold} approved samples (${remaining} more needed)` : undefined}
-                        className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        Set as Word Bank Video
-                      </button>
-                      <a
-                        href={
-                          generatedVideoUrl.startsWith("/")
-                            ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${generatedVideoUrl}`
-                            : generatedVideoUrl
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs bg-white border border-indigo-300 hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg"
-                      >
-                        Download Video
-                      </a>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1390,7 +1268,7 @@ const ManageWordBank = () => {
                                         video_url: perSeqVideos[sample.id],
                                         playback_speed: perSeqSpeeds[sample.id] ?? 1,
                                       });
-                                      setGalleryModal((prev) => prev ? { ...prev, video_url: perSeqVideos[sample.id] } : prev);
+                                      setModal((prev) => prev.type === "gallery" ? { type: "gallery", data: { ...prev.data, video_url: perSeqVideos[sample.id] } } : prev);
                                       fetchWords();
                                       showSuccess("Video set as word bank video");
                                     } catch (err) {
@@ -1585,7 +1463,7 @@ const ManageWordBank = () => {
 
       {/* ── Add Word Modal ─────────────────────────────────────── */}
       {addModal && (
-        <AppModal title="Add Word" onClose={() => setAddModal(false)}>
+        <AppModal title="Add Word" onClose={closeModal}>
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Label *</label>
@@ -1665,7 +1543,7 @@ const ManageWordBank = () => {
                 {actionLoading ? "Adding..." : "Add Word"}
               </button>
               <button
-                onClick={() => setAddModal(false)}
+                onClick={closeModal}
                 className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancel
@@ -1677,7 +1555,7 @@ const ManageWordBank = () => {
 
       {/* ── Admin Upload Samples Modal ─────────────────────────── */}
       {uploadModal && (
-        <AppModal title={`Upload Samples — ${uploadModal.label}`} onClose={() => setUploadModal(null)}>
+        <AppModal title={`Upload Samples — ${uploadModal.label}`} onClose={closeModal}>
           <div className="space-y-3">
             <p className="text-xs text-gray-500">
               Select gesture images from your device. The system will automatically extract hand landmark
@@ -1709,7 +1587,7 @@ const ManageWordBank = () => {
                 {actionLoading ? "Uploading..." : "Upload Samples"}
               </button>
               <button
-                onClick={() => setUploadModal(null)}
+                onClick={closeModal}
                 className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancel
@@ -1721,7 +1599,7 @@ const ManageWordBank = () => {
 
       {/* ── Edit Modal ─────────────────────────────────────────── */}
       {editModal && (
-        <AppModal title="Edit Word" onClose={() => setEditModal(null)}>
+        <AppModal title="Edit Word" onClose={closeModal}>
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
@@ -1810,7 +1688,7 @@ className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outl
                 {actionLoading ? "Saving..." : "Save Changes"}
               </button>
               <button
-                onClick={() => setEditModal(null)}
+                onClick={closeModal}
                 className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancel
@@ -1860,7 +1738,7 @@ className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outl
 
       {/* ── Reject Word Modal ──────────────────────────────────── */}
       {rejectModal && (
-        <AppModal title="Reject Word" onClose={() => setRejectModal(null)}>
+        <AppModal title="Reject Word" onClose={closeModal}>
           <div className="space-y-3">
             <p className="text-sm text-gray-600">
               Rejecting <strong>{rejectModal.label}</strong>. Optionally provide a reason:
@@ -1881,7 +1759,7 @@ className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outl
                 {actionLoading ? "Rejecting..." : "Confirm Reject"}
               </button>
               <button
-                onClick={() => setRejectModal(null)}
+                onClick={closeModal}
                 className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancel
