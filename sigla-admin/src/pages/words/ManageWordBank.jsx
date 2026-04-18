@@ -227,6 +227,8 @@ const ManageWordBank = () => {
       await rejectSample(wordId, sampleId);
       showSuccess("Sample rejected");
       await reloadSamples(wordId);
+      fetchStats();
+      fetchWords();
     } catch (err) {
       showError(err.response?.data?.message || "Failed to reject sample");
     }
@@ -494,13 +496,19 @@ const ManageWordBank = () => {
     if (!uploadForm.files.length) { showError("Please select at least one image"); return; }
     setActionLoading(true);
     try {
-      const formData = new FormData();
-      uploadForm.files.forEach((file) => formData.append("images", file));
-      const res = await adminUploadSamples(uploadModal.id, formData);
+      const toBase64 = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const images = await Promise.all(uploadForm.files.map(toBase64));
+      const res = await adminUploadSamples(uploadModal.id, { images });
       showSuccess(res.message || `${uploadForm.files.length} sample(s) uploaded successfully`);
       setUploadModal(null);
       fetchStats();
       fetchWords();
+      if (galleryModal) await reloadSamples(galleryModal.id);
     } catch (err) {
       showError(err.response?.data?.message || "Failed to upload samples");
     } finally {

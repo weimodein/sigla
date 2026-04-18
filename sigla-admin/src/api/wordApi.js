@@ -56,11 +56,11 @@ export const rejectAllSamplesByUser = (wordId, userId) =>
     .patch(`/words/${wordId}/samples/user/${userId}/reject-all`)
     .then((r) => r.data);
 
-export const approveSubmission = (wordId) =>
-  api.patch(`/words/${wordId}/approve-submission`).then((r) => r.data);
+export const approveSubmission = (wordId, data) =>
+  api.patch(`/words/${wordId}/approve-submission`, data).then((r) => r.data);
 
-export const rejectSubmission = (wordId) =>
-  api.patch(`/words/${wordId}/reject-submission`).then((r) => r.data);
+export const rejectSubmission = (wordId, data) =>
+  api.patch(`/words/${wordId}/reject-submission`, data).then((r) => r.data);
 
 export const lockWord = (id) =>
   api.patch(`/words/${id}/lock`).then((r) => r.data);
@@ -88,10 +88,8 @@ export const adminAddWord = async (data) => {
   return response.data;
 };
 
-export const adminUploadSamples = async (wordId, formData) => {
-  const response = await api.post(`/words/${wordId}/admin-samples`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+export const adminUploadSamples = async (wordId, data) => {
+  const response = await api.post(`/words/${wordId}/admin-samples`, data);
   return response.data;
 };
 

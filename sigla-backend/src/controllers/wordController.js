@@ -462,63 +462,58 @@ const adminAddWord = async (req, res) => {
 
 // ── POST /api/words/:id/admin-samples ─────────────────────────
 // Admin uploads gesture samples for any word — auto-approved
-// The same MediaPipe landmark extraction pipeline is triggered via the ML service
+// Accepts { images: [base64, ...] } JSON — each image becomes one GestureSample
 // Bypasses user sample cap — admin can upload as many as needed
 // Triggers word activation if threshold is met
 const adminUploadSamples = async (req, res) => {
   try {
     const word = await Word.findOne({ where: { id: req.params.id } });
-
     if (!word) {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    const { file_url, sample_count } = req.body;
+    const { images } = req.body;
 
-    if (!file_url) {
-      return res.status(400).json({ message: "File URL is required" });
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      return res.status(400).json({ message: "At least one image is required" });
     }
 
-    const newCount = parseInt(sample_count) || 1;
+    // Upload each base64 image to Supabase and create one GestureSample per image
+    const samples = [];
+    for (let i = 0; i < images.length; i++) {
+      const url = await saveImage(images[i], i, "static");
+      const sample = await GestureSample.create({
+        word_id: word.id,
+        submitted_by: req.user.id,
+        file_url: url,
+        sample_count: 1,
+        status: "approved",
+        is_validated: true,
+      });
+      samples.push(sample);
+    }
 
-    // Admin-uploaded samples are automatically approved and counted toward the threshold
-    const sample = await GestureSample.create({
-      word_id: word.id,
-      submitted_by: req.user.id,
-      file_url,
-      sample_count: newCount,
-      status: "approved",
-      is_validated: true,
-      // NEW: store landmarks or sequence
-      landmarks:
-        word.gesture_type === "static" ? req.body.landmarks || null : null,
-      sequence:
-        word.gesture_type === "motion" ? req.body.sequence || null : null,
-    });
+    const newCount = samples.length;
 
-    // Update total samples count
+    // Update word counters
     await word.update({
       total_samples: (word.total_samples || 0) + newCount,
+      approved_sample_count: (word.approved_sample_count || 0) + newCount,
     });
 
-    // Check if word should now be activated
+    // Re-fetch word with updated counts before activation check
+    await word.reload();
     const activated = await checkAndActivateWord(word, req.user.id);
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "admin_uploaded_samples",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Admin uploaded ${newCount} gesture sample(s) for word: ${word.label}. Word activated: ${activated}`,
-    // });
+    const remaining = getActivationThreshold(word.gesture_type || "static") - word.approved_sample_count;
 
     return res.status(201).json({
       message: activated
-        ? `Samples uploaded and word "${word.label}" is now active`
-        : `Samples uploaded. ${getActivationThreshold(word.gesture_type || "static") - (word.approved_sample_count + newCount)} more approved samples needed to activate this word.`,
-      sample,
+        ? `${newCount} sample(s) uploaded and word "${word.label}" is now active`
+        : `${newCount} sample(s) uploaded. ${Math.max(0, remaining)} more approved sample(s) needed to activate this word.`,
+      count: newCount,
       activated,
-      approved_sample_count: word.approved_sample_count + newCount,
+      approved_sample_count: word.approved_sample_count,
     });
   } catch (err) {
     console.error("Admin upload samples error:", err);
