@@ -1407,6 +1407,17 @@ const approveAllSamplesForWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
+    // Capture pending counts per submitter BEFORE the bulk update
+    const pendingSamples = await GestureSample.findAll({
+      where: { word_id: word.id, status: "pending" },
+      attributes: ["submitted_by"],
+    });
+    const submitterCounts = {};
+    for (const s of pendingSamples) {
+      if (s.submitted_by)
+        submitterCounts[s.submitted_by] = (submitterCounts[s.submitted_by] || 0) + 1;
+    }
+
     const [count] = await GestureSample.update(
       { status: "approved" },
       { where: { word_id: word.id, status: "pending" } },
@@ -1416,6 +1427,12 @@ const approveAllSamplesForWord = async (req, res) => {
     const activated = await checkAndActivateWord(word, req.user.id);
 
     await word.update({ approved_sample_count: totalApproved });
+
+    // Notify each affected submitter
+    const cap = getSampleCap(word.gesture_type || "static");
+    for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
+      await sendSubmissionNotification(userId, word.label, pendingCount, pendingCount, cap, pendingCount);
+    }
 
     // await ActivityLog.create({
     //   user_id: req.user.id,
@@ -1445,6 +1462,17 @@ const rejectAllSamplesForWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
+    // Capture pending counts per submitter BEFORE the bulk update
+    const pendingSamples = await GestureSample.findAll({
+      where: { word_id: word.id, status: "pending" },
+      attributes: ["submitted_by"],
+    });
+    const submitterCounts = {};
+    for (const s of pendingSamples) {
+      if (s.submitted_by)
+        submitterCounts[s.submitted_by] = (submitterCounts[s.submitted_by] || 0) + 1;
+    }
+
     const [count] = await GestureSample.update(
       { status: "rejected" },
       { where: { word_id: word.id, status: "pending" } },
@@ -1457,6 +1485,12 @@ const rejectAllSamplesForWord = async (req, res) => {
         reviewed_by: req.user.id,
         reviewed_at: new Date(),
       });
+    }
+
+    // Notify each affected submitter
+    const cap = getSampleCap(word.gesture_type || "static");
+    for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
+      await sendSubmissionNotification(userId, word.label, 0, pendingCount, cap, 0);
     }
 
     // await ActivityLog.create({
