@@ -421,12 +421,40 @@ class MainActivity : AppCompatActivity() {
     private fun openAuthDialog() {
         val dialog = AuthDialogFragment()
         dialog.onSignedIn = {
-            // Reload auth state after sign in
             checkAuthState()
             refreshSidebarAuthState()
             loadFilipinoTranslations()
+            applyAccountSettings()
         }
         dialog.show(supportFragmentManager, "auth")
+    }
+
+    private fun applyAccountSettings() {
+        lifecycleScope.launch {
+            try {
+                val response = ApiClient.get(session.token).getMySettings()
+                if (!response.isSuccessful) return@launch
+                val s = response.body()?.settings ?: return@launch
+
+                getSharedPreferences("sigla_prefs", android.content.Context.MODE_PRIVATE).edit()
+                    .putInt(SettingsActivity.PREF_VOLUME, s.volume)
+                    .putString(SettingsActivity.PREF_VOICE, s.voice_type.uppercase())
+                    .putInt(SettingsActivity.PREF_TEXT_SIZE, s.text_size)
+                    .putBoolean(SettingsActivity.PREF_DARK_MODE, s.dark_mode)
+                    .apply()
+
+                val app = AppSettings.getInstance(this@MainActivity)
+                app.volume     = s.volume
+                app.voiceType  = s.voice_type
+                app.textSize   = s.text_size
+                app.isDarkMode = s.dark_mode
+
+                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+                    if (s.dark_mode) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                    else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+                )
+            } catch (_: Exception) { }
+        }
     }
 
     private fun refreshSidebarAuthState() {

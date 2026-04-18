@@ -19,9 +19,14 @@ const {
   getUserRegistrations,
   // getRecentActivity,
 } = require("../controllers/userController.js");
+const { getMySettings, updateMySettings } = require("../controllers/settingsController.js");
 
 // All routes require login
 router.use(authMiddleware);
+
+// ── Settings (any authenticated user) ────────────────────────
+router.get("/settings", getMySettings);
+router.patch("/settings", updateMySettings);
 
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getUserStats);

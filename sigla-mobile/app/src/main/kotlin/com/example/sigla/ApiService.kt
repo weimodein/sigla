@@ -108,6 +108,20 @@ data class ChangePasswordRequest(
 
 data class MessageResponse(val message: String)
 
+data class UserSettingsData(
+    val volume: Int,
+    val voice_type: String,
+    val text_size: Int,
+    val dark_mode: Boolean
+)
+data class UserSettingsResponse(val settings: UserSettingsData)
+data class UpdateSettingsRequest(
+    val volume: Int,
+    val voice_type: String,
+    val text_size: Int,
+    val dark_mode: Boolean
+)
+
 
 // ── API Service ───────────────────────────────────────────────
 
@@ -170,6 +184,13 @@ interface ApiService {
 
     @DELETE("notifications/{id}")
     suspend fun deleteNotification(@Path("id") id: Int): Response<MessageResponse>
+
+    // Settings (auth)
+    @GET("users/settings")
+    suspend fun getMySettings(): Response<UserSettingsResponse>
+
+    @PATCH("users/settings")
+    suspend fun updateMySettings(@Body body: UpdateSettingsRequest): Response<MessageResponse>
 
     // Profile (auth)
     @PUT("users/{id}")

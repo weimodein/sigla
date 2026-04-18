@@ -12,12 +12,14 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.launch
 
 /**
  * SettingsActivity.kt
@@ -69,6 +71,7 @@ class SettingsActivity : AppCompatActivity() {
         setupTopBar()
         setupSidebar()
         loadPreferences()
+        lifecycleScope.launch { pullAndApplySettings() }
         bindVolumeSeekBar()
         bindVoiceToggle()
         bindTextSizeSeekBar()
@@ -206,6 +209,53 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    // ── Backend sync ──────────────────────────────────────────────────────────
+
+    private suspend fun pullAndApplySettings() {
+        if (!session.isLoggedIn) return
+        val response = try {
+            ApiClient.get(session.token).getMySettings()
+        } catch (_: Exception) { return }
+        if (!response.isSuccessful) return
+        val s = response.body()?.settings ?: return
+
+        // Write to SettingsActivity's prefs
+        getSharedPreferences("sigla_prefs", Context.MODE_PRIVATE).edit()
+            .putInt(PREF_VOLUME, s.volume)
+            .putString(PREF_VOICE, s.voice_type.uppercase())
+            .putInt(PREF_TEXT_SIZE, s.text_size)
+            .putBoolean(PREF_DARK_MODE, s.dark_mode)
+            .apply()
+
+        // Keep AppSettings in sync
+        val app = AppSettings.getInstance(this)
+        app.volume     = s.volume
+        app.voiceType  = s.voice_type
+        app.textSize   = s.text_size
+        app.isDarkMode = s.dark_mode
+
+        AppCompatDelegate.setDefaultNightMode(
+            if (s.dark_mode) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        )
+        loadPreferences()
+    }
+
+    private fun pushSettings() {
+        if (!session.isLoggedIn) return
+        lifecycleScope.launch {
+            try {
+                ApiClient.get(session.token).updateMySettings(
+                    UpdateSettingsRequest(
+                        volume     = currentVolume,
+                        voice_type = currentVoice.lowercase(),
+                        text_size  = currentTextSizePct,
+                        dark_mode  = currentDarkMode
+                    )
+                )
+            } catch (_: Exception) { }
+        }
+    }
+
     // ── Load saved preferences ────────────────────────────────────────────────
 
     private fun loadPreferences() {
@@ -260,7 +310,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
-            override fun onStopTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) { pushSettings() }
         })
     }
 
@@ -270,10 +320,12 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnVoiceMale)?.setOnClickListener {
             applyVoiceSelection("MALE")
             savePreference(PREF_VOICE, "MALE")
+            pushSettings()
         }
         findViewById<View>(R.id.btnVoiceFemale)?.setOnClickListener {
             applyVoiceSelection("FEMALE")
             savePreference(PREF_VOICE, "FEMALE")
+            pushSettings()
         }
     }
 
@@ -319,7 +371,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
-            override fun onStopTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) { pushSettings() }
         })
     }
 
@@ -335,6 +387,7 @@ class SettingsActivity : AppCompatActivity() {
                 if (isChecked) AppCompatDelegate.MODE_NIGHT_YES
                 else AppCompatDelegate.MODE_NIGHT_NO
             )
+            pushSettings()
         }
     }
 
@@ -362,6 +415,7 @@ class SettingsActivity : AppCompatActivity() {
                     savePreference(PREF_DARK_MODE, currentDarkMode)
 
                     loadPreferences()
+                    pushSettings()
 
                     AppCompatDelegate.setDefaultNightMode(
                         if (currentDarkMode) AppCompatDelegate.MODE_NIGHT_YES
