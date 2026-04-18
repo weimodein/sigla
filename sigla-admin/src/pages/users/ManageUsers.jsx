@@ -819,142 +819,65 @@ const ManageUsers = () => {
         }}
       >
         {loading ? (
-          <table className="w-full text-left">
-            <thead style={{ background: "#f9fafb" }}>
-              <tr>
-                <th className="px-5 py-3">
-                  <span
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}
-                  >
-                    ID
-                  </span>
-                </th>
-                <th className="px-5 py-3">
-                  <span
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}
-                  >
-                    Username
-                  </span>
-                </th>
-                <th className="px-5 py-3">
-                  <span
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}
-                  >
-                    Name
-                  </span>
-                </th>
-                <th className="px-5 py-3">
-                  <span
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}
-                  >
-                    Email
-                  </span>
-                </th>
-                <th className="px-5 py-3">
-                  <span
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}
-                  >
-                    Status
-                  </span>
-                </th>
-                {isDeactivated && (
-                  <th className="px-5 py-3">
-                    <span
-                      className="text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: C.muted }}
-                    >
-                      Auto-Reactivates
-                    </span>
-                  </th>
-                )}
-                <th className="px-5 py-3">
-                  <span
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: C.muted }}
-                  >
-                    Actions
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <SkeletonRows rows={5} cols={tableCols} />
-            </tbody>
-          </table>
-        ) : (
-          <>
-            <table className="w-full text-left">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left" style={{ minWidth: 760 }}>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
-                  <SortableHeader
-                    label="ID"
-                    sortKey="id"
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                  />
-                  <SortableHeader
-                    label="Username"
-                    sortKey="username"
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                  />
-                  <SortableHeader
-                    label="Name"
-                    sortKey="name"
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                  />
-                  <SortableHeader
-                    label="Email"
-                    sortKey="email"
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                  />
-                  <SortableHeader
-                    label="Status"
-                    sortKey="status"
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                  />
-                  <SortableHeader
-                    label="Registered"
-                    sortKey="created_at"
-                    sortField={sortField}
-                    sortDir={sortDir}
-                    onSort={handleSort}
-                  />
+                  <th className="px-5 py-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>ID</span>
+                  </th>
+                  <th className="px-5 py-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Username</span>
+                  </th>
+                  <th className="px-5 py-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Name</span>
+                  </th>
+                  <th className="px-5 py-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Email</span>
+                  </th>
+                  <th className="px-5 py-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Status</span>
+                  </th>
                   {isDeactivated && (
                     <th className="px-5 py-3">
-                      <span
-                        className="text-xs font-semibold uppercase tracking-wider"
-                        style={{ color: C.muted }}
-                      >
-                        Auto-Reactivates
-                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Auto-Reactivates</span>
                     </th>
                   )}
                   <th className="px-5 py-3">
-                    <span
-                      className="text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: C.muted }}
-                    >
-                      Actions
-                    </span>
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Actions</span>
                   </th>
                 </tr>
               </thead>
-              <tbody>{renderRows()}</tbody>
+              <tbody>
+                <SkeletonRows rows={5} cols={tableCols} />
+              </tbody>
             </table>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left" style={{ minWidth: 760 }}>
+                <thead style={{ background: "#f9fafb" }}>
+                  <tr>
+                    <SortableHeader label="ID" sortKey="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHeader label="Username" sortKey="username" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHeader label="Name" sortKey="name" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHeader label="Email" sortKey="email" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHeader label="Status" sortKey="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    <SortableHeader label="Registered" sortKey="created_at" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                    {isDeactivated && (
+                      <th className="px-5 py-3">
+                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Auto-Reactivates</span>
+                      </th>
+                    )}
+                    <th className="px-5 py-3">
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>{renderRows()}</tbody>
+              </table>
+            </div>
             {sortedUsers.length > pageSize && (
               <Pagination
                 page={page}
