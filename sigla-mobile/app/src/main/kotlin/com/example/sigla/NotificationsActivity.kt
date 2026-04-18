@@ -217,6 +217,7 @@ class NotificationsActivity : AppCompatActivity() {
                     })
                     applyFilter(getCurrentTabFilter())
                     refreshSummaryBar()
+                    refreshNotifBadge()
                 } else {
                     Toast.makeText(this@NotificationsActivity, "Failed to load notifications", Toast.LENGTH_SHORT).show()
                 }
@@ -231,7 +232,7 @@ class NotificationsActivity : AppCompatActivity() {
     private fun mapNotificationType(title: String): NotifType {
         return when {
             title.contains("Approved", ignoreCase = true) -> NotifType.APPROVAL
-            title.contains("Denied", ignoreCase = true) -> NotifType.DENIAL
+            title.contains("Denied", ignoreCase = true) || title.contains("Rejected", ignoreCase = true) -> NotifType.DENIAL
             title.contains("Warning", ignoreCase = true) -> NotifType.WARNING
             title.contains("Maintenance", ignoreCase = true) -> NotifType.MAINTENANCE
             title.contains("System", ignoreCase = true) -> NotifType.SYSTEM
@@ -331,6 +332,26 @@ class NotificationsActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Toast.makeText(this@NotificationsActivity, "Failed to mark all as read", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun refreshNotifBadge() {
+        if (!session.isLoggedIn) return
+        lifecycleScope.launch {
+            try {
+                val response = ApiClient.get(session.token).getUnreadCount()
+                if (response.isSuccessful) {
+                    val count = response.body()?.unread ?: 0
+                    val sidebar = drawer.getChildAt(1)
+                    val badge = sidebar?.findViewById<TextView>(R.id.tvNotifBadge)
+                    if (count > 0) {
+                        badge?.text = if (count > 99) "99+" else count.toString()
+                        badge?.visibility = View.VISIBLE
+                    } else {
+                        badge?.visibility = View.GONE
+                    }
+                }
+            } catch (_: Exception) { }
         }
     }
 

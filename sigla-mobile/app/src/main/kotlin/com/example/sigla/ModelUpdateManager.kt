@@ -65,15 +65,13 @@ object ModelUpdateManager {
 
                 val remoteVersion = model.version_number
                 val cachedVersion = getCachedVersion(context)
-                val versionChanged = remoteVersion != cachedVersion
-                val modelFileMissing = !hasLocalModel(context)
 
-                if (!versionChanged && !modelFileMissing) {
-                    Log.i(TAG, "Model up-to-date: $remoteVersion")
-                    return@withContext true
+                if (remoteVersion == cachedVersion) {
+                    Log.i(TAG, "Model up-to-date (v$remoteVersion) — skipping download")
+                    return@withContext hasLocalModel(context)
                 }
 
-                Log.i(TAG, "Downloading model version: $remoteVersion")
+                Log.i(TAG, "New model version detected: $remoteVersion (cached: $cachedVersion) — downloading")
 
                 // ── Static model (required) ───────────────────────────────────
                 val staticUrl = model.tflite_url

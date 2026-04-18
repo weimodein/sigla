@@ -539,6 +539,31 @@ class MainActivity : AppCompatActivity() {
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
+    override fun onResume() {
+        super.onResume()
+        refreshSidebarAuthState()
+        refreshNotifBadge()
+    }
+
+    private fun refreshNotifBadge() {
+        if (!session.isLoggedIn) return
+        lifecycleScope.launch {
+            try {
+                val response = ApiClient.get(session.token).getUnreadCount()
+                if (response.isSuccessful) {
+                    val count = response.body()?.unread ?: 0
+                    val badge = findViewById<TextView?>(R.id.tvNotifBadge)
+                    if (count > 0) {
+                        badge?.text = if (count > 99) "99+" else count.toString()
+                        badge?.visibility = View.VISIBLE
+                    } else {
+                        badge?.visibility = View.GONE
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
     @Deprecated("Use OnBackPressedDispatcher instead")
     override fun onBackPressed() {
         if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
