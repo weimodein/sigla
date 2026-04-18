@@ -61,7 +61,7 @@ class NotificationsActivity : AppCompatActivity() {
     }
     // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
     private fun refreshSidebarAuthState() {
-        val sidebar = drawer.getChildAt(1)  // ← USE YOUR drawerLayout VARIABLE NAME
+        val sidebar = drawer.getChildAt(1) ?: return
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)

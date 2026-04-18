@@ -57,7 +57,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
     }
     // ── Resume Sidebar ─────────────────────────────────────────────────────────────────
     private fun refreshSidebarAuthState() {
-        val sidebar = drawerLayout.getChildAt(1)
+        val sidebar = drawerLayout.getChildAt(1) ?: return
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)

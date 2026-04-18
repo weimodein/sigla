@@ -62,7 +62,7 @@ class ProfileActivity : AppCompatActivity() {
     }
     // ── Refresh Side Bar ───────────────────────────────────────────────────
     private fun refreshSidebarAuthState() {
-        val sidebar = drawer.getChildAt(1)
+        val sidebar = drawer.getChildAt(1) ?: return
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSidebarSignIn)

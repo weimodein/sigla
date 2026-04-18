@@ -2,20 +2,42 @@ package com.example.sigla
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 class SessionManager(context: Context) {
 
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "sigla_session",
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build(),
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val prefs: SharedPreferences = try {
+        EncryptedSharedPreferences.create(
+            context,
+            "sigla_session",
+            MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    } catch (e: Exception) {
+        // Encrypted prefs can fail after OS updates or keystore corruption.
+        // Delete the corrupted file and retry with a fresh instance.
+        Log.w("SessionManager", "EncryptedSharedPreferences failed, resetting: ${e.message}")
+        try {
+            context.deleteSharedPreferences("sigla_session")
+            EncryptedSharedPreferences.create(
+                context,
+                "sigla_session",
+                MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build(),
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e2: Exception) {
+            Log.e("SessionManager", "EncryptedSharedPreferences unavailable, using plain prefs")
+            context.getSharedPreferences("sigla_session_plain", Context.MODE_PRIVATE)
+        }
+    }
 
     companion object {
         private const val KEY_TOKEN        = "auth_token"

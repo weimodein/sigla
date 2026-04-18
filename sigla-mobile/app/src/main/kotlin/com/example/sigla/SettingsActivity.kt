@@ -71,7 +71,7 @@ class SettingsActivity : AppCompatActivity() {
         setupTopBar()
         setupSidebar()
         loadPreferences()
-        lifecycleScope.launch { pullAndApplySettings() }
+        lifecycleScope.launch { try { pullAndApplySettings() } catch (_: Exception) { } }
         bindVolumeSeekBar()
         bindVoiceToggle()
         bindTextSizeSeekBar()
@@ -87,7 +87,7 @@ class SettingsActivity : AppCompatActivity() {
     // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
 
     private fun refreshSidebarAuthState() {
-        val sidebar = drawer.getChildAt(1)
+        val sidebar = drawer.getChildAt(1) ?: return
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)

@@ -96,7 +96,7 @@ class SuggestWordActivity : AppCompatActivity() {
 
     // ── Refresh Sidebar  ───────────────────────────────────────────────────────────
     private fun refreshSidebarAuthState() {
-        val sidebar = drawerLayout.getChildAt(1)  // ← USE YOUR drawerLayout VARIABLE NAME
+        val sidebar = drawerLayout.getChildAt(1) ?: return
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
