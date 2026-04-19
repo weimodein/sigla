@@ -246,7 +246,6 @@ class SettingsActivity : AppCompatActivity() {
             try {
                 ApiClient.get(session.token).updateMySettings(
                     UpdateSettingsRequest(
-                        volume     = currentVolume,
                         voice_type = currentVoice.lowercase(),
                         text_size  = currentTextSizePct,
                         dark_mode  = currentDarkMode
@@ -310,7 +309,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
-            override fun onStopTrackingTouch(sb: SeekBar?) { pushSettings() }
+            override fun onStopTrackingTouch(sb: SeekBar?) { /* volume is local-only, no server sync */ }
         })
     }
 

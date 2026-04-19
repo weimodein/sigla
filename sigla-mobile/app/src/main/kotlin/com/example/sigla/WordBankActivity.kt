@@ -56,6 +56,7 @@ class WordBankActivity : AppCompatActivity() {
     // TTS
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
+    private val appSettings by lazy { AppSettings.getInstance(this) }
 
     // Custom categories management
     private lateinit var customCategoryManager: CustomCategoryManager
@@ -494,7 +495,11 @@ class WordBankActivity : AppCompatActivity() {
 
     private fun speakWord(word: String) {
         if (isTtsReady) {
-            tts?.speak(word, TextToSpeech.QUEUE_FLUSH, null, null)
+            val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
+            val params = Bundle().apply {
+                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
+            }
+            tts?.speak(word, TextToSpeech.QUEUE_FLUSH, params, null)
         } else {
             Toast.makeText(this, "🔊 Playing: $word", Toast.LENGTH_SHORT).show()
         }

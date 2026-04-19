@@ -109,14 +109,12 @@ data class ChangePasswordRequest(
 data class MessageResponse(val message: String)
 
 data class UserSettingsData(
-    val volume: Int,
     val voice_type: String,
     val text_size: Int,
     val dark_mode: Boolean
 )
 data class UserSettingsResponse(val settings: UserSettingsData)
 data class UpdateSettingsRequest(
-    val volume: Int,
     val voice_type: String,
     val text_size: Int,
     val dark_mode: Boolean

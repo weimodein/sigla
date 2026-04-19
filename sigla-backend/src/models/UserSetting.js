@@ -14,11 +14,6 @@ const UserSetting = sequelize.define(
       allowNull: false,
       unique: true,
     },
-    volume: {
-      type: DataTypes.INTEGER,
-      defaultValue: 80,
-      validate: { min: 0, max: 100 },
-    },
     voice_type: {
       type: DataTypes.STRING(10),
       defaultValue: "female",

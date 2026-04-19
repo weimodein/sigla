@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
-import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
 import android.speech.tts.TextToSpeech
@@ -172,11 +171,11 @@ class MainActivity : AppCompatActivity() {
     private fun speak(text: String) {
         if (!isTtsReady) return
         applyTtsVoice()
-        val audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val targetVol = (appSettings.volume / 100.0 * maxVol).toInt()
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
+        }
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, null)
     }
 
     private fun loadFilipinoTranslations() {
@@ -437,14 +436,12 @@ class MainActivity : AppCompatActivity() {
                 val s = response.body()?.settings ?: return@launch
 
                 getSharedPreferences("sigla_prefs", android.content.Context.MODE_PRIVATE).edit()
-                    .putInt(SettingsActivity.PREF_VOLUME, s.volume)
                     .putString(SettingsActivity.PREF_VOICE, s.voice_type.uppercase())
                     .putInt(SettingsActivity.PREF_TEXT_SIZE, s.text_size)
                     .putBoolean(SettingsActivity.PREF_DARK_MODE, s.dark_mode)
                     .apply()
 
                 val app = AppSettings.getInstance(this@MainActivity)
-                app.volume     = s.volume
                 app.voiceType  = s.voice_type
                 app.textSize   = s.text_size
                 app.isDarkMode = s.dark_mode
