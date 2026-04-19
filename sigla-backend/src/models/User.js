@@ -23,17 +23,6 @@ const User = sequelize.define(
       type: DataTypes.STRING(100),
       allowNull: true,
     },
-    age: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    gender: {
-      type: DataTypes.STRING(10),
-      allowNull: true,
-      validate: {
-        isIn: [["male", "female", "other"]],
-      },
-    },
     email: {
       type: DataTypes.STRING(100),
       allowNull: false,

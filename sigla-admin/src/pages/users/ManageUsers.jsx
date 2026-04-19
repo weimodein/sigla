@@ -317,8 +317,6 @@ const ManageUsers = () => {
     name: "",
     username: "",
     email: "",
-    age: "",
-    gender: "",
   });
 
   // ── Fetch data ──────────────────────────────────────────────
@@ -509,8 +507,6 @@ const ManageUsers = () => {
       name: user.name || "",
       username: user.username || "",
       email: user.email || "",
-      age: user.age || "",
-      gender: user.gender || "",
     });
     setEditModal(user);
   };
@@ -950,7 +946,7 @@ const ManageUsers = () => {
       {editModal && (
         <AppModal title="Edit User" onClose={() => setEditModal(null)}>
           <div className="space-y-3">
-            {["name", "username", "email", "age"].map((field) => (
+            {["name", "username", "email"].map((field) => (
               <div key={field}>
                 <label
                   className="block text-xs font-medium mb-1 capitalize"
@@ -959,7 +955,7 @@ const ManageUsers = () => {
                   {field}
                 </label>
                 <input
-                  type={field === "age" ? "number" : "text"}
+                  type="text"
                   value={editForm[field]}
                   onChange={(e) =>
                     setEditForm({ ...editForm, [field]: e.target.value })
@@ -973,31 +969,6 @@ const ManageUsers = () => {
                 />
               </div>
             ))}
-            <div>
-              <label
-                className="block text-xs font-medium mb-1"
-                style={{ color: "#4b5563" }}
-              >
-                Gender
-              </label>
-              <select
-                value={editForm.gender}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, gender: e.target.value })
-                }
-                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
-                style={{
-                  borderColor: C.border,
-                  background: C.surface,
-                  color: C.text,
-                }}
-              >
-                <option value="">Select gender</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleEditSave}

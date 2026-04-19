@@ -209,7 +209,7 @@ const verifyEmail = async (req, res) => {
 // since email was already verified in the previous step
 const setPassword = async (req, res) => {
   try {
-    const { username, email, age, gender, password } = req.body;
+    const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
       return res
@@ -232,8 +232,6 @@ const setPassword = async (req, res) => {
     const user = await User.create({
       username,
       email,
-      age: age || null,
-      gender: gender || null,
       password: hashedPassword,
       role_id: 3,
       status: "active",

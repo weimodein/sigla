@@ -460,7 +460,7 @@ const deleteUser = async (req, res) => {
 // ── PUT /api/users/:id ────────────────────────────────────────
 const updateUser = async (req, res) => {
   try {
-    const { username, name, email, age, gender } = req.body;
+    const { username, name, email } = req.body;
 
     const user = await User.findOne({
       where: { id: req.params.id, role_id: 3 },
@@ -487,8 +487,6 @@ const updateUser = async (req, res) => {
       username: username || user.username,
       name: name !== undefined ? name : user.name,
       email: email || user.email,
-      age: age ?? user.age,
-      gender: gender || user.gender,
     });
 
     // await ActivityLog.create({
