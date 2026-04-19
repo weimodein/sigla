@@ -772,7 +772,9 @@ const ManageWordBank = () => {
                         </button>
                         <button
                           onClick={() => handleOpenUpload(word)}
-                          className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded-lg flex items-center gap-1"
+                          disabled={(word.total_samples || 0) > 0}
+                          title={(word.total_samples || 0) > 0 ? "Samples already collected for this word" : "Upload gesture samples"}
+                          className={`text-xs px-2 py-1 rounded-lg flex items-center gap-1 ${(word.total_samples || 0) > 0 ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-purple-50 text-purple-700 hover:bg-purple-100"}`}
                         >
                           <Upload size={12} /> Upload
                         </button>

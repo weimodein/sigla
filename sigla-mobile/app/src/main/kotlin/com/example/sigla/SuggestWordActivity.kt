@@ -55,11 +55,6 @@ class SuggestWordActivity : AppCompatActivity() {
     private var isTwoHands = false
     private var isMotion = false
     
-    // Store word data for existing word contribution
-    private var existingWordId: Int = -1
-    private var existingWordLabel: String = ""
-    private var existingWordHands: Int = 1
-    private var existingWordGesture: String = "static"
     private var remainingUserSamples: Int = 0
 
     // Request code for Terms Activity
@@ -499,44 +494,8 @@ class SuggestWordActivity : AppCompatActivity() {
     }
     
     private fun handleExistingWordResponse(response: retrofit2.Response<*>, word: String, handsCount: Int, gestureType: String) {
-        try {
-            val errorBody = response.errorBody()?.string() ?: ""
-            val json = com.google.gson.JsonParser.parseString(errorBody).asJsonObject
-            
-            val isExisting = json.get("existing")?.asBoolean ?: false
-            if (isExisting) {
-                existingWordId = json.get("word_id")?.asInt ?: 0
-                existingWordLabel = json.get("label")?.asString ?: word
-                existingWordHands = json.get("hands_count")?.asInt ?: handsCount
-                existingWordGesture = json.get("gesture_type")?.asString ?: gestureType
-                
-                val isLocked = json.get("is_locked")?.asBoolean ?: false
-                val capReached = json.get("cap_reached")?.asBoolean ?: false
-                val userCapReached = json.get("user_cap_reached")?.asBoolean ?: false
-                val totalCap = json.get("cap")?.asInt ?: 100
-                val perUserCap = json.get("per_user_cap")?.asInt ?: 100
-                val collected = json.get("total_samples")?.asInt ?: 0
-                val userSamples = json.get("user_samples")?.asInt ?: 0
-                remainingUserSamples = json.get("remaining_for_user")?.asInt ?: (perUserCap - userSamples)
-                
-                setLoading(false)
-                
-                when {
-                    isLocked -> showLockedBanner()
-                    capReached -> showCapReachedBanner(totalCap, collected)
-                    userCapReached -> showUserQuotaBanner(perUserCap, userSamples)
-                    else -> {
-                        showExistsBanner(word, userSamples, remainingUserSamples)
-                    }
-                }
-            } else {
-                showError("Submission failed")
-                setLoading(false)
-            }
-        } catch (e: Exception) {
-            showError("Submission failed")
-            setLoading(false)
-        }
+        setLoading(false)
+        showExistsBanner(word)
     }
     
     private fun navigateToCollection(wordId: Int, wordLabel: String, gestureType: String, handsCount: Int, targetCount: Int) {
@@ -552,11 +511,6 @@ class SuggestWordActivity : AppCompatActivity() {
         finish()
     }
     
-    private fun contributeToExistingWord() {
-        val maxSamples = if (existingWordGesture == "motion") 150 else 100
-        navigateToCollection(existingWordId, existingWordLabel, existingWordGesture, existingWordHands, remainingUserSamples)
-    }
-
     // ── Banner helpers ─────────────────────────────────────────────────────────
     private fun showLockedBanner() {
         lockedWordBanner.isVisible = true
@@ -589,25 +543,14 @@ class SuggestWordActivity : AppCompatActivity() {
         btnStartCollecting.alpha = 0.45f
     }
 
-    private fun showExistsBanner(word: String, userSamples: Int, remaining: Int) {
-        val msg = buildString {
-            append("\"$word\" already exists in the database. You may still contribute gesture samples to it.")
-            if (userSamples > 0) {
-                append("\n\nYou have submitted $userSamples sample${if (userSamples != 1) "s" else ""} so far. You can contribute $remaining more.")
-            }
-        }
-        tvWordStatus.text = msg
+    private fun showExistsBanner(word: String) {
+        tvWordStatus.text = "\"$word\" is already in the system. You can only suggest words that are not yet available."
         wordStatusBanner.isVisible = true
         lockedWordBanner.isVisible = false
         quotaReachedBanner.isVisible = false
-        btnStartCollecting.isEnabled = true
-        btnStartCollecting.text = "Contribute Samples"
-        btnStartCollecting.alpha = 1f
-        
-        // Change button behavior for contribution
-        btnStartCollecting.setOnClickListener {
-            contributeToExistingWord()
-        }
+        btnStartCollecting.isEnabled = false
+        btnStartCollecting.text = "Start Collecting"
+        btnStartCollecting.alpha = 0.45f
     }
 
     // ── Error helpers ──────────────────────────────────────────────────────────

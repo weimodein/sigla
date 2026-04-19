@@ -318,33 +318,9 @@ const submitWord = async (req, res) => {
     });
 
     if (existing) {
-      const totalCap = getSampleCap(existing);
-      const perUserCap = getPerUserCap(existing.gesture_type || "static");
-
-      // Use live DB counts — stored counters can be stale
-      const [totalSamples, userSamples] = await Promise.all([
-        GestureSample.count({ where: { word_id: existing.id } }),
-        getUserSampleCount(req.user.id, existing.id),
-      ]);
-
       return res.status(409).json({
-        message: "This word already exists or is pending approval",
-        word_id: existing.id,
+        message: "This word already exists in the system. Only new words can be submitted.",
         existing: true,
-        label: existing.label,
-        gesture_type: existing.gesture_type || "static",
-        hands_count: existing.hands_count || 1,
-        is_locked: !!existing.is_locked,
-        cap_reached: totalSamples >= totalCap,
-        user_cap_reached: userSamples >= perUserCap,
-        cap: totalCap,
-        per_user_cap: perUserCap,
-        total_samples: totalSamples,
-        user_samples: userSamples,
-        remaining_for_user: Math.max(
-          0,
-          Math.min(perUserCap - userSamples, totalCap - totalSamples),
-        ),
       });
     }
 
@@ -535,6 +511,13 @@ const uploadSamples = async (req, res) => {
         message:
           "Submissions for this word are currently locked by the administrator.",
         locked: true,
+      });
+    }
+
+    const existingSampleCount = await GestureSample.count({ where: { word_id: word.id } });
+    if (existingSampleCount > 0) {
+      return res.status(409).json({
+        message: "Samples already exist for this word. No additional samples can be added.",
       });
     }
 
