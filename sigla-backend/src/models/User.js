@@ -33,10 +33,6 @@ const User = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: false,
     },
-    profile_image: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
     // Default is now "active" — email is verified before account is created
     // so no pending approval step is needed
     status: {

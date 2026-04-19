@@ -301,7 +301,6 @@ const login = async (req, res) => {
         username: user.username,
         email: user.email,
         role: roleName,
-        profile_image: user.profile_image,
       },
     });
   } catch (err) {
