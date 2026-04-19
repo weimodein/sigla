@@ -11,7 +11,6 @@ class AppSettings(context: Context) {
     companion object {
         private const val KEY_VOLUME = "volume"
         private const val KEY_VOICE_TYPE = "voice_type"
-        private const val KEY_TEXT_SIZE = "text_size"
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_SHOW_FILIPINO = "show_filipino"
 
@@ -34,10 +33,6 @@ class AppSettings(context: Context) {
         get() = prefs.getString(KEY_VOICE_TYPE, VOICE_FEMALE) ?: VOICE_FEMALE
         set(v) = prefs.edit().putString(KEY_VOICE_TYPE, v).apply()
 
-    var textSize: Int
-        get() = prefs.getInt(KEY_TEXT_SIZE, 48)
-        set(v) = prefs.edit().putInt(KEY_TEXT_SIZE, v).apply()
-
     var isDarkMode: Boolean
         get() = prefs.getBoolean(KEY_DARK_MODE, true)
         set(v) = prefs.edit().putBoolean(KEY_DARK_MODE, v).apply()
@@ -50,7 +45,6 @@ class AppSettings(context: Context) {
         prefs.edit()
             .putInt(KEY_VOLUME, 80)
             .putString(KEY_VOICE_TYPE, VOICE_FEMALE)
-            .putInt(KEY_TEXT_SIZE, 48)
             .putBoolean(KEY_DARK_MODE, true)
             .putBoolean(KEY_SHOW_FILIPINO, true)
             .apply()

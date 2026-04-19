@@ -23,11 +23,6 @@ const UserSetting = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
-    text_size: {
-      type: DataTypes.INTEGER,
-      defaultValue: 100,
-      validate: { min: 80, max: 150 },
-    },
     dark_mode: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

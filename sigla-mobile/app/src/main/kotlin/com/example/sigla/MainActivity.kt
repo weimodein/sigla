@@ -437,13 +437,11 @@ class MainActivity : AppCompatActivity() {
 
                 getSharedPreferences("sigla_prefs", android.content.Context.MODE_PRIVATE).edit()
                     .putString(SettingsActivity.PREF_VOICE, s.voice_type.uppercase())
-                    .putInt(SettingsActivity.PREF_TEXT_SIZE, s.text_size)
                     .putBoolean(SettingsActivity.PREF_DARK_MODE, s.dark_mode)
                     .apply()
 
                 val app = AppSettings.getInstance(this@MainActivity)
                 app.voiceType  = s.voice_type
-                app.textSize   = s.text_size
                 app.isDarkMode = s.dark_mode
 
                 androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(

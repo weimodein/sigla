@@ -21,7 +21,7 @@ const getMySettings = async (req, res) => {
 // ── PATCH /api/users/settings ─────────────────────────────────
 const updateMySettings = async (req, res) => {
   try {
-    const { voice_type, text_size, dark_mode } = req.body;
+    const { voice_type, dark_mode } = req.body;
 
     const updates = {};
 
@@ -30,14 +30,6 @@ const updateMySettings = async (req, res) => {
         return res.status(400).json({ message: "voice_type must be male or female" });
       }
       updates.voice_type = voice_type;
-    }
-
-    if (text_size !== undefined) {
-      const t = parseInt(text_size);
-      if (isNaN(t) || t < 80 || t > 150) {
-        return res.status(400).json({ message: "text_size must be 80–150" });
-      }
-      updates.text_size = t;
     }
 
     if (dark_mode !== undefined) {

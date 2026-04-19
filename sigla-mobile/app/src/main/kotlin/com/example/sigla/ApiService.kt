@@ -110,13 +110,11 @@ data class MessageResponse(val message: String)
 
 data class UserSettingsData(
     val voice_type: String,
-    val text_size: Int,
     val dark_mode: Boolean
 )
 data class UserSettingsResponse(val settings: UserSettingsData)
 data class UpdateSettingsRequest(
     val voice_type: String,
-    val text_size: Int,
     val dark_mode: Boolean
 )
 

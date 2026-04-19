@@ -41,25 +41,18 @@ class SettingsActivity : AppCompatActivity() {
     companion object {
         const val DEFAULT_VOLUME         = 70
         const val DEFAULT_VOICE          = "MALE"   // "MALE" or "FEMALE"
-        const val DEFAULT_TEXT_SIZE_PCT  = 100      // percent: 80–150
         const val DEFAULT_DARK_MODE      = false
-
-        // SeekBar range: progress 0–70 maps to 80%–150% (progress + 80 = percent)
-        const val TEXT_SIZE_MIN          = 80
-        const val TEXT_SIZE_MAX          = 150
 
         // SharedPreferences keys
         const val PREF_VOLUME    = "pref_volume"
         const val PREF_VOICE     = "pref_voice_type"
-        const val PREF_TEXT_SIZE = "pref_text_size_pct"
         const val PREF_DARK_MODE = "pref_dark_mode"
     }
 
     // In-memory state
-    private var currentVolume      = DEFAULT_VOLUME
-    private var currentVoice       = DEFAULT_VOICE
-    private var currentTextSizePct = DEFAULT_TEXT_SIZE_PCT
-    private var currentDarkMode    = DEFAULT_DARK_MODE
+    private var currentVolume   = DEFAULT_VOLUME
+    private var currentVoice    = DEFAULT_VOICE
+    private var currentDarkMode = DEFAULT_DARK_MODE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,7 +67,6 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch { try { pullAndApplySettings() } catch (_: Exception) { } }
         bindVolumeSeekBar()
         bindVoiceToggle()
-        bindTextSizeSeekBar()
         bindDarkModeSwitch()
         bindResetButton()
         bindReplayTutorial()
@@ -221,17 +213,13 @@ class SettingsActivity : AppCompatActivity() {
 
         // Write to SettingsActivity's prefs
         getSharedPreferences("sigla_prefs", Context.MODE_PRIVATE).edit()
-            .putInt(PREF_VOLUME, s.volume)
             .putString(PREF_VOICE, s.voice_type.uppercase())
-            .putInt(PREF_TEXT_SIZE, s.text_size)
             .putBoolean(PREF_DARK_MODE, s.dark_mode)
             .apply()
 
         // Keep AppSettings in sync
         val app = AppSettings.getInstance(this)
-        app.volume     = s.volume
         app.voiceType  = s.voice_type
-        app.textSize   = s.text_size
         app.isDarkMode = s.dark_mode
 
         AppCompatDelegate.setDefaultNightMode(
@@ -247,7 +235,6 @@ class SettingsActivity : AppCompatActivity() {
                 ApiClient.get(session.token).updateMySettings(
                     UpdateSettingsRequest(
                         voice_type = currentVoice.lowercase(),
-                        text_size  = currentTextSizePct,
                         dark_mode  = currentDarkMode
                     )
                 )
@@ -261,7 +248,6 @@ class SettingsActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("sigla_prefs", Context.MODE_PRIVATE)
         currentVolume = prefs.getInt(PREF_VOLUME, DEFAULT_VOLUME)
         currentVoice = prefs.getString(PREF_VOICE, DEFAULT_VOICE) ?: DEFAULT_VOICE
-        currentTextSizePct = prefs.getInt(PREF_TEXT_SIZE, DEFAULT_TEXT_SIZE_PCT)
         currentDarkMode = prefs.getBoolean(PREF_DARK_MODE, DEFAULT_DARK_MODE)
 
         // Volume
@@ -271,10 +257,9 @@ class SettingsActivity : AppCompatActivity() {
         // Voice
         applyVoiceSelection(currentVoice, animate = false)
 
-        // Text size — convert percent to SeekBar progress
-        val progress = currentTextSizePct - TEXT_SIZE_MIN
-        findViewById<SeekBar>(R.id.seekTextSize)?.progress = progress
-        findViewById<TextView>(R.id.tvTextSizeValue)?.text = "$currentTextSizePct%"
+        // Hide unused text size controls
+        findViewById<View>(R.id.seekTextSize)?.visibility = View.GONE
+        findViewById<View>(R.id.tvTextSizeValue)?.visibility = View.GONE
 
         // Dark mode
         val darkSwitch = findViewById<SwitchMaterial>(R.id.switchDarkMode)
@@ -354,26 +339,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // ── Text size SeekBar ─────────────────────────────────────────────────────
-
-    private fun bindTextSizeSeekBar() {
-        val seekBar = findViewById<SeekBar>(R.id.seekTextSize)
-        val tvValue = findViewById<TextView>(R.id.tvTextSizeValue)
-
-        seekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                val pct = progress + TEXT_SIZE_MIN
-                currentTextSizePct = pct
-                tvValue?.text = "$pct%"
-                if (fromUser) {
-                    savePreference(PREF_TEXT_SIZE, currentTextSizePct)
-                }
-            }
-            override fun onStartTrackingTouch(sb: SeekBar?) {}
-            override fun onStopTrackingTouch(sb: SeekBar?) { pushSettings() }
-        })
-    }
-
     // ── Dark mode ─────────────────────────────────────────────────────────────
 
     private fun bindDarkModeSwitch() {
@@ -405,12 +370,10 @@ class SettingsActivity : AppCompatActivity() {
                 .setPositiveButton("Reset") { _, _ ->
                     currentVolume = DEFAULT_VOLUME
                     currentVoice = DEFAULT_VOICE
-                    currentTextSizePct = DEFAULT_TEXT_SIZE_PCT
                     currentDarkMode = DEFAULT_DARK_MODE
 
                     savePreference(PREF_VOLUME, currentVolume)
                     savePreference(PREF_VOICE, currentVoice)
-                    savePreference(PREF_TEXT_SIZE, currentTextSizePct)
                     savePreference(PREF_DARK_MODE, currentDarkMode)
 
                     loadPreferences()
