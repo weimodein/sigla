@@ -48,7 +48,6 @@ class SuggestWordActivity : AppCompatActivity() {
     // ── Status banners ─────────────────────────────────────────────────────────
     private lateinit var wordStatusBanner: LinearLayout
     private lateinit var tvWordStatus: TextView
-    private lateinit var lockedWordBanner: LinearLayout
     private lateinit var quotaReachedBanner: LinearLayout
 
     // ── State ──────────────────────────────────────────────────────────────────
@@ -141,7 +140,6 @@ class SuggestWordActivity : AppCompatActivity() {
         // Status banners
         wordStatusBanner   = findViewById(R.id.wordStatusBanner)
         tvWordStatus       = findViewById(R.id.tvWordStatus)
-        lockedWordBanner   = findViewById(R.id.lockedWordBanner)
         quotaReachedBanner = findViewById(R.id.quotaReachedBanner)
     }
 
@@ -512,18 +510,8 @@ class SuggestWordActivity : AppCompatActivity() {
     }
     
     // ── Banner helpers ─────────────────────────────────────────────────────────
-    private fun showLockedBanner() {
-        lockedWordBanner.isVisible = true
-        wordStatusBanner.isVisible = false
-        quotaReachedBanner.isVisible = false
-        btnStartCollecting.isEnabled = false
-        btnStartCollecting.text = "Start Collecting"
-        btnStartCollecting.alpha = 0.45f
-    }
-
     private fun showCapReachedBanner(totalCap: Int, collected: Int) {
         quotaReachedBanner.isVisible = true
-        lockedWordBanner.isVisible = false
         wordStatusBanner.isVisible = false
         val tvQuotaMsg = quotaReachedBanner.findViewById<TextView>(R.id.tvWordStatus) ?: findViewById(R.id.tvWordStatus) as? TextView
         tvQuotaMsg?.text = "The maximum of $totalCap gesture samples for this word has already been collected ($collected/$totalCap). No more contributions are accepted."
@@ -534,7 +522,6 @@ class SuggestWordActivity : AppCompatActivity() {
     
     private fun showUserQuotaBanner(perUserCap: Int, userSamples: Int) {
         quotaReachedBanner.isVisible = true
-        lockedWordBanner.isVisible = false
         wordStatusBanner.isVisible = false
         val tvQuotaMsg = quotaReachedBanner.findViewById<TextView>(R.id.tvWordStatus) ?: findViewById(R.id.tvWordStatus) as? TextView
         tvQuotaMsg?.text = "You have already contributed the maximum of $perUserCap samples for this word ($userSamples/$perUserCap)."
@@ -546,7 +533,6 @@ class SuggestWordActivity : AppCompatActivity() {
     private fun showExistsBanner(word: String) {
         tvWordStatus.text = "\"$word\" is already in the system. You can only suggest words that are not yet available."
         wordStatusBanner.isVisible = true
-        lockedWordBanner.isVisible = false
         quotaReachedBanner.isVisible = false
         btnStartCollecting.isEnabled = false
         btnStartCollecting.text = "Start Collecting"

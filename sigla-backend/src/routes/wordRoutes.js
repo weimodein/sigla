@@ -27,8 +27,6 @@ const {
   approveSubmission,
   rejectSubmission,
   activateWord,
-  lockWord,
-  unlockWord,
   getUserSampleCountForWord,
   setThumbnail,
   setVideo,
@@ -132,8 +130,6 @@ router.patch(
   rejectSubmission,
 );
 router.patch("/:id/activate", roleMiddleware("admin"), activateWord);
-router.patch("/:id/lock", roleMiddleware("admin"), lockWord);
-router.patch("/:id/unlock", roleMiddleware("admin"), unlockWord);
 
 // ── User + admin accessible ───────────────────────────────────
 router.get(
@@ -182,5 +178,3 @@ module.exports = router;
 // PATCH  /api/words/:id/approve                            → manual word approval (admin)
 // PATCH  /api/words/:id/reject                             → manual word rejection (admin)
 //
-// PATCH  /api/words/:id/lock                               → lock word submissions (admin)
-// PATCH  /api/words/:id/unlock                             → unlock word submissions (admin)

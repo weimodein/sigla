@@ -16,8 +16,6 @@ import {
   rejectAllSamplesForWord,
   approveSubmission,
   rejectSubmission,
-  lockWord,
-  unlockWord,
   adminAddWord,
   adminUploadSamples,
   setWordThumbnail,
@@ -34,8 +32,6 @@ import {
   CheckCircle,
   Clock,
   Search,
-  Lock,
-  Unlock,
   Image,
   Plus,
   Upload,
@@ -334,34 +330,6 @@ const ManageWordBank = () => {
     }
   };
 
-  // ── Lock/Unlock ─────────────────────────────────────────────
-  const handleLock = async (id) => {
-    if (!window.confirm("Lock this word? Users will no longer be able to submit samples for it.")) return;
-    setActionLoading(true);
-    try {
-      await lockWord(id);
-      showSuccess("Word locked. No further submissions allowed.");
-      fetchWords();
-    } catch (err) {
-      showError(err.response?.data?.message || "Failed to lock word");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleUnlock = async (id) => {
-    setActionLoading(true);
-    try {
-      await unlockWord(id);
-      showSuccess("Word unlocked. Submissions are now allowed.");
-      fetchWords();
-    } catch (err) {
-      showError(err.response?.data?.message || "Failed to unlock word");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   // ── Approve/Reject word status ───────────────────────────────
   const handleApprove = async (id) => {
     setActionLoading(true);
@@ -632,11 +600,10 @@ const ManageWordBank = () => {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         <StatCard title="Total Words" value={stats?.total} icon={BookOpen} color="bg-blue-900" />
         <StatCard title="Pending" value={stats?.pending} icon={Clock} color="bg-yellow-500" />
         <StatCard title="Approved" value={stats?.approved} icon={CheckCircle} color="bg-green-500" />
-        <StatCard title="Locked" value={stats?.locked} icon={Lock} color="bg-gray-600" />
       </div>
 
       {/* Ready-to-activate banner */}
@@ -728,11 +695,6 @@ const ManageWordBank = () => {
                     <td className="px-4 py-3 font-medium text-gray-800">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {word.label}
-                        {word.is_locked && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                            <Lock size={10} /> Locked
-                          </span>
-                        )}
                         {word.is_active && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                             Active
@@ -794,22 +756,6 @@ const ManageWordBank = () => {
                               Reject
                             </button>
                           </>
-                        )}
-
-                        {word.is_locked ? (
-                          <button
-                            onClick={() => handleUnlock(word.id)}
-                            className="text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 px-2 py-1 rounded-lg flex items-center gap-1"
-                          >
-                            <Unlock size={12} /> Unlock
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleLock(word.id)}
-                            className="text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 px-2 py-1 rounded-lg flex items-center gap-1"
-                          >
-                            <Lock size={12} /> Lock
-                          </button>
                         )}
 
                         <button

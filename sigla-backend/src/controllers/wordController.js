@@ -222,14 +222,13 @@ const getAllWords = async (req, res) => {
 // ── GET /api/words/stats ──────────────────────────────────────
 const getWordStats = async (req, res) => {
   try {
-    const [total, pending, approved, rejected, active, locked, totalSamples] =
+    const [total, pending, approved, rejected, active, totalSamples] =
       await Promise.all([
         Word.count(),
         Word.count({ where: { status: "pending" } }),
         Word.count({ where: { status: "approved" } }),
         Word.count({ where: { status: "rejected" } }),
         Word.count({ where: { is_active: true } }),
-        Word.count({ where: { is_locked: true } }),
         Word.sum("total_samples"),
       ]);
 
@@ -244,7 +243,6 @@ const getWordStats = async (req, res) => {
       approved,
       rejected,
       active,
-      locked,
       ready_to_activate: readyToActivate,
       total_samples: totalSamples || 0,
     });
@@ -504,14 +502,6 @@ const uploadSamples = async (req, res) => {
 
     if (!word) {
       return res.status(404).json({ message: "Word not found" });
-    }
-
-    if (word.is_locked) {
-      return res.status(403).json({
-        message:
-          "Submissions for this word are currently locked by the administrator.",
-        locked: true,
-      });
     }
 
     const existingSampleCount = await GestureSample.count({ where: { word_id: word.id } });
@@ -1053,60 +1043,6 @@ const activateWord = async (req, res) => {
   }
 };
 
-// ── PATCH /api/words/:id/lock ─────────────────────────────────
-const lockWord = async (req, res) => {
-  try {
-    const word = await Word.findOne({ where: { id: req.params.id } });
-    if (!word) {
-      return res.status(404).json({ message: "Word not found" });
-    }
-
-    await word.update({ is_locked: true });
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "locked_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Locked submissions for word: ${word.label}`,
-    // });
-
-    return res
-      .status(200)
-      .json({ message: "Word locked. No further submissions allowed." });
-  } catch (err) {
-    console.error("Lock word error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ── PATCH /api/words/:id/unlock ───────────────────────────────
-const unlockWord = async (req, res) => {
-  try {
-    const word = await Word.findOne({ where: { id: req.params.id } });
-    if (!word) {
-      return res.status(404).json({ message: "Word not found" });
-    }
-
-    await word.update({ is_locked: false });
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "unlocked_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Unlocked submissions for word: ${word.label}`,
-    // });
-
-    return res
-      .status(200)
-      .json({ message: "Word unlocked. Submissions are now allowed." });
-  } catch (err) {
-    console.error("Unlock word error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
 // ── PATCH /api/words/:id/approve ──────────────────────────────
 const approveWord = async (req, res) => {
   try {
@@ -1327,7 +1263,6 @@ const getSamples = async (req, res) => {
       total_samples: word.total_samples,
       approved_sample_count: word.approved_sample_count,
       is_active: word.is_active,
-      is_locked: word.is_locked,
       gesture_type: word.gesture_type,
       activation_threshold: getActivationThreshold(
         word.gesture_type || "static",
@@ -1868,8 +1803,6 @@ module.exports = {
   approveSubmission,
   rejectSubmission,
   activateWord,
-  lockWord,
-  unlockWord,
   getUserSampleCountForWord,
   setThumbnail,
   setVideo,
