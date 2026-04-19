@@ -19,10 +19,6 @@ const UserSetting = sequelize.define(
       defaultValue: "female",
       validate: { isIn: [["male", "female"]] },
     },
-    voice_enabled: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true,
-    },
     dark_mode: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
