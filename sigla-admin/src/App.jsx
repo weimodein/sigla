@@ -6,6 +6,7 @@ import Layout from "./components/Layout.jsx";
 
 // Pages
 import Login from "./pages/auth/Login.jsx";
+import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import ManageUsers from "./pages/users/ManageUsers.jsx";
 import ManageWordBank from "./pages/words/ManageWordBank.jsx";
@@ -21,6 +22,7 @@ const App = () => {
           <Routes>
             {/* Public */}
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
 
             {/* Protected — with sidebar layout */}
             <Route
