@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -8,7 +8,7 @@ import {
   resetPassword,
   resendCode,
 } from "../../api/authApi.js";
-import { Eye, EyeOff, Loader2, Check } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 // ── Color palette ──
 const C = {
@@ -18,10 +18,6 @@ const C = {
   secondary: "#1d4ed8",
   accent: "#3f8efc",
 };
-
-// ── Step config ──
-const STEPS = ["Email", "Verify", "New Password"];
-const STEP_INDEX = { forgot: 0, verify: 1, reset: 2 };
 
 // ── Reusable Floating Input ──
 const FloatingInput = ({
@@ -83,7 +79,7 @@ const Button = ({ disabled, loading, children }) => {
   );
 };
 
-// ── Password toggle icon ──
+// ── Password toggle icon component ──
 const PasswordToggleIcon = ({ showPass, onToggle }) => (
   <button
     type="button"
@@ -95,119 +91,6 @@ const PasswordToggleIcon = ({ showPass, onToggle }) => (
     {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
   </button>
 );
-
-// ── Step progress bar ──
-const StepBar = ({ currentStep }) => {
-  const idx = STEP_INDEX[currentStep] ?? 0;
-  return (
-    <div style={S.stepBar}>
-      {STEPS.map((label, i) => {
-        const done = i < idx;
-        const active = i === idx;
-        return (
-          <div key={label} style={S.stepItem}>
-            <div
-              style={{
-                ...S.stepCircle,
-                background: done ? C.primary : active ? C.primary : "#e5e7eb",
-                color: done || active ? "#fff" : "#9ca3af",
-                border: active ? `2px solid ${C.primary}` : "2px solid transparent",
-              }}
-            >
-              {done ? <Check size={12} strokeWidth={3} /> : i + 1}
-            </div>
-            <span
-              style={{
-                ...S.stepLabel,
-                color: active ? C.primary : done ? "#374151" : "#9ca3af",
-                fontWeight: active ? 600 : 400,
-              }}
-            >
-              {label}
-            </span>
-            {i < STEPS.length - 1 && (
-              <div
-                style={{
-                  ...S.stepLine,
-                  background: done ? C.primary : "#e5e7eb",
-                }}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-// ── OTP digit boxes ──
-const OtpInput = ({ value, onChange }) => {
-  const inputsRef = useRef([]);
-  const digits = value.split("");
-
-  const handleKey = (e, i) => {
-    if (e.key === "Backspace") {
-      if (digits[i]) {
-        const next = [...digits];
-        next[i] = "";
-        onChange(next.join(""));
-      } else if (i > 0) {
-        inputsRef.current[i - 1]?.focus();
-        const next = [...digits];
-        next[i - 1] = "";
-        onChange(next.join(""));
-      }
-      return;
-    }
-    if (e.key === "ArrowLeft" && i > 0) {
-      inputsRef.current[i - 1]?.focus();
-      return;
-    }
-    if (e.key === "ArrowRight" && i < 5) {
-      inputsRef.current[i + 1]?.focus();
-    }
-  };
-
-  const handleChange = (e, i) => {
-    const val = e.target.value.replace(/\D/g, "").slice(-1);
-    const next = [...digits];
-    next[i] = val;
-    onChange(next.join("").slice(0, 6));
-    if (val && i < 5) inputsRef.current[i + 1]?.focus();
-  };
-
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    onChange(pasted);
-    const focusIdx = Math.min(pasted.length, 5);
-    inputsRef.current[focusIdx]?.focus();
-  };
-
-  return (
-    <div style={S.otpRow}>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <input
-          key={i}
-          ref={(el) => (inputsRef.current[i] = el)}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={digits[i] || ""}
-          onChange={(e) => handleChange(e, i)}
-          onKeyDown={(e) => handleKey(e, i)}
-          onPaste={handlePaste}
-          style={{
-            ...S.otpBox,
-            borderColor: digits[i] ? C.primary : "#d1d5db",
-            boxShadow: digits[i] ? `0 0 0 2px ${C.primary}22` : "none",
-          }}
-          autoComplete="off"
-        />
-      ))}
-    </div>
-  );
-};
 
 const Login = () => {
   const navigate = useNavigate();
@@ -228,8 +111,6 @@ const Login = () => {
   const [code, setCode] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [showNewPass, setShowNewPass] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   // Resend cooldown
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -311,8 +192,14 @@ const Login = () => {
   }, []);
 
   // ── Login handlers ──
-  const handleIdentifierChange = useCallback((e) => setIdentifier(e.target.value), []);
-  const handlePasswordChange = useCallback((e) => setPassword(e.target.value), []);
+  const handleIdentifierChange = useCallback(
+    (e) => setIdentifier(e.target.value),
+    [],
+  );
+  const handlePasswordChange = useCallback(
+    (e) => setPassword(e.target.value),
+    [],
+  );
   const toggleShowPass = useCallback(() => setShowPass((s) => !s), []);
 
   const handleLogin = useCallback(
@@ -323,7 +210,9 @@ const Login = () => {
         await login(identifier, password);
         navigate("/dashboard");
       } catch (err) {
-        toast.error(err.response?.data?.message || err.message || "Login failed");
+        toast.error(
+          err.response?.data?.message || err.message || "Login failed",
+        );
       } finally {
         setLoading(false);
       }
@@ -339,7 +228,9 @@ const Login = () => {
       setLoading(true);
       try {
         await forgotPassword(email);
-        toast.success("Verification code sent to your email. Valid for 5 minutes.");
+        toast.success(
+          "Verification code sent to your email. Valid for 5 minutes.",
+        );
         setStep("verify");
         startCooldown();
       } catch (err) {
@@ -352,6 +243,9 @@ const Login = () => {
   );
 
   // ── Verify code handlers ──
+  const handleCodeChange = useCallback((e) => {
+    setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+  }, []);
   const handleVerify = useCallback(
     async (e) => {
       e.preventDefault();
@@ -386,8 +280,14 @@ const Login = () => {
   }, [email, resendCooldown, toast, startCooldown]);
 
   // ── Reset password handlers ──
-  const handleNewPassChange = useCallback((e) => setNewPass(e.target.value), []);
-  const handleConfirmChange = useCallback((e) => setConfirm(e.target.value), []);
+  const handleNewPassChange = useCallback(
+    (e) => setNewPass(e.target.value),
+    [],
+  );
+  const handleConfirmChange = useCallback(
+    (e) => setConfirm(e.target.value),
+    [],
+  );
   const handleReset = useCallback(
     async (e) => {
       e.preventDefault();
@@ -417,26 +317,25 @@ const Login = () => {
     [newPass, confirm, email, toast],
   );
 
-  // ── Password match state ──
-  const passwordsMatch = newPass && confirm && newPass === confirm;
-  const passwordsMismatch = newPass && confirm && newPass !== confirm;
-
-  // ── UI ──
+  // ── UI – forms inlined directly ──
   return (
     <div style={S.pageWrapper}>
       <div style={S.background} />
       <div className="sigla-login-container" style={S.loginContainer}>
-
-        {/* Logo panel — left on login, right on reset flow */}
         {step === "login" && (
           <div className="sigla-left-panel" style={S.leftPanel}>
             <img src="/logo.png" alt="SIGLA Logo" style={S.logo} />
           </div>
         )}
 
-        {/* Form panel */}
-        <div className="sigla-right-panel" style={S.rightPanel}>
-
+        <div
+          className="sigla-right-panel"
+          style={
+            step === "login"
+              ? S.rightPanel
+              : { ...S.rightPanel, width: "100%", maxWidth: "440px" }
+          }
+        >
           {/* LOGIN FORM */}
           {step === "login" && (
             <form onSubmit={handleLogin}>
@@ -459,7 +358,12 @@ const Login = () => {
                   onChange={handlePasswordChange}
                   label="Password"
                   autoComplete="current-password"
-                  icon={<PasswordToggleIcon showPass={showPass} onToggle={toggleShowPass} />}
+                  icon={
+                    <PasswordToggleIcon
+                      showPass={showPass}
+                      onToggle={toggleShowPass}
+                    />
+                  }
                 />
               </div>
 
@@ -479,7 +383,11 @@ const Login = () => {
 
               <div style={S.footer}>
                 <p style={S.footerP}>Forgot your password?</p>
-                <button type="button" onClick={() => setStep("forgot")} style={S.footerLink}>
+                <button
+                  type="button"
+                  onClick={() => setStep("forgot")}
+                  style={S.footerLink}
+                >
                   Reset it here
                 </button>
               </div>
@@ -489,9 +397,7 @@ const Login = () => {
           {/* FORGOT PASSWORD FORM */}
           {step === "forgot" && (
             <form onSubmit={handleForgot}>
-              <StepBar currentStep="forgot" />
               <h2 style={S.heading}>Forgot Password?</h2>
-              <p style={S.subtitle}>Enter the email address linked to your admin account.</p>
               <div style={S.fields}>
                 <FloatingInput
                   key="forgot-email"
@@ -509,7 +415,11 @@ const Login = () => {
 
               <div style={S.footer}>
                 <p style={S.footerP}>Remember your password?</p>
-                <button type="button" onClick={() => setStep("login")} style={S.footerLink}>
+                <button
+                  type="button"
+                  onClick={() => setStep("login")}
+                  style={S.footerLink}
+                >
                   Back to login
                 </button>
               </div>
@@ -519,13 +429,20 @@ const Login = () => {
           {/* VERIFY CODE FORM */}
           {step === "verify" && (
             <form onSubmit={handleVerify}>
-              <StepBar currentStep="verify" />
-              <h2 style={S.heading}>Verify Your Email</h2>
-              <p style={S.subtitle}>
-                A 6-digit code was sent to <strong>{email}</strong>. Enter it below.
-              </p>
-
-              <OtpInput value={code} onChange={setCode} />
+              <h2 style={S.heading}>Verify your email</h2>
+              <div style={S.fields}>
+                <FloatingInput
+                  key="verify-code"
+                  id="code"
+                  type="text"
+                  value={code}
+                  onChange={handleCodeChange}
+                  label="Verification Code"
+                  maxLength={6}
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                />
+              </div>
 
               <Button disabled={loading || code.length !== 6} loading={loading}>
                 {loading ? "Verifying..." : "Verify Code"}
@@ -541,9 +458,15 @@ const Login = () => {
                     ...(resendCooldown > 0 ? S.linkDisabled : {}),
                   }}
                 >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                  {resendCooldown > 0
+                    ? `Resend in ${resendCooldown}s`
+                    : "Resend code"}
                 </button>
-                <button type="button" onClick={() => setStep("login")} style={S.link}>
+                <button
+                  type="button"
+                  onClick={() => setStep("login")}
+                  style={S.link}
+                >
                   Back to login
                 </button>
               </div>
@@ -553,76 +476,51 @@ const Login = () => {
           {/* RESET PASSWORD FORM */}
           {step === "reset" && (
             <form onSubmit={handleReset}>
-              <StepBar currentStep="reset" />
               <h2 style={S.heading}>Set New Password</h2>
-              <p style={S.subtitle}>Choose a strong password for your account.</p>
               <div style={S.fields}>
                 <FloatingInput
                   key="reset-newpass"
                   id="new-pass"
-                  type={showNewPass ? "text" : "password"}
+                  type="password"
                   value={newPass}
                   onChange={handleNewPassChange}
                   label="New Password"
                   autoComplete="new-password"
-                  icon={
-                    <PasswordToggleIcon
-                      showPass={showNewPass}
-                      onToggle={() => setShowNewPass((s) => !s)}
-                    />
-                  }
                 />
-                <div>
-                  <FloatingInput
-                    key="reset-confirm"
-                    id="confirm-pass"
-                    type={showConfirm ? "text" : "password"}
-                    value={confirm}
-                    onChange={handleConfirmChange}
-                    label="Confirm Password"
-                    autoComplete="new-password"
-                    icon={
-                      <PasswordToggleIcon
-                        showPass={showConfirm}
-                        onToggle={() => setShowConfirm((s) => !s)}
-                      />
-                    }
-                  />
-                  {passwordsMatch && (
-                    <p style={{ ...S.matchHint, color: "#16a34a" }}>✓ Passwords match</p>
-                  )}
-                  {passwordsMismatch && (
-                    <p style={{ ...S.matchHint, color: "#dc2626" }}>✗ Passwords do not match</p>
-                  )}
-                </div>
+                <FloatingInput
+                  key="reset-confirm"
+                  id="confirm-pass"
+                  type="password"
+                  value={confirm}
+                  onChange={handleConfirmChange}
+                  label="Confirm Password"
+                  autoComplete="new-password"
+                />
               </div>
 
-              <Button disabled={loading || !passwordsMatch} loading={loading}>
+              <Button disabled={loading} loading={loading}>
                 {loading ? "Resetting..." : "Reset Password"}
               </Button>
 
               <div style={S.footer}>
                 <p style={S.footerP}>Done resetting?</p>
-                <button type="button" onClick={() => setStep("login")} style={S.footerLink}>
+                <button
+                  type="button"
+                  onClick={() => setStep("login")}
+                  style={S.footerLink}
+                >
                   Back to login
                 </button>
               </div>
             </form>
           )}
         </div>
-
-        {/* Logo panel — right side on reset flow */}
-        {step !== "login" && (
-          <div className="sigla-left-panel" style={S.leftPanel}>
-            <img src="/logo.png" alt="SIGLA Logo" style={S.logo} />
-          </div>
-        )}
       </div>
     </div>
   );
 };
 
-// ── Style objects ──
+// ── Style objects (unchanged from original) ──
 const S = {
   pageWrapper: {
     display: "flex",
@@ -668,34 +566,24 @@ const S = {
   },
   rightPanel: {
     width: "55%",
-    flexShrink: 0,
     background: "#f0f1f9",
-    padding: "40px 45px",
+    padding: "50px 45px",
     color: C.text,
     display: "flex",
     flexDirection: "column",
     justifyContent: "center",
-    overflowY: "auto",
   },
   fields: {
     display: "flex",
     flexDirection: "column",
-    gap: "28px",
-    marginBottom: "24px",
+    gap: "32px",
+    marginBottom: "20px",
   },
   heading: {
-    fontSize: "1.5rem",
+    fontSize: "1.75rem",
     fontWeight: 700,
-    marginBottom: "6px",
-    marginTop: "8px",
+    marginBottom: "30px",
     color: C.text,
-  },
-  subtitle: {
-    fontSize: "0.82rem",
-    color: "#6b7280",
-    marginBottom: "20px",
-    marginTop: 0,
-    lineHeight: 1.5,
   },
   inputGroup: {
     position: "relative",
@@ -778,10 +666,10 @@ const S = {
     cursor: "pointer",
     transition: "0.3s",
     fontFamily: "inherit",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
+  },
+  btnDisabled: {
+    opacity: 0.7,
+    cursor: "not-allowed",
   },
   footer: {
     marginTop: "15px",
@@ -828,71 +716,6 @@ const S = {
     color: "#999",
     cursor: "not-allowed",
     fontWeight: 400,
-  },
-  // Step bar
-  stepBar: {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: "16px",
-    gap: 0,
-  },
-  stepItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    flexShrink: 0,
-  },
-  stepCircle: {
-    width: "24px",
-    height: "24px",
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "11px",
-    fontWeight: 700,
-    flexShrink: 0,
-    transition: "background 0.3s",
-  },
-  stepLabel: {
-    fontSize: "11px",
-    whiteSpace: "nowrap",
-    transition: "color 0.3s",
-  },
-  stepLine: {
-    height: "2px",
-    width: "20px",
-    marginLeft: "6px",
-    transition: "background 0.3s",
-    flexShrink: 0,
-  },
-  // OTP boxes
-  otpRow: {
-    display: "flex",
-    gap: "10px",
-    justifyContent: "center",
-    marginBottom: "24px",
-  },
-  otpBox: {
-    width: "44px",
-    height: "52px",
-    textAlign: "center",
-    fontSize: "1.4rem",
-    fontWeight: 700,
-    border: "2px solid #d1d5db",
-    borderRadius: "10px",
-    background: "#fff",
-    color: C.text,
-    outline: "none",
-    transition: "border-color 0.2s, box-shadow 0.2s",
-    fontFamily: "inherit",
-  },
-  // Password match hint
-  matchHint: {
-    fontSize: "0.78rem",
-    marginTop: "6px",
-    marginLeft: "4px",
-    fontWeight: 500,
   },
 };
 
