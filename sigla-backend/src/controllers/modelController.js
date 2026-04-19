@@ -84,6 +84,7 @@ const getLatestModel = async (req, res) => {
         "version_number",
         "tflite_url",
         "motion_tflite_url",
+        "gesture_config_url",
         "accuracy",
         "motion_accuracy",
         "deployed_at",
@@ -105,6 +106,22 @@ const getLatestModel = async (req, res) => {
       ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
       : null;
 
+    // If the current deployed model is static-only, fall back to the versioned
+    // gesture_config from the last model that had a motion model. This ensures
+    // the mobile always gets a gesture_config that includes motion gesture definitions
+    // (e.g. J and Z marked as motion: true) even across static-only deploys.
+    let gestureConfigUrl = base ? `${base}/gesture_config.json` : null;
+    if (!model.motion_tflite_url) {
+      const lastMotionModel = await ModelVersion.findOne({
+        where: { motion_tflite_url: { [Op.ne]: null } },
+        attributes: ["gesture_config_url"],
+        order: [["deployed_at", "DESC"]],
+      });
+      if (lastMotionModel?.gesture_config_url) {
+        gestureConfigUrl = lastMotionModel.gesture_config_url;
+      }
+    }
+
     return res.status(200).json({
       model: {
         ...model.toJSON(),
@@ -114,7 +131,7 @@ const getLatestModel = async (req, res) => {
         motion_tflite_url: (base && model.motion_tflite_url) ? `${base}/sign_model_motion.tflite` : null,
         labels_static_url: base ? `${base}/labels_static.json` : null,
         labels_motion_url: (base && model.motion_tflite_url) ? `${base}/labels_motion.json` : null,
-        gesture_config_url: base ? `${base}/gesture_config.json` : null,
+        gesture_config_url: gestureConfigUrl,
       },
     });
   } catch (err) {
@@ -362,7 +379,10 @@ const deployModel = async (req, res) => {
         required: false,
       },
       {
-        url: `${baseUrl}/gesture_config.json`,
+        // Only overwrite deployed/gesture_config.json when this model has a motion model.
+        // Static-only deploys skip it so the previous gesture_config (which includes
+        // motion gesture definitions) is preserved in the deployed/ folder.
+        url: model.motion_tflite_url ? `${baseUrl}/gesture_config.json` : null,
         name: "gesture_config.json",
         required: false,
       },

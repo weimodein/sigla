@@ -67,7 +67,15 @@ object ModelUpdateManager {
                 val cachedVersion = getCachedVersion(context)
 
                 if (remoteVersion == cachedVersion) {
-                    Log.i(TAG, "Model up-to-date (v$remoteVersion) — skipping download")
+                    Log.i(TAG, "Model up-to-date (v$remoteVersion) — refreshing gesture config")
+                    // Always re-download gesture_config so motion gesture definitions stay current
+                    // even across static-only deploys that don't change the version number.
+                    val gcUrl = model.gesture_config_url
+                    if (!gcUrl.isNullOrBlank()) {
+                        val ok = downloadToFile(gcUrl, File(context.filesDir, "gesture_config.json"))
+                        if (ok) Log.i(TAG, "Gesture config refreshed")
+                        else Log.w(TAG, "Gesture config refresh failed — using cached version")
+                    }
                     return@withContext hasLocalModel(context)
                 }
 
