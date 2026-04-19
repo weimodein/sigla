@@ -111,9 +111,9 @@ const getLatestModel = async (req, res) => {
         tflite_url: base
           ? `${base}/sign_model_static.tflite`
           : model.tflite_url,
-        motion_tflite_url: base ? `${base}/sign_model_motion.tflite` : null,
+        motion_tflite_url: (base && model.motion_tflite_url) ? `${base}/sign_model_motion.tflite` : null,
         labels_static_url: base ? `${base}/labels_static.json` : null,
-        labels_motion_url: base ? `${base}/labels_motion.json` : null,
+        labels_motion_url: (base && model.motion_tflite_url) ? `${base}/labels_motion.json` : null,
         gesture_config_url: base ? `${base}/gesture_config.json` : null,
       },
     });
