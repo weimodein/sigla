@@ -4,7 +4,6 @@ const crypto = require("crypto");
 const {
   ModelVersion,
   Word,
-  WordBank,
   User,
   // ActivityLog,
   Notification,
@@ -85,7 +84,6 @@ const getLatestModel = async (req, res) => {
         "version_number",
         "tflite_url",
         "motion_tflite_url",
-        "word_bank_url",
         "accuracy",
         "motion_accuracy",
         "deployed_at",
@@ -465,87 +463,19 @@ const deployModel = async (req, res) => {
       await model.update({ status: "deployed", deployed_at: new Date() });
     }
 
-    // ── Activate approved words + generate word_bank.json ────────────────────
+    // ── Activate approved words ──────────────────────────────────────────────
     // Wrapped in try/catch — failure here must never leave the model stuck.
     let wordsToActivate = [];
     try {
-      // Activate ALL approved words — the training pipeline is the quality gate,
-      // not the sample count. Admin deployed this model, so all approved words are ready.
       wordsToActivate = await Word.findAll({
         where: { status: "approved", is_active: false },
       });
 
       for (const word of wordsToActivate) {
         await word.update({ is_active: true });
-        const existing = await WordBank.findOne({
-          where: { word_id: word.id },
-        });
-        if (!existing) {
-          await WordBank.create({
-            word_id: word.id,
-            label: word.label,
-            description: word.description,
-            sign_type: word.sign_type,
-            category: word.category,
-            hands_count: word.hands_count,
-            gesture_type: word.gesture_type,
-            is_active: true,
-            video_url: word.video_url || null,
-            image_url: word.thumbnail_url || null,
-            filipino_translation: word.filipino_translation || null,
-          });
-        } else {
-          await existing.update({
-            is_active: true,
-            gesture_type: word.gesture_type,
-            filipino_translation:
-              word.filipino_translation || existing.filipino_translation,
-            image_url: word.thumbnail_url || existing.image_url,
-            video_url: word.video_url || existing.video_url,
-          });
-        }
       }
     } catch (wordErr) {
       console.error("Word activation error (non-fatal):", wordErr.message);
-    }
-
-    // ── Generate and upload word_bank.json to Supabase ───────────────────────
-    try {
-      const allActiveWords = await WordBank.findAll({
-        where: { is_active: true },
-      });
-      const wordBankPayload = {
-        version: model.version_number,
-        deployed_at: new Date().toISOString(),
-        words: allActiveWords.map((w) => ({
-          id: w.id,
-          label: w.label,
-          description: w.description || null,
-          sign_type: w.sign_type,
-          category: w.category,
-          hands_count: w.hands_count,
-          gesture_type: w.gesture_type || "static",
-          thumbnail_url: w.image_url || null,
-          video_url: w.video_url || null,
-          filipino_translation: w.filipino_translation || null,
-        })),
-      };
-
-      if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-        const jsonBuffer = Buffer.from(
-          JSON.stringify(wordBankPayload),
-          "utf-8",
-        );
-        const wordBankUrl = await uploadToSupabase(
-          "deployed/word_bank.json",
-          jsonBuffer,
-          "application/json",
-        );
-        await model.update({ word_bank_url: wordBankUrl });
-        console.log(`Word bank JSON uploaded: ${allActiveWords.length} words`);
-      }
-    } catch (wbErr) {
-      console.error("Word bank upload error (non-fatal):", wbErr.message);
     }
 
     // ── Notifications ─────────────────────────────────────────────────────────

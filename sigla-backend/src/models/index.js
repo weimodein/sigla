@@ -3,7 +3,6 @@ const EmailVerification = require("./EmailVerification.js");
 const Word = require("./Word.js");
 const GestureSample = require("./GestureSample.js");
 const ModelVersion = require("./ModelVersion.js");
-const WordBank = require("./WordBank.js");
 const Notification = require("./Notification.js");
 const Report = require("./Report.js");
 const UserSetting = require("./UserSetting.js");
@@ -27,10 +26,6 @@ Word.hasMany(GestureSample, { foreignKey: "word_id", as: "samples" });
 // ModelVersion belongs to User (trained_by)
 ModelVersion.belongsTo(User, { foreignKey: "trained_by", as: "trainer" });
 
-// WordBank belongs to Word
-WordBank.belongsTo(Word, { foreignKey: "word_id", as: "word" });
-Word.hasOne(WordBank, { foreignKey: "word_id", as: "word_bank_entry" });
-
 // Notification belongs to User
 Notification.belongsTo(User, { foreignKey: "user_id", as: "user" });
 User.hasMany(Notification, { foreignKey: "user_id", as: "notifications" });
@@ -53,7 +48,6 @@ module.exports = {
   Word,
   GestureSample,
   ModelVersion,
-  WordBank,
   Notification,
   Report,
   UserSetting,

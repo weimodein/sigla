@@ -5,7 +5,6 @@ const axios = require("axios");
 const {
   Word,
   GestureSample,
-  WordBank,
   User,
   Notification,
   // ActivityLog,
@@ -1064,9 +1063,6 @@ const activateWord = async (req, res) => {
 
     await word.update({ is_active: true });
 
-    const wb = await WordBank.findOne({ where: { word_id: word.id } });
-    if (wb) await wb.update({ is_active: true });
-
     return res.status(200).json({ message: "Word activated successfully." });
   } catch (err) {
     console.error("Activate word error:", err);
@@ -1270,19 +1266,6 @@ const updateWord = async (req, res) => {
             : parseInt(sample_limit)
           : word.sample_limit,
     });
-
-    // Sync label and description to word bank if word is approved
-    if (word.status === "approved") {
-      await WordBank.update(
-        {
-          label: updatedLabel,
-          description: description ?? word.description,
-          hands_count: hands_count || word.hands_count,
-          category: category || word.category,
-        },
-        { where: { word_id: word.id } },
-      );
-    }
 
     // await ActivityLog.create({
     //   user_id: req.user.id,
@@ -1834,9 +1817,6 @@ async function setThumbnail(req, res) {
 
     await word.update({ thumbnail_url });
 
-    const wb = await WordBank.findOne({ where: { word_id: word.id } });
-    if (wb) await wb.update({ image_url: thumbnail_url });
-
     return res
       .status(200)
       .json({ message: "Thumbnail updated", thumbnail_url });
@@ -1871,9 +1851,6 @@ async function setVideo(req, res) {
         .json({ message: "Either video_url or video_base64 is required" });
 
     await word.update({ video_url: videoUrl });
-
-    const wb = await WordBank.findOne({ where: { word_id: word.id } });
-    if (wb) await wb.update({ video_url: videoUrl });
 
     return res
       .status(200)
