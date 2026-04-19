@@ -18,7 +18,7 @@ const EmailVerification = sequelize.define(
       allowNull: false,
     },
     code: {
-      type: DataTypes.STRING(10),
+      type: DataTypes.STRING(6),
       allowNull: false,
     },
     type: {
