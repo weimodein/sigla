@@ -84,7 +84,6 @@ const getLatestModel = async (req, res) => {
         "version_number",
         "tflite_url",
         "motion_tflite_url",
-        "gesture_config_url",
         "accuracy",
         "motion_accuracy",
         "deployed_at",
@@ -106,21 +105,9 @@ const getLatestModel = async (req, res) => {
       ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
       : null;
 
-    // If the current deployed model is static-only, fall back to the versioned
-    // gesture_config from the last model that had a motion model. This ensures
-    // the mobile always gets a gesture_config that includes motion gesture definitions
-    // (e.g. J and Z marked as motion: true) even across static-only deploys.
-    let gestureConfigUrl = base ? `${base}/gesture_config.json` : null;
-    if (!model.motion_tflite_url) {
-      const lastMotionModel = await ModelVersion.findOne({
-        where: { motion_tflite_url: { [Op.ne]: null } },
-        attributes: ["gesture_config_url"],
-        order: [["deployed_at", "DESC"]],
-      });
-      if (lastMotionModel?.gesture_config_url) {
-        gestureConfigUrl = lastMotionModel.gesture_config_url;
-      }
-    }
+    // gesture_config_url always points to deployed/ — the deploy process now preserves
+    // it across static-only deploys (not overwritten when no motion model is present).
+    const gestureConfigUrl = base ? `${base}/gesture_config.json` : null;
 
     return res.status(200).json({
       model: {
