@@ -53,6 +53,23 @@ class WordBankActivity : AppCompatActivity() {
     private var allWords = listOf<WordBankWord>()
     private var isLoading = false
 
+    companion object {
+        val FSL_CATEGORIES = listOf(
+            "introducing oneself",
+            "ordering food",
+            "buying items",
+            "asking for prices",
+            "giving numbers",
+            "requesting assistance",
+            "asking for directions",
+            "confirming information",
+            "communicating basic needs",
+            "alphabets",
+            "numbers",
+            "additional words"
+        )
+    }
+
     // TTS
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
@@ -322,13 +339,9 @@ class WordBankActivity : AppCompatActivity() {
     }
 
     private fun getCategoryDisplayList(): List<String> {
-        val systemCategories = listOf("All Categories") + getUniqueSystemCategories()
+        val systemCategories = listOf("All Categories") + FSL_CATEGORIES
         val customCategoryNames = customCategories.map { it.name }
         return systemCategories + customCategoryNames
-    }
-
-    private fun getUniqueSystemCategories(): List<String> {
-        return allWords.map { it.category }.distinct().sorted()
     }
 
     private fun refreshCategoryDropdown() {
