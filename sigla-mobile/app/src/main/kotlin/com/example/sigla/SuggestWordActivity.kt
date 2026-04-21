@@ -493,7 +493,22 @@ class SuggestWordActivity : AppCompatActivity() {
     
     private fun handleExistingWordResponse(response: retrofit2.Response<*>, word: String, handsCount: Int, gestureType: String) {
         setLoading(false)
-        showExistsBanner(word)
+        showDuplicateWordDialog(word)
+    }
+
+    private fun showDuplicateWordDialog(word: String) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Word Already Exists")
+            .setMessage("\"$word\" is already in the system. Please try a different word that hasn't been suggested yet.")
+            .setPositiveButton("Try Another Word") { dialog, _ ->
+                dialog.dismiss()
+                etWord.text?.clear()
+                etWord.requestFocus()
+                wordStatusBanner.isVisible = false
+                setLoading(false)
+            }
+            .setCancelable(false)
+            .show()
     }
     
     private fun navigateToCollection(wordId: Int, wordLabel: String, gestureType: String, handsCount: Int, targetCount: Int) {
