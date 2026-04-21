@@ -28,6 +28,7 @@ const {
   rejectSubmission,
   activateWord,
   getUserSampleCountForWord,
+  checkWordExists,
   setThumbnail,
   setVideo,
 } = require("../controllers/wordController.js");
@@ -65,6 +66,7 @@ router.use(authMiddleware);
 
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getWordStats);
+router.get("/check", roleMiddleware("user"), checkWordExists);
 
 // ── Admin add word manually ───────────────────────────────────
 // IMPORTANT: must come before /:id wildcard routes

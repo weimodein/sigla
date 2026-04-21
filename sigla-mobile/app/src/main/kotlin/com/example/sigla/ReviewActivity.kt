@@ -16,6 +16,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.Response
 
 class ReviewActivity : AppCompatActivity() {
 
@@ -72,11 +73,10 @@ class ReviewActivity : AppCompatActivity() {
     // ── Upload ────────────────────────────────────────────────────────────────
 
     private fun startUpload() {
-        val token    = CollectionActivity.uploadToken ?: run {
+        val token = CollectionActivity.uploadToken ?: run {
             showError("Not logged in")
             return
         }
-        val wordId   = CollectionActivity.uploadWordId
         val isMotion = CollectionActivity.reviewIsMotion
 
         // Lock UI while uploading
@@ -88,6 +88,25 @@ class ReviewActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
+                // Step 1: Create the word in the database (deferred from SuggestWordActivity)
+                val wordResp = ApiClient.get(token).submitWord(
+                    SubmitWordRequest(
+                        label = CollectionActivity.reviewWordLabel,
+                        description = CollectionActivity.uploadDescription,
+                        hands_count = CollectionActivity.uploadHandsCount,
+                        gesture_type = CollectionActivity.uploadGestureType
+                    )
+                )
+                if (!wordResp.isSuccessful) {
+                    withContext(Dispatchers.Main) {
+                        progressUpload.visibility = View.GONE
+                        showError(parseError(wordResp))
+                    }
+                    return@launch
+                }
+                val wordId = wordResp.body()?.word_id ?: wordResp.body()?.word?.id ?: 0
+
+                // Step 2: Upload the collected samples
                 val request = if (!isMotion) {
                     UploadSamplesRequest(
                         landmarks    = CollectionActivity.uploadStaticLandmarks,
@@ -108,17 +127,10 @@ class ReviewActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     progressUpload.visibility = View.GONE
                     if (response.isSuccessful) {
-                        // Upload done — return OK to CollectionActivity
                         setResult(RESULT_OK)
                         finish()
                     } else {
-                        val msg = try {
-                            val json = com.google.gson.JsonParser.parseString(
-                                response.errorBody()?.string() ?: ""
-                            ).asJsonObject
-                            json.get("message")?.asString ?: "Upload failed (${response.code()})"
-                        } catch (_: Exception) { "Upload failed (${response.code()})" }
-                        showError(msg)
+                        showError(parseError(response))
                     }
                 }
             } catch (e: Exception) {
@@ -128,6 +140,15 @@ class ReviewActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun parseError(response: retrofit2.Response<*>): String {
+        return try {
+            val json = com.google.gson.JsonParser.parseString(
+                response.errorBody()?.string() ?: ""
+            ).asJsonObject
+            json.get("message")?.asString ?: "Request failed (${response.code()})"
+        } catch (_: Exception) { "Request failed (${response.code()})" }
     }
 
     private fun showError(msg: String) {

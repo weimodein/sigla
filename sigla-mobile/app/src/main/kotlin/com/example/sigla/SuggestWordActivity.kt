@@ -1,7 +1,9 @@
 package com.example.sigla
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Environment
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.method.LinkMovementMethod
@@ -24,6 +26,8 @@ import kotlinx.coroutines.launch
 import android.widget.ImageView
 import androidx.core.view.isVisible
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import org.json.JSONObject
+import java.io.File
 
 class SuggestWordActivity : AppCompatActivity() {
 
@@ -85,7 +89,57 @@ class SuggestWordActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshSidebarAuthState()  // ← UPDATE SIDEBAR WHEN ACTIVITY RESUMES
+        refreshSidebarAuthState()
+        checkForPendingSession()
+    }
+
+    // ── Offline resumption ─────────────────────────────────────────────────────
+
+    private fun checkForPendingSession() {
+        val prefs = getSharedPreferences("sigla_suggest", Context.MODE_PRIVATE)
+        val json = prefs.getString("pending_suggest_session", null) ?: return
+        val obj = try { JSONObject(json) } catch (_: Exception) { prefs.edit().remove("pending_suggest_session").apply(); return }
+        val label = obj.optString("label").takeIf { it.isNotBlank() } ?: return
+        val gestureType = obj.optString("gesture_type", "static")
+        val collectedCount = getSavedSampleCount(label)
+        if (collectedCount == 0) {
+            prefs.edit().remove("pending_suggest_session").apply()
+            return
+        }
+        val targetCount = obj.optInt("target_count", 25)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Resume Collection?")
+            .setMessage("You have an incomplete suggestion for \"$label\" ($collectedCount/$targetCount samples collected). Would you like to continue where you left off?")
+            .setPositiveButton("Resume") { _, _ -> resumeSession(obj) }
+            .setNegativeButton("Discard") { _, _ ->
+                clearSavedFiles(label)
+                prefs.edit().remove("pending_suggest_session").apply()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun getSavedSampleCount(label: String): Int {
+        val dir = File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "sigla_dataset/$label")
+        return dir.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
+    }
+
+    private fun clearSavedFiles(label: String) {
+        File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "sigla_dataset/$label")
+            .deleteRecursively()
+    }
+
+    private fun resumeSession(obj: JSONObject) {
+        val intent = Intent(this, CollectionActivity::class.java).apply {
+            putExtra("word_label", obj.optString("label"))
+            putExtra("description", obj.optString("description"))
+            putExtra("mode", "suggest")
+            putExtra("gesture_type", obj.optString("gesture_type", "static"))
+            putExtra("hands_count", obj.optInt("hands_count", 1))
+            putExtra("target_count", obj.optInt("target_count", 25))
+            putExtra("resume", true)
+        }
+        startActivity(intent)
     }
 
     // ── Refresh Sidebar  ───────────────────────────────────────────────────────────
@@ -442,48 +496,53 @@ class SuggestWordActivity : AppCompatActivity() {
         val description = etDescription.text?.toString()?.trim() ?: ""
         val handsCount = if (isTwoHands) 2 else 1
         val gestureType = if (isMotion) "motion" else "static"
+        val targetCount = 25
 
         clearError()
         tilWord.error = null
         tilDescription.error = null
 
         setLoading(true)
-        
+
         lifecycleScope.launch {
             try {
                 val api = ApiClient.get(session.token)
-                val response = api.submitWord(
-                    SubmitWordRequest(
-                        label = word,
-                        description = description,
-                        hands_count = handsCount,
-                        gesture_type = gestureType
-                    )
-                )
+                val response = api.checkWordExists(word)
 
-                if (response.isSuccessful) {
-                    val body = response.body()
-                    if (body == null) {
-                        showError("Server returned an empty response")
-                        setLoading(false)
-                        return@launch
-                    }
-                    val wordId = body.word_id ?: body.word?.id ?: 0
-
-                    val sessionMax = 50
-                    
-                    Toast.makeText(this@SuggestWordActivity,
-                        "Word submitted! Now collect gesture samples.", Toast.LENGTH_SHORT).show()
-                    
-                    navigateToCollection(wordId, word, gestureType, handsCount, sessionMax)
-                    
-                } else if (response.code() == 409) {
-                    // Word already exists - parse error response
-                    handleExistingWordResponse(response, word, handsCount, gestureType)
-                } else {
+                if (!response.isSuccessful) {
                     showError(parseError(response))
                     setLoading(false)
+                    return@launch
                 }
+
+                val exists = response.body()?.exists ?: false
+                if (exists) {
+                    setLoading(false)
+                    showDuplicateWordDialog(word)
+                    return@launch
+                }
+
+                // Save pending session so we can resume if collection is interrupted
+                val prefs = getSharedPreferences("sigla_suggest", Context.MODE_PRIVATE)
+                prefs.edit().putString("pending_suggest_session", JSONObject().apply {
+                    put("label", word)
+                    put("description", description)
+                    put("hands_count", handsCount)
+                    put("gesture_type", gestureType)
+                    put("target_count", targetCount)
+                }.toString()).apply()
+
+                val intent = Intent(this@SuggestWordActivity, CollectionActivity::class.java).apply {
+                    putExtra("word_label", word)
+                    putExtra("description", description)
+                    putExtra("mode", "suggest")
+                    putExtra("gesture_type", gestureType)
+                    putExtra("hands_count", handsCount)
+                    putExtra("target_count", targetCount)
+                }
+                startActivity(intent)
+                finish()
+
             } catch (e: Exception) {
                 showError("Connection failed: ${e.message}")
                 setLoading(false)
@@ -491,11 +550,6 @@ class SuggestWordActivity : AppCompatActivity() {
         }
     }
     
-    private fun handleExistingWordResponse(response: retrofit2.Response<*>, word: String, handsCount: Int, gestureType: String) {
-        setLoading(false)
-        showDuplicateWordDialog(word)
-    }
-
     private fun showDuplicateWordDialog(word: String) {
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Word Already Exists")
@@ -509,19 +563,6 @@ class SuggestWordActivity : AppCompatActivity() {
             }
             .setCancelable(false)
             .show()
-    }
-    
-    private fun navigateToCollection(wordId: Int, wordLabel: String, gestureType: String, handsCount: Int, targetCount: Int) {
-        val intent = Intent(this, CollectionActivity::class.java).apply {
-            putExtra("word_id", wordId)
-            putExtra("word_label", wordLabel)
-            putExtra("mode", "suggest")
-            putExtra("gesture_type", gestureType)
-            putExtra("hands_count", handsCount)
-            putExtra("target_count", targetCount)
-        }
-        startActivity(intent)
-        finish()
     }
     
     // ── Banner helpers ─────────────────────────────────────────────────────────

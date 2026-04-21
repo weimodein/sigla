@@ -57,6 +57,8 @@ data class NotificationsResponse(val notifications: List<NotificationItem>)
 
 data class UnreadCountResponse(val unread: Int)
 
+data class CheckWordResponse(val exists: Boolean, val message: String? = null)
+
 data class SubmitWordRequest(
     val label: String,
     val description: String,
@@ -156,6 +158,12 @@ interface ApiService {
     suspend fun getWordBank(): Response<WordBankResponse>
 
     // Words (auth)
+    @GET("words/check")
+    suspend fun checkWordExists(
+        @Query("label") label: String,
+        @Query("sign_type") signType: String = "FSL"
+    ): Response<CheckWordResponse>
+
     @POST("words")
     suspend fun submitWord(@Body body: SubmitWordRequest): Response<SubmitWordResponse>
 

@@ -104,6 +104,10 @@ class CollectionActivity : AppCompatActivity() {
         var uploadMotionSequences: List<List<List<Float>>> = emptyList()
         var uploadStaticImages: List<String> = emptyList()
         var uploadMotionImages: List<List<String>> = emptyList()
+        // Word metadata for deferred creation in ReviewActivity
+        var uploadDescription: String = ""
+        var uploadHandsCount: Int = 1
+        var uploadGestureType: String = "static"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,17 +119,18 @@ class CollectionActivity : AppCompatActivity() {
         landmarker = HandLandmarkHelper(this)
 
         // Get intent extras for suggest mode
-        val wordIdExtra = intent.getIntExtra("word_id", -1)
         val wordLabel = intent.getStringExtra("word_label")
         val gestureType = intent.getStringExtra("gesture_type")
         val mode = intent.getStringExtra("mode")
         val handsCount = intent.getIntExtra("hands_count", 1)
         val targetCountExtra = intent.getIntExtra("target_count", -1)
+        val description = intent.getStringExtra("description") ?: ""
+        val isResume = intent.getBooleanExtra("resume", false)
 
-        if (mode == "suggest" && wordIdExtra != -1 && !wordLabel.isNullOrEmpty() && !gestureType.isNullOrEmpty()) {
+        if (mode == "suggest" && !wordLabel.isNullOrEmpty() && !gestureType.isNullOrEmpty()) {
             // SUGGEST MODE - Skip config dialog, use data from intent
             isSuggestMode = true
-            wordId = wordIdExtra
+            wordId = -1  // word not created yet; deferred to ReviewActivity
             label = wordLabel
             isMotion = gestureType == "motion"
 
@@ -140,11 +145,24 @@ class CollectionActivity : AppCompatActivity() {
                 "sigla_dataset/$label"
             ).also { it.mkdirs() }
 
-            count = 0  // backend tracks submission count; local files may be stale
+            count = 0
+
+            // Store metadata for ReviewActivity to create the word
+            uploadDescription = description
+            uploadHandsCount = handsCount
+            uploadGestureType = gestureType
+
+            if (isResume) {
+                loadSamplesFromDisk()
+            }
 
             setupUI()
             setupButtons()
-            showCollectionInstructionDialog()
+            if (!isResume || count < targetCount) {
+                showCollectionInstructionDialog()
+            } else {
+                showReviewScreen()
+            }
         } else {
             // ADMIN MODE - Show config dialog
             showConfigDialog()
@@ -697,6 +715,41 @@ class CollectionActivity : AppCompatActivity() {
         }
     }
 
+    // ── Resume from disk ──────────────────────────────────────────────────────
+
+    private fun loadSamplesFromDisk() {
+        val files = saveDir?.listFiles { f -> f.name.endsWith(".json") }
+            ?.sortedBy { it.nameWithoutExtension.toIntOrNull() ?: 0 } ?: return
+        for (file in files) {
+            try {
+                val obj = JSONObject(file.readText())
+                if (!isMotion) {
+                    val arr = obj.getJSONArray("features")
+                    val floats = FloatArray(arr.length()) { arr.getDouble(it).toFloat() }
+                    pendingStaticLandmarks.add(floats.toList())
+                    pendingStaticImages.add("")
+                } else {
+                    val seq = obj.getJSONArray("sequence")
+                    val frames = (0 until seq.length()).map { i ->
+                        val frame = seq.getJSONArray(i)
+                        (0 until frame.length()).map { j -> frame.getDouble(j).toFloat() }
+                    }
+                    pendingMotionSequences.add(frames)
+                    pendingMotionImages.add(emptyList())
+                }
+                pendingBitmaps.add(createPlaceholderBitmap())
+                count++
+            } catch (_: Exception) {}
+        }
+        updateCountDisplay()
+    }
+
+    private fun createPlaceholderBitmap(): Bitmap {
+        val bm = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        bm.eraseColor(android.graphics.Color.DKGRAY)
+        return bm
+    }
+
     // ── Review screen (suggest mode) ──────────────────────────────────────────
 
     private fun showReviewScreen() {
@@ -742,6 +795,11 @@ class CollectionActivity : AppCompatActivity() {
     private fun showDoneScreen(uploadAlreadyDone: Boolean = false) {
         cameraProvider?.unbindAll()
         binding.overlayDone.visibility = View.VISIBLE
+
+        if (isSuggestMode && uploadAlreadyDone) {
+            getSharedPreferences("sigla_suggest", android.content.Context.MODE_PRIVATE)
+                .edit().remove("pending_suggest_session").apply()
+        }
 
         if (isSuggestMode) {
             // Upload was handled in ReviewActivity — just show the completion state

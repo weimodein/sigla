@@ -1779,10 +1779,30 @@ async function setVideo(req, res) {
   }
 }
 
+const checkWordExists = async (req, res) => {
+  try {
+    const { label, sign_type = "FSL" } = req.query;
+    if (!label) return res.status(400).json({ message: "label is required" });
+    const normalized = normalizeLabel(label);
+    const existing = await Word.findOne({
+      where: {
+        normalized_label: normalized,
+        sign_type,
+        status: { [Op.in]: ["pending", "approved"] },
+      },
+    });
+    return res.json({ exists: !!existing });
+  } catch (err) {
+    console.error("Check word error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getAllWords,
   getWordStats,
   getWordById,
+  checkWordExists,
   submitWord,
   adminAddWord,
   adminUploadSamples,
