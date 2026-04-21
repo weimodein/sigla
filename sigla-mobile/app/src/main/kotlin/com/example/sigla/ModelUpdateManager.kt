@@ -18,6 +18,7 @@ object ModelUpdateManager {
     private const val TAG = "ModelUpdateManager"
     private const val PREFS = "model_cache"
     private const val KEY_VERSION = "cached_version"
+    private const val KEY_STATIC_URL = "cached_static_url"
     private const val WORD_BANK_CACHE_FILE = "word_bank_cache.json"
 
     private val http = OkHttpClient.Builder()
@@ -34,6 +35,9 @@ object ModelUpdateManager {
 
     fun getCachedVersion(context: Context): String? =
         prefs(context).getString(KEY_VERSION, null)
+
+    private fun getCachedStaticUrl(context: Context): String? =
+        prefs(context).getString(KEY_STATIC_URL, null)
 
     fun hasLocalModel(context: Context): Boolean {
         return listOf(
@@ -66,7 +70,8 @@ object ModelUpdateManager {
                 val remoteVersion = model.version_number
                 val cachedVersion = getCachedVersion(context)
 
-                if (remoteVersion == cachedVersion) {
+                val remoteStaticUrl = model.tflite_url
+                if (remoteVersion == cachedVersion && remoteStaticUrl == getCachedStaticUrl(context)) {
                     Log.i(TAG, "Model up-to-date (v$remoteVersion) — refreshing gesture config")
                     // Always re-download gesture_config so motion gesture definitions stay current
                     // even across static-only deploys that don't change the version number.
@@ -82,13 +87,12 @@ object ModelUpdateManager {
                 Log.i(TAG, "New model version detected: $remoteVersion (cached: $cachedVersion) — downloading")
 
                 // ── Static model (required) ───────────────────────────────────
-                val staticUrl = model.tflite_url
-                if (staticUrl.isNullOrBlank()) {
+                if (remoteStaticUrl.isNullOrBlank()) {
                     Log.e(TAG, "Backend returned no static model URL — check SUPABASE_URL on server")
                     return@withContext hasLocalModel(context)
                 }
                 val staticDest = File(context.filesDir, "sign_model_static.tflite")
-                val staticOk = downloadToFile(staticUrl, staticDest)
+                val staticOk = downloadToFile(remoteStaticUrl, staticDest)
                 if (!staticOk) {
                     Log.e(TAG, "Static model download failed")
                     return@withContext hasLocalModel(context)
@@ -151,8 +155,11 @@ object ModelUpdateManager {
                     Log.w(TAG, "No gesture config URL — skipping")
                 }
 
-                // ── Save version only after all required files succeeded ───────
-                prefs(context).edit().putString(KEY_VERSION, remoteVersion).apply()
+                // ── Save version + URL only after all required files succeeded ──
+                prefs(context).edit()
+                    .putString(KEY_VERSION, remoteVersion)
+                    .putString(KEY_STATIC_URL, remoteStaticUrl)
+                    .apply()
                 Log.i(TAG, "Model updated to $remoteVersion")
                 true
             } catch (e: Exception) {
