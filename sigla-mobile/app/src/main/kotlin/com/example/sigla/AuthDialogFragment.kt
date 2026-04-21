@@ -327,6 +327,22 @@ class AuthDialogFragment : DialogFragment() {
             showError(tvSignUpError, "Username cannot be blank.")
             return
         }
+        if (username.length < 3) {
+            showError(tvSignUpError, "Username must be at least 3 characters.")
+            return
+        }
+        if (username.length > 20) {
+            showError(tvSignUpError, "Username must be 20 characters or fewer.")
+            return
+        }
+        if (!username.matches(Regex("^[a-zA-Z0-9_]+$"))) {
+            showError(tvSignUpError, "Username can only contain letters, numbers, and underscores.")
+            return
+        }
+        if (email.isBlank()) {
+            showError(tvSignUpError, "Email cannot be blank.")
+            return
+        }
         if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             showError(tvSignUpError, "Please enter a valid email address.")
             return
@@ -524,8 +540,16 @@ class AuthDialogFragment : DialogFragment() {
         val pw1 = etNewPassword.text?.toString() ?: ""
         val pw2 = etConfirmPassword.text?.toString() ?: ""
 
-        if (pw1.length < 6) {
-            showError(tvSetPasswordError, "Password must be at least 6 characters.")
+        if (pw1.length < 8) {
+            showError(tvSetPasswordError, "Password must be at least 8 characters.")
+            return
+        }
+        if (!pw1.any { it.isLetter() }) {
+            showError(tvSetPasswordError, "Password must contain at least one letter.")
+            return
+        }
+        if (!pw1.any { it.isDigit() }) {
+            showError(tvSetPasswordError, "Password must contain at least one number.")
             return
         }
         if (pw1 != pw2) {
