@@ -15,17 +15,17 @@ private const val TAG                    = "PredictionService"
 private const val SEQUENCE_LENGTH        = 30    // model input size
 private const val MIN_MOTION_FRAMES      = 8     // start running motion inference early
 private const val MOTION_SLIDE_INTERVAL  = 2     // re-run motion every N frames
-private const val MOTION_EARLY_CONF      = 0.80f // motion must be confident before early exit fires
-private const val MOTION_EARLY_STREAK    = 7     // more consecutive hits needed to fire early
+private const val MOTION_EARLY_CONF      = 0.60f // was 0.70f – fire motion early‑exit earlier
+private const val MOTION_EARLY_STREAK    = 5     // was 7
 private const val MOTION_VELOCITY_STREAK = 17    // more sustained frames of movement required before probing motion
-private const val STATIC_THRESHOLD          = 0.55f
-private const val MOTION_THRESHOLD          = 0.70f // raised — motion must win decisively in dual-race
-private const val MOTION_DOMINANCE_MARGIN   = 0.15f // motion must exceed static confidence by this margin
-private const val STATIC_SUPPRESS_STREAK    = 8     // sustained high-velocity frames needed before suppressing static early-exit
-private const val VELOCITY_WINDOW           = 8
-private const val MOTION_VELOCITY_THRESH    = 0.030f // higher — filters out small hand repositioning
-private const val EARLY_EXIT_STREAK         = 4
-private const val EARLY_EXIT_THRESHOLD      = 0.95f
+private const val STATIC_THRESHOLD       = 0.70f
+private const val MOTION_THRESHOLD       = 0.60f // was 0.50f – motion must win decisively
+private const val MOTION_DOMINANCE_MARGIN= 0.05f // was 0.0f – motion must exceed static by this margin
+private const val STATIC_SUPPRESS_STREAK = 5     // was 8 – suppress static quicker when moving
+private const val VELOCITY_WINDOW        = 8
+private const val MOTION_VELOCITY_THRESH = 0.010f // higher — filters out small hand repositioning
+private const val EARLY_EXIT_STREAK      = 6
+private const val EARLY_EXIT_THRESHOLD   = 0.95f
 private const val STATIC_AVG_FRAMES      = 7     // matches STATIC_FRAMES_PER_SAMPLE in CollectionActivity
 private const val STATIC_INFERENCE_INTERVAL = 2  // run static model every N frames to halve CPU cost
 private const val BUFFER_CAPACITY        = 90    // supports time-based buffering
@@ -43,10 +43,16 @@ private val KEY_XY: List<Int> = KEY_LANDMARKS.flatMap { i ->
 // Static labels that share a starting pose with a known motion gesture.
 // Only these labels get suppressed when velocity is rising — all others fire normally.
 private val MOTION_CONFLICTS = mapOf(
-    "is" to "J",
-    "I"  to "J",
-    "z"  to "Z",
-    "s"  to "Z"
+    "I" to "J",           // static "I" handshape conflicts with motion "J"
+    "I love you" to "J",  // if "I love you" shares the same starting pose as "I"
+    // Add other conflicts if needed, e.g., "Yes" might conflict with "Y" static if you had it
+    "G" to "J",
+    "A" to "Yes",
+    "N" to "Yes",
+    "N" to "No",
+    "Q" to "Yes",
+    "F" to "J",
+    "Q" to "J",
 )
 
 // ── Data classes ──────────────────────────────────────────────────────────────
@@ -422,6 +428,28 @@ class PredictionService(private val context: Context) {
 
     // ── Dual-race inference ───────────────────────────────────────────────────
 
+    /**
+     * Apply a penalty to static confidence if the static label is known to conflict
+     * with a motion gesture that also has decent confidence.
+     */
+    private fun applyConflictPenalty(
+        staticIdx: Int,
+        staticConf: Float,
+        motionIdx: Int?,
+        motionConf: Float
+    ): Float {
+        if (motionIdx == null || motionConf < MOTION_THRESHOLD) return staticConf
+        val staticLabel = staticLabels.getOrNull(staticIdx) ?: return staticConf
+        val motionLabel = motionLabels.getOrNull(motionIdx) ?: return staticConf
+        val conflictMotion = MOTION_CONFLICTS[staticLabel]
+        return if (conflictMotion == motionLabel) {
+            // Penalise static confidence – e.g., multiply by 0.7
+            staticConf * 0.7f
+        } else {
+            staticConf
+        }
+    }
+
     private fun runDualRace(now: Long, meanVel: Float) {
         val frames = frameBuffer.toList()
 
@@ -432,18 +460,28 @@ class PredictionService(private val context: Context) {
         val staticResult = lastStaticResult
         val motionResult = if (motionProbeArmed) runMotionInference(frames) else null
 
+        // Apply conflict penalty to static confidence if both models ran
+        val adjustedStaticConf = if (staticResult != null && motionResult != null) {
+            applyConflictPenalty(
+                staticIdx = staticResult.first,
+                staticConf = staticResult.second,
+                motionIdx = motionResult.first,
+                motionConf = motionResult.second
+            )
+        } else {
+            staticResult?.second ?: 0f
+        }
+
+        // Motion decision with adjusted margin
         if (motionResult != null) {
             val (mIdx, mConf)   = motionResult
             val mLabel          = motionLabels.getOrNull(mIdx) ?: return
             val isMotionGesture = gestureConfig[mLabel]?.motion == true
-            // Motion only wins if the hand was moving continuously for long enough —
-            // brief shakes (e.g. repositioning during a static gesture) are filtered out
-            // by requiring the peak sustained streak to reach MIN_MOTION_FRAMES.
-            val sConfForMargin = staticResult?.second ?: 0f
-            if (isMotionGesture && mConf >= MOTION_THRESHOLD
-                && mConf >= sConfForMargin + MOTION_DOMINANCE_MARGIN
-                && meanVel >= MOTION_VELOCITY_THRESH
-                && maxSustainedMotionFrames >= MIN_MOTION_FRAMES) {
+            if (isMotionGesture &&
+                mConf >= MOTION_THRESHOLD &&
+                mConf >= adjustedStaticConf + MOTION_DOMINANCE_MARGIN &&
+                meanVel >= MOTION_VELOCITY_THRESH &&
+                maxSustainedMotionFrames >= MIN_MOTION_FRAMES) {
                 lastDetectionTime       = now
                 lastMotionDetectionTime = now
                 onResult?.invoke(PredictionResult(mLabel, mConf, isMotion = true))
@@ -451,13 +489,14 @@ class PredictionService(private val context: Context) {
             }
         }
 
+        // Static decision (only if no motion won)
         if (staticResult != null) {
-            val (sIdx, sConf)   = staticResult
-            val sLabel          = staticLabels.getOrNull(sIdx) ?: return
+            val (sIdx, _) = staticResult
+            val sLabel = staticLabels.getOrNull(sIdx) ?: return
             val isMotionGesture = gestureConfig[sLabel]?.motion == true
-            if (!isMotionGesture && sConf >= STATIC_THRESHOLD) {
+            if (!isMotionGesture && adjustedStaticConf >= STATIC_THRESHOLD) {
                 lastDetectionTime = now
-                onResult?.invoke(PredictionResult(sLabel, sConf, isMotion = false))
+                onResult?.invoke(PredictionResult(sLabel, adjustedStaticConf, isMotion = false))
             }
         }
     }
