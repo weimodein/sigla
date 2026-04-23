@@ -51,7 +51,7 @@
                 android:layout_height="48dp"
                 android:text="@string/next"
                 android:textSize="16sp"
-                app:backgroundTint="@color/colorPrimary"
+                app:backgroundTint="#1e3b8b"
                 xmlns:app="http://schemas.android.com/apk/res-auto" />
         </LinearLayout>
     </LinearLayout>

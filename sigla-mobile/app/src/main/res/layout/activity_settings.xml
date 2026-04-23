@@ -4,8 +4,7 @@
     Scope:
       - Volume level (SeekBar)
       - Voice type (toggle/selector: Male / Female)
-      - Text size (SeekBar, 80%–150%, default 100%)
-      - Light / Dark mode (toggle switch)
+      - Light / Dark mode (toggle switch)        ← Text size removed
       - Reset to Default button
       - Replay onboarding tutorial
       - Retractable sidebar (no back button — sidebar matches activity_main.xml pattern)
@@ -27,11 +26,11 @@
             android:id="@+id/topBarCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="12dp"
-            android:layout_marginEnd="12dp"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="8dp"
+            android:layout_marginStart="0dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="0dp"
+            app:cardCornerRadius="0dp"
+            app:cardElevation="4dp"
             app:cardBackgroundColor="#E6001E3D"
             app:strokeColor="#334A90E2"
             app:strokeWidth="1dp">
@@ -269,7 +268,7 @@
                 </androidx.cardview.widget.CardView>
 
                 <!-- ════════════════════════════════════
-                     SECTION: DISPLAY
+                     SECTION: DISPLAY              (Text size removed)
                 ════════════════════════════════════ -->
                 <TextView
                     android:layout_width="match_parent"
@@ -302,114 +301,7 @@
                         android:paddingTop="8dp"
                         android:paddingBottom="16dp">
 
-                        <!-- Text Size -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical"
-                            android:paddingTop="8dp"
-                            android:paddingBottom="4dp">
-
-                            <LinearLayout
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:orientation="vertical">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Text Size"
-                                    android:textColor="#1F1F1F"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Adjust the size of text throughout the app"
-                                    android:textColor="#78909C"
-                                    android:textSize="11sp"
-                                    android:layout_marginTop="2dp" />
-
-                            </LinearLayout>
-
-                            <!-- Live value badge, mirrors volume label style -->
-                            <LinearLayout
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:layout_marginStart="12dp">
-
-                                <ImageView
-                                    android:layout_width="16dp"
-                                    android:layout_height="16dp"
-                                    android:src="@android:drawable/ic_menu_zoom"
-                                    android:tint="#0056A4"
-                                    android:layout_marginEnd="4dp"
-                                    android:contentDescription="Text size" />
-
-                                <TextView
-                                    android:id="@+id/tvTextSizeValue"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="100%"
-                                    android:textColor="#0056A4"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
-
-                            </LinearLayout>
-
-                        </LinearLayout>
-
-                        <!--
-                            SeekBar range: 0–70 maps to 80%–150% (step = 1 → 1%)
-                            Default progress 20 → 100%
-                            Formula: displayPercent = progress + 80
-                        -->
-                        <SeekBar
-                            android:id="@+id/seekTextSize"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:max="70"
-                            android:progress="20"
-                            android:progressTint="#0056A4"
-                            android:thumbTint="#0056A4"
-                            android:layout_marginBottom="4dp" />
-
-                        <!-- Min / Max hint labels -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="80%"
-                                android:textColor="#B0BEC5"
-                                android:textSize="10sp" />
-
-                            <View
-                                android:layout_width="0dp"
-                                android:layout_height="0dp"
-                                android:layout_weight="1" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="150%"
-                                android:textColor="#B0BEC5"
-                                android:textSize="10sp" />
-
-                        </LinearLayout>
-
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F0F4FA"
-                            android:layout_marginTop="16dp" android:layout_marginBottom="4dp" />
-
-                        <!-- Dark Mode toggle -->
+                        <!-- Dark Mode toggle – only item in this card now -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="52dp"

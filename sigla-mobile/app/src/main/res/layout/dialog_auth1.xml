@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    dialog_auth.xml  (updated)
-    Screens handled by toggling visibility:
+    activity_auth.xml
+    Screens handled in a single Activity by toggling visibility:
       Screen 1 — Sign In
-      Screen 2 — Sign Up (username + email only)
-      Screen 3 — Email Verification (6-digit OTP)
-      Screen 4 — Set Password  ← now includes live strength meter + rule checklist
-      Screen 5 — Forgot Password
-      Screen 6 — Success splash
+      Screen 2 — Sign Up (username + email only; password set after email verification)
+      Screen 3 — Email Verification (6-digit OTP, 5-min expiry, max 5 attempts, resend after 1 min)
+      Screen 4 — Set Password (after OTP verified; also reused for Forgot Password reset)
+      Screen 5 — Forgot Password (enter email → triggers OTP flow)
+      Screen 6 — Success splash (registration complete → go to Sign In)
 
-    Password policy (enforced in Screen 4):
-      • Minimum 8 characters
-      • At least one letter
-      • At least one digit (0-9)
-      • At least one symbol  (!@#$%^&* etc.)
+    Scope notes:
+      - Registered email is verified during sign-up and cannot be changed later
+      - Passwords are encrypted before storage
+      - Admin access to user data is restricted to the admin platform only
+      - Forgot Password reuses the same OTP rules (5 min, 5 attempts, 1 min resend cooldown)
 -->
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -28,7 +28,7 @@
         android:layout_height="match_parent"
         android:paddingBottom="24dp">
 
-        <!-- Close button -->
+        <!-- Close button (dismisses auth without logging in — allowed per scope) -->
         <ImageButton
             android:id="@+id/btnCloseAuth"
             android:layout_width="40dp"
@@ -168,6 +168,7 @@
                                 android:paddingBottom="14dp" />
 
                         </com.google.android.material.textfield.TextInputLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <!-- Password -->
@@ -210,6 +211,7 @@
                                 android:paddingBottom="14dp" />
 
                         </com.google.android.material.textfield.TextInputLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <!-- Forgot Password link -->
@@ -304,6 +306,8 @@
 
                 <!-- ══════════════════════════════════════
                      SCREEN 2 — SIGN UP
+                     Scope: collect username + email only.
+                     Password is set after email verification (Screen 4).
                      ══════════════════════════════════════ -->
                 <LinearLayout
                     android:id="@+id/screenSignUp"
@@ -367,6 +371,7 @@
                                 android:paddingBottom="14dp" />
 
                         </com.google.android.material.textfield.TextInputLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <!-- Email -->
@@ -407,6 +412,7 @@
                                 android:paddingBottom="14dp" />
 
                         </com.google.android.material.textfield.TextInputLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <!-- Info note about verification code -->
@@ -443,6 +449,7 @@
                                 android:lineSpacingMultiplier="1.4" />
 
                         </LinearLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <TextView
@@ -495,6 +502,9 @@
 
                 <!-- ══════════════════════════════════════
                      SCREEN 3 — EMAIL VERIFICATION (OTP)
+                     Scope: 6 digits, 5 min expiry, max 5 wrong attempts,
+                     resend available after 1 minute.
+                     Shared by: sign-up, forgot password, change password flows.
                      ══════════════════════════════════════ -->
                 <LinearLayout
                     android:id="@+id/screenVerify"
@@ -535,6 +545,7 @@
                         android:layout_marginBottom="28dp" />
 
                     <!-- OTP input boxes (6 digits) -->
+                    <!-- OTP input boxes (6 digits) — replace the existing CardView block -->
                     <androidx.cardview.widget.CardView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -644,6 +655,7 @@
                                 android:padding="0dp" />
 
                         </LinearLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <!-- Attempts remaining + expiry countdown -->
@@ -668,7 +680,7 @@
                         android:visibility="gone"
                         android:layout_marginBottom="12dp" />
 
-                    <!-- Resend -->
+                    <!-- Resend: available after 1-minute cooldown -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -692,6 +704,7 @@
                             android:textSize="12sp"
                             android:textStyle="bold" />
 
+                        <!-- Shows countdown "(0:59)" during 1-minute cooldown -->
                         <TextView
                             android:id="@+id/tvResendCooldown"
                             android:layout_width="wrap_content"
@@ -728,8 +741,9 @@
 
                 <!-- ══════════════════════════════════════
                      SCREEN 4 — SET PASSWORD
-                     Includes live strength meter + rule checklist.
-                     Policy: 8+ chars, letter, digit, symbol.
+                     Reused for: post-signup password creation AND forgot-password reset.
+                     tvSetPasswordTitle and tvSetPasswordSubtitle are set programmatically
+                     to differentiate the two contexts.
                      ══════════════════════════════════════ -->
                 <LinearLayout
                     android:id="@+id/screenSetPassword"
@@ -755,13 +769,13 @@
                         android:text="Choose a strong password for your account"
                         android:textColor="#4A90E2"
                         android:textSize="13sp"
-                        android:layout_marginBottom="20dp" />
+                        android:layout_marginBottom="28dp" />
 
                     <!-- New Password -->
                     <androidx.cardview.widget.CardView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
+                        android:layout_marginBottom="16dp"
                         app:cardCornerRadius="16dp"
                         app:cardElevation="2dp"
                         app:cardBackgroundColor="#FFFFFF"
@@ -797,126 +811,7 @@
                                 android:paddingBottom="14dp" />
 
                         </com.google.android.material.textfield.TextInputLayout>
-                    </androidx.cardview.widget.CardView>
 
-                    <!-- ── PASSWORD STRENGTH METER ── -->
-                    <!-- Four segmented bars -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="4dp">
-
-                        <View
-                            android:id="@+id/strengthBar1"
-                            android:layout_width="0dp"
-                            android:layout_height="5dp"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="4dp"
-                            android:background="#E0E0E0"
-                            android:backgroundTint="@null" />
-
-                        <View
-                            android:id="@+id/strengthBar2"
-                            android:layout_width="0dp"
-                            android:layout_height="5dp"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="4dp"
-                            android:background="#E0E0E0"
-                            android:backgroundTint="@null" />
-
-                        <View
-                            android:id="@+id/strengthBar3"
-                            android:layout_width="0dp"
-                            android:layout_height="5dp"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="4dp"
-                            android:background="#E0E0E0"
-                            android:backgroundTint="@null" />
-
-                        <View
-                            android:id="@+id/strengthBar4"
-                            android:layout_width="0dp"
-                            android:layout_height="5dp"
-                            android:layout_weight="1"
-                            android:background="#E0E0E0"
-                            android:backgroundTint="@null" />
-
-                    </LinearLayout>
-
-                    <!-- Strength label (Weak / Fair / Good / Strong) -->
-                    <TextView
-                        android:id="@+id/tvPasswordStrengthLabel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text=""
-                        android:textSize="11sp"
-                        android:textStyle="bold"
-                        android:gravity="end"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- Rule checklist card -->
-                    <androidx.cardview.widget.CardView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="16dp"
-                        app:cardCornerRadius="12dp"
-                        app:cardElevation="1dp"
-                        app:cardBackgroundColor="#F8F9FF">
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical"
-                            android:padding="12dp">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Password requirements:"
-                                android:textColor="#4A90E2"
-                                android:textSize="11sp"
-                                android:textStyle="bold"
-                                android:layout_marginBottom="8dp" />
-
-                            <!-- Each rule TextView starts with "✗" by default;
-                                 the Kotlin code replaces it with "✓" when met. -->
-                            <TextView
-                                android:id="@+id/tvRuleLength"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="✗ At least 8 characters"
-                                android:textColor="#9E9E9E"
-                                android:textSize="12sp"
-                                android:layout_marginBottom="4dp" />
-
-                            <TextView
-                                android:id="@+id/tvRuleLetter"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="✗ At least one letter (a–z, A–Z)"
-                                android:textColor="#9E9E9E"
-                                android:textSize="12sp"
-                                android:layout_marginBottom="4dp" />
-
-                            <TextView
-                                android:id="@+id/tvRuleDigit"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="✗ At least one number (0–9)"
-                                android:textColor="#9E9E9E"
-                                android:textSize="12sp"
-                                android:layout_marginBottom="4dp" />
-
-                            <TextView
-                                android:id="@+id/tvRuleSymbol"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="✗ At least one symbol (!@#$%^&amp;* …)"
-                                android:textColor="#9E9E9E"
-                                android:textSize="12sp" />
-
-                        </LinearLayout>
                     </androidx.cardview.widget.CardView>
 
                     <!-- Confirm Password -->
@@ -959,6 +854,7 @@
                                 android:paddingBottom="14dp" />
 
                         </com.google.android.material.textfield.TextInputLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <TextView
@@ -971,6 +867,7 @@
                         android:visibility="gone"
                         android:layout_marginBottom="12dp" />
 
+                    <!-- Save: finalizes registration or password reset -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSavePassword"
                         android:layout_width="match_parent"
@@ -986,6 +883,7 @@
 
                 <!-- ══════════════════════════════════════
                      SCREEN 5 — FORGOT PASSWORD
+                     User enters registered email → OTP sent → Screen 3 → Screen 4
                      ══════════════════════════════════════ -->
                 <LinearLayout
                     android:id="@+id/screenForgotPassword"
@@ -1060,6 +958,7 @@
                                 android:paddingBottom="14dp" />
 
                         </com.google.android.material.textfield.TextInputLayout>
+
                     </androidx.cardview.widget.CardView>
 
                     <TextView
@@ -1097,6 +996,8 @@
 
                 <!-- ══════════════════════════════════════
                      SCREEN 6 — SUCCESS SPLASH
+                     Shown after successful registration.
+                     Scope: system returns user to Sign In page after registration.
                      ══════════════════════════════════════ -->
                 <LinearLayout
                     android:id="@+id/screenSuccess"

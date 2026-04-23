@@ -258,8 +258,8 @@ class SettingsActivity : AppCompatActivity() {
         applyVoiceSelection(currentVoice, animate = false)
 
         // Hide unused text size controls
-        findViewById<View>(R.id.seekTextSize)?.visibility = View.GONE
-        findViewById<View>(R.id.tvTextSizeValue)?.visibility = View.GONE
+        //findViewById<View>(R.id.seekTextSize)?.visibility = View.GONE
+        //findViewById<View>(R.id.tvTextSizeValue)?.visibility = View.GONE
 
         // Dark mode
         val darkSwitch = findViewById<SwitchMaterial>(R.id.switchDarkMode)

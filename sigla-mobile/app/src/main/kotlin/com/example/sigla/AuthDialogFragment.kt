@@ -58,9 +58,16 @@ class AuthDialogFragment : DialogFragment() {
     private var expiryTimer: CountDownTimer? = null
     private var resendTimer: CountDownTimer? = null
     private var resendOnCooldown = false
-    
+
     // Session manager
     private lateinit var session: SessionManager
+
+    // ── Password policy ───────────────────────────────────────────────────────
+    /**
+     * Symbols accepted in passwords. Using a safe, well-known set that covers
+     * keyboard-reachable special characters.
+     */
+    private val symbolRegex = Regex("""[!@#$%^&*()_\-+=\[\]{};:'",.<>?/\\|`~]""")
 
     // ── Views (lateinit, bound in onCreateView) ───────────────────────────────
     private lateinit var screens: Map<Screen, View>
@@ -98,6 +105,17 @@ class AuthDialogFragment : DialogFragment() {
     private lateinit var etConfirmPassword: TextInputEditText
     private lateinit var tvSetPasswordError: TextView
     private lateinit var btnSavePassword: MaterialButton
+
+    // Password strength indicator views (in screenSetPassword)
+    private lateinit var tvPasswordStrengthLabel: TextView
+    private lateinit var strengthBar1: View
+    private lateinit var strengthBar2: View
+    private lateinit var strengthBar3: View
+    private lateinit var strengthBar4: View
+    private lateinit var tvRuleLength: TextView
+    private lateinit var tvRuleLetter: TextView
+    private lateinit var tvRuleDigit: TextView
+    private lateinit var tvRuleSymbol: TextView
 
     // Forgot Password
     private lateinit var etForgotEmail: TextInputEditText
@@ -199,6 +217,17 @@ class AuthDialogFragment : DialogFragment() {
         tvSetPasswordError    = v.findViewById(R.id.tvSetPasswordError)
         btnSavePassword       = v.findViewById(R.id.btnSavePassword)
 
+        // Password strength UI
+        tvPasswordStrengthLabel = v.findViewById(R.id.tvPasswordStrengthLabel)
+        strengthBar1            = v.findViewById(R.id.strengthBar1)
+        strengthBar2            = v.findViewById(R.id.strengthBar2)
+        strengthBar3            = v.findViewById(R.id.strengthBar3)
+        strengthBar4            = v.findViewById(R.id.strengthBar4)
+        tvRuleLength            = v.findViewById(R.id.tvRuleLength)
+        tvRuleLetter            = v.findViewById(R.id.tvRuleLetter)
+        tvRuleDigit             = v.findViewById(R.id.tvRuleDigit)
+        tvRuleSymbol            = v.findViewById(R.id.tvRuleSymbol)
+
         // Forgot Password
         etForgotEmail     = v.findViewById(R.id.etForgotEmail)
         tvForgotError     = v.findViewById(R.id.tvForgotError)
@@ -236,7 +265,14 @@ class AuthDialogFragment : DialogFragment() {
             }
         }
 
-        // ── Set Password screen
+        // ── Set Password screen — live strength meter
+        etNewPassword.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                updatePasswordStrengthUI(s?.toString() ?: "")
+            }
+        })
         btnSavePassword.setOnClickListener { attemptSavePassword() }
 
         // ── Forgot Password screen
@@ -251,6 +287,14 @@ class AuthDialogFragment : DialogFragment() {
     private fun showScreen(screen: Screen) {
         currentScreen = screen
         screens.forEach { (s, v) -> v.isVisible = (s == screen) }
+
+        // Reset password fields and strength meter whenever Set Password is shown
+        if (screen == Screen.SET_PASSWORD) {
+            etNewPassword.setText("")
+            etConfirmPassword.setText("")
+            hideError(tvSetPasswordError)
+            updatePasswordStrengthUI("")
+        }
     }
 
     // ── Auto-advance OTP digits ───────────────────────────────────────────────
@@ -279,7 +323,6 @@ class AuthDialogFragment : DialogFragment() {
     }
 
     // ── Sign In ───────────────────────────────────────────────────────────────
-
     private fun attemptSignIn() {
         val email = etSignInEmail.text?.toString()?.trim() ?: ""
         val password = etSignInPassword.text?.toString() ?: ""
@@ -318,7 +361,6 @@ class AuthDialogFragment : DialogFragment() {
     }
 
     // ── Send Code (Sign Up) ───────────────────────────────────────────────────
-
     private fun attemptSendSignUpCode() {
         val username = etSignUpUsername.text?.toString()?.trim() ?: ""
         val email = etSignUpEmail.text?.toString()?.trim() ?: ""
@@ -375,7 +417,6 @@ class AuthDialogFragment : DialogFragment() {
     }
 
     // ── Send Code (Forgot Password) ───────────────────────────────────────────
-
     private fun attemptSendForgotCode() {
         val email = etForgotEmail.text?.toString()?.trim() ?: ""
 
@@ -410,7 +451,6 @@ class AuthDialogFragment : DialogFragment() {
     }
 
     // ── Enter Verify Screen ───────────────────────────────────────────────────
-
     private fun sendCodeAndEnterVerifyScreen(title: String, subtitle: String) {
         attemptsLeft = maxAttempts
         otpDigits.forEach { it.setText("") }
@@ -428,14 +468,13 @@ class AuthDialogFragment : DialogFragment() {
         startExpiryTimer()
         startResendCooldown()
         showScreen(Screen.VERIFY)
-        
+
         // Reset button states
         setLoading(btnSendCode, false, "Send Verification Code")
         setLoading(btnForgotSendCode, false, "Send Verification Code")
     }
 
     // ── Verify Code ───────────────────────────────────────────────────────────
-
     private fun attemptVerify() {
         val code = otpDigits.joinToString("") { it.text?.toString() ?: "" }
         if (code.length < 6) {
@@ -469,7 +508,7 @@ class AuthDialogFragment : DialogFragment() {
     private fun proceedAfterVerify() {
         expiryTimer?.cancel()
         setLoading(btnVerifyCode, false, "Verify")
-        
+
         when (verifySource) {
             Screen.SIGN_UP -> {
                 tvSetPasswordTitle.text = "Set your password"
@@ -488,7 +527,7 @@ class AuthDialogFragment : DialogFragment() {
     private fun handleWrongCode(errorMsg: String) {
         attemptsLeft--
         setLoading(btnVerifyCode, false, "Verify")
-        
+
         if (attemptsLeft <= 0) {
             expiryTimer?.cancel()
             showError(tvVerifyError, "Maximum attempts exceeded. Please request a new code.")
@@ -504,15 +543,14 @@ class AuthDialogFragment : DialogFragment() {
     }
 
     // ── Resend Code ───────────────────────────────────────────────────────────
-
     private fun resendCode() {
         setLoading(null, true, null)
-        
+
         lifecycleScope.launch {
             try {
                 val type = if (verifySource == Screen.SIGN_UP) "registration" else "password_reset"
                 val response = ApiClient.get().resendCode(ResendCodeRequest(pendingEmail, type))
-                
+
                 if (response.isSuccessful) {
                     attemptsLeft = maxAttempts
                     otpDigits.forEach { it.setText("") }
@@ -536,22 +574,38 @@ class AuthDialogFragment : DialogFragment() {
 
     // ── Set Password ──────────────────────────────────────────────────────────
 
+    /**
+     * Validates the password against the security policy:
+     *   • At least 8 characters
+     *   • At least one letter (upper or lower)
+     *   • At least one digit
+     *   • At least one special/symbol character
+     *
+     * Returns null on success or an error string to display.
+     */
+    private fun validatePassword(password: String): String? {
+        if (password.length < 8)
+            return "Password must be at least 8 characters."
+        if (!password.any { it.isLetter() })
+            return "Password must contain at least one letter."
+        if (!password.any { it.isDigit() })
+            return "Password must contain at least one number."
+        if (!symbolRegex.containsMatchIn(password))
+            return "Password must contain at least one symbol (e.g. !@#\$%^&*)."
+        return null
+    }
+
     private fun attemptSavePassword() {
         val pw1 = etNewPassword.text?.toString() ?: ""
         val pw2 = etConfirmPassword.text?.toString() ?: ""
 
-        if (pw1.length < 8) {
-            showError(tvSetPasswordError, "Password must be at least 8 characters.")
+        // Run policy validation first
+        val policyError = validatePassword(pw1)
+        if (policyError != null) {
+            showError(tvSetPasswordError, policyError)
             return
         }
-        if (!pw1.any { it.isLetter() }) {
-            showError(tvSetPasswordError, "Password must contain at least one letter.")
-            return
-        }
-        if (!pw1.any { it.isDigit() }) {
-            showError(tvSetPasswordError, "Password must contain at least one number.")
-            return
-        }
+
         if (pw1 != pw2) {
             showError(tvSetPasswordError, "Passwords do not match.")
             return
@@ -606,8 +660,76 @@ class AuthDialogFragment : DialogFragment() {
         showScreen(Screen.SUCCESS)
     }
 
-    // ── Timers ────────────────────────────────────────────────────────────────
+    // ── Password strength meter ───────────────────────────────────────────────
 
+    private data class PasswordRules(
+        val hasLength: Boolean,
+        val hasLetter: Boolean,
+        val hasDigit: Boolean,
+        val hasSymbol: Boolean,
+    ) {
+        val score: Int get() = listOf(hasLength, hasLetter, hasDigit, hasSymbol).count { it }
+    }
+
+    private fun evaluatePassword(password: String) = PasswordRules(
+        hasLength = password.length >= 8,
+        hasLetter = password.any { it.isLetter() },
+        hasDigit  = password.any { it.isDigit() },
+        hasSymbol = symbolRegex.containsMatchIn(password),
+    )
+
+    /**
+     * Updates the four strength bars and checklist rule labels in real time.
+     * Colors:
+     *   0 rules met  → all bars grey
+     *   1 rule       → 1 bar red   (Weak)
+     *   2 rules      → 2 bars amber (Fair)
+     *   3 rules      → 3 bars blue  (Good)
+     *   4 rules      → 4 bars green (Strong)
+     */
+    private fun updatePasswordStrengthUI(password: String) {
+        val rules = evaluatePassword(password)
+        val bars = listOf(strengthBar1, strengthBar2, strengthBar3, strengthBar4)
+
+        // Color constants (match your theme)
+        val colorGrey  = android.graphics.Color.parseColor("#E0E0E0")
+        val colorRed   = android.graphics.Color.parseColor("#D32F2F")
+        val colorAmber = android.graphics.Color.parseColor("#F9A825")
+        val colorBlue  = android.graphics.Color.parseColor("#4A90E2")
+        val colorGreen = android.graphics.Color.parseColor("#388E3C")
+
+        val (activeColor, label) = when (rules.score) {
+            0    -> colorGrey  to ""
+            1    -> colorRed   to "Weak"
+            2    -> colorAmber to "Fair"
+            3    -> colorBlue  to "Good"
+            else -> colorGreen to "Strong"
+        }
+
+        bars.forEachIndexed { i, bar ->
+            bar.setBackgroundColor(if (i < rules.score) activeColor else colorGrey)
+        }
+
+        tvPasswordStrengthLabel.text = label
+        tvPasswordStrengthLabel.setTextColor(activeColor)
+
+        // Checklist rules
+        fun TextView.applyRule(met: Boolean) {
+            val checkMark = if (met) "✓" else "✗"
+            val color = if (met) colorGreen else android.graphics.Color.parseColor("#9E9E9E")
+            setTextColor(color)
+            // Prepend or replace the icon prefix
+            val current = text.toString().trimStart('✓', '✗', ' ')
+            text = "$checkMark $current"
+        }
+
+        tvRuleLength.applyRule(rules.hasLength)
+        tvRuleLetter.applyRule(rules.hasLetter)
+        tvRuleDigit.applyRule(rules.hasDigit)
+        tvRuleSymbol.applyRule(rules.hasSymbol)
+    }
+
+    // ── Timers ────────────────────────────────────────────────────────────────
     private fun startExpiryTimer() {
         expiryTimer?.cancel()
         expiryTimer = object : CountDownTimer(codeTtlMs, 1000) {
@@ -645,7 +767,6 @@ class AuthDialogFragment : DialogFragment() {
     }
 
     // ── UI Helpers ────────────────────────────────────────────────────────────
-
     private fun updateAttemptsLabel(expiry: String = "Expires in 5:00") {
         tvAttemptsLeft.text = "$attemptsLeft attempt${if (attemptsLeft == 1) "" else "s"} remaining · $expiry"
     }
@@ -653,11 +774,7 @@ class AuthDialogFragment : DialogFragment() {
     private fun setLoading(button: MaterialButton?, loading: Boolean, text: String?) {
         button?.apply {
             isEnabled = !loading
-            if (loading) {
-                text?.let { setText(it) }
-            } else {
-                text?.let { setText(it) }
-            }
+            text?.let { setText(it) }
         }
     }
 
