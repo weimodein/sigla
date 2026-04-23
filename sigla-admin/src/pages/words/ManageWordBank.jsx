@@ -36,6 +36,8 @@ import {
   Plus,
   Upload,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────
@@ -98,6 +100,8 @@ const ManageWordBank = () => {
   const [search, setSearch] = useState("");
 
   const [filterCat, setFilterCat] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Modal state — single object to prevent concurrent conflicts
@@ -135,7 +139,7 @@ const ManageWordBank = () => {
   const fetchWords = async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { limit: 500 };
       if (activeTab !== "all") params.status = activeTab;
       if (search) params.search = search;
       if (filterCat) params.category = filterCat;
@@ -149,7 +153,7 @@ const ManageWordBank = () => {
   };
 
   useEffect(() => { fetchStats(); }, []);
-  useEffect(() => { fetchWords(); }, [activeTab, search, filterCat]);
+  useEffect(() => { setPage(1); fetchWords(); }, [activeTab, search, filterCat]);
 
   // Open gallery for wordId from URL query param (e.g. from Dashboard pending reviews)
   useEffect(() => {
@@ -580,6 +584,10 @@ const ManageWordBank = () => {
   const thresholdMet = approvedCount >= motionThreshold;
   const remaining = motionThreshold - approvedCount;
 
+  // ── Pagination ───────────────────────────────────────────────
+  const totalPages = Math.ceil(words.length / pageSize);
+  const paginatedWords = words.slice((page - 1) * pageSize, page * pageSize);
+
   // ── JSX ─────────────────────────────────────────────────────
   return (
     <div>
@@ -659,7 +667,10 @@ const ManageWordBank = () => {
       <div className="dash-card overflow-x-auto">
         <div className="dash-card-header flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-800">Word List</h3>
-          <span className="text-xs text-gray-500">{words.length} word{words.length !== 1 ? "s" : ""}</span>
+          <span className="text-xs text-gray-500">
+            {words.length} word{words.length !== 1 ? "s" : ""}
+            {totalPages > 1 && ` · page ${page}/${totalPages}`}
+          </span>
         </div>
         {loading ? (
           <div className="flex items-center justify-center h-40">
@@ -682,14 +693,14 @@ const ManageWordBank = () => {
               </tr>
             </thead>
             <tbody>
-              {words.length === 0 ? (
+              {paginatedWords.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="text-center py-8 text-gray-400 text-sm">
                     No words found
                   </td>
                 </tr>
               ) : (
-                words.map((word) => (
+                paginatedWords.map((word) => (
                   <tr key={word.id} className="border-t hover:bg-gray-50 text-sm">
                     <td className="px-4 py-3 text-gray-500">{word.id}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">
@@ -777,6 +788,40 @@ const ManageWordBank = () => {
               )}
             </tbody>
           </table>
+        )}
+        {words.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600">
+            <span className="text-xs text-gray-500">
+              Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, words.length)} of {words.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="text-xs border border-gray-300 rounded px-2 py-1"
+              >
+                <option value={5}>5 / page</option>
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+              <span className="text-xs">{page} / {totalPages || 1}</span>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-1 rounded hover:bg-gray-100 disabled:opacity-40"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="p-1 rounded hover:bg-gray-100 disabled:opacity-40"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
