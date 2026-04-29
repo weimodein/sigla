@@ -23,6 +23,10 @@ const mlRoutes = require("./src/routes/mlRoutes.js"); // ML service routes (inte
 // application setup
 const app = express();
 
+// Trust the first proxy (Render, Railway, Heroku, etc.) so rate-limit and
+// logging see the real client IP from X-Forwarded-For instead of the proxy IP.
+app.set("trust proxy", 1);
+
 // CORS — restrict to known origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())

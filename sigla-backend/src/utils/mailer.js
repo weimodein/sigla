@@ -1,22 +1,7 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 require("dotenv").config();
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
-  },
-});
-
-// Verify SMTP connection on startup so misconfiguration is caught early
-transporter.verify((err) => {
-  if (err) {
-    console.error("[Mailer] SMTP connection failed:", err.message);
-  } else {
-    console.log("[Mailer] SMTP connection OK — ready to send emails");
-  }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendVerificationCode = async (email, code, type) => {
   const subject =
@@ -29,10 +14,10 @@ const sendVerificationCode = async (email, code, type) => {
       ? "complete your registration"
       : "reset your password";
 
-  const mailOptions = {
-    from: process.env.MAIL_FROM,
+  const { error } = await resend.emails.send({
+    from: process.env.MAIL_FROM || "SIGLA <onboarding@resend.dev>",
     to: email,
-    subject: subject,
+    subject,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 32px; border: 1px solid #e0e0e0; border-radius: 8px;">
         <h2 style="color: #1A237E; text-align: center;">SIGLA</h2>
@@ -51,9 +36,11 @@ const sendVerificationCode = async (email, code, type) => {
         </p>
       </div>
     `,
-  };
+  });
 
-  await transporter.sendMail(mailOptions);
+  if (error) {
+    throw new Error(`Resend error: ${error.message}`);
+  }
 };
 
 module.exports = { sendVerificationCode };
