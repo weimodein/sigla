@@ -3,25 +3,42 @@ import { login as loginApi, getMe } from "../api/authApi.js";
 
 const AuthContext = createContext(null);
 
+const storage = {
+  get: (key) => localStorage.getItem(key),
+  set: (key, val) => localStorage.setItem(key, val),
+  remove: (key) => localStorage.removeItem(key),
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  // Initialise user synchronously from localStorage so ProtectedRoute never
+  // flickers to "not logged in" before the async getMe call resolves.
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = storage.get("user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
-  // ── On app load: restore session from sessionStorage ────────
+  // ── On app load: verify token is still valid with the server ─
   useEffect(() => {
     const restoreSession = async () => {
-      const token = sessionStorage.getItem("token");
-      const saved = sessionStorage.getItem("user");
+      const token = storage.get("token");
 
-      if (token && saved) {
+      if (token) {
         try {
           const data = await getMe();
           setUser(data.user);
-        } catch (err) {
-          sessionStorage.removeItem("token");
-          sessionStorage.removeItem("user");
+          storage.set("user", JSON.stringify(data.user));
+        } catch {
+          storage.remove("token");
+          storage.remove("user");
           setUser(null);
         }
+      } else {
+        setUser(null);
       }
 
       setLoading(false);
@@ -39,8 +56,8 @@ export const AuthProvider = ({ children }) => {
       throw new Error("Access denied. Admin accounts only.");
     }
 
-    sessionStorage.setItem("token", data.token);
-    sessionStorage.setItem("user", JSON.stringify(data.user));
+    storage.set("token", data.token);
+    storage.set("user", JSON.stringify(data.user));
     setUser(data.user);
 
     return data;
@@ -48,8 +65,8 @@ export const AuthProvider = ({ children }) => {
 
   // ── Logout ────────────────────────────────────────────────
   const logout = () => {
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("user");
+    storage.remove("token");
+    storage.remove("user");
     setUser(null);
   };
 
