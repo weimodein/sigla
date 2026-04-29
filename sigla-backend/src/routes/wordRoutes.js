@@ -133,13 +133,6 @@ router.patch(
 );
 router.patch("/:id/activate", roleMiddleware("admin"), activateWord);
 
-// ── User + admin accessible ───────────────────────────────────
-router.get(
-  "/:id/user-sample-count",
-  roleMiddleware("admin", "user"),
-  getUserSampleCountForWord,
-);
-
 // ── Motion sequence routes (admin only) ───────────────────────
 router.get("/:id/motion-sequences", roleMiddleware("admin"), getMotionSequences);
 router.post("/:id/generate-video", roleMiddleware("admin"), generateVideo);
