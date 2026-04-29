@@ -8,3 +8,4 @@ supabase
 httpx
 python-multipart
 opencv-python-headless
+mediapipe
