@@ -40,20 +40,24 @@ private val KEY_XY: List<Int> = KEY_LANDMARKS.flatMap { i ->
     listOf(i * 3, i * 3 + 1)
 }
 
-// Static labels that share a starting pose with a known motion gesture.
-// Only these labels get suppressed when velocity is rising — all others fire normally.
-private val MOTION_CONFLICTS = mapOf(
-    "I" to "J",           // static "I" handshape conflicts with motion "J"
-    "I love you" to "J",  // if "I love you" shares the same starting pose as "I"
-    // Add other conflicts if needed, e.g., "Yes" might conflict with "Y" static if you had it
-    "G" to "J",
-    "A" to "Yes",
-    "N" to "Yes",
-    "N" to "No",
-    "Q" to "Yes",
-    "F" to "J",
-    "Q" to "J",
+// Static labels that share a starting pose with one or more known motion gestures.
+// When the static prediction matches any of these, the motion model must dominate
+// by MOTION_CONFLICT_MARGIN (on top of MOTION_DOMINANCE_MARGIN) before firing.
+private val MOTION_CONFLICTS: Map<String, Set<String>> = mapOf(
+    "I"          to setOf("J"),
+    "I love you" to setOf("J"),
+    "G"          to setOf("J"),
+    "A"          to setOf("Yes"),
+    "N"          to setOf("Yes", "No"),
+    "Q"          to setOf("Yes", "J"),
+    "F"          to setOf("J"),
+    "L"          to setOf("Z"),
+    "S"          to setOf("Yes")
 )
+
+// Extra margin a motion prediction must beat static by when they form a known conflict pair.
+private const val MOTION_CONFLICT_MARGIN       = 0.15f
+private const val MOTION_CONFLICT_EXTRA_STREAK = 4
 
 // ── Data classes ──────────────────────────────────────────────────────────────
 
@@ -392,10 +396,21 @@ class PredictionService(private val context: Context) {
                 val (mIdx, mConf)   = motionResult
                 val mLabel          = motionLabels.getOrNull(mIdx) ?: ""
                 val isMotionGesture = gestureConfig[mLabel]?.motion == true
-                if (isMotionGesture && mConf >= MOTION_EARLY_CONF) {
+
+                // If the current static prediction forms a known conflict pair with this
+                // motion label (e.g. static "A" + motion "Yes"), require motion to both
+                // dominate static by an extra margin AND hold a longer streak before firing.
+                val staticLabel = lastStaticResult?.let { staticLabels.getOrNull(it.first) }
+                val staticConf  = lastStaticResult?.second ?: 0f
+                val inConflict  = isConflictingPair(staticLabel, mLabel)
+                val effectiveConf   = if (inConflict) MOTION_EARLY_CONF + MOTION_CONFLICT_MARGIN else MOTION_EARLY_CONF
+                val effectiveStreak = if (inConflict) MOTION_EARLY_STREAK + MOTION_CONFLICT_EXTRA_STREAK else MOTION_EARLY_STREAK
+                val dominatesStatic = !inConflict || mConf >= staticConf + MOTION_CONFLICT_MARGIN
+
+                if (isMotionGesture && mConf >= effectiveConf && dominatesStatic) {
                     if (mIdx == motionEarlyLabel) motionEarlyStreak++
                     else { motionEarlyStreak = 1; motionEarlyLabel = mIdx }
-                    if (motionEarlyStreak >= MOTION_EARLY_STREAK) {
+                    if (motionEarlyStreak >= effectiveStreak) {
                         lastDetectionTime       = now
                         lastMotionDetectionTime = now
                         onResult?.invoke(PredictionResult(mLabel, mConf, true, earlyExit = true))
@@ -428,6 +443,12 @@ class PredictionService(private val context: Context) {
 
     // ── Dual-race inference ───────────────────────────────────────────────────
 
+    /** True when the given static + motion labels form a known conflict pair. */
+    private fun isConflictingPair(staticLabel: String?, motionLabel: String?): Boolean {
+        if (staticLabel == null || motionLabel == null) return false
+        return MOTION_CONFLICTS[staticLabel]?.contains(motionLabel) == true
+    }
+
     /**
      * Apply a penalty to static confidence if the static label is known to conflict
      * with a motion gesture that also has decent confidence.
@@ -441,13 +462,7 @@ class PredictionService(private val context: Context) {
         if (motionIdx == null || motionConf < MOTION_THRESHOLD) return staticConf
         val staticLabel = staticLabels.getOrNull(staticIdx) ?: return staticConf
         val motionLabel = motionLabels.getOrNull(motionIdx) ?: return staticConf
-        val conflictMotion = MOTION_CONFLICTS[staticLabel]
-        return if (conflictMotion == motionLabel) {
-            // Penalise static confidence – e.g., multiply by 0.7
-            staticConf * 0.7f
-        } else {
-            staticConf
-        }
+        return if (isConflictingPair(staticLabel, motionLabel)) staticConf * 0.7f else staticConf
     }
 
     private fun runDualRace(now: Long, meanVel: Float) {
@@ -477,9 +492,12 @@ class PredictionService(private val context: Context) {
             val (mIdx, mConf)   = motionResult
             val mLabel          = motionLabels.getOrNull(mIdx) ?: return
             val isMotionGesture = gestureConfig[mLabel]?.motion == true
+            val staticLabel     = staticResult?.let { staticLabels.getOrNull(it.first) }
+            val inConflict      = isConflictingPair(staticLabel, mLabel)
+            val requiredMargin  = if (inConflict) MOTION_DOMINANCE_MARGIN + MOTION_CONFLICT_MARGIN else MOTION_DOMINANCE_MARGIN
             if (isMotionGesture &&
                 mConf >= MOTION_THRESHOLD &&
-                mConf >= adjustedStaticConf + MOTION_DOMINANCE_MARGIN &&
+                mConf >= adjustedStaticConf + requiredMargin &&
                 meanVel >= MOTION_VELOCITY_THRESH &&
                 maxSustainedMotionFrames >= MIN_MOTION_FRAMES) {
                 lastDetectionTime       = now

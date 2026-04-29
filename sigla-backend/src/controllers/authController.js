@@ -90,12 +90,14 @@ const register = async (req, res) => {
       last_sent_at: new Date(),
     });
 
-    await sendVerificationCode(email, code, "registration");
-
-    return res.status(200).json({
+    res.status(200).json({
       message: "Verification code sent to email",
       email,
     });
+
+    sendVerificationCode(email, code, "registration").catch((err) =>
+      console.error("Failed to send registration code to", email, err.message)
+    );
   } catch (err) {
     console.error("Register error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -146,9 +148,11 @@ const resendCode = async (req, res) => {
       last_sent_at: new Date(),
     });
 
-    await sendVerificationCode(email, code, type);
+    res.status(200).json({ message: "New verification code sent" });
 
-    return res.status(200).json({ message: "New verification code sent" });
+    sendVerificationCode(email, code, type).catch((err) =>
+      console.error("Failed to resend code to", email, err.message)
+    );
   } catch (err) {
     console.error("Resend code error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -362,11 +366,11 @@ const forgotPassword = async (req, res) => {
       last_sent_at: new Date(),
     });
 
-    await sendVerificationCode(email, code, "password_reset");
+    res.status(200).json({ message: "If that email exists, a code has been sent" });
 
-    return res
-      .status(200)
-      .json({ message: "If that email exists, a code has been sent" });
+    sendVerificationCode(email, code, "password_reset").catch((err) =>
+      console.error("Failed to send password reset code to", email, err.message)
+    );
   } catch (err) {
     console.error("Forgot password error:", err);
     return res.status(500).json({ message: "Server error" });
