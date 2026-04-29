@@ -14,17 +14,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 responses globally — redirect to login
-// Skip the redirect for the login endpoint itself so wrong-credential errors
-// propagate normally and display the correct "Invalid credentials" message.
+// Handle 401 responses globally — clear session so ProtectedRoute redirects to login.
+// Skip auth endpoints so their errors propagate normally to the calling component.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const isLoginRequest = error.config?.url?.includes("/auth/login");
-    if (error.response?.status === 401 && !isLoginRequest) {
+    const url = error.config?.url ?? "";
+    const isAuthEndpoint = url.includes("/auth/login") || url.includes("/auth/me");
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       sessionStorage.removeItem("token");
       sessionStorage.removeItem("user");
-      window.location.href = "/login";
     }
     return Promise.reject(error);
   },
