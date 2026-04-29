@@ -1,13 +1,14 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional
 import hashlib
 import httpx
 import os
-from app.services.train  import train
-from app.services.test   import test
-from app.services.deploy import deploy
-from app.services.video import generate_word_video
+from app.services.train   import train
+from app.services.test    import test
+from app.services.deploy  import deploy
+from app.services.video   import generate_word_video
+from app.services.extract import extract_static_landmarks, extract_motion_landmarks
 
 router = APIRouter(prefix="", tags=["Model"])
 
@@ -202,3 +203,34 @@ async def generate_video(request: VideoRequest):
         return {"video_url": video_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
+
+
+@router.post("/extract-landmarks")
+async def extract_landmarks(
+    file: UploadFile = File(...),
+    gesture_type: str = Form(...),
+):
+    """
+    Extract MediaPipe hand landmarks from an uploaded video file.
+    gesture_type: "static" | "motion"
+    Returns features (static) or sequence (motion).
+    Called by Node.js backend for each video file uploaded by admin.
+    """
+    try:
+        video_bytes = await file.read()
+
+        if gesture_type == "motion":
+            sequence = extract_motion_landmarks(video_bytes)
+            if sequence is None:
+                raise HTTPException(status_code=422, detail="No hands detected in video")
+            return {"type": "motion", "sequence": sequence}
+        else:
+            features = extract_static_landmarks(video_bytes)
+            if features is None:
+                raise HTTPException(status_code=422, detail="No hands detected in video")
+            return {"type": "static", "features": features}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Landmark extraction failed: {str(e)}")

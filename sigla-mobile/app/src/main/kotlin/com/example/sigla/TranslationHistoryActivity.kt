@@ -61,18 +61,14 @@ class TranslationHistoryActivity : AppCompatActivity() {
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        val suggestBadge = sidebar.findViewById<TextView>(R.id.tvSuggestWordBadge)
-
         if (session.isLoggedIn) {
             tvUsername?.text = session.username ?: "User"
             tvEmail?.text = session.email ?: ""
             btnSignIn?.visibility = View.GONE
-            suggestBadge?.visibility = View.GONE
         } else {
             tvUsername?.text = "Guest User"
             tvEmail?.text = "Not signed in"
             btnSignIn?.visibility = View.VISIBLE
-            suggestBadge?.visibility = View.VISIBLE
         }
     }    
 
@@ -112,17 +108,6 @@ class TranslationHistoryActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnSidebarSignIn)?.setOnClickListener {
             drawerLayout.closeDrawers()
             openAuthDialog()
-        }
-        
-        // Override Suggest Word navigation to check login
-        findViewById<View>(R.id.navSuggestWord)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {
-                startActivity(Intent(this, SuggestWordActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()
-            }
         }
         
         // Override Profile navigation to check login

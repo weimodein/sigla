@@ -10,6 +10,7 @@ import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import ManageUsers from "./pages/users/ManageUsers.jsx";
 import ManageWordBank from "./pages/words/ManageWordBank.jsx";
+import ManageDataset from "./pages/words/ManageDataset.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
 import AdministratorAccount from "./pages/adminaccount/AdministratorAccount.jsx";
 import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx";
@@ -51,6 +52,16 @@ const App = () => {
                 <ProtectedRoute>
                   <Layout>
                     <ManageWordBank />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dataset"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ManageDataset />
                   </Layout>
                 </ProtectedRoute>
               }

@@ -1798,6 +1798,86 @@ const checkWordExists = async (req, res) => {
   }
 };
 
+// ── POST /api/words/:id/upload-videos ────────────────────────
+// Admin uploads video files — backend forwards each to ML service for
+// MediaPipe landmark extraction, then stores the resulting GestureSample rows
+const uploadVideos = async (req, res) => {
+  try {
+    const word = await Word.findByPk(req.params.id);
+    if (!word) return res.status(404).json({ message: "Word not found" });
+
+    const FormData = require("form-data");
+    const multer = require("multer");
+    const upload = multer({ storage: multer.memoryStorage() });
+
+    // Files are attached by multer middleware before this handler runs
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).json({ message: "At least one video file is required" });
+    }
+
+    const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
+    const results = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const file of files) {
+      try {
+        const form = new FormData();
+        form.append("file", file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+        });
+        form.append("gesture_type", word.gesture_type || "static");
+
+        const mlRes = await axios.post(`${ML_SERVICE_URL}/extract-landmarks`, form, {
+          headers: form.getHeaders(),
+          timeout: 60000,
+          maxBodyLength: Infinity,
+        });
+
+        const { type, features, sequence } = mlRes.data;
+
+        const sample = await GestureSample.create({
+          word_id: word.id,
+          submitted_by: req.user.id,
+          file_url: `video_upload_${Date.now()}`,
+          sample_count: 1,
+          status: "approved",
+          is_validated: true,
+          landmarks: type === "static" ? [features] : null,
+          sequence: type === "motion" ? sequence : null,
+        });
+
+        results.push({ file: file.originalname, status: "ok", sample_id: sample.id });
+        successCount++;
+      } catch (err) {
+        const detail = err.response?.data?.detail || err.message;
+        results.push({ file: file.originalname, status: "failed", error: detail });
+        failCount++;
+      }
+    }
+
+    // Update word counters
+    const newApproved = await getApprovedSampleCount(word.id);
+    await word.update({
+      total_samples: (word.total_samples || 0) + successCount,
+      approved_sample_count: newApproved,
+    });
+    await word.reload();
+    await checkAndActivateWord(word, req.user.id);
+
+    return res.status(207).json({
+      message: `${successCount} video(s) processed, ${failCount} failed`,
+      results,
+      approved_sample_count: newApproved,
+    });
+  } catch (err) {
+    console.error("Upload videos error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getAllWords,
   getWordStats,
@@ -1826,4 +1906,5 @@ module.exports = {
   getUserSampleCountForWord,
   setThumbnail,
   setVideo,
+  uploadVideos,
 };

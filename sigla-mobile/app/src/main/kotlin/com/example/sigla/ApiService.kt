@@ -57,32 +57,6 @@ data class NotificationsResponse(val notifications: List<NotificationItem>)
 
 data class UnreadCountResponse(val unread: Int)
 
-data class CheckWordResponse(val exists: Boolean, val message: String? = null)
-
-data class SubmitWordRequest(
-    val label: String,
-    val description: String,
-    val hands_count: Int,
-    val gesture_type: String,
-    val sign_type: String = "FSL"
-)
-
-data class SubmitWordResponse(
-    val message: String,
-    val word: WordBankWord? = null,
-    val word_id: Int? = null,
-    val exists: Boolean = false
-)
-
-// FIX: Changed images type from List<String>? to Any? to accept both flat and nested lists
-data class UploadSamplesRequest(
-    val file_url: String? = null,
-    val landmark_url: String? = null,
-    val sample_count: Int,
-    val landmarks: List<List<Float>>? = null,
-    val sequence: List<List<List<Float>>>? = null,
-    val images: Any? = null   // Can be List<String> (static) or List<List<String>> (motion)
-)
 
 data class ModelInfo(
     val id: Int,
@@ -156,22 +130,6 @@ interface ApiService {
     // Words (public)
     @GET("words/word-bank")
     suspend fun getWordBank(): Response<WordBankResponse>
-
-    // Words (auth)
-    @GET("words/check")
-    suspend fun checkWordExists(
-        @Query("label") label: String,
-        @Query("sign_type") signType: String = "FSL"
-    ): Response<CheckWordResponse>
-
-    @POST("words")
-    suspend fun submitWord(@Body body: SubmitWordRequest): Response<SubmitWordResponse>
-
-    @POST("words/{id}/samples")
-    suspend fun uploadSamples(
-        @Path("id") wordId: Int,
-        @Body body: UploadSamplesRequest
-    ): Response<MessageResponse>
 
     // Notifications (auth)
     @GET("notifications")

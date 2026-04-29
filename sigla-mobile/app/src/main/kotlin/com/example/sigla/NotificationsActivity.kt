@@ -65,18 +65,14 @@ class NotificationsActivity : AppCompatActivity() {
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        val suggestBadge = sidebar.findViewById<TextView>(R.id.tvSuggestWordBadge)
-
         if (session.isLoggedIn) {
             tvUsername?.text = session.username ?: "User"
             tvEmail?.text = session.email ?: ""
             btnSignIn?.visibility = View.GONE
-            suggestBadge?.visibility = View.GONE
         } else {
             tvUsername?.text = "Guest User"
             tvEmail?.text = "Not signed in"
             btnSignIn?.visibility = View.VISIBLE
-            suggestBadge?.visibility = View.VISIBLE
         }
     }
     private fun openAuthDialog() {
@@ -119,17 +115,6 @@ class NotificationsActivity : AppCompatActivity() {
             startActivity(Intent(this, TranslationHistoryActivity::class.java))
             finish()
         }
-         // For Suggest Word - ADD LOGIN CHECK
-        findViewById<View>(R.id.navSuggestWord)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
-                startActivity(Intent(this, SuggestWordActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()                         // ← ADD THIS
-            }
-        }
-
         // For Notifications - ADD LOGIN CHECK
         findViewById<View>(R.id.navNotifications)?.setOnClickListener {
             drawer.closeDrawer(GravityCompat.START)
@@ -165,7 +150,7 @@ class NotificationsActivity : AppCompatActivity() {
     private fun setActiveNavItem(activeId: Int) {
         val navIds = listOf(
             R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
-            R.id.navSuggestWord, R.id.navNotifications, R.id.navProfile, R.id.navSettings
+            R.id.navNotifications, R.id.navProfile, R.id.navSettings
         )
         navIds.forEach { id ->
             val view = findViewById<LinearLayout>(id)

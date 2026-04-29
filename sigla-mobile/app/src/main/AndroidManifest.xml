@@ -32,9 +32,7 @@
         </activity>
 
         
-        <activity android:name=".SuggestWordActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".CollectionActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".ReviewActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".TranslationHistoryActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".WordBankActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".NotificationsActivity" android:exported="false" android:screenOrientation="portrait" />

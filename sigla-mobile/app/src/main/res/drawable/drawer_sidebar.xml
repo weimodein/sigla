@@ -155,48 +155,6 @@
 
     </LinearLayout>
 
-    <!-- Suggest a Word (dimmed, login required) -->
-    <LinearLayout
-        android:id="@+id/navSuggestWord"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:alpha="0.5"
-        android:background="?attr/selectableItemBackground">
-
-        <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:src="@android:drawable/ic_menu_edit"
-            android:tint="#555E8A" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Suggest a Word"
-            android:textColor="#888EA8"
-            android:textSize="14sp"
-            android:layout_marginStart="12dp" />
-
-        <!-- Login required badge -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Login required"
-            android:textColor="#555E8A"
-            android:textSize="9sp"
-            android:background="@drawable/bg_badge_locked"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp" />
-
-    </LinearLayout>
-
     <!-- Notifications -->
     <LinearLayout
         android:id="@+id/navNotifications"

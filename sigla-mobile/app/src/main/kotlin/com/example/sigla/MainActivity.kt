@@ -405,15 +405,6 @@ class MainActivity : AppCompatActivity() {
             drawer.closeDrawers()
             openAuthDialog()
         }
-        findViewById<View?>(R.id.navSuggestWord)?.setOnClickListener {
-            drawer.closeDrawers()
-            if (isSignedIn) {
-                startActivity(Intent(this, SuggestWordActivity::class.java))
-            } else {
-                openAuthDialog()
-            }
-        }
-
         refreshSidebarAuthState()
     }
 
@@ -456,18 +447,15 @@ class MainActivity : AppCompatActivity() {
         val tvUsername = findViewById<TextView?>(R.id.tvSidebarUsername)
         val tvEmail    = findViewById<TextView?>(R.id.tvSidebarEmail)
         val btnSignIn  = findViewById<MaterialButton?>(R.id.btnSidebarSignIn)
-        val tvBadge    = findViewById<TextView?>(R.id.tvSuggestWordBadge)
 
         if (isSignedIn) {
             tvUsername?.text      = currentUsername.ifBlank { "User" }
             tvEmail?.text         = currentEmail
             btnSignIn?.isVisible  = false
-            tvBadge?.isVisible    = false
         } else {
             tvUsername?.text      = "Guest User"
             tvEmail?.text         = "Not signed in"
             btnSignIn?.isVisible  = true
-            tvBadge?.isVisible    = true
         }
     }
 

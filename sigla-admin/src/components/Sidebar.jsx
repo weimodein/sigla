@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import {
   LayoutDashboard,
   Users,
-  BookOpen,
+  Database,
   Cpu,
   BarChart2,
   Settings,
@@ -17,7 +17,7 @@ import {
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Manage Users", path: "/users", icon: Users },
-  { label: "Manage Word Bank", path: "/word_bank", icon: BookOpen },
+  { label: "Manage Dataset", path: "/dataset", icon: Database },
   { label: "Manage Model", path: "/model", icon: Cpu },
   { label: "Reports", path: "/reports", icon: BarChart2 },
   { label: "Administrator Account", path: "/admin_account", icon: Settings },

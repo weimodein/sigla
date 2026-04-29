@@ -1,4 +1,5 @@
 import api from "./authApi.js";
+import axios from "axios";
 
 export const getAllWords = async (params) => {
   const response = await api.get("/words", { params });
@@ -116,6 +117,21 @@ export const getMotionSequences = async (wordId) => {
 export const generateVideoFromSequence = async (wordId, sequenceIds) => {
   const response = await api.post(`/words/${wordId}/generate-video`, {
     sequence_ids: sequenceIds,
+  });
+  return response.data;
+};
+
+export const uploadVideos = async (wordId, files, onProgress) => {
+  const formData = new FormData();
+  for (const file of files) formData.append("videos", file);
+  const token = localStorage.getItem("token");
+  const { API_URL } = await import("../utils/constants.js");
+  const response = await axios.post(`${API_URL}/words/${wordId}/upload-videos`, formData, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "multipart/form-data",
+    },
+    onUploadProgress: onProgress,
   });
   return response.data;
 };

@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Screen { MAIN, WORD_BANK, HISTORY, SUGGEST, NOTIFICATIONS, PROFILE, SETTINGS }
+enum class Screen { MAIN, WORD_BANK, HISTORY, NOTIFICATIONS, PROFILE, SETTINGS }
 
 object NavigationHelper {
 
@@ -25,22 +25,19 @@ object NavigationHelper {
     ) {
         val session = SessionManager.getInstance(activity)
 
-        // User info - using your new IDs
+        // User info
         val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
         val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
         val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        val suggestBadge = sidebar.findViewById<TextView>(R.id.tvSuggestWordBadge)
 
         if (session.isLoggedIn) {
             tvUsername?.text = session.username ?: "User"
             tvEmail?.text = session.email ?: ""
             btnSignIn?.visibility = View.GONE
-            suggestBadge?.visibility = View.GONE
         } else {
             tvUsername?.text = "Guest User"
             tvEmail?.text = "Not signed in"
             btnSignIn?.visibility = View.VISIBLE
-            suggestBadge?.visibility = View.VISIBLE
         }
 
         // Highlight current item
@@ -68,18 +65,6 @@ object NavigationHelper {
             drawerLayout.closeDrawers()
             if (current != Screen.HISTORY) {
                 activity.startActivity(Intent(activity, TranslationHistoryActivity::class.java))
-                if (current != Screen.MAIN) activity.finish()
-            }
-        }
-
-        sidebar.findViewById<View>(R.id.navSuggestWord)?.setOnClickListener {
-            drawerLayout.closeDrawers()
-            if (!session.isLoggedIn) {
-                activity.startActivity(Intent(activity, AuthActivity::class.java))
-                return@setOnClickListener
-            }
-            if (current != Screen.SUGGEST) {
-                activity.startActivity(Intent(activity, SuggestWordActivity::class.java))
                 if (current != Screen.MAIN) activity.finish()
             }
         }
@@ -125,7 +110,7 @@ object NavigationHelper {
         // Reset all first
         val allNavItems = listOf(
             R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
-            R.id.navSuggestWord, R.id.navNotifications, R.id.navProfile, R.id.navSettings
+            R.id.navNotifications, R.id.navProfile, R.id.navSettings
         )
         
         allNavItems.forEach { id ->
@@ -138,7 +123,6 @@ object NavigationHelper {
             Screen.MAIN -> R.id.navMainInterface
             Screen.WORD_BANK -> R.id.navWordBank
             Screen.HISTORY -> R.id.navTranslationHistory
-            Screen.SUGGEST -> R.id.navSuggestWord
             Screen.NOTIFICATIONS -> R.id.navNotifications
             Screen.PROFILE -> R.id.navProfile
             Screen.SETTINGS -> R.id.navSettings

@@ -29,10 +29,7 @@ import java.util.concurrent.Executors
 
 private const val TAG = "CollectionActivity"
 
-// Default targets (will be overridden by backend if in suggest mode)
 private const val TARGET_ADMIN = 300
-private const val TARGET_SUGGEST = 25
-private const val TARGET_SUGGEST_MOTION = 25
 
 // Timing constants
 private const val SEQUENCE_LENGTH = 30
@@ -62,7 +59,6 @@ class CollectionActivity : AppCompatActivity() {
     private var label = ""
     private var isMotion = false
     private var wordId: Int = 0
-    private var isSuggestMode = false
     private var mirrorLeftHand = true
     private var saveDir: File? = null
 
@@ -82,33 +78,7 @@ class CollectionActivity : AppCompatActivity() {
     private val seqImageBuffer = mutableListOf<Bitmap>()
     private var staticFrameBuffer = mutableListOf<FloatArray>()
 
-    // In-memory store for suggest mode (held until user confirms on review screen)
-    private val pendingStaticLandmarks = mutableListOf<List<Float>>()
-    private val pendingMotionSequences = mutableListOf<List<List<Float>>>()
-    private val pendingMotionImages = mutableListOf<List<String>>()
-    private val pendingStaticImages = mutableListOf<String>()
-    private val pendingBitmaps = mutableListOf<Bitmap>()   // thumbnails for review screen
     private var uploadError: String? = null
-    private var uploadJob: kotlinx.coroutines.Job? = null
-
-    private val REVIEW_REQUEST_CODE = 2001
-
-    companion object {
-        var reviewBitmaps: List<Bitmap> = emptyList()
-        var reviewIsMotion: Boolean = false
-        var reviewWordLabel: String = ""
-        // Upload payload — populated before launching ReviewActivity
-        var uploadWordId: Int = 0
-        var uploadToken: String? = null
-        var uploadStaticLandmarks: List<List<Float>> = emptyList()
-        var uploadMotionSequences: List<List<List<Float>>> = emptyList()
-        var uploadStaticImages: List<String> = emptyList()
-        var uploadMotionImages: List<List<String>> = emptyList()
-        // Word metadata for deferred creation in ReviewActivity
-        var uploadDescription: String = ""
-        var uploadHandsCount: Int = 1
-        var uploadGestureType: String = "static"
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -127,46 +97,8 @@ class CollectionActivity : AppCompatActivity() {
         val description = intent.getStringExtra("description") ?: ""
         val isResume = intent.getBooleanExtra("resume", false)
 
-        if (mode == "suggest" && !wordLabel.isNullOrEmpty() && !gestureType.isNullOrEmpty()) {
-            // SUGGEST MODE - Skip config dialog, use data from intent
-            isSuggestMode = true
-            wordId = -1  // word not created yet; deferred to ReviewActivity
-            label = wordLabel
-            isMotion = gestureType == "motion"
-
-            val sessionMax = if (isMotion) TARGET_SUGGEST_MOTION else TARGET_SUGGEST
-            targetCount = if (targetCountExtra > 0) minOf(targetCountExtra, sessionMax) else sessionMax
-
-            countdownFrames = 2
-            cooldownFrames = if (isMotion) 2 else 1
-
-            saveDir = File(
-                getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS),
-                "sigla_dataset/$label"
-            ).also { it.mkdirs() }
-
-            count = 0
-
-            // Store metadata for ReviewActivity to create the word
-            uploadDescription = description
-            uploadHandsCount = handsCount
-            uploadGestureType = gestureType
-
-            if (isResume) {
-                loadSamplesFromDisk()
-            }
-
-            setupUI()
-            setupButtons()
-            if (!isResume || count < targetCount) {
-                showCollectionInstructionDialog()
-            } else {
-                showReviewScreen()
-            }
-        } else {
-            // ADMIN MODE - Show config dialog
-            showConfigDialog()
-        }
+        // ADMIN MODE - Show config dialog
+        showConfigDialog()
     }
 
     private fun setupUI() {
@@ -406,7 +338,7 @@ class CollectionActivity : AppCompatActivity() {
     private fun tick(handsDetected: Int, features: FloatArray, frameBitmap: Bitmap) {
         if (count >= targetCount) {
             state = CollectState.DONE
-            if (isSuggestMode) showReviewScreen() else showDoneScreen()
+            showDoneScreen()
             return
         }
 
@@ -416,9 +348,7 @@ class CollectionActivity : AppCompatActivity() {
 
         when (state) {
             CollectState.WAITING -> {
-                binding.tvOverlay.text = if (isSuggestMode)
-                    "Show your hand to start\n($targetCount samples needed)"
-                else
+                binding.tvOverlay.text =
                     "Show your hand to begin…"
                 binding.tvOverlay.visibility = View.VISIBLE
                 if (handOk) {
@@ -552,12 +482,6 @@ class CollectionActivity : AppCompatActivity() {
     // ── Save helpers with backend upload ──────────────────────────────────────
 
     private fun saveSample(features: FloatArray, frameBitmap: Bitmap) {
-        // For suggest mode, hold in memory until user confirms on review screen
-        if (isSuggestMode) {
-            pendingStaticLandmarks.add(features.toList())
-            pendingStaticImages.add(bitmapToBase64(frameBitmap))
-            pendingBitmaps.add(frameBitmap.copy(Bitmap.Config.ARGB_8888, true))
-        }
 
         // Also save locally
         try {
@@ -614,17 +538,7 @@ class CollectionActivity : AppCompatActivity() {
         val trimmedBuffer = centeredBuffer.take(SEQUENCE_LENGTH)
         val trimmedImages = centeredImages.take(SEQUENCE_LENGTH)
 
-        // For suggest mode, hold in memory until user confirms on review screen
-        if (isSuggestMode) {
-            pendingMotionSequences.add(trimmedBuffer.map { it.toList() })
-            val frameBase64List = trimmedImages.map { bitmapToBase64(it) }
-            pendingMotionImages.add(frameBase64List)
-            // Use middle frame as the representative thumbnail
-            val middleFrame = trimmedImages[trimmedImages.size / 2]
-            pendingBitmaps.add(middleFrame.copy(Bitmap.Config.ARGB_8888, true))
-        }
-
-        // Also save locally
+        // Save locally
         try {
             if (saveDir == null) {
                 Log.e(TAG, "saveDir is null, cannot write motion sample")
@@ -651,167 +565,14 @@ class CollectionActivity : AppCompatActivity() {
         binding.tvSessionCount.text = "$count / $targetCount"
     }
 
-    // ── Batched upload to backend ─────────────────────────────────────────────
-
-    private fun uploadBatchAsync() {
-        if (!isSuggestMode) return
-        uploadJob?.cancel()
-        uploadJob = lifecycleScope.launch {
-            val staticBatch = if (!isMotion) pendingStaticLandmarks.toList() else emptyList()
-            val motionBatch = if (isMotion) pendingMotionSequences.toList() else emptyList()
-            val staticImagesBatch = if (!isMotion) pendingStaticImages.toList() else emptyList()
-            val motionImagesBatch = if (isMotion) pendingMotionImages.toList() else emptyList()
-
-            if (staticBatch.isEmpty() && motionBatch.isEmpty()) return@launch
-
-            pendingStaticLandmarks.clear()
-            pendingMotionSequences.clear()
-            pendingStaticImages.clear()
-            pendingMotionImages.clear()
-
-            try {
-                if (!session.isLoggedIn) {
-                    uploadError = "Not logged in"
-                    showUploadError(uploadError!!)
-                    return@launch
-                }
-
-                val request = if (!isMotion) {
-                    UploadSamplesRequest(
-                        landmarks = staticBatch,
-                        sample_count = staticBatch.size,
-                        images = staticImagesBatch.ifEmpty { null }
-                    )
-                } else {
-                    UploadSamplesRequest(
-                        sequence = motionBatch,
-                        sample_count = motionBatch.size,
-                        images = motionImagesBatch.ifEmpty { null } as Any?
-                    )
-                }
-
-                val response = ApiClient.get(session.token).uploadSamples(wordId, request)
-                withContext(Dispatchers.Main) {
-                    if (!response.isSuccessful) {
-                        val errMsg = try {
-                            val json = com.google.gson.JsonParser.parseString(
-                                response.errorBody()?.string() ?: ""
-                            ).asJsonObject
-                            json.get("message")?.asString ?: "Upload failed"
-                        } catch (_: Exception) { "Upload failed (${response.code()})" }
-                        uploadError = errMsg
-                        showUploadError(errMsg)
-                    } else {
-                        uploadError = null
-                        Log.d(TAG, "Batch uploaded successfully")
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    uploadError = e.message
-                    showUploadError("Connection error: ${e.message}")
-                }
-            }
-        }
-    }
-
-    // ── Resume from disk ──────────────────────────────────────────────────────
-
-    private fun loadSamplesFromDisk() {
-        val files = saveDir?.listFiles { f -> f.name.endsWith(".json") }
-            ?.sortedBy { it.nameWithoutExtension.toIntOrNull() ?: 0 } ?: return
-        for (file in files) {
-            try {
-                val obj = JSONObject(file.readText())
-                if (!isMotion) {
-                    val arr = obj.getJSONArray("features")
-                    val floats = FloatArray(arr.length()) { arr.getDouble(it).toFloat() }
-                    pendingStaticLandmarks.add(floats.toList())
-                    pendingStaticImages.add("")
-                } else {
-                    val seq = obj.getJSONArray("sequence")
-                    val frames = (0 until seq.length()).map { i ->
-                        val frame = seq.getJSONArray(i)
-                        (0 until frame.length()).map { j -> frame.getDouble(j).toFloat() }
-                    }
-                    pendingMotionSequences.add(frames)
-                    pendingMotionImages.add(emptyList())
-                }
-                pendingBitmaps.add(createPlaceholderBitmap())
-                count++
-            } catch (_: Exception) {}
-        }
-        updateCountDisplay()
-    }
-
-    private fun createPlaceholderBitmap(): Bitmap {
-        val bm = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
-        bm.eraseColor(android.graphics.Color.DKGRAY)
-        return bm
-    }
-
-    // ── Review screen (suggest mode) ──────────────────────────────────────────
-
-    private fun showReviewScreen() {
-        cameraProvider?.unbindAll()
-        reviewBitmaps = pendingBitmaps.toList()
-        reviewIsMotion = isMotion
-        reviewWordLabel = label
-        uploadWordId = wordId
-        uploadToken = session.token
-        uploadStaticLandmarks = pendingStaticLandmarks.toList()
-        uploadMotionSequences = pendingMotionSequences.toList()
-        uploadStaticImages = pendingStaticImages.toList()
-        uploadMotionImages = pendingMotionImages.toList()
-        val intent = android.content.Intent(this, ReviewActivity::class.java)
-        startActivityForResult(intent, REVIEW_REQUEST_CODE)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REVIEW_REQUEST_CODE) {
-            if (resultCode == RESULT_OK) {
-                // Upload was completed in ReviewActivity — show final done screen
-                showDoneScreen(uploadAlreadyDone = true)
-            } else {
-                // User chose retake — clear all pending data and restart collection
-                pendingStaticLandmarks.clear()
-                pendingMotionSequences.clear()
-                pendingStaticImages.clear()
-                pendingMotionImages.clear()
-                pendingBitmaps.clear()
-                reviewBitmaps = emptyList()
-                count = 0
-                state = CollectState.WAITING
-                updateCountDisplay()
-                if (hasCameraPermission()) startCamera()
-                else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 200)
-            }
-        }
-    }
 
     // ── Done screen ───────────────────────────────────────────────────────────
 
     private fun showDoneScreen(uploadAlreadyDone: Boolean = false) {
         cameraProvider?.unbindAll()
         binding.overlayDone.visibility = View.VISIBLE
-
-        if (isSuggestMode && uploadAlreadyDone) {
-            getSharedPreferences("sigla_suggest", android.content.Context.MODE_PRIVATE)
-                .edit().remove("pending_suggest_session").apply()
-        }
-
-        if (isSuggestMode) {
-            // Upload was handled in ReviewActivity — just show the completion state
-            binding.tvUploadStatus.visibility = View.VISIBLE
-            binding.tvUploadStatus.text = "✓ Samples submitted successfully!\n${count} samples recorded."
-            binding.tvUploadStatus.setTextColor(0xFF00E676.toInt())
-            binding.progressUpload.visibility = View.GONE
-            binding.btnSubmit.visibility = View.VISIBLE
-        } else {
-            binding.tvDonePath.text = "Files saved to:\n${saveDir?.absolutePath}\n\nTransfer to PC and run:\npython convert_collection.py"
-            binding.btnSubmit.visibility = View.VISIBLE
-        }
+        binding.tvDonePath.text = "Files saved to:\n${saveDir?.absolutePath}\n\nTransfer to PC and run:\npython convert_collection.py"
+        binding.btnSubmit.visibility = View.VISIBLE
     }
 
     private fun showUploadError(msg: String) {

@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
@@ -7,14 +8,12 @@ const {
   getAllWords,
   getWordStats,
   getWordById,
-  submitWord,
   adminAddWord,
   adminUploadSamples,
   approveWord,
   rejectWord,
   updateWord,
   deleteWord,
-  uploadSamples,
   getSamples,
   getMotionSequences,
   generateVideo,
@@ -27,11 +26,12 @@ const {
   approveSubmission,
   rejectSubmission,
   activateWord,
-  getUserSampleCountForWord,
-  checkWordExists,
   setThumbnail,
   setVideo,
+  uploadVideos,
 } = require("../controllers/wordController.js");
+
+const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 // ... other requires
 
@@ -66,22 +66,22 @@ router.use(authMiddleware);
 
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getWordStats);
-router.get("/check", roleMiddleware("user"), checkWordExists);
 
 // ── Admin add word manually ───────────────────────────────────
 // IMPORTANT: must come before /:id wildcard routes
 router.post("/admin-add", roleMiddleware("admin"), adminAddWord);
 
-// ── List and submit ───────────────────────────────────────────
+// ── List ──────────────────────────────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllWords);
-router.get("/:id", roleMiddleware("admin", "user"), getWordById);
-router.post("/", roleMiddleware("user"), submitWord);
+router.get("/:id", roleMiddleware("admin"), getWordById);
 
 // ── Admin sample upload (auto-approved, bypasses user cap) ────
 router.post("/:id/admin-samples", roleMiddleware("admin"), adminUploadSamples);
 
-// ── User sample upload ────────────────────────────────────────
-router.post("/:id/samples", roleMiddleware("user"), uploadSamples);
+// ── Admin video upload → ML landmark extraction ───────────────
+router.post("/:id/upload-videos", roleMiddleware("admin"), videoUpload.array("videos", 50), uploadVideos);
+
+// ── Samples ───────────────────────────────────────────────────
 router.get("/:id/samples", roleMiddleware("admin"), getSamples);
 
 // ── Sample review routes (admin only) ────────────────────────
