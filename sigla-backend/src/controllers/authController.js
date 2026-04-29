@@ -96,7 +96,7 @@ const register = async (req, res) => {
     });
 
     sendVerificationCode(email, code, "registration").catch((err) =>
-      console.error("Failed to send registration code to", email, err.message)
+      console.error("Failed to send registration code to", email, err)
     );
   } catch (err) {
     console.error("Register error:", err);
@@ -151,7 +151,7 @@ const resendCode = async (req, res) => {
     res.status(200).json({ message: "New verification code sent" });
 
     sendVerificationCode(email, code, type).catch((err) =>
-      console.error("Failed to resend code to", email, err.message)
+      console.error("Failed to resend code to", email, err)
     );
   } catch (err) {
     console.error("Resend code error:", err);
@@ -369,7 +369,7 @@ const forgotPassword = async (req, res) => {
     res.status(200).json({ message: "If that email exists, a code has been sent" });
 
     sendVerificationCode(email, code, "password_reset").catch((err) =>
-      console.error("Failed to send password reset code to", email, err.message)
+      console.error("Failed to send password reset code to", email, err)
     );
   } catch (err) {
     console.error("Forgot password error:", err);

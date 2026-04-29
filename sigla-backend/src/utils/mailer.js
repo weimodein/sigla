@@ -9,6 +9,15 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Verify SMTP connection on startup so misconfiguration is caught early
+transporter.verify((err) => {
+  if (err) {
+    console.error("[Mailer] SMTP connection failed:", err.message);
+  } else {
+    console.log("[Mailer] SMTP connection OK — ready to send emails");
+  }
+});
+
 const sendVerificationCode = async (email, code, type) => {
   const subject =
     type === "registration"
