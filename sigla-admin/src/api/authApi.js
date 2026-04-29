@@ -15,10 +15,13 @@ api.interceptors.request.use((config) => {
 });
 
 // Handle 401 responses globally — redirect to login
+// Skip the redirect for the login endpoint itself so wrong-credential errors
+// propagate normally and display the correct "Invalid credentials" message.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isLoginRequest = error.config?.url?.includes("/auth/login");
+    if (error.response?.status === 401 && !isLoginRequest) {
       sessionStorage.removeItem("token");
       sessionStorage.removeItem("user");
       window.location.href = "/login";
