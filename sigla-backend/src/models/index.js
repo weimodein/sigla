@@ -6,6 +6,7 @@ const ModelVersion = require("./ModelVersion.js");
 const Notification = require("./Notification.js");
 const Report = require("./Report.js");
 const UserSetting = require("./UserSetting.js");
+const Category = require("./Category.js");
 // const ActivityLog = require("./ActivityLog.js");
 
 // ── Associations ──────────────────────────────────────────────
@@ -51,5 +52,6 @@ module.exports = {
   Notification,
   Report,
   UserSetting,
+  Category,
   // ActivityLog,
 };

@@ -8,7 +8,11 @@ from app.services.train   import train
 from app.services.test    import test
 from app.services.deploy  import deploy
 from app.services.video   import generate_word_video
-from app.services.extract import extract_static_landmarks, extract_motion_landmarks
+from app.services.extract import (
+    extract_static_landmarks,
+    extract_motion_landmarks,
+    extract_image_landmarks,
+)
 
 router = APIRouter(prefix="", tags=["Model"])
 
@@ -234,3 +238,21 @@ async def extract_landmarks(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Landmark extraction failed: {str(e)}")
+
+
+@router.post("/extract-landmarks-image")
+async def extract_landmarks_image(file: UploadFile = File(...)):
+    """
+    Extract MediaPipe hand landmarks from a single image (static gestures only).
+    Returns the 126-float feature vector. Used for image-based datasets like Collated.
+    """
+    try:
+        image_bytes = await file.read()
+        features = extract_image_landmarks(image_bytes)
+        if features is None:
+            raise HTTPException(status_code=422, detail="No hands detected in image")
+        return {"type": "static", "features": features}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image extraction failed: {str(e)}")

@@ -1,0 +1,253 @@
+import { useState, useEffect } from "react";
+import AppModal from "../../components/AppModal.jsx";
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from "../../api/categoryApi.js";
+import { useToast } from "../../context/ToastContext.jsx";
+import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+
+const C = {
+  primary: "#1e3a8a",
+  border: "#e5e7eb",
+  muted: "#9ca3af",
+  green: "#22c55e",
+  red: "#ef4444",
+};
+
+const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabel }) => {
+  const [form, setForm] = useState({ name: "", description: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setForm({ name: initial?.name || "", description: initial?.description || "" });
+    }
+  }, [open, initial]);
+
+  if (!open) return null;
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      await onSubmit(form);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <AppModal title={title} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+        <div>
+          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Name *</label>
+          <input
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            placeholder="e.g. greeting, food, color"
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Description</label>
+          <textarea
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            rows={3}
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", resize: "vertical", boxSizing: "border-box" }}
+          />
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
+        <button onClick={handleSubmit} disabled={saving || !form.name.trim()}
+          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: saving || !form.name.trim() ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: saving || !form.name.trim() ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
+          {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
+          {submitLabel}
+        </button>
+      </div>
+    </AppModal>
+  );
+};
+
+const ManageCategories = () => {
+  const { success, error: errorToast } = useToast();
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const fetchCategories = async () => {
+    setLoading(true);
+    try {
+      const data = await getCategories();
+      setCategories(data.categories || []);
+    } catch {
+      errorToast("Failed to load categories");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchCategories(); }, []);
+
+  const handleAdd = async (form) => {
+    try {
+      await createCategory(form);
+      success(`Category "${form.name}" created`);
+      setAddOpen(false);
+      fetchCategories();
+    } catch (err) {
+      errorToast(err.response?.data?.message || "Failed to create");
+    }
+  };
+
+  const handleEdit = async (form) => {
+    try {
+      await updateCategory(editTarget.id, form);
+      success(`Category updated`);
+      setEditTarget(null);
+      fetchCategories();
+    } catch (err) {
+      errorToast(err.response?.data?.message || "Failed to update");
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteCategory(deleteTarget.id);
+      success(`Category "${deleteTarget.name}" deleted`);
+      setDeleteTarget(null);
+      fetchCategories();
+    } catch (err) {
+      errorToast(err.response?.data?.message || "Failed to delete");
+    }
+  };
+
+  return (
+    <div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
+            Manage Categories
+          </h2>
+          <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
+            {categories.length} category(ies)
+          </p>
+        </div>
+        <button
+          onClick={() => setAddOpen(true)}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            padding: "8px 16px", background: C.primary, color: "white",
+            border: "none", borderRadius: "8px",
+            fontSize: "0.85rem", fontWeight: 500, cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          <Plus size={16} /> Add Category
+        </button>
+      </div>
+
+      {/* Table */}
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{
+          background: "white",
+          border: `1px solid ${C.border}`,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-left" style={{ minWidth: 600, fontSize: "0.875rem" }}>
+            <thead style={{ background: "#f9fafb" }}>
+              <tr>
+                {["Name", "Description", "Words", "Actions"].map(h => (
+                  <th key={h} className="px-5 py-3">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>{h}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={4} style={{ textAlign: "center", padding: "40px", color: C.muted }}>Loading...</td></tr>
+              ) : categories.length === 0 ? (
+                <tr><td colSpan={4} style={{ textAlign: "center", padding: "40px", color: C.muted }}>No categories yet. Add your first one.</td></tr>
+              ) : categories.map(cat => (
+                <tr key={cat.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937", textTransform: "capitalize" }}>{cat.name}</td>
+                  <td className="px-5 py-3" style={{ color: "#6b7280" }}>{cat.description || "—"}</td>
+                  <td className="px-5 py-3" style={{ color: "#374151" }}>
+                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 600,
+                      background: cat.word_count > 0 ? "#eff6ff" : "#f3f4f6",
+                      color: cat.word_count > 0 ? "#1e40af" : "#6b7280" }}>
+                      {cat.word_count}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button title="Edit" onClick={() => setEditTarget(cat)}
+                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                        <Pencil size={14} color="#374151" />
+                      </button>
+                      <button title="Delete" onClick={() => setDeleteTarget(cat)}
+                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid #fecaca`, background: "#fff5f5", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                        <Trash2 size={14} color={C.red} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <CategoryFormModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSubmit={handleAdd}
+        title="Add Category"
+        submitLabel="Create"
+      />
+
+      <CategoryFormModal
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        onSubmit={handleEdit}
+        initial={editTarget}
+        title="Edit Category"
+        submitLabel="Save"
+      />
+
+      {deleteTarget && (
+        <AppModal title="Delete Category" onClose={() => setDeleteTarget(null)}>
+          <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "12px" }}>
+            Delete category <strong>"{deleteTarget.name}"</strong>?
+          </p>
+          {deleteTarget.word_count > 0 && (
+            <p style={{ fontSize: "0.85rem", color: C.red, marginBottom: "20px" }}>
+              ⚠ This category is used by {deleteTarget.word_count} word(s). The backend will block this deletion.
+            </p>
+          )}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <button onClick={() => setDeleteTarget(null)} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
+            <button onClick={handleDelete} style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.red, color: "white", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600 }}>
+              Delete
+            </button>
+          </div>
+        </AppModal>
+      )}
+    </div>
+  );
+};
+
+export default ManageCategories;

@@ -71,6 +71,29 @@ def extract_static_landmarks(video_bytes: bytes) -> list[float] | None:
         os.unlink(tmp_path)
 
 
+def extract_image_landmarks(image_bytes: bytes) -> list[float] | None:
+    """
+    Extract a single 126-float landmark array from a still image.
+    Returns None if no hands detected or image cannot be decoded.
+    """
+    mp_hands = mp.solutions.hands
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if frame is None:
+        return None
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    with mp_hands.Hands(
+        static_image_mode=True,
+        max_num_hands=2,
+        min_detection_confidence=0.5,
+    ) as hands:
+        result = hands.process(rgb)
+        if not result.multi_hand_landmarks:
+            return None
+        return _build_feature_vector(result.multi_hand_landmarks)
+
+
 def extract_motion_landmarks(video_bytes: bytes) -> list[list[float]] | None:
     """
     Extract a 30-frame motion sequence from a video.

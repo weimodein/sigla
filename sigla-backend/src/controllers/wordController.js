@@ -1147,6 +1147,7 @@ const updateWord = async (req, res) => {
       category,
       filipino_translation,
       sample_limit,
+      gesture_type,
     } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
@@ -1164,6 +1165,24 @@ const updateWord = async (req, res) => {
       }
     }
 
+    // Guard: changing gesture_type after samples exist would invalidate them
+    // (static stores 126-float landmarks, motion stores 30x126 sequences — incompatible shapes)
+    if (
+      gesture_type &&
+      gesture_type !== word.gesture_type &&
+      (word.total_samples || 0) > 0
+    ) {
+      return res.status(400).json({
+        message: `Cannot change gesture type: word already has ${word.total_samples} sample(s). Delete samples first.`,
+      });
+    }
+
+    if (gesture_type && !["static", "motion"].includes(gesture_type)) {
+      return res
+        .status(400)
+        .json({ message: "gesture_type must be 'static' or 'motion'" });
+    }
+
     const updatedLabel = label || word.label;
     const updatedNormalized = normalizeLabel(updatedLabel);
 
@@ -1174,6 +1193,7 @@ const updateWord = async (req, res) => {
       hands_count: hands_count || word.hands_count,
       sign_type: sign_type || word.sign_type,
       category: category || word.category,
+      gesture_type: gesture_type || word.gesture_type,
       filipino_translation:
         filipino_translation !== undefined
           ? filipino_translation
@@ -1813,7 +1833,7 @@ const uploadVideos = async (req, res) => {
     // Files are attached by multer middleware before this handler runs
     const files = req.files;
     if (!files || files.length === 0) {
-      return res.status(400).json({ message: "At least one video file is required" });
+      return res.status(400).json({ message: "At least one file is required" });
     }
 
     const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
@@ -1821,16 +1841,55 @@ const uploadVideos = async (req, res) => {
     let successCount = 0;
     let failCount = 0;
 
+    const IMAGE_RX = /\.(jpe?g|png)$/i;
+    const VIDEO_RX = /\.(mov|mp4|webm|avi|mkv)$/i;
+
     for (const file of files) {
+      const isImage =
+        IMAGE_RX.test(file.originalname) || (file.mimetype || "").startsWith("image/");
+      const isVideo =
+        VIDEO_RX.test(file.originalname) || (file.mimetype || "").startsWith("video/");
+
+      // Unsupported file type
+      if (!isImage && !isVideo) {
+        results.push({
+          file: file.originalname,
+          status: "skipped",
+          type: "unknown",
+          reason: "Unsupported file type",
+        });
+        failCount++;
+        continue;
+      }
+
+      // Motion words can't accept images (no temporal sequence from a still frame)
+      if (isImage && word.gesture_type === "motion") {
+        results.push({
+          file: file.originalname,
+          status: "skipped",
+          type: "image",
+          reason: "Motion gestures require video files",
+        });
+        failCount++;
+        continue;
+      }
+
       try {
         const form = new FormData();
         form.append("file", file.buffer, {
           filename: file.originalname,
           contentType: file.mimetype,
         });
-        form.append("gesture_type", word.gesture_type || "static");
 
-        const mlRes = await axios.post(`${ML_SERVICE_URL}/extract-landmarks`, form, {
+        let endpoint;
+        if (isImage) {
+          endpoint = "/extract-landmarks-image";
+        } else {
+          endpoint = "/extract-landmarks";
+          form.append("gesture_type", word.gesture_type || "static");
+        }
+
+        const mlRes = await axios.post(`${ML_SERVICE_URL}${endpoint}`, form, {
           headers: form.getHeaders(),
           timeout: 60000,
           maxBodyLength: Infinity,
@@ -1841,7 +1900,7 @@ const uploadVideos = async (req, res) => {
         const sample = await GestureSample.create({
           word_id: word.id,
           submitted_by: req.user.id,
-          file_url: `video_upload_${Date.now()}`,
+          file_url: `${isImage ? "image" : "video"}_upload_${Date.now()}`,
           sample_count: 1,
           status: "approved",
           is_validated: true,
@@ -1849,11 +1908,21 @@ const uploadVideos = async (req, res) => {
           sequence: type === "motion" ? sequence : null,
         });
 
-        results.push({ file: file.originalname, status: "ok", sample_id: sample.id });
+        results.push({
+          file: file.originalname,
+          status: "ok",
+          type: isImage ? "image" : "video",
+          sample_id: sample.id,
+        });
         successCount++;
       } catch (err) {
         const detail = err.response?.data?.detail || err.message;
-        results.push({ file: file.originalname, status: "failed", error: detail });
+        results.push({
+          file: file.originalname,
+          status: "failed",
+          type: isImage ? "image" : "video",
+          error: detail,
+        });
         failCount++;
       }
     }
@@ -1868,7 +1937,7 @@ const uploadVideos = async (req, res) => {
     await checkAndActivateWord(word, req.user.id);
 
     return res.status(207).json({
-      message: `${successCount} video(s) processed, ${failCount} failed`,
+      message: `${successCount} file(s) processed, ${failCount} failed/skipped`,
       results,
       approved_sample_count: newApproved,
     });

@@ -594,7 +594,6 @@ class CollectionActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        uploadJob?.cancel()
         executor.shutdown()
         landmarker.close()
         super.onDestroy()
