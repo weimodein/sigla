@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import AppModal from "../../components/AppModal.jsx";
 import {
   getAllWords,
@@ -18,118 +19,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-  X,
   Loader2,
+  Brain,
 } from "lucide-react";
-
-// ── FSL-105 label list (from labels.csv) ─────────────────────
-const FSL_105 = [
-  { id: 0,  label: "GOOD MORNING",      category: "GREETING" },
-  { id: 1,  label: "GOOD AFTERNOON",    category: "GREETING" },
-  { id: 2,  label: "GOOD EVENING",      category: "GREETING" },
-  { id: 3,  label: "HELLO",             category: "GREETING" },
-  { id: 4,  label: "HOW ARE YOU",       category: "GREETING" },
-  { id: 5,  label: "IM FINE",           category: "GREETING" },
-  { id: 6,  label: "NICE TO MEET YOU",  category: "GREETING" },
-  { id: 7,  label: "THANK YOU",         category: "GREETING" },
-  { id: 8,  label: "YOURE WELCOME",     category: "GREETING" },
-  { id: 9,  label: "SEE YOU TOMORROW",  category: "GREETING" },
-  { id: 10, label: "UNDERSTAND",        category: "SURVIVAL" },
-  { id: 11, label: "DON'T UNDERSTAND",  category: "SURVIVAL" },
-  { id: 12, label: "KNOW",              category: "SURVIVAL" },
-  { id: 13, label: "DON'T KNOW",        category: "SURVIVAL" },
-  { id: 14, label: "NO",                category: "SURVIVAL" },
-  { id: 15, label: "YES",               category: "SURVIVAL" },
-  { id: 16, label: "WRONG",             category: "SURVIVAL" },
-  { id: 17, label: "CORRECT",           category: "SURVIVAL" },
-  { id: 18, label: "SLOW",              category: "SURVIVAL" },
-  { id: 19, label: "FAST",              category: "SURVIVAL" },
-  { id: 20, label: "ONE",               category: "NUMBER" },
-  { id: 21, label: "TWO",               category: "NUMBER" },
-  { id: 22, label: "THREE",             category: "NUMBER" },
-  { id: 23, label: "FOUR",              category: "NUMBER" },
-  { id: 24, label: "FIVE",              category: "NUMBER" },
-  { id: 25, label: "SIX",               category: "NUMBER" },
-  { id: 26, label: "SEVEN",             category: "NUMBER" },
-  { id: 27, label: "EIGHT",             category: "NUMBER" },
-  { id: 28, label: "NINE",              category: "NUMBER" },
-  { id: 29, label: "TEN",               category: "NUMBER" },
-  { id: 30, label: "JANUARY",           category: "CALENDAR" },
-  { id: 31, label: "FEBRUARY",          category: "CALENDAR" },
-  { id: 32, label: "MARCH",             category: "CALENDAR" },
-  { id: 33, label: "APRIL",             category: "CALENDAR" },
-  { id: 34, label: "MAY",               category: "CALENDAR" },
-  { id: 35, label: "JUNE",              category: "CALENDAR" },
-  { id: 36, label: "JULY",              category: "CALENDAR" },
-  { id: 37, label: "AUGUST",            category: "CALENDAR" },
-  { id: 38, label: "SEPTEMBER",         category: "CALENDAR" },
-  { id: 39, label: "OCTOBER",           category: "CALENDAR" },
-  { id: 40, label: "NOVEMBER",          category: "CALENDAR" },
-  { id: 41, label: "DECEMBER",          category: "CALENDAR" },
-  { id: 42, label: "MONDAY",            category: "DAYS" },
-  { id: 43, label: "TUESDAY",           category: "DAYS" },
-  { id: 44, label: "WEDNESDAY",         category: "DAYS" },
-  { id: 45, label: "THURSDAY",          category: "DAYS" },
-  { id: 46, label: "FRIDAY",            category: "DAYS" },
-  { id: 47, label: "SATURDAY",          category: "DAYS" },
-  { id: 48, label: "SUNDAY",            category: "DAYS" },
-  { id: 49, label: "TODAY",             category: "DAYS" },
-  { id: 50, label: "TOMORROW",          category: "DAYS" },
-  { id: 51, label: "YESTERDAY",         category: "DAYS" },
-  { id: 52, label: "FATHER",            category: "FAMILY" },
-  { id: 53, label: "MOTHER",            category: "FAMILY" },
-  { id: 54, label: "SON",               category: "FAMILY" },
-  { id: 55, label: "DAUGHTER",          category: "FAMILY" },
-  { id: 56, label: "GRANDFATHER",       category: "FAMILY" },
-  { id: 57, label: "GRANDMOTHER",       category: "FAMILY" },
-  { id: 58, label: "UNCLE",             category: "FAMILY" },
-  { id: 59, label: "AUNTIE",            category: "FAMILY" },
-  { id: 60, label: "COUSIN",            category: "FAMILY" },
-  { id: 61, label: "PARENTS",           category: "FAMILY" },
-  { id: 62, label: "BOY",               category: "RELATIONSHIPS" },
-  { id: 63, label: "GIRL",              category: "RELATIONSHIPS" },
-  { id: 64, label: "MAN",               category: "RELATIONSHIPS" },
-  { id: 65, label: "WOMAN",             category: "RELATIONSHIPS" },
-  { id: 66, label: "DEAF",              category: "RELATIONSHIPS" },
-  { id: 67, label: "HARD OF HEARING",   category: "RELATIONSHIPS" },
-  { id: 68, label: "WEELCHAIR PERSON",  category: "RELATIONSHIPS" },
-  { id: 69, label: "BLIND",             category: "RELATIONSHIPS" },
-  { id: 70, label: "DEAF BLIND",        category: "RELATIONSHIPS" },
-  { id: 71, label: "MARRIED",           category: "RELATIONSHIPS" },
-  { id: 72, label: "BLUE",              category: "COLOR" },
-  { id: 73, label: "GREEN",             category: "COLOR" },
-  { id: 74, label: "RED",               category: "COLOR" },
-  { id: 75, label: "BROWN",             category: "COLOR" },
-  { id: 76, label: "BLACK",             category: "COLOR" },
-  { id: 77, label: "WHITE",             category: "COLOR" },
-  { id: 78, label: "YELLOW",            category: "COLOR" },
-  { id: 79, label: "ORANGE",            category: "COLOR" },
-  { id: 80, label: "GRAY",              category: "COLOR" },
-  { id: 81, label: "PINK",              category: "COLOR" },
-  { id: 82, label: "VIOLET",            category: "COLOR" },
-  { id: 83, label: "LIGHT",             category: "COLOR" },
-  { id: 84, label: "DARK",              category: "COLOR" },
-  { id: 85, label: "BREAD",             category: "FOOD" },
-  { id: 86, label: "EGG",               category: "FOOD" },
-  { id: 87, label: "FISH",              category: "FOOD" },
-  { id: 88, label: "MEAT",              category: "FOOD" },
-  { id: 89, label: "CHICKEN",           category: "FOOD" },
-  { id: 90, label: "SPAGHETTI",         category: "FOOD" },
-  { id: 91, label: "RICE",              category: "FOOD" },
-  { id: 92, label: "LONGANISA",         category: "FOOD" },
-  { id: 93, label: "SHRIMP",            category: "FOOD" },
-  { id: 94, label: "CRAB",              category: "FOOD" },
-  { id: 95, label: "HOT",               category: "DRINK" },
-  { id: 96, label: "COLD",              category: "DRINK" },
-  { id: 97, label: "JUICE",             category: "DRINK" },
-  { id: 98, label: "MILK",              category: "DRINK" },
-  { id: 99, label: "COFFEE",            category: "DRINK" },
-  { id: 100, label: "TEA",              category: "DRINK" },
-  { id: 101, label: "BEER",             category: "DRINK" },
-  { id: 102, label: "WINE",             category: "DRINK" },
-  { id: 103, label: "SUGAR",            category: "DRINK" },
-  { id: 104, label: "NO SUGAR",         category: "DRINK" },
-];
 
 const C = {
   primary: "#1e3a8a",
@@ -145,21 +37,16 @@ const PAGE_SIZE = 10;
 // ── Add Word Modal ────────────────────────────────────────────
 const AddWordModal = ({ open, onClose, onSuccess }) => {
   const { showToast } = useToast();
-  const [source, setSource] = useState("fsl105"); // "fsl105" | "custom"
-  const [selectedSign, setSelectedSign] = useState(null);
-  const [fslSearch, setFslSearch] = useState("");
-  const [form, setForm] = useState({ label: "", description: "", category: "", gesture_type: "static", hands_count: 1, sign_type: "FSL", filipino_translation: "" });
+  const [form, setForm] = useState({
+    label: "",
+    description: "",
+    category: "",
+    gesture_type: "static",
+    hands_count: 1,
+    sign_type: "FSL",
+    filipino_translation: "",
+  });
   const [saving, setSaving] = useState(false);
-
-  const filteredFsl = FSL_105.filter(s =>
-    s.label.toLowerCase().includes(fslSearch.toLowerCase()) ||
-    s.category.toLowerCase().includes(fslSearch.toLowerCase())
-  );
-
-  const handleSelectFsl = (sign) => {
-    setSelectedSign(sign);
-    setForm(f => ({ ...f, label: sign.label, category: sign.category.toLowerCase() }));
-  };
 
   const handleSubmit = async () => {
     if (!form.label) return showToast("Label is required", "error");
@@ -180,74 +67,43 @@ const AddWordModal = ({ open, onClose, onSuccess }) => {
 
   return (
     <AppModal title="Add New Word" onClose={onClose}>
-      <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-        {["fsl105", "custom"].map(s => (
-          <button key={s} onClick={() => setSource(s)} style={{
-            flex: 1, padding: "8px", borderRadius: "8px", border: `1px solid ${source === s ? C.primary : C.border}`,
-            background: source === s ? C.primary : "white", color: source === s ? "white" : "#374151",
-            fontWeight: 600, cursor: "pointer", fontSize: "0.875rem",
-          }}>
-            {s === "fsl105" ? "From FSL-105" : "Custom Word"}
-          </button>
-        ))}
-      </div>
-
-      {source === "fsl105" && (
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
         <div>
-          <div style={{ position: "relative", marginBottom: "12px" }}>
-            <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: C.muted }} />
-            <input
-              placeholder="Search FSL-105 signs..."
-              value={fslSearch}
-              onChange={e => setFslSearch(e.target.value)}
-              style={{ width: "100%", padding: "8px 8px 8px 32px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", boxSizing: "border-box" }}
-            />
-          </div>
-          <div style={{ maxHeight: "200px", overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: "8px", marginBottom: "16px" }}>
-            {filteredFsl.map(sign => (
-              <div key={sign.id} onClick={() => handleSelectFsl(sign)} style={{
-                padding: "8px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
-                background: selectedSign?.id === sign.id ? "#eff6ff" : "white",
-                borderBottom: `1px solid ${C.border}`,
-              }}>
-                <span style={{ fontWeight: selectedSign?.id === sign.id ? 600 : 400, fontSize: "0.875rem" }}>{sign.label}</span>
-                <span style={{ fontSize: "0.75rem", color: C.muted, background: "#f3f4f6", padding: "2px 8px", borderRadius: "12px" }}>{sign.category}</span>
-              </div>
-            ))}
-          </div>
-          {selectedSign && (
-            <p style={{ fontSize: "0.875rem", color: "#374151", marginBottom: "8px" }}>
-              Selected: <strong>{selectedSign.label}</strong> ({selectedSign.category})
-            </p>
-          )}
+          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Label *</label>
+          <input
+            value={form.label}
+            onChange={e => setForm(f => ({ ...f, label: e.target.value.toUpperCase() }))}
+            placeholder="e.g. HELLO, BANANA, GOOD MORNING"
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
+          />
         </div>
-      )}
-
-      {source === "custom" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
-          <div>
-            <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Label *</label>
-            <input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value.toUpperCase() }))}
-              style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }} />
-          </div>
-          <div>
-            <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Category</label>
-            <input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              placeholder="e.g. greeting, survival..."
-              style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }} />
-          </div>
-          <div>
-            <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Filipino Translation</label>
-            <input value={form.filipino_translation} onChange={e => setForm(f => ({ ...f, filipino_translation: e.target.value }))}
-              style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }} />
-          </div>
-          <div>
-            <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Description</label>
-            <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2}
-              style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", resize: "vertical", boxSizing: "border-box" }} />
-          </div>
+        <div>
+          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Category</label>
+          <input
+            value={form.category}
+            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+            placeholder="e.g. greeting, food, color..."
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
+          />
         </div>
-      )}
+        <div>
+          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Filipino Translation</label>
+          <input
+            value={form.filipino_translation}
+            onChange={e => setForm(f => ({ ...f, filipino_translation: e.target.value }))}
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Description</label>
+          <textarea
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            rows={2}
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", resize: "vertical", boxSizing: "border-box" }}
+          />
+        </div>
+      </div>
 
       <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
         <div style={{ flex: 1 }}>
@@ -270,8 +126,8 @@ const AddWordModal = ({ open, onClose, onSuccess }) => {
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
         <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-        <button onClick={handleSubmit} disabled={saving || (source === "fsl105" && !selectedSign) || !form.label}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: saving ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
+        <button onClick={handleSubmit} disabled={saving || !form.label}
+          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: saving || !form.label ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: saving || !form.label ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
           {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
           Add Word
         </button>
@@ -317,7 +173,7 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
   return (
     <AppModal title={`Upload Videos — ${word?.label}`} onClose={onClose}>
       <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
-        Upload <strong>.MOV</strong> video files from the FSL-105 dataset. Landmarks will be extracted automatically using MediaPipe.
+        Upload video clips for this word. Landmarks will be extracted automatically using MediaPipe.
       </p>
       <p style={{ fontSize: "0.8rem", color: "#374151", marginBottom: "12px" }}>
         Gesture type: <strong>{word?.gesture_type}</strong> &nbsp;|&nbsp; Hands: <strong>{word?.hands_count === 1 ? "One" : "Both"}</strong>
@@ -384,6 +240,7 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
 // ── Main Page ─────────────────────────────────────────────────
 const ManageDataset = () => {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [words, setWords] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -438,7 +295,7 @@ const ManageDataset = () => {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const categories = [...new Set(FSL_105.map(s => s.category))];
+  const categories = [...new Set(words.map(w => w.category).filter(Boolean))];
 
   return (
     <div style={{ padding: "24px" }}>
@@ -453,13 +310,22 @@ const ManageDataset = () => {
             <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: 0 }}>{total} word(s) in database</p>
           </div>
         </div>
-        <button onClick={() => setAddOpen(true)} style={{
-          display: "flex", alignItems: "center", gap: "8px", padding: "10px 18px",
-          background: C.primary, color: "white", border: "none", borderRadius: "10px",
-          fontWeight: 600, cursor: "pointer", fontSize: "0.875rem",
-        }}>
-          <Plus size={16} /> Add Word
-        </button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button onClick={() => navigate("/model")} style={{
+            display: "flex", alignItems: "center", gap: "8px", padding: "10px 18px",
+            background: "white", color: C.primary, border: `1px solid ${C.primary}`, borderRadius: "10px",
+            fontWeight: 600, cursor: "pointer", fontSize: "0.875rem",
+          }}>
+            <Brain size={16} /> Train Model
+          </button>
+          <button onClick={() => setAddOpen(true)} style={{
+            display: "flex", alignItems: "center", gap: "8px", padding: "10px 18px",
+            background: C.primary, color: "white", border: "none", borderRadius: "10px",
+            fontWeight: 600, cursor: "pointer", fontSize: "0.875rem",
+          }}>
+            <Plus size={16} /> Add Word
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
