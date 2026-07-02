@@ -19,7 +19,9 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"https://sigla-backend.onrender.com/api/\"")
+            // Local backend for on-device testing (PC LAN IP, port 8080).
+            // Requires the cleartext exception in network_security_config.xml.
+            buildConfigField("String", "BASE_URL", "\"http://192.168.100.163:8080/api/\"")
         }
         release {
             isMinifyEnabled = true
@@ -28,7 +30,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "BASE_URL", "\"https://sigla-backend.onrender.com/api/\"")
+            buildConfigField("String", "BASE_URL", "\"http://192.168.100.163:8080/api/\"")
         }
     }
     compileOptions {

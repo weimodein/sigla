@@ -23,26 +23,15 @@ SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
 
-def load_tflite_model(tflite_path: str):
-    import tensorflow as tf
-    interpreter = tf.lite.Interpreter(model_path=tflite_path)
-    interpreter.allocate_tensors()
-    return interpreter
+def predict_keras(model, input_data: np.ndarray) -> np.ndarray:
+    """Run the Keras (.h5) model on a batch and return predicted class indices.
 
-
-def predict_tflite(interpreter, input_data: np.ndarray) -> np.ndarray:
-    input_details  = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-
-    predictions = []
-    for sample in input_data:
-        input_array = np.expand_dims(sample, axis=0).astype(np.float32)
-        interpreter.set_tensor(input_details[0]["index"], input_array)
-        interpreter.invoke()
-        output = interpreter.get_tensor(output_details[0]["index"])
-        predictions.append(np.argmax(output[0]))
-
-    return np.array(predictions)
+    We evaluate the Keras model rather than the .tflite because the LSTM's TFLite
+    build uses Select-TF (Flex) ops, which the Python tf.lite.Interpreter does not
+    register. Keras runs the LSTM natively with identical weights.
+    """
+    probs = model.predict(input_data, verbose=0)
+    return np.argmax(probs, axis=1)
 
 
 def download_model_from_supabase(version_number: str, filename: str) -> str:
@@ -83,8 +72,11 @@ def test(version_number: str, model_id: int) -> dict:
     if len(motion_dataset) < 2:
         raise ValueError("At least 2 gesture classes with sequence data are required for evaluation.")
 
-    # ── Step 2: Download the motion model ─────────────────────
-    tflite_path = download_model_from_supabase(version_number, "sign_model_motion.tflite")
+    # ── Step 2: Download the Keras (.h5) motion model ─────────
+    # We evaluate the .h5 rather than the .tflite: the LSTM's TFLite build needs
+    # Select-TF (Flex) ops that the Python tf.lite.Interpreter can't load. The
+    # .h5 has identical weights and runs the LSTM natively in Keras.
+    h5_path = download_model_from_supabase(version_number, "sign_model_motion.h5")
 
     # ── Step 3: Prepare + split ───────────────────────────────
     X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
@@ -94,8 +86,9 @@ def test(version_number: str, model_id: int) -> dict:
 
     # ── Step 4: Evaluate ──────────────────────────────────────
     print("Evaluating motion model...")
-    interpreter = load_tflite_model(tflite_path)
-    preds       = predict_tflite(interpreter, X_test)
+    from tensorflow import keras
+    model = keras.models.load_model(h5_path)
+    preds = predict_keras(model, X_test)
 
     accuracy  = accuracy_score(y_test,  preds)
     precision = precision_score(y_test, preds, average="weighted", zero_division=0)
