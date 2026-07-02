@@ -100,25 +100,18 @@ const getLatestModel = async (req, res) => {
     }
 
     // All file URLs point to the fixed deployed/ folder in Supabase
-    // so the mobile always fetches from a stable path regardless of version
+    // so the mobile always fetches from a stable path regardless of version.
+    // Every model is a motion (LSTM) model.
     const base = SUPABASE_URL
       ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
       : null;
 
-    // gesture_config_url always points to deployed/ — the deploy process now preserves
-    // it across static-only deploys (not overwritten when no motion model is present).
-    const gestureConfigUrl = base ? `${base}/gesture_config.json` : null;
-
     return res.status(200).json({
       model: {
         ...model.toJSON(),
-        tflite_url: base
-          ? `${base}/sign_model_static.tflite`
-          : model.tflite_url,
-        motion_tflite_url: (base && model.motion_tflite_url) ? `${base}/sign_model_motion.tflite` : null,
-        labels_static_url: base ? `${base}/labels_static.json` : null,
-        labels_motion_url: (base && model.motion_tflite_url) ? `${base}/labels_motion.json` : null,
-        gesture_config_url: gestureConfigUrl,
+        tflite_url: base ? `${base}/sign_model_motion.tflite` : model.tflite_url,
+        motion_tflite_url: base ? `${base}/sign_model_motion.tflite` : model.motion_tflite_url,
+        labels_motion_url: base ? `${base}/labels_motion.json` : null,
       },
     });
   } catch (err) {
@@ -335,43 +328,24 @@ const deployModel = async (req, res) => {
     }
 
     // ── Upload model files to Supabase deployed folder ───────────────────────
-    // Derive base URL from the static tflite file (assumes all files are in the same folder)
+    // Derive base URL from the motion tflite file (all files share the same folder)
     const baseUrl = model.tflite_url.substring(
       0,
       model.tflite_url.lastIndexOf("/"),
     );
 
-    // List of expected files – required ones must exist, optional ones are skipped if missing.
-    // Motion model URL comes from the stored DB column (saved after training).
-    // Labels URLs are derived from the versioned base path (same folder as the tflite files).
+    // Every model is a motion (LSTM) model. tflite_url holds the motion model URL;
+    // labels are in the same versioned folder.
     const possibleFiles = [
       {
         url: model.tflite_url,
-        name: "sign_model_static.tflite",
-        required: true,
-      },
-      {
-        url: `${baseUrl}/labels_static.json`,
-        name: "labels_static.json",
-        required: true,
-      },
-      {
-        url: model.motion_tflite_url || null,
         name: "sign_model_motion.tflite",
-        required: false,
+        required: true,
       },
       {
-        url: model.motion_tflite_url ? `${baseUrl}/labels_motion.json` : null,
+        url: `${baseUrl}/labels_motion.json`,
         name: "labels_motion.json",
-        required: false,
-      },
-      {
-        // Only overwrite deployed/gesture_config.json when this model has a motion model.
-        // Static-only deploys skip it so the previous gesture_config (which includes
-        // motion gesture definitions) is preserved in the deployed/ folder.
-        url: model.motion_tflite_url ? `${baseUrl}/gesture_config.json` : null,
-        name: "gesture_config.json",
-        required: false,
+        required: true,
       },
     ];
 
@@ -416,19 +390,18 @@ const deployModel = async (req, res) => {
       }
     }
 
-    // ── Compute SHA256 checksum of the deployed static .tflite ──────────────
-    // Computed from the buffer already in memory — no extra download needed.
-    // Saved so the mobile app can verify the downloaded file is not corrupted.
+    // ── Compute SHA256 checksum of the deployed motion .tflite ──────────────
+    // Saved so the mobile app can verify the downloaded model is not corrupted.
     try {
-      const staticFile = possibleFiles.find((f) => f.name === "sign_model_static.tflite");
-      if (staticFile) {
-        const staticResponse = await axios.get(staticFile.url, {
+      const motionFile = possibleFiles.find((f) => f.name === "sign_model_motion.tflite");
+      if (motionFile) {
+        const motionResponse = await axios.get(motionFile.url, {
           responseType: "arraybuffer",
           timeout: 30000,
         });
         const checksumHex = crypto
           .createHash("sha256")
-          .update(Buffer.from(staticResponse.data))
+          .update(Buffer.from(motionResponse.data))
           .digest("hex");
         await model.update({ checksum: checksumHex });
         console.log(`SHA256 checksum saved: ${checksumHex}`);
