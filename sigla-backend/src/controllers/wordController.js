@@ -19,14 +19,10 @@ const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // ── Sample caps ───────────────────────────────────────────────
-// Per-user maximums: how many samples ONE user can contribute to a single word.
-const PER_USER_CAP = { static: 25, motion: 25 };
-
-// Default total caps across ALL users (used when admin has not set sample_limit).
-const DEFAULT_SAMPLE_CAP = { static: 25, motion: 25 };
-
-// Activation threshold: approved samples needed before a word is eligible for deploy.
-const ACTIVATION_THRESHOLD = { static: 25, motion: 25 };
+// All gestures are motion; a single flat cap/threshold applies to every word.
+const PER_USER_CAP = 25;         // max samples ONE user can contribute to a word
+const DEFAULT_SAMPLE_CAP = 25;   // total cap across all users (when no admin sample_limit)
+const ACTIVATION_THRESHOLD = 25; // approved samples needed before a word is deploy-eligible
 
 // ── Helper: normalize word label ──────────────────────────────
 const normalizeLabel = (label) =>
@@ -35,23 +31,19 @@ const normalizeLabel = (label) =>
     .replace(/[^\w\s]/g, "")
     .trim();
 
-// ── Helper: total cap for a word (admin-set or default) ───────
-const getSampleCap = (gestureTypeOrWord) => {
-  if (gestureTypeOrWord && typeof gestureTypeOrWord === "object") {
-    const word = gestureTypeOrWord;
-    if (word.sample_limit != null) return word.sample_limit;
-    return DEFAULT_SAMPLE_CAP[word.gesture_type] || DEFAULT_SAMPLE_CAP.static;
+// ── Helper: total cap for a word (admin-set sample_limit or default) ───
+const getSampleCap = (word) => {
+  if (word && typeof word === "object" && word.sample_limit != null) {
+    return word.sample_limit;
   }
-  return DEFAULT_SAMPLE_CAP[gestureTypeOrWord] || DEFAULT_SAMPLE_CAP.static;
+  return DEFAULT_SAMPLE_CAP;
 };
 
-// ── Helper: per-user cap based on gesture type ────────────────
-const getPerUserCap = (gestureType) =>
-  PER_USER_CAP[gestureType] || PER_USER_CAP.static;
+// ── Helper: per-user cap ──────────────────────────────────────
+const getPerUserCap = () => PER_USER_CAP;
 
-// ── Helper: get activation threshold based on gesture_type ────
-const getActivationThreshold = (gestureType) =>
-  ACTIVATION_THRESHOLD[gestureType] || ACTIVATION_THRESHOLD.static;
+// ── Helper: activation threshold ──────────────────────────────
+const getActivationThreshold = () => ACTIVATION_THRESHOLD;
 
 // ── Helper: get total samples submitted by user for a word ────
 const getUserSampleCount = async (userId, wordId) => {
@@ -106,7 +98,7 @@ const sendSubmissionNotification = async (
 // ── Helper: update sample count; mark word approved when threshold met ────
 // Words are NOT activated here — activation only happens on model deploy.
 const checkAndActivateWord = async (word, reviewerId = null) => {
-  const threshold = getActivationThreshold(word.gesture_type || "static");
+  const threshold = getActivationThreshold();
   const approvedCount = await getApprovedSampleCount(word.id);
 
   const reachedThreshold = approvedCount >= threshold;
@@ -124,6 +116,63 @@ const checkAndActivateWord = async (word, reviewerId = null) => {
   });
 
   return reachedThreshold;
+};
+
+// ── Helper: extract landmarks for one file via the ML service and store a
+// GestureSample. Shared by the manual upload route (uploadVideos) and the
+// FSL-105 bulk importer so both use identical extraction + storage logic.
+//
+// Returns { status: "ok"|"skipped"|"failed", type, sample_id?, reason?/error? }.
+// Does NOT update word counters — the caller does that after a batch.
+const IMAGE_RX = /\.(jpe?g|png)$/i;
+const VIDEO_RX = /\.(mov|mp4|webm|avi|mkv)$/i;
+
+const extractAndStoreSample = async (
+  word,
+  fileBuffer,
+  filename,
+  mimetype,
+  userId,
+  fileUrl = null,
+) => {
+  const isVideo = VIDEO_RX.test(filename) || (mimetype || "").startsWith("video/");
+
+  // Every gesture is motion — only video files produce a valid sequence.
+  if (!isVideo) {
+    return { file: filename, status: "skipped", type: "unknown", reason: "Only video files are supported" };
+  }
+
+  const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
+  const FormData = require("form-data");
+
+  try {
+    const form = new FormData();
+    form.append("file", fileBuffer, { filename, contentType: mimetype });
+
+    const mlRes = await axios.post(`${ML_SERVICE_URL}/extract-landmarks`, form, {
+      headers: form.getHeaders(),
+      timeout: 60000,
+      maxBodyLength: Infinity,
+    });
+
+    const { sequence } = mlRes.data;
+
+    const sample = await GestureSample.create({
+      word_id: word.id,
+      submitted_by: userId,
+      file_url: fileUrl || `video_upload_${Date.now()}`,
+      sample_count: 1,
+      status: "approved",
+      is_validated: true,
+      landmarks: null,
+      sequence: sequence,
+    });
+
+    return { file: filename, status: "ok", type: "video", sample_id: sample.id };
+  } catch (err) {
+    const detail = err.response?.data?.detail || err.message;
+    return { file: filename, status: "failed", type: "video", error: detail };
+  }
 };
 
 // ── Helper: upload a base64 image to Supabase Storage, return its public URL
@@ -173,7 +222,6 @@ const getAllWords = async (req, res) => {
       status,
       sign_type,
       category,
-      gesture_type,
       search,
       page = 1,
       limit = 10,
@@ -184,7 +232,6 @@ const getAllWords = async (req, res) => {
     if (status) where.status = status;
     if (sign_type) where.sign_type = sign_type;
     if (category) where.category = category;
-    if (gesture_type) where.gesture_type = gesture_type;
     if (search) {
       where[Op.or] = [
         { label: { [Op.iLike]: `%${search}%` } },
@@ -292,10 +339,8 @@ const submitWord = async (req, res) => {
     const {
       label,
       description,
-      hands_count,
       sign_type,
       category,
-      gesture_type,
     } = req.body;
 
     if (!label || !sign_type) {
@@ -326,9 +371,7 @@ const submitWord = async (req, res) => {
       label,
       normalized_label: normalized,
       description: description || null,
-      hands_count: hands_count || 1,
       sign_type,
-      gesture_type: gesture_type || "static",
       category: category || "additional words",
       submitted_by: req.user.id,
       status: "pending",
@@ -336,14 +379,6 @@ const submitWord = async (req, res) => {
       is_active: false,
       approved_sample_count: 0,
     });
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "submitted_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Submitted word: ${label} (${sign_type}, ${gesture_type || "static"})`,
-    // });
 
     return res.status(201).json({
       message: "Word submitted successfully. Waiting for admin review.",
@@ -363,10 +398,8 @@ const adminAddWord = async (req, res) => {
     const {
       label,
       description,
-      hands_count,
       sign_type,
       category,
-      gesture_type,
       filipino_translation,
     } = req.body;
 
@@ -400,9 +433,7 @@ const adminAddWord = async (req, res) => {
       label,
       normalized_label: normalized,
       description: description || null,
-      hands_count: hands_count || 1,
       sign_type,
-      gesture_type: gesture_type || "static",
       category: category || "additional words",
       filipino_translation: filipino_translation || null,
       submitted_by: req.user.id,
@@ -413,14 +444,6 @@ const adminAddWord = async (req, res) => {
       reviewed_by: req.user.id,
       reviewed_at: new Date(),
     });
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "admin_added_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Admin manually added word: ${label} (${sign_type}, ${gesture_type || "static"})`,
-    // });
 
     return res.status(201).json({
       message:
@@ -478,7 +501,7 @@ const adminUploadSamples = async (req, res) => {
     await word.reload();
     const activated = await checkAndActivateWord(word, req.user.id);
 
-    const remaining = getActivationThreshold(word.gesture_type || "static") - word.approved_sample_count;
+    const remaining = getActivationThreshold() - word.approved_sample_count;
 
     return res.status(201).json({
       message: activated
@@ -495,7 +518,7 @@ const adminUploadSamples = async (req, res) => {
 };
 
 // ── POST /api/words/:id/samples ───────────────────────────────
-// User uploads gesture samples — enforces per-user per-word cap based on gesture_type
+// User uploads gesture samples — enforces per-user per-word cap
 const uploadSamples = async (req, res) => {
   try {
     const word = await Word.findOne({ where: { id: req.params.id } });
@@ -522,7 +545,6 @@ const uploadSamples = async (req, res) => {
     // DEBUG: Log incoming motion gesture data
     console.log("=== UPLOAD SAMPLES DEBUG ===");
     console.log("word_id:", req.params.id);
-    console.log("gesture_type:", word.gesture_type);
     console.log("sample_count from client:", sample_count);
     console.log("landmarks array:", Array.isArray(landmarks), landmarks ? landmarks.length : "N/A");
     console.log("sequence array:", Array.isArray(sequence), sequence ? sequence.length : "N/A");
@@ -571,7 +593,7 @@ const uploadSamples = async (req, res) => {
     }
 
     const totalCap = getSampleCap(word);
-    const perUserCap = getPerUserCap(word.gesture_type || "static");
+    const perUserCap = getPerUserCap();
 
     // Use live DB counts — word.total_samples can be stale
     const [totalSamples, userTotal] = await Promise.all([
@@ -818,7 +840,7 @@ const approveAllSamplesByUser = async (req, res) => {
 
     await checkAndActivateWord(word, req.user.id);
     const approvedCount = await getApprovedSampleCount(word.id);
-    const cap = getSampleCap(word.gesture_type || "static");
+    const cap = getSampleCap(word);
     const userApprovedAfter = approvedBefore + pendingCount;
 
     if (pendingCount > 0) {
@@ -865,7 +887,7 @@ const rejectAllSamplesByUser = async (req, res) => {
       },
     );
 
-    const cap = getSampleCap(word.gesture_type || "static");
+    const cap = getSampleCap(word);
 
     if (pendingCount > 0) {
       await sendSubmissionNotification(
@@ -920,7 +942,7 @@ const approveSubmission = async (req, res) => {
     );
 
     const totalApproved = await getApprovedSampleCount(word.id);
-    const cap = getSampleCap(word.gesture_type || "static");
+    const cap = getSampleCap(word);
     const activated = await checkAndActivateWord(word, req.user.id);
     const userApprovedAfter = approvedBeforeCount + pendingCount;
 
@@ -990,7 +1012,7 @@ const rejectSubmission = async (req, res) => {
       });
     }
 
-    const cap = getSampleCap(word.gesture_type || "static");
+    const cap = getSampleCap(word);
     const userApprovedCount = userSamples.filter((s) => s.status === "approved").length;
     await sendSubmissionNotification(
       user_id,
@@ -1142,12 +1164,10 @@ const updateWord = async (req, res) => {
     const {
       label,
       description,
-      hands_count,
       sign_type,
       category,
       filipino_translation,
       sample_limit,
-      gesture_type,
     } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
@@ -1165,24 +1185,6 @@ const updateWord = async (req, res) => {
       }
     }
 
-    // Guard: changing gesture_type after samples exist would invalidate them
-    // (static stores 126-float landmarks, motion stores 30x126 sequences — incompatible shapes)
-    if (
-      gesture_type &&
-      gesture_type !== word.gesture_type &&
-      (word.total_samples || 0) > 0
-    ) {
-      return res.status(400).json({
-        message: `Cannot change gesture type: word already has ${word.total_samples} sample(s). Delete samples first.`,
-      });
-    }
-
-    if (gesture_type && !["static", "motion"].includes(gesture_type)) {
-      return res
-        .status(400)
-        .json({ message: "gesture_type must be 'static' or 'motion'" });
-    }
-
     const updatedLabel = label || word.label;
     const updatedNormalized = normalizeLabel(updatedLabel);
 
@@ -1190,10 +1192,8 @@ const updateWord = async (req, res) => {
       label: updatedLabel,
       normalized_label: updatedNormalized,
       description: description ?? word.description,
-      hands_count: hands_count || word.hands_count,
       sign_type: sign_type || word.sign_type,
       category: category || word.category,
-      gesture_type: gesture_type || word.gesture_type,
       filipino_translation:
         filipino_translation !== undefined
           ? filipino_translation
@@ -1266,7 +1266,7 @@ const getSamples = async (req, res) => {
     });
 
     console.log(`GET /api/words/${req.params.id}/samples`);
-    console.log(`  Word: ${word.label} (${word.gesture_type})`);
+    console.log(`  Word: ${word.label}`);
     console.log(`  Total samples found: ${samples.length}`);
     if (samples.length > 0) {
       console.log(`  Sample types:`, samples.map(s => ({
@@ -1283,11 +1283,8 @@ const getSamples = async (req, res) => {
       total_samples: word.total_samples,
       approved_sample_count: word.approved_sample_count,
       is_active: word.is_active,
-      gesture_type: word.gesture_type,
-      activation_threshold: getActivationThreshold(
-        word.gesture_type || "static",
-      ),
-      sample_cap: getSampleCap(word.gesture_type || "static"),
+      activation_threshold: getActivationThreshold(),
+      sample_cap: getSampleCap(word),
     });
   } catch (err) {
     console.error("Get samples error:", err);
@@ -1304,14 +1301,13 @@ const getUserSampleCountForWord = async (req, res) => {
     }
 
     const count = await getUserSampleCount(req.user.id, req.params.id);
-    const cap = getSampleCap(word.gesture_type || "static");
+    const cap = getSampleCap(word);
 
     return res.status(200).json({
       count,
       remaining: cap - count,
       limit_reached: count >= cap,
       cap,
-      gesture_type: word.gesture_type,
     });
   } catch (err) {
     console.error("Get user sample count error:", err);
@@ -1350,7 +1346,7 @@ const approveAllSamplesForWord = async (req, res) => {
     await word.update({ approved_sample_count: totalApproved });
 
     // Notify each affected submitter
-    const cap = getSampleCap(word.gesture_type || "static");
+    const cap = getSampleCap(word);
     for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
       await sendSubmissionNotification(userId, word.label, pendingCount, pendingCount, cap, pendingCount);
     }
@@ -1409,7 +1405,7 @@ const rejectAllSamplesForWord = async (req, res) => {
     }
 
     // Notify each affected submitter
-    const cap = getSampleCap(word.gesture_type || "static");
+    const cap = getSampleCap(word);
     for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
       await sendSubmissionNotification(userId, word.label, 0, pendingCount, cap, 0);
     }
@@ -1438,12 +1434,6 @@ const getMotionSequences = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    if (word.gesture_type !== "motion") {
-      return res
-        .status(400)
-        .json({ message: "Only available for motion gestures" });
-    }
-
     const samples = await GestureSample.findAll({
       where: { word_id: word.id, status: "approved" },
       include: [
@@ -1453,7 +1443,7 @@ const getMotionSequences = async (req, res) => {
     });
 
     console.log(`GET /api/words/${req.params.id}/motion-sequences`);
-    console.log(`  Word: ${word.label}, gesture_type: ${word.gesture_type}`);
+    console.log(`  Word: ${word.label}`);
     console.log(`  Found ${samples.length} approved samples`);
     if (samples.length > 0) {
       console.log(`  Samples with sequence data:`, samples.filter(s => s.sequence && s.sequence.length > 0).length);
@@ -1518,12 +1508,6 @@ const generateVideo = async (req, res) => {
     const word = await Word.findOne({ where: { id: req.params.id } });
     if (!word) {
       return res.status(404).json({ message: "Word not found" });
-    }
-
-    if (word.gesture_type !== "motion") {
-      return res
-        .status(400)
-        .json({ message: "Only available for motion gestures" });
     }
 
     const { sequence_ids } = req.body;
@@ -1826,105 +1810,27 @@ const uploadVideos = async (req, res) => {
     const word = await Word.findByPk(req.params.id);
     if (!word) return res.status(404).json({ message: "Word not found" });
 
-    const FormData = require("form-data");
-    const multer = require("multer");
-    const upload = multer({ storage: multer.memoryStorage() });
-
     // Files are attached by multer middleware before this handler runs
     const files = req.files;
     if (!files || files.length === 0) {
       return res.status(400).json({ message: "At least one file is required" });
     }
 
-    const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
     const results = [];
     let successCount = 0;
     let failCount = 0;
 
-    const IMAGE_RX = /\.(jpe?g|png)$/i;
-    const VIDEO_RX = /\.(mov|mp4|webm|avi|mkv)$/i;
-
     for (const file of files) {
-      const isImage =
-        IMAGE_RX.test(file.originalname) || (file.mimetype || "").startsWith("image/");
-      const isVideo =
-        VIDEO_RX.test(file.originalname) || (file.mimetype || "").startsWith("video/");
-
-      // Unsupported file type
-      if (!isImage && !isVideo) {
-        results.push({
-          file: file.originalname,
-          status: "skipped",
-          type: "unknown",
-          reason: "Unsupported file type",
-        });
-        failCount++;
-        continue;
-      }
-
-      // Motion words can't accept images (no temporal sequence from a still frame)
-      if (isImage && word.gesture_type === "motion") {
-        results.push({
-          file: file.originalname,
-          status: "skipped",
-          type: "image",
-          reason: "Motion gestures require video files",
-        });
-        failCount++;
-        continue;
-      }
-
-      try {
-        const form = new FormData();
-        form.append("file", file.buffer, {
-          filename: file.originalname,
-          contentType: file.mimetype,
-        });
-
-        let endpoint;
-        if (isImage) {
-          endpoint = "/extract-landmarks-image";
-        } else {
-          endpoint = "/extract-landmarks";
-          form.append("gesture_type", word.gesture_type || "static");
-        }
-
-        const mlRes = await axios.post(`${ML_SERVICE_URL}${endpoint}`, form, {
-          headers: form.getHeaders(),
-          timeout: 60000,
-          maxBodyLength: Infinity,
-        });
-
-        const { type, features, sequence } = mlRes.data;
-
-        const sample = await GestureSample.create({
-          word_id: word.id,
-          submitted_by: req.user.id,
-          file_url: `${isImage ? "image" : "video"}_upload_${Date.now()}`,
-          sample_count: 1,
-          status: "approved",
-          is_validated: true,
-          landmarks: type === "static" ? [features] : null,
-          sequence: type === "motion" ? sequence : null,
-        });
-
-        results.push({
-          file: file.originalname,
-          status: "ok",
-          type: isImage ? "image" : "video",
-          sample_id: sample.id,
-        });
-        successCount++;
-      } catch (err) {
-        const detail = err.response?.data?.detail || err.message;
-        results.push({
-          file: file.originalname,
-          status: "failed",
-          type: isImage ? "image" : "video",
-          error: detail,
-        });
-        failCount++;
-      }
+      const result = await extractAndStoreSample(
+        word,
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        req.user.id,
+      );
+      results.push(result);
+      if (result.status === "ok") successCount++;
+      else failCount++;
     }
 
     // Update word counters
@@ -1976,4 +1882,9 @@ module.exports = {
   setThumbnail,
   setVideo,
   uploadVideos,
+  // Shared helpers reused by the FSL-105 bulk importer
+  extractAndStoreSample,
+  normalizeLabel,
+  checkAndActivateWord,
+  getApprovedSampleCount,
 };

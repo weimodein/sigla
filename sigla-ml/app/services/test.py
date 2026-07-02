@@ -11,7 +11,6 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from app.utils.preprocessor import (
     fetch_approved_samples,
-    prepare_static_dataset,
     prepare_motion_dataset,
 )
 from app.utils.supabase_client import download_file, BUCKET_MODELS
@@ -72,121 +71,64 @@ def test(version_number: str, model_id: int) -> dict:
     print(f"Starting evaluation for version: {version_number}")
     print(f"{'='*50}\n")
 
-    # ── Step 1: Fetch approved samples ───────────────────────
+    # ── Step 1: Fetch approved samples (all motion sequences) ──
     dataset = fetch_approved_samples()
 
-    if len(dataset) < 2:
-        raise ValueError("At least 2 gesture classes are required for evaluation.")
-
-    # ── Step 2: Download static model from Supabase ───────────
-    static_tflite_path = download_model_from_supabase(
-        version_number, "sign_model_static.tflite"
-    )
-
-    # ── Step 3: Prepare static dataset ───────────────────────
-    X_static, y_static, static_label_map = prepare_static_dataset(dataset)
-
-    _, X_test_s, _, y_test_s = train_test_split(
-        X_static, y_static,
-        test_size=0.2,
-        random_state=42,
-        stratify=y_static
-    )
-
-    # ── Step 4: Evaluate static model ────────────────────────
-    print("Evaluating static model...")
-    static_interpreter = load_tflite_model(static_tflite_path)
-    static_preds       = predict_tflite(static_interpreter, X_test_s)
-
-    static_accuracy  = accuracy_score(y_test_s,  static_preds)
-    static_precision = precision_score(y_test_s, static_preds, average="weighted", zero_division=0)
-    static_recall    = recall_score(y_test_s,    static_preds, average="weighted", zero_division=0)
-    static_f1        = f1_score(y_test_s,        static_preds, average="weighted", zero_division=0)
-
-    static_report = classification_report(
-        y_test_s,
-        static_preds,
-        target_names=[static_label_map[i] for i in range(len(static_label_map))],
-        zero_division=0
-    )
-
-    print(f"Static Model Results:")
-    print(f"  Accuracy:  {static_accuracy:.4f}")
-    print(f"  Precision: {static_precision:.4f}")
-    print(f"  Recall:    {static_recall:.4f}")
-    print(f"  F1 Score:  {static_f1:.4f}")
-    print(f"\nClassification Report:\n{static_report}")
-
-    # ── Step 5: Evaluate motion model (if exists) ─────────────
-    motion_results = None
     motion_dataset = {
         k: [s for s in v if "sequence" in s]
         for k, v in dataset.items()
     }
     motion_dataset = { k: v for k, v in motion_dataset.items() if v }
 
-    if len(motion_dataset) >= 2:
-        try:
-            motion_tflite_path = download_model_from_supabase(
-                version_number, "sign_model_motion.tflite"
-            )
+    if len(motion_dataset) < 2:
+        raise ValueError("At least 2 gesture classes with sequence data are required for evaluation.")
 
-            X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
+    # ── Step 2: Download the motion model ─────────────────────
+    tflite_path = download_model_from_supabase(version_number, "sign_model_motion.tflite")
 
-            _, X_test_m, _, y_test_m = train_test_split(
-                X_motion, y_motion,
-                test_size=0.2,
-                random_state=42,
-                stratify=y_motion
-            )
+    # ── Step 3: Prepare + split ───────────────────────────────
+    X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
+    _, X_test, _, y_test = train_test_split(
+        X_motion, y_motion, test_size=0.2, random_state=42, stratify=y_motion
+    )
 
-            print("\nEvaluating motion model...")
-            motion_interpreter = load_tflite_model(motion_tflite_path)
-            motion_preds       = predict_tflite(motion_interpreter, X_test_m)
+    # ── Step 4: Evaluate ──────────────────────────────────────
+    print("Evaluating motion model...")
+    interpreter = load_tflite_model(tflite_path)
+    preds       = predict_tflite(interpreter, X_test)
 
-            motion_accuracy  = accuracy_score(y_test_m,  motion_preds)
-            motion_precision = precision_score(y_test_m, motion_preds, average="weighted", zero_division=0)
-            motion_recall    = recall_score(y_test_m,    motion_preds, average="weighted", zero_division=0)
-            motion_f1        = f1_score(y_test_m,        motion_preds, average="weighted", zero_division=0)
+    accuracy  = accuracy_score(y_test,  preds)
+    precision = precision_score(y_test, preds, average="weighted", zero_division=0)
+    recall    = recall_score(y_test,    preds, average="weighted", zero_division=0)
+    f1        = f1_score(y_test,        preds, average="weighted", zero_division=0)
 
-            motion_report = classification_report(
-                y_test_m,
-                motion_preds,
-                target_names=[motion_label_map[i] for i in range(len(motion_label_map))],
-                zero_division=0
-            )
+    report = classification_report(
+        y_test, preds,
+        target_names=[motion_label_map[i] for i in range(len(motion_label_map))],
+        zero_division=0
+    )
 
-            print(f"Motion Model Results:")
-            print(f"  Accuracy:  {motion_accuracy:.4f}")
-            print(f"  Precision: {motion_precision:.4f}")
-            print(f"  Recall:    {motion_recall:.4f}")
-            print(f"  F1 Score:  {motion_f1:.4f}")
-            print(f"\nClassification Report:\n{motion_report}")
-
-            motion_results = {
-                "accuracy":              round(float(motion_accuracy),  4),
-                "precision":             round(float(motion_precision), 4),
-                "recall":                round(float(motion_recall),    4),
-                "f1_score":              round(float(motion_f1),        4),
-                "classification_report": motion_report,
-            }
-
-        except Exception as e:
-            print(f"Motion model evaluation skipped: {e}")
+    print(f"Motion Model Results:")
+    print(f"  Accuracy:  {accuracy:.4f}")
+    print(f"  Precision: {precision:.4f}")
+    print(f"  Recall:    {recall:.4f}")
+    print(f"  F1 Score:  {f1:.4f}")
+    print(f"\nClassification Report:\n{report}")
 
     print(f"\n{'='*50}")
     print(f"Evaluation complete for version: {version_number}")
     print(f"{'='*50}\n")
 
+    metrics = {
+        "accuracy":              round(float(accuracy),  4),
+        "precision":             round(float(precision), 4),
+        "recall":                round(float(recall),    4),
+        "f1_score":              round(float(f1),        4),
+        "classification_report": report,
+    }
+
     return {
         "version_number": version_number,
         "model_id":       model_id,
-        "static_model": {
-            "accuracy":              round(float(static_accuracy),  4),
-            "precision":             round(float(static_precision), 4),
-            "recall":                round(float(static_recall),    4),
-            "f1_score":              round(float(static_f1),        4),
-            "classification_report": static_report,
-        },
-        "motion_model": motion_results,
+        "motion_model":   metrics,
     }

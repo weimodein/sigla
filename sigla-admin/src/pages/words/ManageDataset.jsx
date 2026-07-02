@@ -43,8 +43,6 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
     label: "",
     description: "",
     category: "",
-    gesture_type: "static",
-    hands_count: 1,
     sign_type: "FSL",
     filipino_translation: "",
   });
@@ -52,7 +50,6 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
   const [saving, setSaving] = useState(false);
 
   const isEdit = mode === "edit";
-  const sampleLock = isEdit && (word?.total_samples ?? 0) > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -64,8 +61,6 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
         label: word.label || "",
         description: word.description || "",
         category: word.category || "",
-        gesture_type: word.gesture_type || "static",
-        hands_count: word.hands_count || 1,
         sign_type: word.sign_type || "FSL",
         filipino_translation: word.filipino_translation || "",
       });
@@ -74,8 +69,6 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
         label: "",
         description: "",
         category: "",
-        gesture_type: "static",
-        hands_count: 1,
         sign_type: "FSL",
         filipino_translation: "",
       });
@@ -157,35 +150,6 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Gesture Type</label>
-          <select
-            value={form.gesture_type}
-            onChange={e => setForm(f => ({ ...f, gesture_type: e.target.value }))}
-            disabled={sampleLock}
-            title={sampleLock ? "Cannot change — word already has samples. Delete samples first." : ""}
-            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", background: sampleLock ? "#f3f4f6" : "white", cursor: sampleLock ? "not-allowed" : "pointer" }}
-          >
-            <option value="static">Static</option>
-            <option value="motion">Motion</option>
-          </select>
-          {sampleLock && (
-            <p style={{ fontSize: "0.7rem", color: C.muted, marginTop: "4px" }}>
-              Locked — {word.total_samples} sample(s) exist
-            </p>
-          )}
-        </div>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Hands</label>
-          <select value={form.hands_count} onChange={e => setForm(f => ({ ...f, hands_count: Number(e.target.value) }))}
-            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px" }}>
-            <option value={1}>One Hand</option>
-            <option value={2}>Both Hands</option>
-          </select>
-        </div>
-      </div>
-
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
         <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
         <button onClick={handleSubmit} disabled={saving || !form.label}
@@ -235,12 +199,7 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
   return (
     <AppModal title={`Upload Files — ${word?.label}`} onClose={onClose}>
       <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
-        {word?.gesture_type === "motion"
-          ? "Upload video clips (.MOV, .MP4). Motion gestures require videos."
-          : "Upload videos (.MOV, .MP4) or images (.JPG, .PNG). Landmarks extracted automatically with MediaPipe."}
-      </p>
-      <p style={{ fontSize: "0.8rem", color: "#374151", marginBottom: "12px" }}>
-        Gesture type: <strong>{word?.gesture_type}</strong> &nbsp;|&nbsp; Hands: <strong>{word?.hands_count === 1 ? "One" : "Both"}</strong>
+        Upload video clips (.MOV, .MP4). Landmarks are extracted automatically with MediaPipe.
       </p>
 
       <div
@@ -252,15 +211,13 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
       >
         <Upload size={28} style={{ color: C.muted, margin: "0 auto 8px" }} />
         <p style={{ fontSize: "0.875rem", color: "#374151" }}>
-          {word?.gesture_type === "motion"
-            ? "Click to select video files (.MOV, .MP4)"
-            : "Click to select videos (.MOV, .MP4) or images (.JPG, .PNG)"}
+          Click to select video files (.MOV, .MP4)
         </p>
         <p style={{ fontSize: "0.75rem", color: C.muted }}>Up to 50 files at once</p>
         <input
           ref={fileRef}
           type="file"
-          accept={word?.gesture_type === "motion" ? "video/*,.mov" : "video/*,.mov,image/*,.jpg,.jpeg,.png"}
+          accept="video/*,.mov"
           multiple
           style={{ display: "none" }}
           onChange={handleFiles}
@@ -343,7 +300,6 @@ const ManageDataset = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
-  const [filterGesture, setFilterGesture] = useState("");
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editWord, setEditWord] = useState(null);
@@ -356,7 +312,6 @@ const ManageDataset = () => {
       const params = { page, limit: PAGE_SIZE };
       if (search) params.search = search;
       if (filterCategory) params.category = filterCategory;
-      if (filterGesture) params.gesture_type = filterGesture;
       const data = await getAllWords(params);
       setWords(data.words || []);
       setTotal(data.total || 0);
@@ -368,7 +323,7 @@ const ManageDataset = () => {
   };
 
   useEffect(() => { fetchWords(); }, [page]);
-  useEffect(() => { setPage(1); fetchWords(); }, [search, filterCategory, filterGesture]);
+  useEffect(() => { setPage(1); fetchWords(); }, [search, filterCategory]);
 
   const handleActivate = async (word) => {
     try {
@@ -466,12 +421,6 @@ const ManageDataset = () => {
           <option value="">All Categories</option>
           {categories.map(c => <option key={c} value={c.toLowerCase()}>{c}</option>)}
         </select>
-        <select value={filterGesture} onChange={e => setFilterGesture(e.target.value)}
-          style={{ padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem" }}>
-          <option value="">All Gestures</option>
-          <option value="static">Static</option>
-          <option value="motion">Motion</option>
-        </select>
       </div>
 
       {/* Table */}
@@ -487,7 +436,7 @@ const ManageDataset = () => {
           <table className="w-full text-left" style={{ minWidth: 760, fontSize: "0.875rem" }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
-                {["Label", "Category", "Gesture", "Hands", "Samples", "Status", "Actions"].map(h => (
+                {["Label", "Category", "Samples", "Status", "Actions"].map(h => (
                   <th key={h} className="px-5 py-3">
                     <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>{h}</span>
                   </th>
@@ -498,7 +447,7 @@ const ManageDataset = () => {
               {loading ? (
                 Array.from({ length: PAGE_SIZE }).map((_, i) => (
                   <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 5 }).map((_, j) => (
                       <td key={j} className="px-5 py-3">
                         <div style={{ height: "14px", background: "#f3f4f6", borderRadius: "4px", animation: "pulse 1.5s infinite" }} />
                       </td>
@@ -507,7 +456,7 @@ const ManageDataset = () => {
                 ))
               ) : words.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "40px", color: C.muted }}>
+                  <td colSpan={5} style={{ textAlign: "center", padding: "40px", color: C.muted }}>
                     No words found. Add your first word using the button above.
                   </td>
                 </tr>
@@ -515,14 +464,6 @@ const ManageDataset = () => {
                 <tr key={word.id} style={{ borderTop: `1px solid ${C.border}` }}>
                   <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937" }}>{word.label}</td>
                   <td className="px-5 py-3" style={{ color: "#6b7280", textTransform: "capitalize" }}>{word.category || "—"}</td>
-                  <td className="px-5 py-3">
-                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 600,
-                      background: word.gesture_type === "motion" ? "#fef3c7" : "#eff6ff",
-                      color: word.gesture_type === "motion" ? "#92400e" : "#1e40af" }}>
-                      {word.gesture_type}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3" style={{ color: "#6b7280" }}>{word.hands_count === 1 ? "One" : "Both"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>{word.approved_sample_count ?? 0}</td>
                   <td className="px-5 py-3">
                     <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 600,

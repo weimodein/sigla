@@ -26,23 +26,10 @@ const Word = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    hands_count: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 1,
-      validate: { isIn: [[1, 2]] },
-    },
     sign_type: {
       type: DataTypes.STRING(10),
       allowNull: false,
       validate: { isIn: [["FSL"]] },
-    },
-    // static = single frame gesture, motion = movement-based gesture
-    gesture_type: {
-      type: DataTypes.STRING(10),
-      allowNull: true,
-      defaultValue: "static",
-      validate: { isIn: [["static", "motion"]] },
     },
     category: {
       type: DataTypes.STRING(50),
@@ -84,7 +71,7 @@ const Word = sequelize.define(
       defaultValue: false,
     },
     // Admin-defined cap on total gesture samples collected across all users.
-    // When null, falls back to the default cap per gesture_type (static: 100, motion: 150).
+    // When null, falls back to the default cap (25).
     sample_limit: {
       type: DataTypes.INTEGER,
       allowNull: true,

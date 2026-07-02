@@ -8,11 +8,7 @@ from app.services.train   import train
 from app.services.test    import test
 from app.services.deploy  import deploy
 from app.services.video   import generate_word_video
-from app.services.extract import (
-    extract_static_landmarks,
-    extract_motion_landmarks,
-    extract_image_landmarks,
-)
+from app.services.extract import extract_motion_landmarks
 
 router = APIRouter(prefix="", tags=["Model"])
 
@@ -78,7 +74,6 @@ async def train_model(request: TrainRequest):
             "motion_accuracy":   result.get("motion_accuracy"),
             "motion_trained":    result.get("motion_trained"),
             "motion_classes":    result.get("motion_classes"),
-            "gesture_config_url": result.get("gesture_config_url"),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -97,13 +92,14 @@ async def test_model(request: TestRequest):
             version_number=request.version_number,
             model_id=request.model_id,
         )
+        m = result["motion_model"]
         return {
             "message":    "Model evaluated successfully",
             "result":     result,
-            "accuracy":   result["static_model"]["accuracy"],
-            "precision":  result["static_model"]["precision"],
-            "recall":     result["static_model"]["recall"],
-            "f1_score":   result["static_model"]["f1_score"],
+            "accuracy":   m["accuracy"],
+            "precision":  m["precision"],
+            "recall":     m["recall"],
+            "f1_score":   m["f1_score"],
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -174,7 +170,7 @@ async def get_deployed_model_checksum():
         if not supabase_url:
             raise HTTPException(status_code=500, detail="SUPABASE_URL not configured")
 
-        deployed_url = f"{supabase_url}/storage/v1/object/public/{supabase_bucket}/deployed/sign_model_static.tflite"
+        deployed_url = f"{supabase_url}/storage/v1/object/public/{supabase_bucket}/deployed/sign_model_motion.tflite"
 
         checksum = await compute_sha256_from_url(deployed_url)
 
@@ -210,49 +206,19 @@ async def generate_video(request: VideoRequest):
 
 
 @router.post("/extract-landmarks")
-async def extract_landmarks(
-    file: UploadFile = File(...),
-    gesture_type: str = Form(...),
-):
+async def extract_landmarks(file: UploadFile = File(...)):
     """
-    Extract MediaPipe hand landmarks from an uploaded video file.
-    gesture_type: "static" | "motion"
-    Returns features (static) or sequence (motion).
-    Called by Node.js backend for each video file uploaded by admin.
+    Extract a MediaPipe hand-landmark motion sequence (30×126) from an uploaded
+    video. Every gesture is treated as motion. Called by the Node.js backend for
+    each video file uploaded by an admin.
     """
     try:
         video_bytes = await file.read()
-
-        if gesture_type == "motion":
-            sequence = extract_motion_landmarks(video_bytes)
-            if sequence is None:
-                raise HTTPException(status_code=422, detail="No hands detected in video")
-            return {"type": "motion", "sequence": sequence}
-        else:
-            features = extract_static_landmarks(video_bytes)
-            if features is None:
-                raise HTTPException(status_code=422, detail="No hands detected in video")
-            return {"type": "static", "features": features}
-
+        sequence = extract_motion_landmarks(video_bytes)
+        if sequence is None:
+            raise HTTPException(status_code=422, detail="No hands detected in video")
+        return {"type": "motion", "sequence": sequence}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Landmark extraction failed: {str(e)}")
-
-
-@router.post("/extract-landmarks-image")
-async def extract_landmarks_image(file: UploadFile = File(...)):
-    """
-    Extract MediaPipe hand landmarks from a single image (static gestures only).
-    Returns the 126-float feature vector. Used for image-based datasets like Collated.
-    """
-    try:
-        image_bytes = await file.read()
-        features = extract_image_landmarks(image_bytes)
-        if features is None:
-            raise HTTPException(status_code=422, detail="No hands detected in image")
-        return {"type": "static", "features": features}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image extraction failed: {str(e)}")

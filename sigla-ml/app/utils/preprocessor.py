@@ -83,47 +83,6 @@ def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     return np.array(window[:SEQUENCE_LENGTH], dtype=np.float32)
 
 
-def prepare_static_dataset(dataset: dict):
-    """
-    Prepare dataset for static gesture model (MLP).
-    Each sample is a single frame of FEATURE_SIZE landmarks.
-    Returns X (features), y (labels), label_map (index → label)
-    """
-    X = []
-    y = []
-
-    static_labels = sorted([
-        label for label, samples in dataset.items()
-        if any(len(s.get("features", [])) == FEATURE_SIZE for s in samples)
-    ])
-
-    label_map = { i: label for i, label in enumerate(static_labels) }
-    label_idx = { label: i for i, label in enumerate(static_labels) }
-
-    for label in static_labels:
-        samples_for_label = []
-        for sample in dataset[label]:
-            features = sample.get("features", [])
-            if len(features) != FEATURE_SIZE:
-                continue
-            samples_for_label.append(features)
-
-        # 25 samples × 7 = 175 augmented + 25 real = 200 total (matches 50-sample baseline volume)
-        target = max(len(samples_for_label) * 7, 175)
-        augmented = augment_static_samples(samples_for_label, target_count=target)
-        samples_for_label.extend(augmented)
-
-        for features in samples_for_label:
-            X.append(features)
-            y.append(label_idx[label])
-
-    X = np.array(X, dtype=np.float32)
-    y = np.array(y, dtype=np.int32)
-
-    print(f"Static dataset — X: {X.shape}, y: {y.shape}, classes: {len(static_labels)}")
-    return X, y, label_map
-
-
 def prepare_motion_dataset(dataset: dict):
     """
     Prepare dataset for motion gesture model (LSTM).
@@ -176,47 +135,6 @@ def save_label_map(label_map: dict, path: str) -> None:
     with open(path, "w") as f:
         json.dump(label_map, f, indent=2)
     print(f"Label map saved to {path}")
-
-
-def augment_static_samples(samples: list, target_count: int = 150) -> list:
-    """
-    Augment static gesture samples with noise, scaling, and slight translation.
-    """
-    augmented = []
-    if not samples:
-        return augmented
-
-    rng = np.random.default_rng(42)
-    needed = target_count - len(samples)
-
-    while len(augmented) < needed:
-        base = np.array(samples[rng.integers(len(samples))], dtype=np.float32)
-
-        # Randomly apply one or more augmentations
-        aug_type = rng.integers(3)
-        if aug_type == 0:
-            # Gaussian noise
-            noise = rng.normal(0, 0.010, base.shape)
-            result = np.clip(base + noise, 0.0, 1.0)
-        elif aug_type == 1:
-            # Slight scaling around hand centre
-            scale = rng.uniform(0.90, 1.10)
-            cx = float(np.mean(base[0::3]))   # mean x of all landmarks
-            cy = float(np.mean(base[1::3]))   # mean y of all landmarks
-            result = base.copy()
-            result[0::3] = np.clip(cx + (base[0::3] - cx) * scale, 0.0, 1.0)
-            result[1::3] = np.clip(cy + (base[1::3] - cy) * scale, 0.0, 1.0)
-        else:
-            # Slight translation
-            tx = rng.uniform(-0.04, 0.04)
-            ty = rng.uniform(-0.04, 0.04)
-            result = base.copy()
-            result[0::3] = np.clip(base[0::3] + tx, 0.0, 1.0)
-            result[1::3] = np.clip(base[1::3] + ty, 0.0, 1.0)
-
-        augmented.append(result.tolist())
-
-    return augmented
 
 
 def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:

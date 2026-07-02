@@ -39,19 +39,16 @@ object ModelUpdateManager {
     private fun getCachedStaticUrl(context: Context): String? =
         prefs(context).getString(KEY_STATIC_URL, null)
 
+    // The motion model is the only model. hasLocalModel and hasLocalMotionModel
+    // are kept as aliases so existing callers compile unchanged.
     fun hasLocalModel(context: Context): Boolean {
-        return listOf(
-            "sign_model_static.tflite",
-            "labels_static.json"
-        ).all { File(context.filesDir, it).exists() }
-    }
-
-    fun hasLocalMotionModel(context: Context): Boolean {
         return listOf(
             "sign_model_motion.tflite",
             "labels_motion.json"
         ).all { File(context.filesDir, it).exists() }
     }
+
+    fun hasLocalMotionModel(context: Context): Boolean = hasLocalModel(context)
 
     suspend fun checkAndUpdate(context: Context, token: String?): Boolean {
         return withContext(Dispatchers.IO) {
@@ -70,41 +67,34 @@ object ModelUpdateManager {
                 val remoteVersion = model.version_number
                 val cachedVersion = getCachedVersion(context)
 
-                val remoteStaticUrl = model.tflite_url
-                if (remoteVersion == cachedVersion && remoteStaticUrl == getCachedStaticUrl(context)) {
-                    Log.i(TAG, "Model up-to-date (v$remoteVersion) — refreshing gesture config")
-                    // Always re-download gesture_config so motion gesture definitions stay current
-                    // even across static-only deploys that don't change the version number.
-                    val gcUrl = model.gesture_config_url
-                    if (!gcUrl.isNullOrBlank()) {
-                        val ok = downloadToFile(gcUrl, File(context.filesDir, "gesture_config.json"))
-                        if (ok) Log.i(TAG, "Gesture config refreshed")
-                        else Log.w(TAG, "Gesture config refresh failed — using cached version")
-                    }
+                // model.tflite_url is the (motion) LSTM model — the only model.
+                val remoteModelUrl = model.tflite_url
+                if (remoteVersion == cachedVersion && remoteModelUrl == getCachedStaticUrl(context)) {
+                    Log.i(TAG, "Model up-to-date (v$remoteVersion)")
                     return@withContext hasLocalModel(context)
                 }
 
                 Log.i(TAG, "New model version detected: $remoteVersion (cached: $cachedVersion) — downloading")
 
-                // ── Static model (required) ───────────────────────────────────
-                if (remoteStaticUrl.isNullOrBlank()) {
-                    Log.e(TAG, "Backend returned no static model URL — check SUPABASE_URL on server")
+                // ── Motion model (required) ───────────────────────────────────
+                if (remoteModelUrl.isNullOrBlank()) {
+                    Log.e(TAG, "Backend returned no model URL — check SUPABASE_URL on server")
                     return@withContext hasLocalModel(context)
                 }
-                val staticDest = File(context.filesDir, "sign_model_static.tflite")
-                val staticOk = downloadToFile(remoteStaticUrl, staticDest)
-                if (!staticOk) {
-                    Log.e(TAG, "Static model download failed")
+                val modelDest = File(context.filesDir, "sign_model_motion.tflite")
+                val modelOk = downloadToFile(remoteModelUrl, modelDest)
+                if (!modelOk) {
+                    Log.e(TAG, "Motion model download failed")
                     return@withContext hasLocalModel(context)
                 }
 
                 // ── Verify SHA256 integrity before accepting the new model ─────
                 val expectedChecksum = model.checksum
                 if (!expectedChecksum.isNullOrBlank()) {
-                    val actualChecksum = computeSha256(staticDest)
+                    val actualChecksum = computeSha256(modelDest)
                     if (actualChecksum != expectedChecksum) {
                         Log.e(TAG, "Checksum mismatch! Expected=$expectedChecksum Actual=$actualChecksum — discarding download")
-                        staticDest.delete()
+                        modelDest.delete()
                         return@withContext hasLocalModel(context)
                     }
                     Log.i(TAG, "Checksum verified OK")
@@ -112,53 +102,25 @@ object ModelUpdateManager {
                     Log.w(TAG, "No checksum provided by server — skipping integrity check")
                 }
 
-                Log.i(TAG, "Static TFLite downloaded")
+                Log.i(TAG, "Motion TFLite downloaded")
 
-                // ── Static labels (required) ──────────────────────────────────
-                val labelsStaticUrl = model.labels_static_url
-                if (labelsStaticUrl.isNullOrBlank()) {
-                    Log.e(TAG, "Backend returned no static labels URL — check SUPABASE_URL on server")
-                    return@withContext false
-                }
-                val labelsStaticOk = downloadToFile(labelsStaticUrl, File(context.filesDir, "labels_static.json"))
-                if (!labelsStaticOk) {
-                    Log.e(TAG, "Static labels download failed — cannot run inference without labels")
-                    return@withContext false
-                }
-                Log.i(TAG, "Static labels downloaded")
-
-                // ── Motion model (optional) ───────────────────────────────────
-                val motionUrl = model.motion_tflite_url
-                if (!motionUrl.isNullOrBlank()) {
-                    val motionOk = downloadToFile(motionUrl, File(context.filesDir, "sign_model_motion.tflite"))
-                    if (motionOk) Log.i(TAG, "Motion TFLite downloaded")
-                    else Log.w(TAG, "Motion model download failed — only static gestures will work")
-                } else {
-                    Log.w(TAG, "No motion model URL provided — skipping motion model")
-                }
-
-                // ── Motion labels (optional, only if motion model downloaded) ─
+                // ── Motion labels (required) ──────────────────────────────────
                 val labelsMotionUrl = model.labels_motion_url
-                if (!labelsMotionUrl.isNullOrBlank() && File(context.filesDir, "sign_model_motion.tflite").exists()) {
-                    val labelsMotionOk = downloadToFile(labelsMotionUrl, File(context.filesDir, "labels_motion.json"))
-                    if (!labelsMotionOk) Log.w(TAG, "Motion labels download failed")
-                    else Log.i(TAG, "Motion labels downloaded")
+                if (labelsMotionUrl.isNullOrBlank()) {
+                    Log.e(TAG, "Backend returned no motion labels URL — check SUPABASE_URL on server")
+                    return@withContext false
                 }
-
-                // ── Gesture config (optional) ─────────────────────────────────
-                val gestureConfigUrl = model.gesture_config_url
-                if (!gestureConfigUrl.isNullOrBlank()) {
-                    val ok = downloadToFile(gestureConfigUrl, File(context.filesDir, "gesture_config.json"))
-                    if (ok) Log.i(TAG, "Gesture config downloaded")
-                    else Log.w(TAG, "Gesture config download failed — motion type detection may be inaccurate")
-                } else {
-                    Log.w(TAG, "No gesture config URL — skipping")
+                val labelsMotionOk = downloadToFile(labelsMotionUrl, File(context.filesDir, "labels_motion.json"))
+                if (!labelsMotionOk) {
+                    Log.e(TAG, "Motion labels download failed — cannot run inference without labels")
+                    return@withContext false
                 }
+                Log.i(TAG, "Motion labels downloaded")
 
                 // ── Save version + URL only after all required files succeeded ──
                 prefs(context).edit()
                     .putString(KEY_VERSION, remoteVersion)
-                    .putString(KEY_STATIC_URL, remoteStaticUrl)
+                    .putString(KEY_STATIC_URL, remoteModelUrl)
                     .apply()
                 Log.i(TAG, "Model updated to $remoteVersion")
                 true

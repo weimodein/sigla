@@ -387,12 +387,9 @@ class WordBankActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.tvDetailWord).text = word.label.uppercase()
         view.findViewById<TextView>(R.id.tvDetailCategory).text = word.category
 
-        val gestureTypeText = "${word.gesture_type} • ${word.hands_count} hand${if (word.hands_count > 1) "s" else ""}"
-        view.findViewById<TextView>(R.id.tvDetailGestureType).text = gestureTypeText
-
-        val badgeColor = if (word.gesture_type == "static") 0xFF0056A4 else 0xFF00796B
+        view.findViewById<TextView>(R.id.tvDetailGestureType).text = word.sign_type
         view.findViewById<TextView>(R.id.tvDetailGestureType)
-            .setBackgroundColor(badgeColor.toInt())
+            .setBackgroundColor(0xFF00796B.toInt())
 
         // Audio playback
         speakWord(word.label)
@@ -414,8 +411,8 @@ class WordBankActivity : AppCompatActivity() {
         val resolvedVideo = ApiClient.resolveUrl(word.video_url)
 
         when {
-            // Motion gesture with a video URL → play video
-            word.gesture_type == "motion" && !resolvedVideo.isNullOrBlank() -> {
+            // A demonstration video → play it
+            !resolvedVideo.isNullOrBlank() -> {
                 noMediaPlaceholder.visibility = View.GONE
                 ivThumbnail.visibility        = View.GONE
                 videoView.visibility          = View.VISIBLE
@@ -472,8 +469,8 @@ class WordBankActivity : AppCompatActivity() {
         // Update media caption
         val tvMediaCaption = view.findViewById<TextView>(R.id.tvMediaCaption)
         tvMediaCaption.text = when {
-            word.gesture_type == "motion" && !resolvedVideo.isNullOrBlank() ->
-                "Tap to play · pause · Motion gesture demonstration"
+            !resolvedVideo.isNullOrBlank() ->
+                "Tap to play · pause · Gesture demonstration"
             thumbSource != null ->
                 "Sample image of how to form this gesture"
             else ->
@@ -805,11 +802,8 @@ class WordBankAdapter(
         val word = words[position]
         holder.tvWord.text = word.label
         holder.tvCategory.text = word.category
-        val gestureText = "${word.gesture_type} • ${word.hands_count}H"
-        holder.tvGestureType.text = gestureText
-
-        val badgeColor = if (word.gesture_type == "static") 0xFF0056A4 else 0xFF00796B
-        holder.tvGestureType.setBackgroundColor(badgeColor.toInt())
+        holder.tvGestureType.text = word.sign_type
+        holder.tvGestureType.setBackgroundColor(0xFF00796B.toInt())
 
         // Load thumbnail
         val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)

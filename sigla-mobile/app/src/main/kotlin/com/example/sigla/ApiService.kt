@@ -36,8 +36,6 @@ data class WordBankWord(
     val description: String? = null,
     val sign_type: String = "FSL",
     val category: String = "additional words",
-    val hands_count: Int = 1,
-    val gesture_type: String = "static",
     val thumbnail_url: String? = null,
     val video_url: String? = null,
     val filipino_translation: String? = null
@@ -63,9 +61,7 @@ data class ModelInfo(
     val version_number: String,
     val tflite_url: String? = null,
     val motion_tflite_url: String? = null,
-    val labels_static_url: String? = null,
     val labels_motion_url: String? = null,
-    val gesture_config_url: String? = null,
     val word_bank_url: String? = null,
     val accuracy: Double? = null,
     val checksum: String? = null,

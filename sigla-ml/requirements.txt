@@ -8,4 +8,7 @@ supabase
 httpx
 python-multipart
 opencv-python-headless
-mediapipe
+# mediapipe 0.10.35 uses the Tasks HandLandmarker API (legacy mp.solutions was
+# removed). Requires protobuf>=5.28 (compatible with tensorflow 2.20). The
+# hand_landmarker.task model bundle must be present — see app/models/README.md.
+mediapipe==0.10.35

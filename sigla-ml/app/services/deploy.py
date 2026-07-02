@@ -21,33 +21,23 @@ def download_model_files(version_number: str) -> dict:
     local_dir = os.path.join(MODELS_DIR, version_number)
     os.makedirs(local_dir, exist_ok=True)
 
-    files_to_download = [
-        "sign_model_static.tflite",
-        "sign_model_static.h5",
-        "labels_static.json",
-    ]
-
-    # Optional motion model files
-    optional_files = [
+    # Every model is a motion (LSTM) model.
+    motion_files = [
         "sign_model_motion.tflite",
         "sign_model_motion.h5",
         "labels_motion.json",
     ]
 
     local_paths = {}
-
-    # Download required files
-    for filename in files_to_download:
+    for filename in motion_files:
         storage_path = f"{version_number}/{filename}"
         local_path   = os.path.join(local_dir, filename)
 
         if os.path.exists(local_path):
-            print(f"Already exists locally: {filename}")
             local_paths[filename] = local_path
             continue
 
         try:
-            print(f"Downloading {filename}...")
             file_bytes = download_file(BUCKET_MODELS, storage_path)
             with open(local_path, "wb") as f:
                 f.write(file_bytes)
@@ -55,24 +45,6 @@ def download_model_files(version_number: str) -> dict:
             print(f"Downloaded: {filename}")
         except Exception as e:
             raise ValueError(f"Required file {filename} not found in Supabase: {e}")
-
-    # Download optional files
-    for filename in optional_files:
-        storage_path = f"{version_number}/{filename}"
-        local_path   = os.path.join(local_dir, filename)
-
-        if os.path.exists(local_path):
-            local_paths[filename] = local_path
-            continue
-
-        try:
-            file_bytes = download_file(BUCKET_MODELS, storage_path)
-            with open(local_path, "wb") as f:
-                f.write(file_bytes)
-            local_paths[filename] = local_path
-            print(f"Downloaded optional: {filename}")
-        except Exception:
-            print(f"Optional file not found, skipping: {filename}")
 
     return local_paths
 
@@ -84,11 +56,10 @@ def get_model_urls(version_number: str) -> dict:
     urls = {}
 
     files = [
-        ("tflite_url",        "sign_model_static.tflite"),
-        ("h5_url",            "sign_model_static.h5"),
+        ("tflite_url",        "sign_model_motion.tflite"),
+        ("h5_url",            "sign_model_motion.h5"),
         ("motion_tflite_url", "sign_model_motion.tflite"),
         ("motion_h5_url",     "sign_model_motion.h5"),
-        ("labels_static_url", "labels_static.json"),
         ("labels_motion_url", "labels_motion.json"),
     ]
 
@@ -106,11 +77,9 @@ def copy_to_deployed_folder(version_number: str) -> dict:
     """
     Copy model files to a 'deployed/' folder in Supabase Storage.
     This makes it easy for the mobile app to always fetch from
-    a fixed path: models/deployed/sign_model_static.tflite
+    a fixed path: models/deployed/sign_model_motion.tflite
     """
     files_to_copy = [
-        "sign_model_static.tflite",
-        "labels_static.json",
         "sign_model_motion.tflite",
         "labels_motion.json",
     ]

@@ -30,7 +30,6 @@ const {
   setVideo,
   uploadVideos,
 } = require("../controllers/wordController.js");
-
 const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 // ... other requires
@@ -46,8 +45,6 @@ router.get("/word-bank", async (req, res) => {
         "description",
         "sign_type",
         "category",
-        "hands_count",
-        "gesture_type",
         "thumbnail_url",
         "video_url",
         "filipino_translation",
@@ -70,6 +67,7 @@ router.get("/stats", roleMiddleware("admin"), getWordStats);
 // ── Admin add word manually ───────────────────────────────────
 // IMPORTANT: must come before /:id wildcard routes
 router.post("/admin-add", roleMiddleware("admin"), adminAddWord);
+
 
 // ── List ──────────────────────────────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllWords);

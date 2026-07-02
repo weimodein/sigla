@@ -186,17 +186,15 @@ const ManageWordBank = () => {
     try {
       const data = await getWordSamples(word.id);
       setSamples(data.samples || []);
-      // Fetch motion sequences if this is a motion gesture
-      if (word.gesture_type === "motion") {
-        setMotionSequencesLoading(true);
-        try {
-          const seqData = await getMotionSequences(word.id);
-          setMotionSequences(seqData.sequences || []);
-        } catch (err) {
-          console.error("Failed to load motion sequences:", err);
-        } finally {
-          setMotionSequencesLoading(false);
-        }
+      // Every word is a motion gesture — fetch its sequences.
+      setMotionSequencesLoading(true);
+      try {
+        const seqData = await getMotionSequences(word.id);
+        setMotionSequences(seqData.sequences || []);
+      } catch (err) {
+        console.error("Failed to load motion sequences:", err);
+      } finally {
+        setMotionSequencesLoading(false);
       }
     } catch {
       setSamples([]);
@@ -371,8 +369,8 @@ const ManageWordBank = () => {
 
   // ── Edit ────────────────────────────────────────────────────
   const [editForm, setEditForm] = useState({
-    label: "", description: "", hands_count: 1,
-    sign_type: "FSL", category: "additional words", gesture_type: "static",
+    label: "", description: "",
+    sign_type: "FSL", category: "additional words",
     filipino_translation: "", sample_limit: "",
   });
 
@@ -380,10 +378,8 @@ const ManageWordBank = () => {
     setEditForm({
       label: word.label || "",
       description: word.description || "",
-      hands_count: word.hands_count || 1,
       sign_type: word.sign_type || "FSL",
       category: word.category || "additional words",
-      gesture_type: word.gesture_type || "static",
       filipino_translation: word.filipino_translation || "",
       sample_limit: word.sample_limit != null ? String(word.sample_limit) : "",
     });
@@ -430,8 +426,8 @@ const ManageWordBank = () => {
 
   // ── Add Word ─────────────────────────────────────────────────
   const [addForm, setAddForm] = useState({
-    label: "", description: "", hands_count: 1,
-    sign_type: "FSL", category: "additional words", gesture_type: "static",
+    label: "", description: "",
+    sign_type: "FSL", category: "additional words",
     filipino_translation: "",
   });
 
@@ -442,7 +438,7 @@ const ManageWordBank = () => {
       await adminAddWord(addForm);
       showSuccess(`Word "${addForm.label}" added. Upload gesture samples to activate it.`);
       closeModal();
-      setAddForm({ label: "", description: "", hands_count: 1, sign_type: "FSL", category: "additional words", gesture_type: "static", filipino_translation: "" });
+      setAddForm({ label: "", description: "", sign_type: "FSL", category: "additional words", filipino_translation: "" });
       fetchStats();
       fetchWords();
     } catch (err) {
@@ -683,7 +679,6 @@ const ManageWordBank = () => {
                 <th className="px-4 py-3">ID</th>
                 <th className="px-4 py-3">Label</th>
                 <th className="px-4 py-3">Sign Type</th>
-                <th className="px-4 py-3">Gesture</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Filipino</th>
                 <th className="px-4 py-3">Samples</th>
@@ -695,7 +690,7 @@ const ManageWordBank = () => {
             <tbody>
               {paginatedWords.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-8 text-gray-400 text-sm">
+                  <td colSpan={9} className="text-center py-8 text-gray-400 text-sm">
                     No words found
                   </td>
                 </tr>
@@ -714,7 +709,6 @@ const ManageWordBank = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3"><Badge value={word.sign_type} /></td>
-                    <td className="px-4 py-3"><Badge value={word.gesture_type || "static"} /></td>
                     <td className="px-4 py-3 text-xs text-gray-500 capitalize">{word.category || "—"}</td>
                     <td className="px-4 py-3 text-xs text-gray-600">{word.filipino_translation || "—"}</td>
                     <td className="px-4 py-3 text-gray-600">
@@ -886,7 +880,7 @@ const ManageWordBank = () => {
             </div>
 
             {/* ── Word Bank Media Controls ──────────────────────── */}
-            {galleryModal.gesture_type === "motion" ? (
+            {(
               <div className="border border-indigo-200 rounded-lg p-4 bg-indigo-50 space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-indigo-800">Gesture Video</span>
@@ -927,44 +921,10 @@ const ManageWordBank = () => {
                   </label>
                 </div>
               </div>
-            ) : (
-              galleryModal.thumbnail_url && (
-                <div className="border border-green-200 rounded-lg p-3 bg-green-50 flex items-center gap-3">
-                  <img
-                    src={galleryModal.thumbnail_url.startsWith("/")
-                      ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${galleryModal.thumbnail_url}`
-                      : galleryModal.thumbnail_url}
-                    alt="current thumbnail"
-                    className="w-16 h-16 object-cover rounded-lg border border-green-300"
-                    onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/64?text=?"; }}
-                  />
-                  <div>
-                    <p className="text-sm font-semibold text-green-800">Current Word Bank Image</p>
-                    <p className="text-xs text-green-600">Hover an approved sample below and click <strong>Use</strong>, or click <strong>Set as Word Bank Image</strong> to change it.</p>
-                  </div>
-                </div>
-              )
             )}
 
-            {/* Activate button - Static words only */}
-            {galleryModal.gesture_type === "static" && !galleryModal.is_active && galleryModal.thumbnail_url && (
-              <div className="border border-blue-200 rounded-lg p-3 bg-blue-50 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-blue-800">Ready to Activate</p>
-                  <p className="text-xs text-blue-600">A display image is set. Click Activate to publish this word to the mobile app.</p>
-                </div>
-                <button
-                  onClick={handleActivateStaticWord}
-                  disabled={actionLoading}
-                  className="shrink-0 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50"
-                >
-                  Activate Word
-                </button>
-              </div>
-            )}
-
-            {/* Motion Sequences Section - Only for motion gestures */}
-            {galleryModal.gesture_type === "motion" && !thresholdMet && (
+            {/* Activation gating notice */}
+            {!thresholdMet && (
               <div className="px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
                 {approvedCount}/{motionThreshold} approved samples — activation requires {remaining} more approved sample{remaining !== 1 ? "s" : ""}.
               </div>
@@ -1297,30 +1257,6 @@ const ManageWordBank = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Gesture Type</label>
-                <select
-                  value={addForm.gesture_type}
-                  onChange={(e) => setAddForm({ ...addForm, gesture_type: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                >
-                  <option value="static">Static</option>
-                  <option value="motion">Motion</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Hands</label>
-                <select
-                  value={addForm.hands_count}
-                  onChange={(e) => setAddForm({ ...addForm, hands_count: parseInt(e.target.value) })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                >
-                  <option value={1}>1 Hand</option>
-                  <option value={2}>2 Hands</option>
-                </select>
-              </div>
-            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
               <select
@@ -1430,30 +1366,6 @@ const ManageWordBank = () => {
                 rows={3}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Gesture Type</label>
-                <select
-                  value={editForm.gesture_type}
-                  onChange={(e) => setEditForm({ ...editForm, gesture_type: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                >
-                  <option value="static">Static</option>
-                  <option value="motion">Motion</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Hands</label>
-                <select
-                  value={editForm.hands_count}
-                  onChange={(e) => setEditForm({ ...editForm, hands_count: parseInt(e.target.value) })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                >
-                  <option value={1}>1 Hand</option>
-                  <option value={2}>2 Hands</option>
-                </select>
-              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
