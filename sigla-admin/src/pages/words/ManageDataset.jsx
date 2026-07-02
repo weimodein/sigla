@@ -232,13 +232,25 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
 
       {uploading && (
         <div style={{ marginBottom: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#6b7280", marginBottom: "4px" }}>
-            <span>Uploading & extracting landmarks...</span>
-            <span>{progress}%</span>
-          </div>
-          <div style={{ background: C.border, borderRadius: "4px", height: "6px" }}>
-            <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${progress}%`, transition: "width 0.2s" }} />
-          </div>
+          {progress < 100 ? (
+            // Phase 1: browser is uploading the video bytes — show real % progress.
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#6b7280", marginBottom: "4px" }}>
+                <span>Uploading files...</span>
+                <span>{progress}%</span>
+              </div>
+              <div style={{ background: C.border, borderRadius: "4px", height: "6px" }}>
+                <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${progress}%`, transition: "width 0.2s" }} />
+              </div>
+            </>
+          ) : (
+            // Phase 2: upload done — the server is now extracting landmarks (MediaPipe,
+            // ~a few seconds per clip). This has no measurable %, so show an indeterminate state.
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", color: "#6b7280" }}>
+              <Loader2 size={14} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
+              <span>Extracting landmarks on server… this can take a moment for many clips.</span>
+            </div>
+          )}
         </div>
       )}
 

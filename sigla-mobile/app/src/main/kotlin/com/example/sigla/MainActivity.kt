@@ -509,8 +509,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun mirrorHandX(features: FloatArray): FloatArray {
         val mirrored = features.copyOf()
-        for (i in 0 until 42) {  // 2 hands × 21 landmarks
-            mirrored[i * 3] = 1.0f - mirrored[i * 3]
+        // Landmarks are wrist-relative (normalized in HandLandmarkHelper), so a
+        // horizontal mirror is a sign flip: x → -x. Only flip present hands; an absent
+        // hand is 63 zeros (−0 == 0, so it stays a valid "no hand" sentinel).
+        for (hand in 0..1) {
+            val base = hand * 63
+            var present = false
+            for (k in base until base + 63) {
+                if (mirrored[k] != 0f) { present = true; break }
+            }
+            if (!present) continue
+            for (j in 0..20) {
+                mirrored[base + j * 3] = -mirrored[base + j * 3]
+            }
         }
         return mirrored
     }

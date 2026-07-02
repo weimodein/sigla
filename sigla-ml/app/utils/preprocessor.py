@@ -50,6 +50,38 @@ def fetch_approved_samples() -> dict:
     return dataset
 
 
+def normalize_frame(frame: np.ndarray) -> np.ndarray:
+    """
+    Make a 126-float frame position- and scale-invariant, per present hand:
+      1. Wrist-center: subtract landmark 0 (x,y,z) from all 21 landmarks.
+      2. Scale: divide all by the 2D wrist→middle-finger-MCP (landmark 9) distance.
+    An absent hand is 63 zeros and is left untouched (keeps the "no hand" sentinel).
+
+    MUST stay identical to the mobile normalization in HandLandmarkHelper.parseResult.
+    """
+    out = frame.copy()
+    for hand in range(2):
+        base = hand * 63
+        block = out[base:base + 63]
+        if not np.any(block):
+            continue  # absent hand — leave zeros
+        wx, wy, wz = block[0], block[1], block[2]            # landmark 0 (wrist)
+        mx, my     = block[9 * 3], block[9 * 3 + 1]          # landmark 9 (middle MCP)
+        d = float(np.sqrt((mx - wx) ** 2 + (my - wy) ** 2))
+        if d < 1e-6:
+            d = 1e-6
+        for j in range(21):
+            out[base + j * 3]     = (block[j * 3]     - wx) / d
+            out[base + j * 3 + 1] = (block[j * 3 + 1] - wy) / d
+            out[base + j * 3 + 2] = (block[j * 3 + 2] - wz) / d
+    return out
+
+
+def normalize_sequence(seq: np.ndarray) -> np.ndarray:
+    """Apply normalize_frame to every frame of a (T, 126) sequence."""
+    return np.array([normalize_frame(f) for f in seq], dtype=np.float32)
+
+
 def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     """
     Center a motion sequence on its peak-velocity frame.
@@ -106,6 +138,11 @@ def prepare_motion_dataset(dataset: dict):
                 continue
 
             seq = np.array(sequence, dtype=np.float32)
+
+            # Position/scale-invariant normalization (per hand: wrist-center + hand-size
+            # scale). Applied here so existing stored samples are normalized at train
+            # time — no re-upload. MUST match mobile HandLandmarkHelper.parseResult.
+            seq = normalize_sequence(seq)
 
             # Center on peak-velocity frame — mirrors PredictionService.extractMotionWindow()
             seq = center_on_peak_velocity(seq)
@@ -164,9 +201,10 @@ def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:
             # Re-center on peak velocity after stretching
             result = center_on_peak_velocity(stretched)
         elif aug_type == 1:
-            # Per-frame Gaussian noise
+            # Per-frame Gaussian noise. No [0,1] clip: coordinates are wrist-relative
+            # after normalize_frame and legitimately fall outside [0,1].
             noise = rng.normal(0, 0.010, base.shape)
-            result = np.clip(base + noise, 0.0, 1.0)
+            result = base + noise
         else:
             # Random frame dropout — replace up to 4 frames with adjacent frame
             result = base.copy()

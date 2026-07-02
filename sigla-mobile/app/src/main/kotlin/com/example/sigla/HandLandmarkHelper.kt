@@ -39,8 +39,11 @@ class HandLandmarkHelper(
             )
             .setRunningMode(mode)
             .setNumHands(2)
-            .setMinHandDetectionConfidence(0.6f)
-            .setMinHandPresenceConfidence(0.6f)
+            // Match the training extraction settings (sigla-ml/app/services/extract.py):
+            // detection/presence/tracking all 0.5, so the phone reproduces the same
+            // landmarks the model was trained on.
+            .setMinHandDetectionConfidence(0.5f)
+            .setMinHandPresenceConfidence(0.5f)
             .setMinTrackingConfidence(0.5f)
         if (onResult != null) {
             builder.setResultListener { result, _ -> onResult.invoke(parseResult(result)) }
@@ -106,11 +109,33 @@ class HandLandmarkHelper(
                 features[base + j * 3    ] = lm.x()
                 features[base + j * 3 + 1] = lm.y()
                 features[base + j * 3 + 2] = lm.z()
-                pts.add(Pair(lm.x(), lm.y()))
+                pts.add(Pair(lm.x(), lm.y()))  // raw coords for the on-screen overlay
             }
+            // Position/scale-invariant normalization of this hand's block — MUST match
+            // sigla-ml preprocessor.normalize_frame exactly (wrist-center on landmark 0,
+            // scale by 2D wrist→landmark-9 distance, epsilon 1e-6). Only the model's
+            // `features` are normalized; drawData stays in raw frame coords for drawing.
+            normalizeHandBlock(features, base)
             drawData.add(pts)
         }
         return LandmarkResult(numHands, features, drawData)
+    }
+
+    // Normalize one hand's 63-float block in place: wrist-center (landmark 0) + scale
+    // by the 2D wrist→landmark-9 distance. Must match sigla-ml normalize_frame exactly.
+    private fun normalizeHandBlock(features: FloatArray, base: Int) {
+        val wx = features[base]
+        val wy = features[base + 1]
+        val wz = features[base + 2]
+        val mx = features[base + 9 * 3]
+        val my = features[base + 9 * 3 + 1]
+        var d = kotlin.math.sqrt((mx - wx) * (mx - wx) + (my - wy) * (my - wy))
+        if (d < 1e-6f) d = 1e-6f
+        for (j in 0..20) {
+            features[base + j * 3]     = (features[base + j * 3]     - wx) / d
+            features[base + j * 3 + 1] = (features[base + j * 3 + 1] - wy) / d
+            features[base + j * 3 + 2] = (features[base + j * 3 + 2] - wz) / d
+        }
     }
 
     private fun empty() = LandmarkResult(0, FloatArray(126), emptyList())
