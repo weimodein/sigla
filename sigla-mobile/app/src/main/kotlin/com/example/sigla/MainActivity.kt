@@ -90,16 +90,18 @@ class MainActivity : AppCompatActivity() {
 
         predictor  = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
-            // Mirror feature x-coordinates for front camera to match training data orientation.
-            // CollectionActivity flips both the bitmap AND the feature x-coords (double mirror =
-            // natural coords). Prediction must do the same so the model sees consistent input.
-            val features = if (isFrontCamera) mirrorHandX(result.features) else result.features
-            predictor.processFrame(features, result.handsDetected)
+            // MediaPipe always receives the true (un-mirrored) scene for both cameras
+            // (see bindCamera — the analysis bitmap is never flipped), so the landmarks
+            // already match the back-camera/training orientation. No correction needed.
+            predictor.processFrame(result.features, result.handsDetected)
             runOnUiThread {
+                // The model sees the true (un-mirrored) scene, but the front-camera
+                // preview is mirrored (selfie). Mirror the drawn overlay to match it.
                 binding.overlayView.setLandmarks(
                     result.landmarks,
                     binding.cameraPreview.width.toFloat(),
-                    binding.cameraPreview.height.toFloat()
+                    binding.cameraPreview.height.toFloat(),
+                    mirrored = isFrontCamera
                 )
             }
         }
@@ -488,7 +490,9 @@ class MainActivity : AppCompatActivity() {
             if (frameSkipCounter % 2 == 0) {
                 val bitmap          = imageProxy.toBitmap()
                 val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
+                // Never mirror the image sent to MediaPipe — the model must see the
+                // true scene (same as the back camera / training data) for both cameras.
+                val prepared        = prepareBitmap(bitmap, rotationDegrees)
                 landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
             }
             imageProxy.close()
@@ -507,21 +511,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun mirrorHandX(features: FloatArray): FloatArray {
-        val mirrored = features.copyOf()
-        for (i in 0 until 42) {  // 2 hands × 21 landmarks
-            mirrored[i * 3] = 1.0f - mirrored[i * 3]
-        }
-        return mirrored
-    }
-
-    private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
+    // The image is never horizontally mirrored: MediaPipe must see the true scene
+    // (matching the back-camera / training orientation) for both front and back cameras.
+    private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int): Bitmap {
         val maxDim = 640
         val scale  = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
             if (rotationDegrees != 0) postRotate(rotationDegrees.toFloat())
-            if (frontCamera) postScale(-1f, 1f, bitmap.width * scale / 2f, 0f)
         }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }

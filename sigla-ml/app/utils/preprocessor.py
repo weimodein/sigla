@@ -83,6 +83,31 @@ def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     return np.array(window[:SEQUENCE_LENGTH], dtype=np.float32)
 
 
+def mirror_sequence(seq: np.ndarray) -> np.ndarray:
+    """
+    Horizontally mirror a motion sequence so a right-handed sign becomes its
+    left-handed equivalent (and vice-versa). Flips x → 1 - x for every present
+    landmark; y and z are unchanged.
+
+    The 126-vector is 2 hands × 21 landmarks × 3 (x,y,z), x at index j*3.
+    A missing hand is stored as 63 zeros — those MUST stay zero, so we only flip
+    x for hand blocks that are actually present (non-zero), per frame.
+    """
+    out = seq.copy()
+    n_frames = out.shape[0]
+    for f in range(n_frames):
+        for hand in range(2):
+            base = hand * 63
+            block = out[f, base:base + 63]
+            # Skip zero-padded (absent) hands so 0 doesn't become 1.
+            if not np.any(block):
+                continue
+            # Flip x of the 21 landmarks in this hand block.
+            x_idx = [base + j * 3 for j in range(21)]
+            out[f, x_idx] = 1.0 - out[f, x_idx]
+    return out
+
+
 def prepare_motion_dataset(dataset: dict):
     """
     Prepare dataset for motion gesture model (LSTM).
@@ -112,7 +137,12 @@ def prepare_motion_dataset(dataset: dict):
 
             sequences_for_label.append(seq)
 
-        # 25 sequences × 6 = 150 augmented + 25 real = 175 total
+        # Mirror-augment: add a horizontally-flipped copy of every real sequence so
+        # the model learns both hand orientations (left- and right-handed signers).
+        mirrored = [mirror_sequence(s) for s in sequences_for_label]
+        sequences_for_label.extend(mirrored)
+
+        # Noise/scale/temporal augmentation on top of the (now doubled) real+mirrored set.
         target = max(len(sequences_for_label) * 6, 150)
         augmented = augment_motion_sequences(
             [s.tolist() for s in sequences_for_label], target_count=target
