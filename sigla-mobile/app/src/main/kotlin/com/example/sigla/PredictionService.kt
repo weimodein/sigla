@@ -170,8 +170,19 @@ class PredictionService(private val context: Context) {
         if (handsDetected == 0) {
             noHandFrames++
             if (noHandFrames >= NO_HAND_TIMEOUT && (collecting || frameBuffer.isNotEmpty())) {
-                onNoHands?.invoke()
-                resetBuffers()
+                // Flush: a FAST sign may have ended before the sliding window fired.
+                // If enough frames were collected, run one final forced inference so the
+                // just-completed gesture still gets classified (extractMotionWindow pads
+                // short sequences to SEQUENCE_LENGTH). fire() resets the buffer on success.
+                if (frameBuffer.size >= MIN_MOTION_FRAMES &&
+                    System.currentTimeMillis() - lastDetectionTime >= DETECTION_COOLDOWN_MS
+                ) {
+                    runAndMaybeFire(System.currentTimeMillis(), force = true)
+                }
+                if (frameBuffer.isNotEmpty() || collecting) {
+                    onNoHands?.invoke()
+                    resetBuffers()
+                }
             }
             return
         }

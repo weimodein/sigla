@@ -34,6 +34,20 @@ import java.util.concurrent.Executors
 private const val TAG               = "MainActivity"
 private const val CAMERA_PERMISSION = 100
 
+// ── Left-handed support (inference-time handedness canonicalization) ──────────
+// When enabled, a hand MediaPipe reports as "Left" is mirrored (x → -x on the
+// normalized, wrist-relative coords) so the model always sees a right-handed sign.
+// The rule is camera-independent (the front-camera bitmap flip is already encoded
+// in the reported label). When disabled, behavior is byte-identical to before.
+private const val LEFT_HANDED_SUPPORT_ENABLED = true
+// MediaPipe's Left/Right convention can be inverted on some builds. Verify on-device
+// (hold RIGHT hand → back cam should log "Right", front cam "Left"); flip if reversed.
+private const val MEDIAPIPE_LABELS_INVERTED   = false
+// Ignore low-confidence handedness (treat as no-decision → don't mirror).
+private const val HANDEDNESS_MIN_SCORE        = 0.8f
+// Frames with no hands before a gesture is considered ended (resets the latch).
+private const val LATCH_NO_HAND_RESET         = 6
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding   : ActivityMainBinding
@@ -50,6 +64,15 @@ class MainActivity : AppCompatActivity() {
     private val executor      = Executors.newSingleThreadExecutor()
     private var isFrontCamera = false
     private var cameraProvider: ProcessCameraProvider? = null
+
+    // ── Handedness latch (stabilizes left-handed mirroring across a gesture) ────
+    // MediaPipe's Left/Right label flickers mid-gesture; we vote over the first few
+    // frames after hands appear, latch the decision, and hold it until hands leave.
+    private var latchedMirrorSlot0: Boolean? = null   // null = not yet decided
+    private var latchedMirrorSlot1: Boolean? = null
+    private var handVoteMirror0 = 0                    // votes: +1 mirror, -1 don't
+    private var handVoteMirror1 = 0
+    private var latchNoHandFrames = 0                  // frames with no hands → ends gesture
 
     // ── UI state ──────────────────────────────────────────────────────────────
     private var showFilipino       = true
@@ -90,10 +113,9 @@ class MainActivity : AppCompatActivity() {
 
         predictor  = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
-            // Mirror feature x-coordinates for front camera to match training data orientation.
-            // CollectionActivity flips both the bitmap AND the feature x-coords (double mirror =
-            // natural coords). Prediction must do the same so the model sees consistent input.
-            val features = if (isFrontCamera) mirrorHandX(result.features) else result.features
+            val features = canonicalizeHandedness(
+                result.features, result.handedness, result.handednessScore, result.handsDetected
+            )
             predictor.processFrame(features, result.handsDetected)
             runOnUiThread {
                 binding.overlayView.setLandmarks(
@@ -505,6 +527,77 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Camera bind failed: ${e.message}")
         }
+    }
+
+    // Canonicalize every hand to the right-handed orientation the model was trained on.
+    // Rule (camera-independent): mirror a hand iff MediaPipe reports it "Left" — the
+    // front-camera flip is already encoded in that label. To resist per-frame label
+    // flicker, the mirror decision is LATCHED per gesture: votes accumulate while hands
+    // are visible and the latched decision holds until hands leave for LATCH_NO_HAND_RESET
+    // frames. Per hand slot; absent (all-zero) blocks are skipped.
+    private fun canonicalizeHandedness(
+        features: FloatArray,
+        handedness: List<String?>,
+        scores: List<Float>,
+        handsDetected: Int,
+    ): FloatArray {
+        if (!LEFT_HANDED_SUPPORT_ENABLED) {
+            // Legacy behavior: unconditionally mirror the whole frame on the front camera.
+            return if (isFrontCamera) mirrorHandX(features) else features
+        }
+
+        // Gesture boundary: when hands disappear long enough, reset the latch.
+        if (handsDetected == 0) {
+            latchNoHandFrames++
+            if (latchNoHandFrames >= LATCH_NO_HAND_RESET) resetHandednessLatch()
+            return features
+        }
+        latchNoHandFrames = 0
+
+        val out = features.copyOf()
+        val mirrorLabel = if (MEDIAPIPE_LABELS_INVERTED) "Right" else "Left"
+
+        for (slot in 0..1) {
+            val base = slot * 63
+            var present = false
+            for (k in base until base + 63) {
+                if (out[k] != 0f) { present = true; break }
+            }
+            if (!present) continue
+
+            // Accumulate a vote from this frame's confident label (only while undecided).
+            val latched = if (slot == 0) latchedMirrorSlot0 else latchedMirrorSlot1
+            if (latched == null) {
+                val label = handedness.getOrNull(slot)
+                val score = scores.getOrNull(slot) ?: 0f
+                if (label != null && score >= HANDEDNESS_MIN_SCORE) {
+                    val vote = if (label == mirrorLabel) 1 else -1
+                    if (slot == 0) handVoteMirror0 += vote else handVoteMirror1 += vote
+                }
+                // Latch once we have a clear majority (|votes| ≥ 3).
+                val votes = if (slot == 0) handVoteMirror0 else handVoteMirror1
+                if (kotlin.math.abs(votes) >= 3) {
+                    val decision = votes > 0
+                    if (slot == 0) latchedMirrorSlot0 = decision else latchedMirrorSlot1 = decision
+                }
+            }
+
+            // Apply the current decision (latched, or the running lean before latching).
+            val decided = (if (slot == 0) latchedMirrorSlot0 else latchedMirrorSlot1)
+                ?: ((if (slot == 0) handVoteMirror0 else handVoteMirror1) > 0)
+            if (decided) {
+                for (j in 0..20) out[base + j * 3] = -out[base + j * 3]  // x → -x (normalized)
+            }
+        }
+        return out
+    }
+
+    private fun resetHandednessLatch() {
+        latchedMirrorSlot0 = null
+        latchedMirrorSlot1 = null
+        handVoteMirror0 = 0
+        handVoteMirror1 = 0
+        latchNoHandFrames = 0
     }
 
     private fun mirrorHandX(features: FloatArray): FloatArray {

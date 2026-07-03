@@ -15,7 +15,11 @@ private const val TAG = "HandLandmarkHelper"
 data class LandmarkResult(
     val handsDetected: Int,
     val features: FloatArray,
-    val landmarks: List<List<Pair<Float, Float>>>
+    val landmarks: List<List<Pair<Float, Float>>>,
+    // Per hand-slot MediaPipe handedness ("Left"/"Right"/null) and its score,
+    // aligned to the same slot index as `features` (slot 0 = features[0..62]).
+    val handedness: List<String?> = emptyList(),
+    val handednessScore: List<Float> = emptyList()
 )
 
 class HandLandmarkHelper(
@@ -100,6 +104,8 @@ class HandLandmarkHelper(
         if (result.landmarks().isEmpty()) return empty()
 
         val numHands = minOf(result.landmarks().size, 2)
+        val handLabels  = mutableListOf<String?>()
+        val handScores  = mutableListOf<Float>()
         for (i in 0 until numHands) {
             val lms  = result.landmarks()[i]
             val base = i * 63
@@ -117,8 +123,13 @@ class HandLandmarkHelper(
             // `features` are normalized; drawData stays in raw frame coords for drawing.
             normalizeHandBlock(features, base)
             drawData.add(pts)
+
+            // Handedness for this slot ("Left"/"Right"), same index as the feature block.
+            val cat = result.handednesses().getOrNull(i)?.getOrNull(0)
+            handLabels.add(cat?.categoryName())
+            handScores.add(cat?.score() ?: 0f)
         }
-        return LandmarkResult(numHands, features, drawData)
+        return LandmarkResult(numHands, features, drawData, handLabels, handScores)
     }
 
     // Normalize one hand's 63-float block in place: wrist-center (landmark 0) + scale
