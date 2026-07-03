@@ -28,7 +28,7 @@ const navItems = [
 const Sidebar = ({ onToggle }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => setShowLogoutModal(true);
@@ -168,30 +168,6 @@ const Sidebar = ({ onToggle }) => {
           >
             <PanelLeftClose size={20} />
           </button>
-        </div>
-      )}
-
-      {/* User Info - conditionally rendered */}
-      {!collapsed && user?.name && (
-        <div
-          style={{
-            padding: "12px 24px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
-            flexShrink: 0,
-            transition: transitionStyle,
-          }}
-        >
-          <p
-            style={{
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              color: "white",
-              marginBottom: 0,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {user?.name}
-          </p>
         </div>
       )}
 
