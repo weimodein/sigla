@@ -1064,20 +1064,27 @@ const ManageModel = () => {
       {resultModal && (
         <AppModal title={resultModal.title} onClose={() => setResultModal(null)}>
           <div className="space-y-3 text-sm">
-            {resultModal.data?.accuracy && (
+            {resultModal.data?.message && (
+              <p className="text-gray-700">{resultModal.data.message}</p>
+            )}
+            {(resultModal.data?.accuracy ?? resultModal.data?.model?.accuracy) != null && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Accuracy</p>
                   <p className="font-bold text-lg text-blue-900">
-                    {fmt(resultModal.data.accuracy)}
+                    {fmt(resultModal.data?.accuracy ?? resultModal.data?.model?.accuracy)}
                   </p>
                 </div>
               </div>
             )}
-            {resultModal.data?.result?.total_classes && (
+            {(resultModal.data?.result?.total_classes ??
+              resultModal.data?.model?.total_classes) != null && (
               <p className="text-gray-600">
                 Total classes trained:{" "}
-                <strong>{resultModal.data.result.total_classes}</strong>
+                <strong>
+                  {resultModal.data?.result?.total_classes ??
+                    resultModal.data?.model?.total_classes}
+                </strong>
               </p>
             )}
             <button
