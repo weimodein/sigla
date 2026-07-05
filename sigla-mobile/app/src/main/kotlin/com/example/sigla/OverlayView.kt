@@ -39,13 +39,14 @@ class OverlayView @JvmOverloads constructor(
         strokeWidth = 3f
     }
 
-    private var landmarks: List<List<Pair<Float, Float>>> = emptyList()
+    // Each hand is a flat FloatArray of interleaved x,y (42 floats). landmark i = (arr[2i], arr[2i+1]).
+    private var landmarks: List<FloatArray> = emptyList()
     private var srcWidth = 1f
     private var srcHeight = 1f
     private var isMirrored = false  // NEW: track mirroring state
 
     /** Called from MainActivity to update hand landmarks and redraw. */
-    fun setLandmarks(lms: List<List<Pair<Float, Float>>>, w: Float, h: Float, mirrored: Boolean = false) {
+    fun setLandmarks(lms: List<FloatArray>, w: Float, h: Float, mirrored: Boolean = false) {
         landmarks = lms
         srcWidth = w
         srcHeight = h
@@ -67,35 +68,36 @@ class OverlayView @JvmOverloads constructor(
         for ((handIdx, hand) in landmarks.withIndex()) {
             val dp = if (handIdx == 0) dotPaint else dot2Paint
             val lp = if (handIdx == 0) linePaint else line2Paint
+            val n = hand.size / 2  // number of landmarks (interleaved x,y)
 
             for ((a, b) in CONNECTIONS) {
-                if (a < hand.size && b < hand.size) {
-                    var x1 = hand[a].first * srcWidth * scaleX
-                    var x2 = hand[b].first * srcWidth * scaleX
-                    
+                if (a < n && b < n) {
+                    var x1 = hand[a * 2] * srcWidth * scaleX
+                    var x2 = hand[b * 2] * srcWidth * scaleX
+
                     // Mirror X coordinates if needed
                     if (isMirrored) {
                         x1 = width - x1
                         x2 = width - x2
                     }
-                    
+
                     canvas.drawLine(
                         x1,
-                        hand[a].second * srcHeight * scaleY,
+                        hand[a * 2 + 1] * srcHeight * scaleY,
                         x2,
-                        hand[b].second * srcHeight * scaleY,
+                        hand[b * 2 + 1] * srcHeight * scaleY,
                         lp
                     )
                 }
             }
-            for ((x, y) in hand) {
-                var drawX = x * srcWidth * scaleX
+            for (i in 0 until n) {
+                var drawX = hand[i * 2] * srcWidth * scaleX
                 if (isMirrored) {
                     drawX = width - drawX
                 }
                 canvas.drawCircle(
                     drawX,
-                    y * srcHeight * scaleY,
+                    hand[i * 2 + 1] * srcHeight * scaleY,
                     6f, dp
                 )
             }

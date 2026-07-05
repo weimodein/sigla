@@ -53,7 +53,12 @@ private const val LATCH_NO_HAND_RESET         = 6
 // the RIGHT hand is always slot 0 and LEFT slot 1, using a pure-geometry chirality
 // test (byte-identical to sigla-ml preprocessor.canonicalize_slots). When disabled,
 // behavior is byte-identical to before. MUST retrain the model for this to take effect.
-private const val SLOT_CANONICALIZATION_ENABLED = true
+// Disabled: geometry-based hand-slot canonicalization never recovered two-handed
+// signs (e.g. THANK YOU stayed 0/5 across per-frame vote, sum, and best-frame
+// variants) and traded wins for losses. Kept behind the flag for reference; the
+// training pipeline (preprocessor.prepare_motion_dataset) is disabled to match.
+// Both sides MUST agree — re-enabling requires a retrain with it on in Python too.
+private const val SLOT_CANONICALIZATION_ENABLED = false
 // Sign convention: cross_z < 0 ⇒ RIGHT. Verify on-device against MediaPipe's label;
 // flip if reversed. MUST equal Python _CHIRALITY_RIGHT_IS_NEGATIVE_CROSS.
 private const val CHIRALITY_RIGHT_IS_NEGATIVE_CROSS = true
@@ -84,9 +89,13 @@ class MainActivity : AppCompatActivity() {
     private var handVoteMirror1 = 0
     private var latchNoHandFrames = 0                  // frames with no hands → ends gesture
 
-    // Slot-order latch: decide once per gesture whether the two hands are swapped.
-    private var latchedSwapSlots: Boolean? = null      // null = undecided
-    private var slotSwapVote = 0                        // +1 swap, -1 keep
+    // Slot-order latch: decide once per gesture whether the two hands are swapped,
+    // using the single most hands-apart frame seen so far (largest |cz0|+|cz1|).
+    // This mirrors Python canonicalize_slots, which decides from the best frame of
+    // the whole sequence. Tracking the best-separation frame (not a vote count)
+    // stops ambiguous hands-together frames from flipping the decision.
+    private var latchedSwapSlots: Boolean? = null      // decision from best frame so far
+    private var bestSlotSep = -1f                      // largest |cz0|+|cz1| seen this gesture
 
     // ── UI state ──────────────────────────────────────────────────────────────
     private var showFilipino       = true
@@ -583,16 +592,20 @@ class MainActivity : AppCompatActivity() {
         val cz0 = flip * handCrossZ(features, 0)
         val cz1 = flip * handCrossZ(features, 63)
 
-        // Accumulate a swap vote while undecided (swap when slot0=left AND slot1=right).
-        if (latchedSwapSlots == null) {
-            if ((!isRightHand(cz0)) && isRightHand(cz1)) slotSwapVote += 1 else slotSwapVote -= 1
-            if (kotlin.math.abs(slotSwapVote) >= 3) latchedSwapSlots = slotSwapVote > 0
+        // Update the decision only when THIS frame is the most hands-apart so far —
+        // that is where chirality is most reliable. Ambiguous hands-together frames
+        // (small |cz0|+|cz1|) never override a cleaner earlier frame's decision.
+        val sep = kotlin.math.abs(cz0) + kotlin.math.abs(cz1)
+        if (sep > bestSlotSep) {
+            bestSlotSep = sep
+            latchedSwapSlots = (!isRightHand(cz0)) && isRightHand(cz1)
         }
-        val swap = latchedSwapSlots ?: (slotSwapVote > 0)
+        val swap = latchedSwapSlots ?: false
 
         // Stage-0 log to verify the chirality convention on-device.
         Log.d(TAG, "slots cam=${if (isFrontCamera) "front" else "back"} " +
-                "cz0=$cz0 cz1=$cz1 mp0=${handedness.getOrNull(0)} mp1=${handedness.getOrNull(1)} swap=$swap")
+                "cz0=$cz0 cz1=$cz1 sep=$sep best=$bestSlotSep " +
+                "mp0=${handedness.getOrNull(0)} mp1=${handedness.getOrNull(1)} swap=$swap")
 
         if (!swap) return features
         val out = features.copyOf()
@@ -671,7 +684,7 @@ class MainActivity : AppCompatActivity() {
         latchNoHandFrames = 0
         // Reset the slot-order latch together (same gesture lifecycle).
         latchedSwapSlots = null
-        slotSwapVote = 0
+        bestSlotSep = -1f
     }
 
     private fun mirrorHandX(features: FloatArray): FloatArray {
