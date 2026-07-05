@@ -14,7 +14,7 @@ import kotlin.math.sqrt
 // sliding 30-frame window. There is no static model or static/motion race.
 private const val TAG                    = "PredictionService"
 private const val SEQUENCE_LENGTH        = 30    // LSTM input length
-private const val FEATURE_SIZE           = 126   // 2 hands × 21 landmarks × 3
+private const val FEATURE_SIZE           = 147   // 2 hands × 21 × 3 + 7 pose keypoints × 3
 private const val MIN_MOTION_FRAMES      = 8      // begin inference once this many frames buffered
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
 private const val MOTION_THRESHOLD       = 0.60f  // min confidence to accept a prediction
