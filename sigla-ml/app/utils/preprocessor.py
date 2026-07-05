@@ -6,8 +6,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
+FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))  # 126 hand + 21 pose
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
+
+# Pose block layout (must match extract.py and mobile): 7 upper-body keypoints
+# (nose, L/R shoulder, L/R elbow, L/R wrist) × 3 = 21 floats at offset 126.
+POSE_BASE   = 126
+POSE_POINTS = 7
+# Local indices within the pose block for shoulders (used for normalization):
+# keypoints order = [nose, Lshoulder, Rshoulder, Lelbow, Relbow, Lwrist, Rwrist].
+_POSE_LSHOULDER = 1
+_POSE_RSHOULDER = 2
 
 # Backend API configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
@@ -52,12 +61,17 @@ def fetch_approved_samples() -> dict:
 
 def normalize_frame(frame: np.ndarray) -> np.ndarray:
     """
-    Make a 126-float frame position- and scale-invariant, per present hand:
+    Make a 147-float frame position- and scale-invariant.
+
+    Hands (per present hand, slots 0/1):
       1. Wrist-center: subtract landmark 0 (x,y,z) from all 21 landmarks.
       2. Scale: divide all by the 2D wrist→middle-finger-MCP (landmark 9) distance.
-    An absent hand is 63 zeros and is left untouched (keeps the "no hand" sentinel).
+    Pose block (offset 126, 7 keypoints):
+      1. Center: subtract the shoulder-midpoint (x,y,z) from all 7 keypoints.
+      2. Scale: divide all by the 2D shoulder width (L↔R shoulder distance).
+    Absent hand (63 zeros) or absent pose (21 zeros) are left untouched (sentinels).
 
-    MUST stay identical to the mobile normalization in HandLandmarkHelper.parseResult.
+    MUST stay byte-identical to the mobile normalization.
     """
     out = frame.copy()
     for hand in range(2):
@@ -74,11 +88,25 @@ def normalize_frame(frame: np.ndarray) -> np.ndarray:
             out[base + j * 3]     = (block[j * 3]     - wx) / d
             out[base + j * 3 + 1] = (block[j * 3 + 1] - wy) / d
             out[base + j * 3 + 2] = (block[j * 3 + 2] - wz) / d
+
+    # Pose block — center on shoulder-midpoint, scale by shoulder width.
+    pblock = out[POSE_BASE:POSE_BASE + POSE_POINTS * 3]
+    if np.any(pblock):
+        lsx, lsy, lsz = pblock[_POSE_LSHOULDER * 3], pblock[_POSE_LSHOULDER * 3 + 1], pblock[_POSE_LSHOULDER * 3 + 2]
+        rsx, rsy, rsz = pblock[_POSE_RSHOULDER * 3], pblock[_POSE_RSHOULDER * 3 + 1], pblock[_POSE_RSHOULDER * 3 + 2]
+        cx, cy, cz = (lsx + rsx) / 2.0, (lsy + rsy) / 2.0, (lsz + rsz) / 2.0
+        sw = float(np.sqrt((rsx - lsx) ** 2 + (rsy - lsy) ** 2))  # 2D shoulder width
+        if sw < 1e-6:
+            sw = 1e-6
+        for k in range(POSE_POINTS):
+            out[POSE_BASE + k * 3]     = (pblock[k * 3]     - cx) / sw
+            out[POSE_BASE + k * 3 + 1] = (pblock[k * 3 + 1] - cy) / sw
+            out[POSE_BASE + k * 3 + 2] = (pblock[k * 3 + 2] - cz) / sw
     return out
 
 
 def normalize_sequence(seq: np.ndarray) -> np.ndarray:
-    """Apply normalize_frame to every frame of a (T, 126) sequence."""
+    """Apply normalize_frame to every frame of a (T, FEATURE_SIZE) sequence."""
     return np.array([normalize_frame(f) for f in seq], dtype=np.float32)
 
 
@@ -115,8 +143,12 @@ def canonicalize_slots(seq: np.ndarray):
     consistently across the whole sequence. One-handed sequences are left as-is
     (single hand stays in slot 0; absent hand stays 63 zeros).
 
-    Decision is made ONCE per sequence (sum cross_z per slot over frames) to avoid
-    per-frame flicker on ambiguous edge-on frames. MUST match mobile canonicalizeSlots.
+    Decision is made ONCE per sequence, from the SINGLE most hands-apart frame —
+    the frame maximizing |cross_z(slot0)| + |cross_z(slot1)|. Summing cross_z over
+    all frames (the old approach) let ambiguous edge-on / hands-together frames
+    (e.g. "thank you") drag the sign near zero and flip the decision, scrambling
+    two-handed features. The most-separated frame is where chirality is most
+    reliable, so we trust only that frame. MUST match mobile canonicalizeSlots.
     Assumes normalize_frame has already been applied (chirality is scale-invariant).
 
     Returns (seq, two_handed: bool, swapped: bool) so the caller can log how many
@@ -129,11 +161,22 @@ def canonicalize_slots(seq: np.ndarray):
     if not (slot0_present and slot1_present):
         return seq, False, False  # one-handed (or empty): no reordering — zero regression
 
-    # Sum chirality signal per slot over all frames, then decide.
-    sum0 = float(np.sum([_hand_cross_z(seq[t, 0:63])   for t in range(T)]))
-    sum1 = float(np.sum([_hand_cross_z(seq[t, 63:126]) for t in range(T)]))
-    slot0_is_right = _is_right_hand(sum0)
-    slot1_is_right = _is_right_hand(sum1)
+    # Find the frame where the two hands are most clearly distinguishable — the one
+    # with the largest combined chirality magnitude — and decide the swap from it.
+    best_sep = -1.0
+    best_cz0 = 0.0
+    best_cz1 = 0.0
+    for t in range(T):
+        cz0 = _hand_cross_z(seq[t, 0:63])
+        cz1 = _hand_cross_z(seq[t, 63:126])
+        sep = abs(cz0) + abs(cz1)
+        if sep > best_sep:
+            best_sep = sep
+            best_cz0 = cz0
+            best_cz1 = cz1
+
+    slot0_is_right = _is_right_hand(best_cz0)
+    slot1_is_right = _is_right_hand(best_cz1)
 
     # Already canonical (slot0 right, slot1 left) → no-op. Swap only if slot0 is the
     # left hand and slot1 is the right hand (unambiguous case).
@@ -191,8 +234,6 @@ def prepare_motion_dataset(dataset: dict):
     label_map = { i: label for i, label in enumerate(labels) }
     label_idx = { label: i for i, label in enumerate(labels) }
 
-    n_two_handed = 0
-    n_swapped    = 0
     for label, samples in dataset.items():
         sequences_for_label = []
         for sample in samples:
@@ -209,14 +250,11 @@ def prepare_motion_dataset(dataset: dict):
             # time — no re-upload. MUST match mobile HandLandmarkHelper.parseResult.
             seq = normalize_sequence(seq)
 
-            # Canonical hand-slot ordering (RIGHT→slot0, LEFT→slot1) via pure geometry,
-            # so two-handed signs are consistent. Must run AFTER normalize (chirality is
-            # scale-invariant) and match mobile canonicalizeSlots.
-            seq, two_handed, was_swapped = canonicalize_slots(seq)
-            if two_handed:
-                n_two_handed += 1
-            if was_swapped:
-                n_swapped += 1
+            # Canonical hand-slot ordering DISABLED — the geometry-based swap never
+            # recovered two-handed signs (THANK YOU stayed 0/5) and traded wins for
+            # losses, so hands stay in MediaPipe's original slot order. Kept off to
+            # match the mobile app (SLOT_CANONICALIZATION_ENABLED=false); both sides
+            # MUST agree. canonicalize_slots() remains defined for reference.
 
             # Center on peak-velocity frame — mirrors PredictionService.extractMotionWindow()
             seq = center_on_peak_velocity(seq)
@@ -237,12 +275,153 @@ def prepare_motion_dataset(dataset: dict):
     X = np.array(X, dtype=np.float32)
     y = np.array(y, dtype=np.int32)
 
-    print(
-        f"[slot-canonicalization] two-handed sequences: {n_two_handed}, "
-        f"swapped to canonical order: {n_swapped}"
-    )
     print(f"Motion dataset — X: {X.shape}, y: {y.shape}, classes: {len(labels)}")
     return X, y, label_map
+
+
+def _preprocess_sample(sample: dict):
+    """Turn one stored sample into a processed (SEQUENCE_LENGTH, 126) array, or None."""
+    sequence = sample.get("sequence", [])
+    if not sequence:
+        return None
+    if len(sequence[0]) != FEATURE_SIZE:
+        return None
+    seq = np.array(sequence, dtype=np.float32)
+    seq = normalize_sequence(seq)              # wrist-center + scale (matches mobile)
+    seq = center_on_peak_velocity(seq)         # temporal alignment (matches inference)
+    return seq
+
+
+def prepare_motion_dataset_split(dataset: dict, test_size: float = 0.2, seed: int = 42):
+    """
+    Build an HONEST train/test split for motion data.
+
+    The critical difference from prepare_motion_dataset: the real clips are split
+    into train/test FIRST, and augmentation is applied to the TRAIN clips ONLY.
+    The test set is real, held-out clips that were never augmented and never seen
+    in training — so test accuracy reflects real generalization, not memorized
+    augmented copies of the training clips (which is why the old combined split
+    reported a meaningless ~100%).
+
+    Per class:
+      1. Split the class's real clips into train/test (at least 1 test clip if the
+         class has ≥2 clips; classes with a single clip go entirely to train).
+      2. Augment ONLY the train clips (same augmentation as prepare_motion_dataset).
+      3. Test clips stay real and untouched.
+
+    Returns X_train, y_train, X_test, y_test, label_map.
+    """
+    labels = sorted(dataset.keys())
+    label_map = { i: label for i, label in enumerate(labels) }
+    label_idx = { label: i for i, label in enumerate(labels) }
+
+    rng = np.random.default_rng(seed)
+    X_train, y_train, X_test, y_test = [], [], [], []
+
+    for label, samples in dataset.items():
+        # Preprocess every real clip for this class.
+        real = [s for s in (_preprocess_sample(smp) for smp in samples) if s is not None]
+        if not real:
+            continue
+
+        # Shuffle then split real clips into train / held-out test.
+        idx = rng.permutation(len(real))
+        n_test = int(round(len(real) * test_size)) if len(real) >= 2 else 0
+        test_idx  = set(idx[:n_test].tolist())
+        train_real = [real[i] for i in range(len(real)) if i not in test_idx]
+        test_real  = [real[i] for i in range(len(real)) if i in test_idx]
+
+        # Held-out test clips: REAL only, no augmentation.
+        for seq in test_real:
+            X_test.append(seq)
+            y_test.append(label_idx[label])
+
+        # Training clips: real + augmentation (augment only what's in train).
+        train_seqs = list(train_real)
+        if train_seqs:
+            target = max(len(train_seqs) * 6, 150)
+            augmented = augment_motion_sequences(
+                [s.tolist() for s in train_seqs], target_count=target
+            )
+            train_seqs.extend([np.array(a, dtype=np.float32) for a in augmented])
+        for seq in train_seqs:
+            X_train.append(seq)
+            y_train.append(label_idx[label])
+
+    X_train = np.array(X_train, dtype=np.float32)
+    y_train = np.array(y_train, dtype=np.int32)
+    X_test  = np.array(X_test,  dtype=np.float32)
+    y_test  = np.array(y_test,  dtype=np.int32)
+
+    print(
+        f"Motion split — train X: {X_train.shape} (real+aug), "
+        f"test X: {X_test.shape} (real held-out only), classes: {len(labels)}"
+    )
+    if X_test.shape[0] == 0:
+        print("WARNING: held-out test set is EMPTY — every class has <2 real clips. "
+              "Test accuracy cannot be measured honestly; collect more clips per word.")
+    return X_train, y_train, X_test, y_test, label_map
+
+
+def list_signers(dataset: dict) -> list:
+    """Return the sorted list of distinct signer ids (submitted_by) in the dataset.
+    Samples with no signer id are grouped under the sentinel None."""
+    signers = set()
+    for samples in dataset.values():
+        for smp in samples:
+            signers.add(smp.get("submitted_by"))
+    # Sort with None last for stable ordering.
+    return sorted(signers, key=lambda s: (s is None, s))
+
+
+def prepare_loso_split(dataset: dict, holdout_signer):
+    """
+    Build a Leave-One-Signer-Out split: TRAIN on every signer except
+    `holdout_signer`, TEST on `holdout_signer`'s real clips only.
+
+    This measures generalization to an UNSEEN person — the metric that matters
+    for "will this work for a new user." Train clips are augmented; the held-out
+    signer's clips are real and untouched.
+
+    Returns X_train, y_train, X_test, y_test, label_map.
+    """
+    labels = sorted(dataset.keys())
+    label_map = { i: label for i, label in enumerate(labels) }
+    label_idx = { label: i for i, label in enumerate(labels) }
+
+    X_train, y_train, X_test, y_test = [], [], [], []
+
+    for label, samples in dataset.items():
+        train_real, test_real = [], []
+        for smp in samples:
+            seq = _preprocess_sample(smp)
+            if seq is None:
+                continue
+            if smp.get("submitted_by") == holdout_signer:
+                test_real.append(seq)
+            else:
+                train_real.append(seq)
+
+        for seq in test_real:
+            X_test.append(seq)
+            y_test.append(label_idx[label])
+
+        train_seqs = list(train_real)
+        if train_seqs:
+            target = max(len(train_seqs) * 6, 150)
+            augmented = augment_motion_sequences(
+                [s.tolist() for s in train_seqs], target_count=target
+            )
+            train_seqs.extend([np.array(a, dtype=np.float32) for a in augmented])
+        for seq in train_seqs:
+            X_train.append(seq)
+            y_train.append(label_idx[label])
+
+    X_train = np.array(X_train, dtype=np.float32)
+    y_train = np.array(y_train, dtype=np.int32)
+    X_test  = np.array(X_test,  dtype=np.float32)
+    y_test  = np.array(y_test,  dtype=np.int32)
+    return X_train, y_train, X_test, y_test, label_map
 
 
 def save_label_map(label_map: dict, path: str) -> None:

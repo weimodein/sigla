@@ -9,17 +9,16 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
 )
-from sklearn.model_selection import train_test_split
 from app.utils.preprocessor import (
     fetch_approved_samples,
-    prepare_motion_dataset,
+    prepare_motion_dataset_split,
 )
 from app.utils.supabase_client import download_file, BUCKET_MODELS
 from dotenv import load_dotenv
 
 load_dotenv()
 
-FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
+FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))  # 126 hand + 21 pose
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
@@ -79,11 +78,19 @@ def test(version_number: str, model_id: int) -> dict:
     # .h5 has identical weights and runs the LSTM natively in Keras.
     h5_path = download_model_from_supabase(version_number, "sign_model_motion.h5")
 
-    # ── Step 3: Prepare + split ───────────────────────────────
-    X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
-    _, X_test, _, y_test = train_test_split(
-        X_motion, y_motion, test_size=0.2, random_state=42, stratify=y_motion
+    # ── Step 3: Prepare honest held-out test set ──────────────
+    # Evaluate on REAL clips only, held out before augmentation (same seed as
+    # training, so these are the exact clips the model never trained on). This
+    # gives a true generalization number instead of accuracy on memorized
+    # augmented copies of the training data.
+    _, _, X_test, y_test, motion_label_map = prepare_motion_dataset_split(
+        motion_dataset, test_size=0.2, seed=42
     )
+    if X_test.shape[0] == 0:
+        raise ValueError(
+            "No held-out real clips to evaluate on — every class has <2 clips. "
+            "Collect more clips per word before testing."
+        )
 
     # ── Step 4: Evaluate ──────────────────────────────────────
     print("Evaluating motion model...")
@@ -102,19 +109,28 @@ def test(version_number: str, model_id: int) -> dict:
         zero_division=0
     )
 
-    print(f"Motion Model Results:")
+    print(f"Motion Model Results (REAL held-out clips):")
     print(f"  Accuracy:  {accuracy:.4f}")
     print(f"  Precision: {precision:.4f}")
     print(f"  Recall:    {recall:.4f}")
     print(f"  F1 Score:  {f1:.4f}")
     print(f"\nClassification Report:\n{report}")
 
+    # ── Per-class accuracy table (which words hit bar) ──
+    print("Per-class accuracy (held-out):")
+    for i in range(len(motion_label_map)):
+        mask = (y_test == i)
+        n = int(mask.sum())
+        if n == 0:
+            print(f"  {motion_label_map[i]:<20} —      (no held-out clips)")
+            continue
+        acc_i = float((preds[mask] == i).mean())
+        print(f"  {motion_label_map[i]:<20} {acc_i*100:5.1f}%  ({int((preds[mask]==i).sum())}/{n})")
+
     # ── Confusion diagnostic: which classes collide with which ──
-    # NOTE: X_test here is drawn from prepare_motion_dataset, which is ~80%
-    # augmented. High accuracy on this set does NOT prove real-world accuracy —
-    # it only shows the model separates its own (augmented) training distribution.
-    # Use this matrix to see which class pairs the model confuses, and read the
-    # OFF-DIAGONAL cells: row=true label, column=predicted label.
+    # X_test is REAL held-out clips (never augmented, never trained on), so these
+    # numbers reflect genuine generalization. Read the OFF-DIAGONAL cells to see
+    # which class pairs the model confuses: row = true label, column = predicted.
     labels_ordered = [motion_label_map[i] for i in range(len(motion_label_map))]
     cm = confusion_matrix(y_test, preds, labels=list(range(len(labels_ordered))))
     print("\nConfusion matrix (row = true, col = predicted):")

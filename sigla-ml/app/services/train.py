@@ -1,11 +1,10 @@
 import os
 import re
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from app.utils.preprocessor import (
     fetch_approved_samples,
-    prepare_motion_dataset,
+    prepare_motion_dataset_split,
     save_label_map,
 )
 from app.utils.supabase_client import upload_file, BUCKET_MODELS
@@ -13,17 +12,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
+FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))  # 126 hand + 21 pose
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
 
-def build_motion_model(num_classes: int):
+def build_motion_model(num_classes: int, feature_size: int = FEATURE_SIZE):
     from tensorflow import keras
     reg = keras.regularizers.l2(2e-4)
     # Reduced LSTM units (256→128→64 → 128→64→32) — prevents overfitting on limited sequences
     model = keras.Sequential([
-        keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_SIZE)),
+        keras.layers.Input(shape=(SEQUENCE_LENGTH, feature_size)),
         keras.layers.LSTM(128, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg),
         keras.layers.Dropout(0.4),
         keras.layers.LSTM(64, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg),
@@ -126,11 +125,18 @@ def train(version_number: str, model_id: int) -> dict:
 
     # ── Step 2: Train motion model (LSTM) ─────────────────────
     print(f"\n--- Training Motion Model (LSTM) — {total_classes} classes ---")
-    X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
-
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_motion, y_motion, test_size=0.2, random_state=42, stratify=y_motion
+    # Honest split: real clips split BEFORE augmentation, so val = real held-out
+    # clips (never augmented, never seen in training). This makes val_accuracy a
+    # real generalization metric rather than the memorized-augmentation ~100%.
+    X_train, y_train, X_val, y_val, motion_label_map = prepare_motion_dataset_split(
+        motion_dataset, test_size=0.2, seed=42
     )
+
+    # If the dataset is too small to hold out any real clips, fall back to using
+    # the train set for validation (accuracy will be inflated — a data warning is
+    # printed by prepare_motion_dataset_split).
+    if X_val.shape[0] == 0:
+        X_val, y_val = X_train, y_train
 
     model = build_motion_model(len(motion_label_map))
 
