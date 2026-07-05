@@ -48,6 +48,16 @@ private const val HANDEDNESS_MIN_SCORE        = 0.8f
 // Frames with no hands before a gesture is considered ended (resets the latch).
 private const val LATCH_NO_HAND_RESET         = 6
 
+// ── Canonical hand-slot ordering (fixes two-handed sign accuracy) ─────────────
+// Two-handed signs are packed by MediaPipe in arbitrary slot order; we reorder so
+// the RIGHT hand is always slot 0 and LEFT slot 1, using a pure-geometry chirality
+// test (byte-identical to sigla-ml preprocessor.canonicalize_slots). When disabled,
+// behavior is byte-identical to before. MUST retrain the model for this to take effect.
+private const val SLOT_CANONICALIZATION_ENABLED = true
+// Sign convention: cross_z < 0 ⇒ RIGHT. Verify on-device against MediaPipe's label;
+// flip if reversed. MUST equal Python _CHIRALITY_RIGHT_IS_NEGATIVE_CROSS.
+private const val CHIRALITY_RIGHT_IS_NEGATIVE_CROSS = true
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding   : ActivityMainBinding
@@ -73,6 +83,10 @@ class MainActivity : AppCompatActivity() {
     private var handVoteMirror0 = 0                    // votes: +1 mirror, -1 don't
     private var handVoteMirror1 = 0
     private var latchNoHandFrames = 0                  // frames with no hands → ends gesture
+
+    // Slot-order latch: decide once per gesture whether the two hands are swapped.
+    private var latchedSwapSlots: Boolean? = null      // null = undecided
+    private var slotSwapVote = 0                        // +1 swap, -1 keep
 
     // ── UI state ──────────────────────────────────────────────────────────────
     private var showFilipino       = true
@@ -113,8 +127,11 @@ class MainActivity : AppCompatActivity() {
 
         predictor  = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
+            // Canonical slot order FIRST (RIGHT→slot0, LEFT→slot1) — must run before the
+            // orientation mirror, which flips chirality. Then orientation-canonicalize.
+            val ordered = canonicalizeSlots(result.features, result.handedness, result.handsDetected)
             val features = canonicalizeHandedness(
-                result.features, result.handedness, result.handednessScore, result.handsDetected
+                ordered, result.handedness, result.handednessScore, result.handsDetected
             )
             predictor.processFrame(features, result.handsDetected)
             runOnUiThread {
@@ -506,13 +523,14 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         analysis.setAnalyzer(executor) { imageProxy ->
-            frameSkipCounter++
-            if (frameSkipCounter % 2 == 0) {
-                val bitmap          = imageProxy.toBitmap()
-                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
-                landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
-            }
+            // Process every frame so quick signs keep up. STRATEGY_KEEP_ONLY_LATEST means
+            // CameraX drops stale frames if MediaPipe falls behind, so this self-limits to
+            // what the device can sustain. (If quick-sign lag returns under sustained load,
+            // reinstate a light skip, e.g. `if (frameSkipCounter++ % 3 != 0)`.)
+            val bitmap          = imageProxy.toBitmap()
+            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
+            landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
             imageProxy.close()
         }
 
@@ -527,6 +545,59 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Camera bind failed: ${e.message}")
         }
+    }
+
+    // 2D cross-product z of (wrist→index-MCP)×(wrist→pinky-MCP) for a hand block.
+    // Landmarks 0=wrist, 5=index MCP, 17=pinky MCP. Byte-identical to Python _hand_cross_z.
+    private fun handCrossZ(features: FloatArray, base: Int): Float {
+        val wx = features[base]; val wy = features[base + 1]
+        val v1x = features[base + 5 * 3] - wx;  val v1y = features[base + 5 * 3 + 1] - wy
+        val v2x = features[base + 17 * 3] - wx; val v2y = features[base + 17 * 3 + 1] - wy
+        return v1x * v2y - v1y * v2x
+    }
+
+    private fun isRightHand(crossZ: Float): Boolean =
+        if (CHIRALITY_RIGHT_IS_NEGATIVE_CROSS) crossZ < 0f else crossZ > 0f
+
+    // Reorder the two hand blocks so RIGHT→slot0, LEFT→slot1 (matches Python
+    // canonicalize_slots). One-handed frames are untouched. The swap decision is LATCHED
+    // per gesture (votes accumulate while hands are visible). For the ordering KEY only,
+    // the front-camera x-flip is undone (negate x) so anatomical chirality matches
+    // training/back-cam — the features themselves are NOT altered here.
+    private fun canonicalizeSlots(
+        features: FloatArray,
+        handedness: List<String?>,
+        handsDetected: Int,
+    ): FloatArray {
+        if (!SLOT_CANONICALIZATION_ENABLED) return features
+        if (handsDetected == 0) return features   // latch reset handled in canonicalizeHandedness
+
+        var slot0Present = false
+        for (k in 0 until 63) if (features[k] != 0f) { slot0Present = true; break }
+        var slot1Present = false
+        for (k in 63 until 126) if (features[k] != 0f) { slot1Present = true; break }
+        if (!(slot0Present && slot1Present)) return features   // one-handed → no reorder
+
+        // Chirality key: undo the front-camera x-flip so it matches training orientation.
+        val flip = if (isFrontCamera) -1f else 1f
+        val cz0 = flip * handCrossZ(features, 0)
+        val cz1 = flip * handCrossZ(features, 63)
+
+        // Accumulate a swap vote while undecided (swap when slot0=left AND slot1=right).
+        if (latchedSwapSlots == null) {
+            if ((!isRightHand(cz0)) && isRightHand(cz1)) slotSwapVote += 1 else slotSwapVote -= 1
+            if (kotlin.math.abs(slotSwapVote) >= 3) latchedSwapSlots = slotSwapVote > 0
+        }
+        val swap = latchedSwapSlots ?: (slotSwapVote > 0)
+
+        // Stage-0 log to verify the chirality convention on-device.
+        Log.d(TAG, "slots cam=${if (isFrontCamera) "front" else "back"} " +
+                "cz0=$cz0 cz1=$cz1 mp0=${handedness.getOrNull(0)} mp1=${handedness.getOrNull(1)} swap=$swap")
+
+        if (!swap) return features
+        val out = features.copyOf()
+        for (k in 0 until 63) { out[k] = features[63 + k]; out[63 + k] = features[k] }
+        return out
     }
 
     // Canonicalize every hand to the right-handed orientation the model was trained on.
@@ -598,6 +669,9 @@ class MainActivity : AppCompatActivity() {
         handVoteMirror0 = 0
         handVoteMirror1 = 0
         latchNoHandFrames = 0
+        // Reset the slot-order latch together (same gesture lifecycle).
+        latchedSwapSlots = null
+        slotSwapVote = 0
     }
 
     private fun mirrorHandX(features: FloatArray): FloatArray {
@@ -622,6 +696,11 @@ class MainActivity : AppCompatActivity() {
     private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
         val maxDim = 640
         val scale  = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
+        // Fast path: no transform needed → reuse the input bitmap and skip a per-frame
+        // createBitmap() allocation (the main GC/jank source during continuous capture).
+        if (scale >= 1f && rotationDegrees == 0 && !frontCamera) {
+            return bitmap
+        }
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
             if (rotationDegrees != 0) postRotate(rotationDegrees.toFloat())

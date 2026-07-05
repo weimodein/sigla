@@ -7,6 +7,7 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
     classification_report,
+    confusion_matrix,
 )
 from sklearn.model_selection import train_test_split
 from app.utils.preprocessor import (
@@ -107,6 +108,34 @@ def test(version_number: str, model_id: int) -> dict:
     print(f"  Recall:    {recall:.4f}")
     print(f"  F1 Score:  {f1:.4f}")
     print(f"\nClassification Report:\n{report}")
+
+    # ── Confusion diagnostic: which classes collide with which ──
+    # NOTE: X_test here is drawn from prepare_motion_dataset, which is ~80%
+    # augmented. High accuracy on this set does NOT prove real-world accuracy —
+    # it only shows the model separates its own (augmented) training distribution.
+    # Use this matrix to see which class pairs the model confuses, and read the
+    # OFF-DIAGONAL cells: row=true label, column=predicted label.
+    labels_ordered = [motion_label_map[i] for i in range(len(motion_label_map))]
+    cm = confusion_matrix(y_test, preds, labels=list(range(len(labels_ordered))))
+    print("\nConfusion matrix (row = true, col = predicted):")
+    header = "true \\ pred".ljust(18) + "".join(f"{i:>5}" for i in range(len(labels_ordered)))
+    print(header)
+    for i, row in enumerate(cm):
+        line = f"{i:>2} {labels_ordered[i][:14]:<14}" + "".join(f"{v:>5}" for v in row)
+        print(line)
+    print("\nLegend:")
+    for i, name in enumerate(labels_ordered):
+        print(f"  {i:>2} = {name}")
+    # Explicitly list the confused pairs (off-diagonal, count > 0)
+    print("\nConfused pairs (true -> predicted : count):")
+    any_confusion = False
+    for i in range(len(labels_ordered)):
+        for j in range(len(labels_ordered)):
+            if i != j and cm[i][j] > 0:
+                any_confusion = True
+                print(f"  {labels_ordered[i]} -> {labels_ordered[j]} : {cm[i][j]}")
+    if not any_confusion:
+        print("  (none on this held-out split — but remember it is mostly augmented data)")
 
     print(f"\n{'='*50}")
     print(f"Evaluation complete for version: {version_number}")

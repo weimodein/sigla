@@ -82,6 +82,69 @@ def normalize_sequence(seq: np.ndarray) -> np.ndarray:
     return np.array([normalize_frame(f) for f in seq], dtype=np.float32)
 
 
+# ── Canonical hand-slot ordering (fixes two-handed sign accuracy) ─────────────
+# Hands are packed by MediaPipe in arbitrary order; we reorder so the RIGHT hand
+# is always slot 0 and the LEFT hand slot 1, using a pure-geometry chirality test
+# (no MediaPipe label). This runs identically here and in the mobile app.
+# Sign convention: cross_z < 0 ⇒ RIGHT. Verified on-device; flip if reversed.
+_CHIRALITY_RIGHT_IS_NEGATIVE_CROSS = True
+
+
+def _hand_cross_z(block: np.ndarray) -> float:
+    """2D cross-product z of (wrist→index-MCP) × (wrist→pinky-MCP).
+    Landmarks: 0=wrist, 5=index MCP, 17=pinky MCP. Uses x,y only.
+    Sign distinguishes left vs right hand; invariant to wrist-center + positive scale.
+    Returns 0.0 for an absent (all-zero) hand.
+    """
+    if not np.any(block):
+        return 0.0
+    wx, wy = block[0], block[1]
+    v1x, v1y = block[5 * 3] - wx,  block[5 * 3 + 1] - wy
+    v2x, v2y = block[17 * 3] - wx, block[17 * 3 + 1] - wy
+    return float(v1x * v2y - v1y * v2x)
+
+
+def _is_right_hand(cross_z: float) -> bool:
+    """Map a cross_z value to right(True)/left(False) per the sign convention."""
+    return (cross_z < 0) if _CHIRALITY_RIGHT_IS_NEGATIVE_CROSS else (cross_z > 0)
+
+
+def canonicalize_slots(seq: np.ndarray):
+    """
+    Reorder the two 63-float hand blocks so RIGHT hand → slot 0, LEFT → slot 1,
+    consistently across the whole sequence. One-handed sequences are left as-is
+    (single hand stays in slot 0; absent hand stays 63 zeros).
+
+    Decision is made ONCE per sequence (sum cross_z per slot over frames) to avoid
+    per-frame flicker on ambiguous edge-on frames. MUST match mobile canonicalizeSlots.
+    Assumes normalize_frame has already been applied (chirality is scale-invariant).
+
+    Returns (seq, two_handed: bool, swapped: bool) so the caller can log how many
+    sequences the canonicalization actually touched (proves the code path ran).
+    """
+    T = seq.shape[0]
+    # Is this a two-handed sequence? (both slots present in at least one frame)
+    slot0_present = np.any(seq[:, 0:63] != 0)
+    slot1_present = np.any(seq[:, 63:126] != 0)
+    if not (slot0_present and slot1_present):
+        return seq, False, False  # one-handed (or empty): no reordering — zero regression
+
+    # Sum chirality signal per slot over all frames, then decide.
+    sum0 = float(np.sum([_hand_cross_z(seq[t, 0:63])   for t in range(T)]))
+    sum1 = float(np.sum([_hand_cross_z(seq[t, 63:126]) for t in range(T)]))
+    slot0_is_right = _is_right_hand(sum0)
+    slot1_is_right = _is_right_hand(sum1)
+
+    # Already canonical (slot0 right, slot1 left) → no-op. Swap only if slot0 is the
+    # left hand and slot1 is the right hand (unambiguous case).
+    if (not slot0_is_right) and slot1_is_right:
+        swapped = seq.copy()
+        swapped[:, 0:63]   = seq[:, 63:126]
+        swapped[:, 63:126] = seq[:, 0:63]
+        return swapped, True, True
+    return seq, True, False
+
+
 def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     """
     Center a motion sequence on its peak-velocity frame.
@@ -128,6 +191,8 @@ def prepare_motion_dataset(dataset: dict):
     label_map = { i: label for i, label in enumerate(labels) }
     label_idx = { label: i for i, label in enumerate(labels) }
 
+    n_two_handed = 0
+    n_swapped    = 0
     for label, samples in dataset.items():
         sequences_for_label = []
         for sample in samples:
@@ -143,6 +208,15 @@ def prepare_motion_dataset(dataset: dict):
             # scale). Applied here so existing stored samples are normalized at train
             # time — no re-upload. MUST match mobile HandLandmarkHelper.parseResult.
             seq = normalize_sequence(seq)
+
+            # Canonical hand-slot ordering (RIGHT→slot0, LEFT→slot1) via pure geometry,
+            # so two-handed signs are consistent. Must run AFTER normalize (chirality is
+            # scale-invariant) and match mobile canonicalizeSlots.
+            seq, two_handed, was_swapped = canonicalize_slots(seq)
+            if two_handed:
+                n_two_handed += 1
+            if was_swapped:
+                n_swapped += 1
 
             # Center on peak-velocity frame — mirrors PredictionService.extractMotionWindow()
             seq = center_on_peak_velocity(seq)
@@ -163,6 +237,10 @@ def prepare_motion_dataset(dataset: dict):
     X = np.array(X, dtype=np.float32)
     y = np.array(y, dtype=np.int32)
 
+    print(
+        f"[slot-canonicalization] two-handed sequences: {n_two_handed}, "
+        f"swapped to canonical order: {n_swapped}"
+    )
     print(f"Motion dataset — X: {X.shape}, y: {y.shape}, classes: {len(labels)}")
     return X, y, label_map
 
