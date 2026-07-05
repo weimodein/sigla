@@ -12,7 +12,6 @@ import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
-import java.util.TreeMap
 
 private const val TAG = "HandLandmarkHelper"
 
@@ -28,11 +27,13 @@ private val POSE_KEYPOINTS = intArrayOf(0, 11, 12, 13, 14, 15, 16)
 private const val POSE_LSHOULDER = 1
 private const val POSE_RSHOULDER = 2
 
-// A hand result whose pose partner never arrives (MediaPipe dropped the pose frame
-// under load) is emitted with a zero pose block after this long. Zero pose is a
-// legitimate training-time state too (extract.py stores zeros when pose detection
-// fails), so this degrades gracefully instead of starving the frame buffer.
-private const val PAIR_STALE_MS = 300L
+// Pose is detected only every Nth camera frame (hands run on every frame) and the
+// most recent pose result is merged into each hand frame. This trades ≤N frames
+// (~100 ms) of pose staleness for ~1/N of the pose compute — pose anchors
+// (shoulders/nose) are near-static, so the normalized block barely changes between
+// consecutive frames. Training uses same-frame pose; raise/lower this only with an
+// on-device accuracy check.
+private const val POSE_DETECT_INTERVAL = 3
 
 data class LandmarkResult(
     val handsDetected: Int,
@@ -58,19 +59,15 @@ class HandLandmarkHelper(
     // LIVE_STREAM mode: async, non-blocking — fastest for real-time camera feeds
     val isLiveStream: Boolean get() = onResult != null
 
-    // ── LIVE_STREAM hand↔pose pairing ─────────────────────────────────────────
-    // Hand and pose landmarkers each run async on the same frame/timestamp; their
-    // callbacks land on MediaPipe internal threads in either order (and either one
-    // may drop a frame under load). Results are paired by timestamp here so one
-    // merged 147-float vector per frame reaches onResult — same-frame pairing,
-    // matching extract.py, which detects pose on the exact frame the hands came from.
-    private class Pending {
-        var hand: HandLandmarkerResult? = null
-        var pose: PoseLandmarkerResult? = null
-    }
-    private val pendingLock = Any()
-    private val pending = TreeMap<Long, Pending>()
-    private var lastEmittedTs = -1L
+    // ── LIVE_STREAM hand↔pose merge ───────────────────────────────────────────
+    // The hand callback emits immediately, merged with the newest pose result seen
+    // so far (snapshot, not same-timestamp pairing). Waiting for the same-frame
+    // pose partner added the pose inference time to every emitted frame and made
+    // the overlay stutter; a ≤POSE_DETECT_INTERVAL-frames-stale pose block is the
+    // deliberate latency/accuracy trade instead. Zero pose (before the first pose
+    // result) is the same absent-pose sentinel training data contains.
+    @Volatile private var lastPoseResult: PoseLandmarkerResult? = null
+    private var poseFrameCounter = 0
 
     private fun buildLandmarker(delegate: Delegate): HandLandmarker {
         val mode = if (onResult != null) RunningMode.LIVE_STREAM else RunningMode.IMAGE
@@ -90,7 +87,7 @@ class HandLandmarkHelper(
             .setMinHandPresenceConfidence(0.5f)
             .setMinTrackingConfidence(0.5f)
         if (onResult != null) {
-            builder.setResultListener { result, _ -> submitHand(result.timestampMs(), result) }
+            builder.setResultListener { result, _ -> onResult?.invoke(parseResult(result, lastPoseResult)) }
             builder.setErrorListener { e -> Log.e(TAG, "MediaPipe error: ${e.message}") }
         }
         return HandLandmarker.createFromOptions(context, builder.build())
@@ -112,7 +109,7 @@ class HandLandmarkHelper(
             .setMinPosePresenceConfidence(0.5f)
             .setMinTrackingConfidence(0.5f)
         if (onResult != null) {
-            builder.setResultListener { result, _ -> submitPose(result.timestampMs(), result) }
+            builder.setResultListener { result, _ -> lastPoseResult = result }
             builder.setErrorListener { e -> Log.e(TAG, "MediaPipe pose error: ${e.message}") }
         }
         return PoseLandmarker.createFromOptions(context, builder.build())
@@ -174,55 +171,14 @@ class HandLandmarkHelper(
         try {
             val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
             lmk.detectAsync(mpImage, frameTimestampMs)
-            poseLandmarker?.detectAsync(mpImage, frameTimestampMs)
+            // Pose only every Nth frame — hands run every frame.
+            poseFrameCounter++
+            if (poseFrameCounter >= POSE_DETECT_INTERVAL) {
+                poseFrameCounter = 0
+                poseLandmarker?.detectAsync(mpImage, frameTimestampMs)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "detectAsync error: ${e.message}")
-        }
-    }
-
-    // ── Pairing (LIVE_STREAM only) ────────────────────────────────────────────
-
-    private fun submitHand(ts: Long, result: HandLandmarkerResult) {
-        val toEmit = ArrayList<LandmarkResult>(2)
-        synchronized(pendingLock) {
-            if (ts <= lastEmittedTs) return
-            val p = pending.getOrPut(ts) { Pending() }
-            p.hand = result
-            collectReady(ts, toEmit)
-        }
-        toEmit.forEach { onResult?.invoke(it) }
-    }
-
-    private fun submitPose(ts: Long, result: PoseLandmarkerResult) {
-        val toEmit = ArrayList<LandmarkResult>(2)
-        synchronized(pendingLock) {
-            if (ts <= lastEmittedTs) return
-            val p = pending.getOrPut(ts) { Pending() }
-            p.pose = result
-            collectReady(ts, toEmit)
-        }
-        toEmit.forEach { onResult?.invoke(it) }
-    }
-
-    // Must be called with pendingLock held. Flushes, in timestamp order:
-    //  - every entry up to a completed (hand+pose) pair, emitting hand-only
-    //    entries with a zero pose block (their pose frame was dropped);
-    //  - entries older than PAIR_STALE_MS whose partner never arrived.
-    // Pose-only entries (hand frame dropped) are discarded silently.
-    private fun collectReady(ts: Long, toEmit: MutableList<LandmarkResult>) {
-        val current = pending[ts]
-        val complete = current != null && current.hand != null &&
-            (current.pose != null || poseLandmarker == null)
-        val flushUpTo = if (complete) ts else ts - PAIR_STALE_MS
-        val it = pending.headMap(flushUpTo, complete).entries.iterator()
-        while (it.hasNext()) {
-            val e = it.next()
-            val h = e.value.hand
-            if (h != null) {
-                toEmit.add(parseResult(h, e.value.pose))
-                lastEmittedTs = e.key
-            }
-            it.remove()
         }
     }
 
@@ -283,7 +239,7 @@ class HandLandmarkHelper(
     fun close() {
         landmarker?.close()
         poseLandmarker?.close()
-        synchronized(pendingLock) { pending.clear() }
+        lastPoseResult = null
     }
 }
 
