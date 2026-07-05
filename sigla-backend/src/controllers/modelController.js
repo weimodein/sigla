@@ -106,12 +106,21 @@ const getLatestModel = async (req, res) => {
       ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
       : null;
 
+    // Cache-buster: the deployed/ path is reused for every version, so the
+    // Supabase public CDN can keep serving a stale copy after a deploy/revert
+    // upsert. A query string that changes whenever the deployed file changes
+    // (version + deploy timestamp) forces the CDN/app to fetch fresh bytes that
+    // match the freshly-computed checksum. Query strings don't affect which
+    // object is served, only the cache key.
+    const deployedAtMs = model.deployed_at ? new Date(model.deployed_at).getTime() : 0;
+    const cb = `v=${encodeURIComponent(model.version_number)}&t=${deployedAtMs}`;
+
     return res.status(200).json({
       model: {
         ...model.toJSON(),
-        tflite_url: base ? `${base}/sign_model_motion.tflite` : model.tflite_url,
-        motion_tflite_url: base ? `${base}/sign_model_motion.tflite` : model.motion_tflite_url,
-        labels_motion_url: base ? `${base}/labels_motion.json` : null,
+        tflite_url: base ? `${base}/sign_model_motion.tflite?${cb}` : model.tflite_url,
+        motion_tflite_url: base ? `${base}/sign_model_motion.tflite?${cb}` : model.motion_tflite_url,
+        labels_motion_url: base ? `${base}/labels_motion.json?${cb}` : null,
       },
     });
   } catch (err) {
@@ -530,6 +539,57 @@ const revertModel = async (req, res) => {
         message:
           "This model version has no .tflite file and cannot be reverted to.",
       });
+    }
+
+    // ── Re-materialize this version's files into the deployed/ folder ────────
+    // The mobile app always downloads from the fixed deployed/ path and verifies
+    // the DB checksum. Flipping status alone would leave the PREVIOUS version's
+    // bytes in deployed/, so the app's checksum check fails and it discards the
+    // model ("No model found"). We must re-upload THIS version's file and
+    // recompute the checksum — identical to deployModel.
+    const baseUrl = model.tflite_url.substring(
+      0,
+      model.tflite_url.lastIndexOf("/"),
+    );
+    const filesToDeploy = [
+      { url: model.tflite_url, name: "sign_model_motion.tflite", required: true },
+      { url: `${baseUrl}/labels_motion.json`, name: "labels_motion.json", required: true },
+    ];
+
+    for (const file of filesToDeploy) {
+      if (!file.url || file.url === "null") {
+        if (file.required) throw new Error(`Missing URL for required file: ${file.name}`);
+        continue;
+      }
+      const response = await axios.get(file.url, {
+        responseType: "arraybuffer",
+        timeout: 30000,
+      });
+      const buffer = Buffer.from(response.data);
+      const contentType =
+        response.headers["content-type"] ||
+        (file.name.endsWith(".tflite")
+          ? "application/octet-stream"
+          : "application/json");
+      await uploadToSupabase(`deployed/${file.name}`, buffer, contentType);
+      console.log(`Revert: uploaded ${file.name} for ${model.version_number}`);
+    }
+
+    // Recompute the checksum from the file we just re-materialized, so the DB
+    // checksum matches the bytes now sitting in deployed/.
+    try {
+      const motionResponse = await axios.get(model.tflite_url, {
+        responseType: "arraybuffer",
+        timeout: 30000,
+      });
+      const checksumHex = crypto
+        .createHash("sha256")
+        .update(Buffer.from(motionResponse.data))
+        .digest("hex");
+      await model.update({ checksum: checksumHex });
+      console.log(`Revert: SHA256 checksum saved: ${checksumHex}`);
+    } catch (csErr) {
+      console.warn("Revert checksum computation failed (non-fatal):", csErr.message);
     }
 
     // Set all currently deployed models to inactive
