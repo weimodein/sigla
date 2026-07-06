@@ -46,7 +46,12 @@ const getApprovedDataset = async (req, res) => {
       if (!dataset[label]) dataset[label] = [];
 
       if (sample.sequence && Array.isArray(sample.sequence)) {
-        dataset[label].push({ sequence: sample.sequence });
+        // submitted_by identifies the signer — used by the ML service for
+        // leave-one-signer-out evaluation (generalization to an unseen person).
+        dataset[label].push({
+          sequence: sample.sequence,
+          submitted_by: sample.submitted_by ?? null,
+        });
       } else {
         console.warn(`Sample ${sample.id} has no embedded sequence, skipping`);
       }

@@ -1063,28 +1063,59 @@ const ManageModel = () => {
       {/* Results Modal */}
       {resultModal && (
         <AppModal title={resultModal.title} onClose={() => setResultModal(null)}>
+          {(() => {
+            const d = resultModal.data || {};
+            // Test results nest metrics under test_result.motion_model; training
+            // results carry them at the top level or under .model. Read both.
+            const m = d.test_result?.motion_model ?? {};
+            const acc = m.accuracy ?? d.accuracy ?? d.model?.accuracy;
+            const precision = m.precision;
+            const recall = m.recall;
+            const f1 = m.f1_score;
+            const report = m.classification_report;
+            const totalClasses = d.result?.total_classes ?? d.model?.total_classes;
+            return (
           <div className="space-y-3 text-sm">
-            {resultModal.data?.message && (
-              <p className="text-gray-700">{resultModal.data.message}</p>
-            )}
-            {(resultModal.data?.accuracy ?? resultModal.data?.model?.accuracy) != null && (
+            {d.message && <p className="text-gray-700">{d.message}</p>}
+            {acc != null && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Accuracy</p>
-                  <p className="font-bold text-lg text-blue-900">
-                    {fmt(resultModal.data?.accuracy ?? resultModal.data?.model?.accuracy)}
-                  </p>
+                  <p className="font-bold text-lg text-blue-900">{fmt(acc)}</p>
                 </div>
+                {f1 != null && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">F1 Score</p>
+                    <p className="font-bold text-lg text-blue-900">{fmt(f1)}</p>
+                  </div>
+                )}
+                {precision != null && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Precision</p>
+                    <p className="font-bold text-lg text-blue-900">{fmt(precision)}</p>
+                  </div>
+                )}
+                {recall != null && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Recall</p>
+                    <p className="font-bold text-lg text-blue-900">{fmt(recall)}</p>
+                  </div>
+                )}
               </div>
             )}
-            {(resultModal.data?.result?.total_classes ??
-              resultModal.data?.model?.total_classes) != null && (
+            {report && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">
+                  Per-class report (held-out clips)
+                </p>
+                <pre className="bg-gray-50 rounded-lg p-3 text-[11px] leading-tight overflow-x-auto whitespace-pre">
+                  {report}
+                </pre>
+              </div>
+            )}
+            {totalClasses != null && (
               <p className="text-gray-600">
-                Total classes trained:{" "}
-                <strong>
-                  {resultModal.data?.result?.total_classes ??
-                    resultModal.data?.model?.total_classes}
-                </strong>
+                Total classes trained: <strong>{totalClasses}</strong>
               </p>
             )}
             <button
@@ -1094,6 +1125,8 @@ const ManageModel = () => {
               Close
             </button>
           </div>
+            );
+          })()}
         </AppModal>
       )}
     </div>
