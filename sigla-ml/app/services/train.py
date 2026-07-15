@@ -1,7 +1,6 @@
 import os
 import re
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from app.utils.preprocessor import (
     fetch_approved_samples,
@@ -13,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
+FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
@@ -125,12 +124,10 @@ def train(version_number: str, model_id: int) -> dict:
         )
 
     # ── Step 2: Train motion model (LSTM) ─────────────────────
+    # Split happens BEFORE augmentation inside prepare_motion_dataset, so X_val/y_val
+    # is real, unaugmented data the model never trained on — a genuine holdout.
     print(f"\n--- Training Motion Model (LSTM) — {total_classes} classes ---")
-    X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
-
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_motion, y_motion, test_size=0.2, random_state=42, stratify=y_motion
-    )
+    X_train, y_train, X_val, y_val, motion_label_map = prepare_motion_dataset(motion_dataset)
 
     model = build_motion_model(len(motion_label_map))
 

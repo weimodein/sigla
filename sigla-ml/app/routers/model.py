@@ -214,7 +214,7 @@ async def extract_landmarks(file: UploadFile = File(...)):
     """
     try:
         video_bytes = await file.read()
-        sequence = extract_motion_landmarks(video_bytes)
+        sequence = extract_motion_landmarks(video_bytes, file.filename)
         if sequence is None:
             raise HTTPException(status_code=422, detail="No hands detected in video")
         return {"type": "motion", "sequence": sequence}

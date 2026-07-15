@@ -30,9 +30,44 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlinx.coroutines.delay
 
 private const val TAG               = "MainActivity"
 private const val CAMERA_PERMISSION = 100
+
+// ── Left-handed support (inference-time handedness canonicalization) ──────────
+// When enabled, a hand MediaPipe reports as "Left" is mirrored (x → -x on the
+// normalized, wrist-relative coords) so the model always sees a right-handed sign.
+// The rule is camera-independent (the front-camera bitmap flip is already encoded
+// in the reported label). When disabled, behavior is byte-identical to before.
+private const val LEFT_HANDED_SUPPORT_ENABLED = true
+// On-device calibration (HANDEDNESS_TEST log, both cameras, both hands, 0.95-0.97
+// confidence, 2026-07-13) confirmed MediaPipe's Left/Right label matches the true
+// anatomical hand identically on front AND back camera — no inversion. If a future
+// MediaPipe/device combo inverts it, re-run the same calibration log and flip this.
+private const val MEDIAPIPE_LABELS_INVERTED   = false
+// Ignore low-confidence handedness (treat as no-decision → don't mirror).
+private const val HANDEDNESS_MIN_SCORE        = 0.8f
+// Frames with no hands before a gesture is considered ended (resets the latch).
+private const val LATCH_NO_HAND_RESET         = 6
+
+// ── Canonical hand-slot ordering (fixes two-handed sign accuracy) ─────────────
+// Two-handed signs are packed by MediaPipe in arbitrary slot order; we reorder so
+// the RIGHT hand is always slot 0 and LEFT slot 1, using a pure-geometry chirality
+// test (byte-identical to sigla-ml preprocessor.canonicalize_slots). When disabled,
+// behavior is byte-identical to before. MUST retrain the model for this to take effect.
+// Reverted again 2026-07: re-enabled with a matching sigla-ml preprocessor.py
+// canonicalize_slots (fixing the mismatch that sank the first attempt) and it DID fix
+// BREAD, but regressed one-handed signs like HELLO — a stray false-positive second-hand
+// detection during an otherwise one-handed gesture now triggers a slot swap, corrupting
+// frames that used to be fine. The deployed model was reverted to the pre-canonicalization
+// version, so this flag and preprocessor.py's canonicalize_slots call MUST both stay off
+// to match it. Two-handed signs remain a known unsolved gap — a real fix likely needs to
+// gate the swap on genuine two-hand confidence, not just presence, before retrying.
+private const val SLOT_CANONICALIZATION_ENABLED = false
+// Sign convention: cross_z < 0 ⇒ RIGHT. Verify on-device against MediaPipe's label;
+// flip if reversed. MUST equal Python _CHIRALITY_RIGHT_IS_NEGATIVE_CROSS.
+private const val CHIRALITY_RIGHT_IS_NEGATIVE_CROSS = true
 
 class MainActivity : AppCompatActivity() {
 
@@ -50,6 +85,29 @@ class MainActivity : AppCompatActivity() {
     private val executor      = Executors.newSingleThreadExecutor()
     private var isFrontCamera = false
     private var cameraProvider: ProcessCameraProvider? = null
+
+    // Add this variable at the top of MainActivity
+    private var frameCounter = 0
+
+    // ── Handedness latch (stabilizes left-handed mirroring across a gesture) ────
+    // MediaPipe's Left/Right label flickers mid-gesture; we vote over the first few
+    // frames after hands appear, latch the decision, and hold it until hands leave.
+    private var latchedMirrorSlot0: Boolean? = null   // null = not yet decided
+    private var latchedMirrorSlot1: Boolean? = null
+    private var handVoteMirror0 = 0                    // votes: +1 mirror, -1 don't
+    private var handVoteMirror1 = 0
+    private var latchNoHandFrames = 0                  // frames with no hands → ends gesture
+
+    // Slot-order latch: decide once per gesture whether the two hands are swapped,
+    // using the single most hands-apart frame seen so far (largest |cz0|+|cz1|).
+    // This mirrors Python canonicalize_slots, which decides from the best frame of
+    // the whole sequence. Tracking the best-separation frame (not a vote count)
+    // stops ambiguous hands-together frames from flipping the decision.
+    private var latchedSwapSlots: Boolean? = null      // decision from best frame so far
+    private var bestSlotSep = -1f                      // largest |cz0|+|cz1| seen this gesture
+
+    // ── TEMP: diagnose NO/BREAD misrecognition — remove once resolved ───────────
+    private var maxHandsSeenThisGesture = 0
 
     // ── UI state ──────────────────────────────────────────────────────────────
     private var showFilipino       = true
@@ -90,40 +148,81 @@ class MainActivity : AppCompatActivity() {
 
         predictor  = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
-            // Mirror feature x-coordinates for front camera to match training data orientation.
-            // CollectionActivity flips both the bitmap AND the feature x-coords (double mirror =
-            // natural coords). Prediction must do the same so the model sees consistent input.
-            val features = if (isFrontCamera) mirrorHandX(result.features) else result.features
+            // TEMP: track whether this gesture ever showed 2 hands (diagnosing whether
+            // NO/BREAD are being signed/trained as one- or two-handed).
+            if (result.handsDetected > maxHandsSeenThisGesture) maxHandsSeenThisGesture = result.handsDetected
+
+            // Canonical slot order FIRST (RIGHT→slot0, LEFT→slot1)
+            val ordered = canonicalizeSlots(result.features, result.handedness, result.handsDetected)
+            val features = canonicalizeHandedness(
+                ordered, result.handedness, result.handednessScore, result.handsDetected
+            )
             predictor.processFrame(features, result.handsDetected)
+            
             runOnUiThread {
+                val width = binding.cameraPreview.width.toFloat()
+                val height = binding.cameraPreview.height.toFloat()
+                
+                // result.landmarks is already List<FloatArray> - no conversion needed!
                 binding.overlayView.setLandmarks(
-                    result.landmarks,
-                    binding.cameraPreview.width.toFloat(),
-                    binding.cameraPreview.height.toFloat()
+                    result.landmarks,  // This is already the right format
+                    width,
+                    height,
+                    isFrontCamera  // ← Just pass the mirror flag
                 )
             }
         }
 
         lifecycleScope.launch(Dispatchers.IO) {
-            // Update model from backend if needed
-            withContext(Dispatchers.Main) { binding.tvStatus.text = "Downloading model…" }
-
-            ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
-            predictor.init()
-
-            // If init failed, cached files were corrupt — re-download
-            if (!predictor.isReady) {
-                Log.w("MainActivity", "Init failed, re-downloading…")
-                withContext(Dispatchers.Main) { binding.tvStatus.text = "Re-downloading model…" }
-                ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
-                predictor.init()
+            withContext(Dispatchers.Main) { 
+                binding.tvStatus.text = "Loading model..."
+                binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_orange_light))
             }
 
-            withContext(Dispatchers.Main) {
-                binding.tvStatus.text = if (predictor.isReady)
-                    "Models loaded ✓"
-                else
-                    "⚠ No model — connect to the internet and reopen the app"
+            try {
+                // Check for a newer deployed model on every launch — not just when no
+                // local model exists. checkAndUpdate() compares version_number/tflite_url
+                // against what's cached, only downloads+verifies when different, and keeps
+                // the existing model in place if the check or download fails. Without this,
+                // a retrained+redeployed model (e.g. after adding a new word) would never
+                // reach a device that already has some model installed.
+                withContext(Dispatchers.Main) {
+                    binding.tvStatus.text = "Checking for model updates..."
+                }
+                val hasModel = ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
+                if (!hasModel) {
+                    withContext(Dispatchers.Main) {
+                        binding.tvStatus.text = "⚠ Failed to download model"
+                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                    }
+                    return@launch
+                }
+
+                // Initialize predictor (it will fetch labels from backend)
+                withContext(Dispatchers.Main) { 
+                    binding.tvStatus.text = "Fetching words from database..."
+                }
+                predictor.init()
+                
+                // Wait a bit for labels to load
+                delay(2000)
+                
+                withContext(Dispatchers.Main) {
+                    if (predictor.isReady) {
+                        binding.tvStatus.text = "✅ Models loaded ✓"
+                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
+                        Log.d("MainActivity", "✅ Model ready with ${predictor.getLabelCount()} classes")
+                    } else {
+                        binding.tvStatus.text = "⚠ Failed to load words from database"
+                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    binding.tvStatus.text = "⚠ Error: ${e.message}"
+                    binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                    Log.e("MainActivity", "Model error: ${e.message}", e)
+                }
             }
         }
 
@@ -141,8 +240,6 @@ class MainActivity : AppCompatActivity() {
         // Check if user is already signed in
         checkAuthState()
     }
-
-
 
     // ── Backend Initialization ────────────────────────────────────────────────
 
@@ -238,6 +335,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupCallbacks() {
         predictor.onResult = { result ->
+            // TEMP: diagnose NO/BREAD misrecognition on front camera.
+            Log.d(TAG, "NOBREAD_TEST cam=${if (isFrontCamera) "front" else "back"} " +
+                "label=${result.label} conf=${result.confidence} maxHands=$maxHandsSeenThisGesture " +
+                "latchedSlot0=$latchedMirrorSlot0 latchedSlot1=$latchedMirrorSlot1")
+            maxHandsSeenThisGesture = 0
             runOnUiThread {
                 val pct = (result.confidence * 100).toInt()
                 val tag = if (result.isMotion) "MOTION" else "STATIC"
@@ -317,6 +419,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnFlipCamera.setOnClickListener {
             isFrontCamera = !isFrontCamera
             predictor.reset()
+            resetHandednessLatch()
             bindCamera()
         }
 
@@ -476,21 +579,39 @@ class MainActivity : AppCompatActivity() {
             it.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
         }
 
+        // For front camera, mirror the preview
+        if (isFrontCamera) {
+            // CameraX PreviewView handles mirroring automatically for front camera
+            // But if you need to force it:
+            binding.cameraPreview.scaleX = -1f
+            binding.cameraPreview.scaleY = 1f
+        } else {
+            binding.cameraPreview.scaleX = 1f
+            binding.cameraPreview.scaleY = 1f
+        }        
+
         val analysis = ImageAnalysis.Builder()
             .setTargetRotation(binding.cameraPreview.display?.rotation ?: android.view.Surface.ROTATION_0)
-            .setTargetResolution(android.util.Size(320, 240))
+            .setTargetResolution(android.util.Size(240, 180))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
 
         analysis.setAnalyzer(executor) { imageProxy ->
-            frameSkipCounter++
-            if (frameSkipCounter % 2 == 0) {
-                val bitmap          = imageProxy.toBitmap()
-                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
-                landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
+            frameCounter++
+            // Skip every 2nd frame to reduce processing
+            if (frameCounter % 2 == 0) {
+                imageProxy.close()
+                return@setAnalyzer
             }
+            // Process every frame so quick signs keep up. STRATEGY_KEEP_ONLY_LATEST means
+            // CameraX drops stale frames if MediaPipe falls behind, so this self-limits to
+            // what the device can sustain. (If quick-sign lag returns under sustained load,
+            // reinstate a light skip, e.g. `if (frameSkipCounter++ % 3 != 0)`.)
+            val bitmap          = imageProxy.toBitmap()
+            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
+            landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
             imageProxy.close()
         }
 
@@ -505,6 +626,179 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Camera bind failed: ${e.message}")
         }
+    }
+
+    // 2D cross-product z of (wrist→index-MCP)×(wrist→pinky-MCP) for a hand block.
+    // Landmarks 0=wrist, 5=index MCP, 17=pinky MCP. Byte-identical to Python _hand_cross_z.
+    private fun handCrossZ(features: FloatArray, base: Int): Float {
+        val wx = features[base]; val wy = features[base + 1]
+        val v1x = features[base + 5 * 3] - wx;  val v1y = features[base + 5 * 3 + 1] - wy
+        val v2x = features[base + 17 * 3] - wx; val v2y = features[base + 17 * 3 + 1] - wy
+        return v1x * v2y - v1y * v2x
+    }
+
+    private fun isRightHand(crossZ: Float): Boolean =
+        if (CHIRALITY_RIGHT_IS_NEGATIVE_CROSS) crossZ < 0f else crossZ > 0f
+
+    // Reorder the two hand blocks so RIGHT→slot0, LEFT→slot1 (matches Python
+    // canonicalize_slots). One-handed frames are untouched. The swap decision is LATCHED
+    // per gesture (votes accumulate while hands are visible). For the ordering KEY only,
+    // the front-camera x-flip is undone (negate x) so anatomical chirality matches
+    // training/back-cam — the features themselves are NOT altered here.
+    private fun canonicalizeSlots(
+        features: FloatArray,
+        handedness: List<String?>,
+        handsDetected: Int,
+    ): FloatArray {
+        if (!SLOT_CANONICALIZATION_ENABLED) return features
+        if (handsDetected == 0) return features   // latch reset handled in canonicalizeHandedness
+
+        var slot0Present = false
+        for (k in 0 until 63) if (features[k] != 0f) { slot0Present = true; break }
+        var slot1Present = false
+        for (k in 63 until 126) if (features[k] != 0f) { slot1Present = true; break }
+        if (!(slot0Present && slot1Present)) return features   // one-handed → no reorder
+
+        // Camera-independent (see MEDIAPIPE_LABELS_INVERTED calibration note above):
+        // MediaPipe sees the true, unmirrored scene on both cameras, so chirality needs
+        // no per-camera correction here either — same fix as canonicalizeHandedness's
+        // mirrorLabel, which had the same now-false "front camera flips the bitmap"
+        // assumption.
+        val cz0 = handCrossZ(features, 0)
+        val cz1 = handCrossZ(features, 63)
+
+        // Update the decision only when THIS frame is the most hands-apart so far —
+        // that is where chirality is most reliable. Ambiguous hands-together frames
+        // (small |cz0|+|cz1|) never override a cleaner earlier frame's decision.
+        val sep = kotlin.math.abs(cz0) + kotlin.math.abs(cz1)
+        if (sep > bestSlotSep) {
+            bestSlotSep = sep
+            latchedSwapSlots = (!isRightHand(cz0)) && isRightHand(cz1)
+        }
+        val swap = latchedSwapSlots ?: false
+
+        // Stage-0 log to verify the chirality convention on-device.
+        Log.d(TAG, "slots cam=${if (isFrontCamera) "front" else "back"} " +
+                "cz0=$cz0 cz1=$cz1 sep=$sep best=$bestSlotSep " +
+                "mp0=${handedness.getOrNull(0)} mp1=${handedness.getOrNull(1)} swap=$swap")
+
+        if (!swap) return features
+        val out = features.copyOf()
+        for (k in 0 until 63) { out[k] = features[63 + k]; out[63 + k] = features[k] }
+        return out
+    }
+
+    // Canonicalize every hand to the right-handed orientation the model was trained on.
+    // Rule (camera-independent): mirror a hand iff MediaPipe reports it "Left" — the
+    // front-camera flip is already encoded in that label. To resist per-frame label
+    // flicker, the mirror decision is LATCHED per gesture: votes accumulate while hands
+    // are visible and the latched decision holds until hands leave for LATCH_NO_HAND_RESET
+    // frames. Per hand slot; absent (all-zero) blocks are skipped.
+    private fun canonicalizeHandedness(
+        features: FloatArray,
+        handedness: List<String?>,
+        scores: List<Float>,
+        handsDetected: Int,
+    ): FloatArray {
+        if (!LEFT_HANDED_SUPPORT_ENABLED) {
+            // Legacy behavior: unconditionally mirror the whole frame on the front camera.
+            return if (isFrontCamera) mirrorHandX(features) else features
+        }
+
+        // Gesture boundary: when hands disappear long enough, reset the latch.
+        if (handsDetected == 0) {
+            latchNoHandFrames++
+            if (latchNoHandFrames >= LATCH_NO_HAND_RESET) resetHandednessLatch()
+            return features
+        }
+        latchNoHandFrames = 0
+
+        val out = features.copyOf()
+
+        // Camera-independent: MediaPipe's Left/Right label matches the true anatomical
+        // hand the same way on both cameras (see MEDIAPIPE_LABELS_INVERTED above), so
+        // the same hand always gets the same mirror decision regardless of camera.
+        val mirrorLabel = if (MEDIAPIPE_LABELS_INVERTED) "Right" else "Left"
+
+        var presentCount = 0
+        var lastDecidedSlotMirrored = false
+
+        for (slot in 0..1) {
+            val base = slot * 63
+            var present = false
+            for (k in base until base + 63) {
+                if (out[k] != 0f) { present = true; break }
+            }
+            if (!present) continue
+            presentCount++
+
+            val latched = if (slot == 0) latchedMirrorSlot0 else latchedMirrorSlot1
+            if (latched == null) {
+                val label = handedness.getOrNull(slot)
+                val score = scores.getOrNull(slot) ?: 0f
+                if (label != null && score >= HANDEDNESS_MIN_SCORE) {
+                    val vote = if (label == mirrorLabel) 1 else -1
+                    if (slot == 0) handVoteMirror0 += vote else handVoteMirror1 += vote
+                }
+                val votes = if (slot == 0) handVoteMirror0 else handVoteMirror1
+                if (kotlin.math.abs(votes) >= 3) {
+                    val decision = votes > 0
+                    if (slot == 0) latchedMirrorSlot0 = decision else latchedMirrorSlot1 = decision
+                }
+            }
+
+            val decided = (if (slot == 0) latchedMirrorSlot0 else latchedMirrorSlot1)
+                ?: ((if (slot == 0) handVoteMirror0 else handVoteMirror1) > 0)
+            if (decided) {
+                for (j in 0..20) out[base + j * 3] = -out[base + j * 3]
+            }
+            lastDecidedSlotMirrored = decided
+        }
+
+        // Pose block (nose/shoulders/elbows/wrists) describes the WHOLE body, not a single
+        // hand slot, so mirroring only the hand landmarks leaves an inconsistent frame: a
+        // "right-hand-shaped" hand paired with the TRUE, unmirrored arm/shoulder position —
+        // a combination the model never saw in training (real right-handed samples pair a
+        // right hand with a right-arm-raised pose). Only safe to resolve automatically for
+        // one-handed frames; with two hands present and potentially conflicting mirror
+        // decisions, there's no single correct pose mirror, so we leave it alone (same
+        // known limitation as the two-handed slot-swap case above).
+        if (presentCount == 1 && lastDecidedSlotMirrored) {
+            mirrorPoseBlock(out)
+        }
+        return out
+    }
+
+    // Negate x + swap L/R paired points (Lshoulder<->Rshoulder, Lelbow<->Relbow,
+    // Lwrist<->Rwrist; nose stays). MUST match HandLandmarkHelper's POSE_BASE (126) and
+    // POSE_KEYPOINTS order (nose, Lshoulder, Rshoulder, Lelbow, Relbow, Lwrist, Rwrist).
+    private fun mirrorPoseBlock(features: FloatArray) {
+        val base = 126
+        var present = false
+        for (k in base until base + 21) if (features[k] != 0f) { present = true; break }
+        if (!present) return
+
+        for (k in 0..6) features[base + k * 3] = -features[base + k * 3]
+        for ((a, b) in listOf(1 to 2, 3 to 4, 5 to 6)) {
+            for (off in 0..2) {
+                val ai = base + a * 3 + off
+                val bi = base + b * 3 + off
+                val tmp = features[ai]
+                features[ai] = features[bi]
+                features[bi] = tmp
+            }
+        }
+    }
+
+    private fun resetHandednessLatch() {
+        latchedMirrorSlot0 = null
+        latchedMirrorSlot1 = null
+        handVoteMirror0 = 0
+        handVoteMirror1 = 0
+        latchNoHandFrames = 0
+        // Reset the slot-order latch together (same gesture lifecycle).
+        latchedSwapSlots = null
+        bestSlotSep = -1f
     }
 
     private fun mirrorHandX(features: FloatArray): FloatArray {
@@ -528,15 +822,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
         val maxDim = 640
-        val scale  = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
+        val scale = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
+        
+        // Fast path: no transform needed
+        if (scale >= 1f && rotationDegrees == 0 && !frontCamera) {
+            return bitmap
+        }
+        
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
             if (rotationDegrees != 0) postRotate(rotationDegrees.toFloat())
-            if (frontCamera) postScale(-1f, 1f, bitmap.width * scale / 2f, 0f)
+            // For front camera: DON'T mirror the image going to the model
+            // The preview (PreviewView) handles the display mirroring separately
+            // if (frontCamera) postScale(-1f, 1f, bitmap.width * scale / 2f, 0f)  // ← REMOVE THIS
         }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
-
     // ── Permissions ───────────────────────────────────────────────────────────
 
     private fun hasCameraPermission() =
@@ -604,3 +905,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 }
+
+
+
+

@@ -30,6 +30,50 @@ async function uploadToSupabase(storagePath, buffer, contentType) {
   return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
 }
 
+// ── Copy a model version's files into the fixed deployed/ folder + recompute its
+// checksum. The mobile app always downloads from this fixed path regardless of which
+// version is "active", and verifies it against the ModelVersion row's stored checksum
+// — so both deployModel AND revertModel must call this. A status-only flip (no file
+// copy) leaves the fixed path serving stale bytes that don't match the "new" active
+// row's checksum, which makes the mobile app correctly refuse the download and keep
+// running whatever was last downloaded, silently. Used by deployModel and revertModel.
+async function syncModelFilesToDeployed(model) {
+  if (!model.tflite_url) {
+    throw new Error("Model has no .tflite file. Train the model first.");
+  }
+
+  // Derive base URL from the motion tflite file (all files share the same folder)
+  const baseUrl = model.tflite_url.substring(0, model.tflite_url.lastIndexOf("/"));
+  const files = [
+    { url: model.tflite_url, name: "sign_model_motion.tflite", required: true },
+    { url: `${baseUrl}/labels_motion.json`, name: "labels_motion.json", required: true },
+  ];
+
+  for (const file of files) {
+    if (!file.url || file.url === "null") {
+      if (file.required) throw new Error(`Missing URL for required file: ${file.name}`);
+      console.warn(`Skipping optional file ${file.name} – no URL provided.`);
+      continue;
+    }
+
+    const response = await axios.get(file.url, { responseType: "arraybuffer", timeout: 30000 });
+    const buffer = Buffer.from(response.data);
+    const contentType =
+      response.headers["content-type"] ||
+      (file.name.endsWith(".tflite") ? "application/octet-stream" : "application/json");
+    await uploadToSupabase(`deployed/${file.name}`, buffer, contentType);
+    console.log(
+      `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed/${file.name}`,
+    );
+
+    if (file.name === "sign_model_motion.tflite") {
+      const checksumHex = crypto.createHash("sha256").update(buffer).digest("hex");
+      await model.update({ checksum: checksumHex });
+      console.log(`SHA256 checksum saved: ${checksumHex}`);
+    }
+  }
+}
+
 // ── GET /api/models ───────────────────────────────────────────
 // Get all model versions
 const getAllModels = async (req, res) => {
@@ -327,88 +371,8 @@ const deployModel = async (req, res) => {
       });
     }
 
-    // ── Upload model files to Supabase deployed folder ───────────────────────
-    // Derive base URL from the motion tflite file (all files share the same folder)
-    const baseUrl = model.tflite_url.substring(
-      0,
-      model.tflite_url.lastIndexOf("/"),
-    );
-
-    // Every model is a motion (LSTM) model. tflite_url holds the motion model URL;
-    // labels are in the same versioned folder.
-    const possibleFiles = [
-      {
-        url: model.tflite_url,
-        name: "sign_model_motion.tflite",
-        required: true,
-      },
-      {
-        url: `${baseUrl}/labels_motion.json`,
-        name: "labels_motion.json",
-        required: true,
-      },
-    ];
-
-    for (const file of possibleFiles) {
-      // Skip if the URL is missing or empty
-      if (!file.url || file.url === "null") {
-        if (file.required) {
-          throw new Error(`Missing URL for required file: ${file.name}`);
-        } else {
-          console.warn(
-            `Skipping optional file ${file.name} – no URL provided.`,
-          );
-          continue;
-        }
-      }
-
-      try {
-        const response = await axios.get(file.url, {
-          responseType: "arraybuffer",
-          timeout: 30000,
-        });
-        const buffer = Buffer.from(response.data);
-        const contentType =
-          response.headers["content-type"] ||
-          (file.name.endsWith(".tflite")
-            ? "application/octet-stream"
-            : "application/json");
-        await uploadToSupabase(`deployed/${file.name}`, buffer, contentType);
-        console.log(
-          `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed/${file.name}`,
-        );
-      } catch (err) {
-        if (file.required) {
-          console.error(
-            `Failed to upload required file ${file.name}:`,
-            err.message,
-          );
-          throw err; // fail the deployment if a required file is missing
-        } else {
-          console.warn(`Skipping optional file ${file.name}: ${err.message}`);
-        }
-      }
-    }
-
-    // ── Compute SHA256 checksum of the deployed motion .tflite ──────────────
-    // Saved so the mobile app can verify the downloaded model is not corrupted.
-    try {
-      const motionFile = possibleFiles.find((f) => f.name === "sign_model_motion.tflite");
-      if (motionFile) {
-        const motionResponse = await axios.get(motionFile.url, {
-          responseType: "arraybuffer",
-          timeout: 30000,
-        });
-        const checksumHex = crypto
-          .createHash("sha256")
-          .update(Buffer.from(motionResponse.data))
-          .digest("hex");
-        await model.update({ checksum: checksumHex });
-        console.log(`SHA256 checksum saved: ${checksumHex}`);
-      }
-    } catch (csErr) {
-      console.warn("Checksum computation failed (non-fatal):", csErr.message);
-    }
+    // Copy this version's files into deployed/ and recompute its checksum.
+    await syncModelFilesToDeployed(model);
 
     // If the model is already deployed (e.g., stuck from a previous partial failure), skip ML call.
     const alreadyDeployed = model.status === "deployed";
@@ -532,7 +496,14 @@ const revertModel = async (req, res) => {
       });
     }
 
-    // Set all currently deployed models to inactive
+    // Copy this version's files into deployed/ and recompute its checksum. Without
+    // this, the fixed deployed/ path keeps serving the previously-active version's
+    // bytes while this row's stale checksum no longer matches them — the mobile app's
+    // integrity check then correctly rejects the download and silently keeps running
+    // whatever was last verified, so the "revert" never actually reaches the phone.
+    await syncModelFilesToDeployed(model);
+
+    // Set all other deployed models to inactive
     await ModelVersion.update(
       { status: "inactive" },
       { where: { status: "deployed" } },

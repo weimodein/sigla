@@ -8,13 +8,16 @@ import java.io.FileInputStream
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import kotlin.math.sqrt
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Every sign is a motion gesture recognised by a single LSTM model over a
 // sliding 30-frame window. There is no static model or static/motion race.
 private const val TAG                    = "PredictionService"
 private const val SEQUENCE_LENGTH        = 30    // LSTM input length
-private const val FEATURE_SIZE           = 126   // 2 hands × 21 landmarks × 3
+private const val FEATURE_SIZE           = 147   // 2 hands × 21 × 3 + 7 pose keypoints × 3
 private const val MIN_MOTION_FRAMES      = 8      // begin inference once this many frames buffered
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
 private const val MOTION_THRESHOLD       = 0.60f  // min confidence to accept a prediction
@@ -88,31 +91,35 @@ class PredictionService(private val context: Context) {
     private var motionOutputArr: Array<FloatArray> = arrayOf(FloatArray(1))
 
     // ── Init ──────────────────────────────────────────────────────────────────
+    fun getLabelCount(): Int = motionLabels.size
 
     fun init() {
         try {
-            val options = Interpreter.Options().apply { numThreads = 4 }
+            Log.d(TAG, "=== INIT START ===")
+            val options = Interpreter.Options().apply { numThreads = 2 }
 
-            // Motion model + labels are required.
+            // Load the model from assets or internal storage
             val motionBuf = loadModelOrNull("sign_model_motion.tflite")
             if (motionBuf == null) {
-                Log.e(TAG, "Motion model not found in filesDir or assets — download from backend first")
+                Log.e(TAG, "Motion model not found")
                 return
             }
             motionInterp = Interpreter(motionBuf, options)
+            Log.d(TAG, "Interpreter created")
 
-            val labels = loadLabelsOrNull("labels_motion.json")
-            if (labels == null || labels.isEmpty()) {
-                Log.e(TAG, "Motion labels not found or empty — download labels_motion.json first")
-                motionInterp?.close()
-                motionInterp = null
-                return
+            // Fetch labels from the backend
+            fetchLabelsFromBackend { labels ->
+                if (labels != null && labels.isNotEmpty()) {
+                    motionLabels = labels
+                    motionOutputArr = arrayOf(FloatArray(motionLabels.size))
+                    isReady = true
+                    Log.i(TAG, "✅ Motion model loaded — ${motionLabels.size} classes")
+                } else {
+                    Log.e(TAG, "Failed to fetch labels from backend")
+                    motionInterp?.close()
+                    motionInterp = null
+                }
             }
-            motionLabels = labels
-
-            motionOutputArr = arrayOf(FloatArray(motionLabels.size))
-            isReady = true
-            Log.i(TAG, "Motion model loaded — ${motionLabels.size} classes")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load motion model: ${e.message}", e)
         }
@@ -170,8 +177,19 @@ class PredictionService(private val context: Context) {
         if (handsDetected == 0) {
             noHandFrames++
             if (noHandFrames >= NO_HAND_TIMEOUT && (collecting || frameBuffer.isNotEmpty())) {
-                onNoHands?.invoke()
-                resetBuffers()
+                // Flush: a FAST sign may have ended before the sliding window fired.
+                // If enough frames were collected, run one final forced inference so the
+                // just-completed gesture still gets classified (extractMotionWindow pads
+                // short sequences to SEQUENCE_LENGTH). fire() resets the buffer on success.
+                if (frameBuffer.size >= MIN_MOTION_FRAMES &&
+                    System.currentTimeMillis() - lastDetectionTime >= DETECTION_COOLDOWN_MS
+                ) {
+                    runAndMaybeFire(System.currentTimeMillis(), force = true)
+                }
+                if (frameBuffer.isNotEmpty() || collecting) {
+                    onNoHands?.invoke()
+                    resetBuffers()
+                }
             }
             return
         }
@@ -342,5 +360,74 @@ class PredictionService(private val context: Context) {
 
     fun close() {
         motionInterp?.close()
+    }
+
+    private fun fetchLabelsFromBackend(callback: (List<String>?) -> Unit) {
+        // Check if we have cached labels
+        val cachedLabels = loadLabelsOrNull("labels_motion.json")
+        if (cachedLabels != null && cachedLabels.isNotEmpty()) {
+            Log.d(TAG, "Using cached labels from internal storage")
+            callback(cachedLabels)
+            return
+        }
+
+        // Fetch from backend
+        try {
+            Log.d(TAG, "Fetching labels from backend...")
+            val token = SessionManager.getInstance(context).token ?: ""
+
+            // Use coroutines for async call
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val response = ApiClient.get(token).getWordBank()
+                    if (response.isSuccessful) {
+                        val words = response.body()?.words ?: emptyList()
+                        if (words.isNotEmpty()) {
+                            // Create labels from words
+                            val labels = words.map { it.label }
+                            Log.d(TAG, "Fetched ${labels.size} labels from backend")
+
+                            // Cache the labels for offline use
+                            cacheLabels(labels)
+
+                            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                callback(labels)
+                            }
+                        } else {
+                            Log.e(TAG, "No words found in backend")
+                            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                callback(null)
+                            }
+                        }
+                    } else {
+                        Log.e(TAG, "Failed to fetch words: ${response.code()}")
+                        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                            callback(null)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error fetching labels: ${e.message}", e)
+                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        callback(null)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error: ${e.message}", e)
+            callback(null)
+        }
+    }
+    private fun cacheLabels(labels: List<String>) {
+        try {
+            val json = org.json.JSONObject()
+            labels.forEachIndexed { index, label ->
+                json.put(index.toString(), label)
+            }
+            val file = File(context.filesDir, "labels_motion.json")
+            file.writeText(json.toString())
+            Log.d(TAG, "Labels cached to internal storage")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cache labels: ${e.message}", e)
+        }
     }
 }

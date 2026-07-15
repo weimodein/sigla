@@ -2,11 +2,12 @@ import os
 import json
 import numpy as np
 import httpx
+from sklearn.model_selection import train_test_split
 from dotenv import load_dotenv
 
 load_dotenv()
 
-FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
+FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 
 # Backend API configuration
@@ -16,6 +17,12 @@ ML_API_KEY  = os.getenv("ML_API_KEY")  # Must be set in .env
 # Key landmark x,y indices for velocity (wrist + fingertips) — matches PredictionService KEY_XY
 _KEY_LANDMARKS = [0, 4, 8, 12, 16, 20]
 _KEY_XY = [idx for i in _KEY_LANDMARKS for idx in (i * 3, i * 3 + 1)]
+
+# Pose block layout — MUST match HandLandmarkHelper.kt (POSE_BASE / POSE_KEYPOINTS /
+# POSE_LSHOULDER / POSE_RSHOULDER). [126..146] = 7 pose keypoints x (x,y,z).
+_POSE_BASE      = 126
+_POSE_LSHOULDER = 1  # local pose-block index (mediapipe landmark 11)
+_POSE_RSHOULDER = 2  # local pose-block index (mediapipe landmark 12)
 
 
 def fetch_approved_samples() -> dict:
@@ -52,12 +59,15 @@ def fetch_approved_samples() -> dict:
 
 def normalize_frame(frame: np.ndarray) -> np.ndarray:
     """
-    Make a 126-float frame position- and scale-invariant, per present hand:
-      1. Wrist-center: subtract landmark 0 (x,y,z) from all 21 landmarks.
-      2. Scale: divide all by the 2D wrist→middle-finger-MCP (landmark 9) distance.
-    An absent hand is 63 zeros and is left untouched (keeps the "no hand" sentinel).
+    Make a 147-float frame position- and scale-invariant:
+      1. Per hand (2 x 63): wrist-center (landmark 0), scale by 2D
+         wrist→middle-finger-MCP (landmark 9) distance. Absent hand (63 zeros)
+         is left untouched.
+      2. Pose block (21): center on the shoulder midpoint, scale by the 2D
+         L↔R shoulder distance. Absent pose (21 zeros) is left untouched.
 
-    MUST stay identical to the mobile normalization in HandLandmarkHelper.parseResult.
+    MUST stay identical to the mobile normalization in HandLandmarkHelper.kt
+    (normalizeHandBlock / normalizePoseBlock).
     """
     out = frame.copy()
     for hand in range(2):
@@ -74,6 +84,19 @@ def normalize_frame(frame: np.ndarray) -> np.ndarray:
             out[base + j * 3]     = (block[j * 3]     - wx) / d
             out[base + j * 3 + 1] = (block[j * 3 + 1] - wy) / d
             out[base + j * 3 + 2] = (block[j * 3 + 2] - wz) / d
+
+    pose_block = out[_POSE_BASE:_POSE_BASE + 21]
+    if np.any(pose_block):
+        lsx, lsy, lsz = pose_block[_POSE_LSHOULDER * 3], pose_block[_POSE_LSHOULDER * 3 + 1], pose_block[_POSE_LSHOULDER * 3 + 2]
+        rsx, rsy, rsz = pose_block[_POSE_RSHOULDER * 3], pose_block[_POSE_RSHOULDER * 3 + 1], pose_block[_POSE_RSHOULDER * 3 + 2]
+        cx, cy, cz = (lsx + rsx) / 2, (lsy + rsy) / 2, (lsz + rsz) / 2
+        sw = float(np.sqrt((rsx - lsx) ** 2 + (rsy - lsy) ** 2))
+        if sw < 1e-6:
+            sw = 1e-6
+        for k in range(7):
+            out[_POSE_BASE + k * 3]     = (pose_block[k * 3]     - cx) / sw
+            out[_POSE_BASE + k * 3 + 1] = (pose_block[k * 3 + 1] - cy) / sw
+            out[_POSE_BASE + k * 3 + 2] = (pose_block[k * 3 + 2] - cz) / sw
     return out
 
 
@@ -115,21 +138,62 @@ def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     return np.array(window[:SEQUENCE_LENGTH], dtype=np.float32)
 
 
-def prepare_motion_dataset(dataset: dict):
-    """
-    Prepare dataset for motion gesture model (LSTM).
-    Each sample is a sequence of SEQUENCE_LENGTH frames centered on peak velocity.
-    Returns X (sequences), y (labels), label_map (index → label)
-    """
-    X      = []
-    y      = []
-    labels = sorted(dataset.keys())
+# Sign convention: cross_z < 0 => RIGHT. MUST equal Kotlin CHIRALITY_RIGHT_IS_NEGATIVE_CROSS.
+_CHIRALITY_RIGHT_IS_NEGATIVE_CROSS = True
 
-    label_map = { i: label for i, label in enumerate(labels) }
-    label_idx = { label: i for i, label in enumerate(labels) }
 
+def _hand_cross_z(frame: np.ndarray, base: int) -> float:
+    """2D cross-product z of (wrist->index-MCP)x(wrist->pinky-MCP) for one hand block.
+    Landmarks 0=wrist, 5=index MCP, 17=pinky MCP. Byte-identical to Kotlin handCrossZ."""
+    wx, wy = frame[base], frame[base + 1]
+    v1x, v1y = frame[base + 5 * 3] - wx,  frame[base + 5 * 3 + 1] - wy
+    v2x, v2y = frame[base + 17 * 3] - wx, frame[base + 17 * 3 + 1] - wy
+    return float(v1x * v2y - v1y * v2x)
+
+
+def _is_right_hand(cross_z: float) -> bool:
+    return cross_z < 0 if _CHIRALITY_RIGHT_IS_NEGATIVE_CROSS else cross_z > 0
+
+
+def canonicalize_slots(seq: np.ndarray) -> np.ndarray:
+    """
+    For two-handed sequences, reorder the two 63-float hand blocks so slot0 is always
+    the RIGHT hand and slot1 always LEFT — matching Kotlin's canonicalizeSlots() exactly
+    (one swap decision per sequence, taken from whichever frame has the two hands most
+    spatially separated, since chirality is most reliable there). One-handed and
+    no-hand sequences are returned unchanged. MUST match the mobile logic byte-for-byte
+    or a live-canonicalized frame and a train-time-canonicalized frame would disagree.
+    """
+    best_sep = -1.0
+    swap = False
+    for frame in seq:
+        slot0_present = bool(np.any(frame[0:63]))
+        slot1_present = bool(np.any(frame[63:126]))
+        if not (slot0_present and slot1_present):
+            continue
+        cz0 = _hand_cross_z(frame, 0)
+        cz1 = _hand_cross_z(frame, 63)
+        sep = abs(cz0) + abs(cz1)
+        if sep > best_sep:
+            best_sep = sep
+            swap = (not _is_right_hand(cz0)) and _is_right_hand(cz1)
+
+    if not swap:
+        return seq
+    out = seq.copy()
+    out[:, 0:63], out[:, 63:126] = seq[:, 63:126].copy(), seq[:, 0:63].copy()
+    return out
+
+
+def _load_real_sequences(dataset: dict) -> dict:
+    """
+    Normalize + peak-center every stored real sequence, grouped by label. No
+    augmentation — this is the actual recorded data, used as the basis for both the
+    augmented training set and the untouched evaluation set below.
+    """
+    real = {}
     for label, samples in dataset.items():
-        sequences_for_label = []
+        sequences = []
         for sample in samples:
             sequence = sample.get("sequence", [])
             if not sequence:
@@ -147,24 +211,73 @@ def prepare_motion_dataset(dataset: dict):
             # Center on peak-velocity frame — mirrors PredictionService.extractMotionWindow()
             seq = center_on_peak_velocity(seq)
 
-            sequences_for_label.append(seq)
+            # NOT calling canonicalize_slots() here on purpose — see
+            # SLOT_CANONICALIZATION_ENABLED in MainActivity.kt. It fixed two-handed signs
+            # (BREAD) but regressed one-handed ones (HELLO) via false-positive second-hand
+            # detections, so both sides were reverted together. Keep this call disabled
+            # unless MainActivity.kt's flag is re-enabled to match — a mismatch here is
+            # exactly the bug that sank the FIRST attempt at this feature.
 
+            sequences.append(seq)
+        if sequences:
+            real[label] = sequences
+    return real
+
+
+def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: int = 42):
+    """
+    Prepare a motion dataset split BEFORE augmentation, so the evaluation split is
+    always pure real (unaugmented) data. Augmenting first and splitting after (the
+    previous approach) let noise/stretch/dropout copies of the same real clip land on
+    both sides of the split — inflating both the training-time val_accuracy (which
+    drives EarlyStopping/ReduceLROnPlateau) and test.py's reported accuracy, since
+    neither was evaluating against genuinely unseen data.
+
+    Returns (X_train, y_train, X_val, y_val, label_map). label_map (index -> label) is
+    identical for both splits — computed once from every label present.
+    """
+    real   = _load_real_sequences(dataset)
+    labels = sorted(real.keys())
+
+    label_map = { i: label for i, label in enumerate(labels) }
+    label_idx = { label: i for i, label in enumerate(labels) }
+
+    X_train, y_train = [], []
+    X_val,   y_val   = [], []
+
+    for label in labels:
+        sequences = real[label]
+        idx = label_idx[label]
+
+        if len(sequences) >= 2:
+            train_seqs, val_seqs = train_test_split(
+                sequences, test_size=test_size, random_state=random_state
+            )
+        else:
+            # Too few real samples to hold any out — everything goes to training;
+            # this class just won't have a data point in the evaluation split.
+            train_seqs, val_seqs = sequences, []
+
+        # Augment the TRAIN portion only — evaluation stays 100% real, unaugmented.
         # 25 sequences × 6 = 150 augmented + 25 real = 175 total
-        target = max(len(sequences_for_label) * 6, 150)
+        target = max(len(train_seqs) * 6, 150)
         augmented = augment_motion_sequences(
-            [s.tolist() for s in sequences_for_label], target_count=target
+            [s.tolist() for s in train_seqs], target_count=target
         )
-        sequences_for_label.extend([np.array(a, dtype=np.float32) for a in augmented])
+        train_seqs_all = train_seqs + [np.array(a, dtype=np.float32) for a in augmented]
 
-        for sequence in sequences_for_label:
-            X.append(sequence)
-            y.append(label_idx[label])
+        X_train.extend(train_seqs_all)
+        y_train.extend([idx] * len(train_seqs_all))
+        X_val.extend(val_seqs)
+        y_val.extend([idx] * len(val_seqs))
 
-    X = np.array(X, dtype=np.float32)
-    y = np.array(y, dtype=np.int32)
+    X_train = np.array(X_train, dtype=np.float32)
+    y_train = np.array(y_train, dtype=np.int32)
+    X_val   = np.array(X_val,   dtype=np.float32)
+    y_val   = np.array(y_val,   dtype=np.int32)
 
-    print(f"Motion dataset — X: {X.shape}, y: {y.shape}, classes: {len(labels)}")
-    return X, y, label_map
+    print(f"Motion dataset — train: {X_train.shape}, val (real, unaugmented): {X_val.shape}, classes: {len(labels)}")
+    return X_train, y_train, X_val, y_val, label_map
 
 
 def save_label_map(label_map: dict, path: str) -> None:

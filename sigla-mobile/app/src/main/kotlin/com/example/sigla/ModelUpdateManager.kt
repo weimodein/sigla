@@ -81,25 +81,16 @@ object ModelUpdateManager {
                     Log.e(TAG, "Backend returned no model URL — check SUPABASE_URL on server")
                     return@withContext hasLocalModel(context)
                 }
+                // ── Download to a staging file, verify checksum, THEN swap in ──
+                // Never overwrite/delete the live model before we have verified
+                // replacement bytes. If verification fails we keep the last-good
+                // model, so a bad deploy or a stale CDN copy can't brick the app.
                 val modelDest = File(context.filesDir, "sign_model_motion.tflite")
-                val modelOk = downloadToFile(remoteModelUrl, modelDest)
-                if (!modelOk) {
-                    Log.e(TAG, "Motion model download failed")
-                    return@withContext hasLocalModel(context)
-                }
-
-                // ── Verify SHA256 integrity before accepting the new model ─────
                 val expectedChecksum = model.checksum
-                if (!expectedChecksum.isNullOrBlank()) {
-                    val actualChecksum = computeSha256(modelDest)
-                    if (actualChecksum != expectedChecksum) {
-                        Log.e(TAG, "Checksum mismatch! Expected=$expectedChecksum Actual=$actualChecksum — discarding download")
-                        modelDest.delete()
-                        return@withContext hasLocalModel(context)
-                    }
-                    Log.i(TAG, "Checksum verified OK")
-                } else {
-                    Log.w(TAG, "No checksum provided by server — skipping integrity check")
+                val verifiedModel = downloadAndVerify(remoteModelUrl, modelDest, expectedChecksum)
+                if (!verifiedModel) {
+                    Log.e(TAG, "Motion model download/verify failed — keeping existing model if any")
+                    return@withContext hasLocalModel(context)
                 }
 
                 Log.i(TAG, "Motion TFLite downloaded")
@@ -112,8 +103,8 @@ object ModelUpdateManager {
                 }
                 val labelsMotionOk = downloadToFile(labelsMotionUrl, File(context.filesDir, "labels_motion.json"))
                 if (!labelsMotionOk) {
-                    Log.e(TAG, "Motion labels download failed — cannot run inference without labels")
-                    return@withContext false
+                    Log.e(TAG, "Motion labels download failed — falling back to any existing local model+labels")
+                    return@withContext hasLocalModel(context)
                 }
                 Log.i(TAG, "Motion labels downloaded")
 
@@ -129,6 +120,69 @@ object ModelUpdateManager {
                 hasLocalModel(context)
             }
         }
+    }
+
+    /**
+     * Download [url] to a staging file, verify its SHA-256 against [expectedChecksum],
+     * and only then atomically replace [dest] with the verified bytes. The live
+     * [dest] is never touched unless verification succeeds, so a bad/stale download
+     * cannot destroy the last-good model.
+     *
+     * On checksum mismatch it retries ONCE with a cache-busting query param, which
+     * defeats a stale Supabase CDN copy served at the fixed deployed/ path.
+     *
+     * Returns true only when [dest] now holds verified bytes. If [expectedChecksum]
+     * is blank, integrity checking is skipped (the download still goes tmp→swap).
+     */
+    private fun downloadAndVerify(url: String, dest: File, expectedChecksum: String?): Boolean {
+        val staging = File(dest.parent, dest.name + ".staging")
+        // Try the plain URL first, then a cache-busted URL if the checksum fails.
+        val attempts = listOf(url, appendCacheBuster(url))
+        for ((index, attemptUrl) in attempts.withIndex()) {
+            if (!downloadToFile(attemptUrl, staging)) {
+                Log.w(TAG, "Download attempt ${index + 1} failed for model")
+                continue
+            }
+            if (expectedChecksum.isNullOrBlank()) {
+                Log.w(TAG, "No checksum provided by server — skipping integrity check")
+                return swapIntoPlace(staging, dest)
+            }
+            val actual = computeSha256(staging)
+            if (actual == expectedChecksum) {
+                Log.i(TAG, "Checksum verified OK")
+                return swapIntoPlace(staging, dest)
+            }
+            Log.e(
+                TAG,
+                "Checksum mismatch (attempt ${index + 1})! Expected=$expectedChecksum Actual=$actual" +
+                    if (index == 0) " — retrying with cache-buster" else " — giving up, keeping last-good model"
+            )
+            staging.delete()
+        }
+        return false
+    }
+
+    // Atomically move the verified staging file onto the live destination.
+    private fun swapIntoPlace(staging: File, dest: File): Boolean {
+        if (staging.renameTo(dest)) return true
+        // Cross-filesystem or existing-dest edge case: copy then clean up.
+        return try {
+            staging.inputStream().use { input ->
+                dest.outputStream().use { output -> input.copyTo(output) }
+            }
+            staging.delete()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to move verified model into place: ${e.message}", e)
+            staging.delete()
+            false
+        }
+    }
+
+    // Append a cache-busting query param, preserving any existing query string.
+    private fun appendCacheBuster(url: String): String {
+        val sep = if (url.contains("?")) "&" else "?"
+        return "$url${sep}cb=${System.nanoTime()}"
     }
 
     private fun downloadToFile(url: String, dest: File): Boolean {
@@ -214,6 +268,75 @@ object ModelUpdateManager {
                 Log.i(TAG, "Word bank cached (${words.size} words)")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to cache word bank: ${e.message}")
+            }
+        }
+    }
+
+    // Add this function to ModelUpdateManager.kt
+    suspend fun forceDownloadModel(context: Context, token: String?): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "=== FORCE DOWNLOADING MODEL ===")
+                val response = ApiClient.get(token).getLatestModel()
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Failed to fetch model info: ${response.code()}")
+                    return@withContext false
+                }
+                
+                val model = response.body()?.model ?: run {
+                    Log.e(TAG, "No model in response")
+                    return@withContext false
+                }
+                
+                Log.d(TAG, "Model version: ${model.version_number}")
+                Log.d(TAG, "Model URL: ${model.tflite_url}")
+                Log.d(TAG, "Expected checksum: ${model.checksum}")
+                
+                // Download without checksum verification first
+                val modelUrl = model.tflite_url
+                if (modelUrl.isNullOrBlank()) {
+                    Log.e(TAG, "Model URL is null or blank")
+                    return@withContext false
+                }
+                
+                val modelDest = File(context.filesDir, "sign_model_motion.tflite")
+                Log.d(TAG, "Downloading to: ${modelDest.absolutePath}")
+                
+                // Download the model
+                val downloadSuccess = downloadToFile(modelUrl, modelDest)
+                if (!downloadSuccess) {
+                    Log.e(TAG, "Download failed!")
+                    return@withContext false
+                }
+                
+                Log.d(TAG, "Download successful! File size: ${modelDest.length()} bytes")
+                
+                // Check if file exists
+                if (!modelDest.exists()) {
+                    Log.e(TAG, "File doesn't exist after download!")
+                    return@withContext false
+                }
+                
+                // Download labels
+                val labelsUrl = model.labels_motion_url
+                if (!labelsUrl.isNullOrBlank()) {
+                    val labelsDest = File(context.filesDir, "labels_motion.json")
+                    downloadToFile(labelsUrl, labelsDest)
+                    Log.d(TAG, "Labels downloaded: ${labelsDest.exists()}")
+                }
+                
+                // Save version
+                prefs(context).edit()
+                    .putString(KEY_VERSION, model.version_number)
+                    .putString(KEY_STATIC_URL, modelUrl)
+                    .apply()
+                
+                Log.d(TAG, "=== MODEL DOWNLOAD COMPLETE ===")
+                return@withContext true
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Force download error: ${e.message}", e)
+                return@withContext false
             }
         }
     }

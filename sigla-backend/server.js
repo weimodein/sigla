@@ -1,5 +1,9 @@
 // database configuration
+// database configuration
 require("dotenv").config();
+console.log('🔍 DATABASE_URL after dotenv load:', process.env.DATABASE_URL ? '✅ EXISTS' : '❌ MISSING');
+console.log('🔍 All env keys containing DB:', Object.keys(process.env).filter(k => k.includes('DB') || k.includes('PG')));
+
 const { connectDB } = require("./src/config/db.js");
 
 // module dependencies
