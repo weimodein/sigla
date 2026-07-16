@@ -88,7 +88,7 @@ const Sidebar = ({ onToggle }) => {
           <img
             src="/logo_without_text_official.png"
             alt="SIGLA logo"
-            style={{ width: "72px", height: "72px", objectFit: "contain" }}
+            style={{ width: "44px", height: "44px", objectFit: "contain" }}
           />
           <button
             onClick={handleToggle}
@@ -119,11 +119,11 @@ const Sidebar = ({ onToggle }) => {
         /* ── Expanded: [logo] [SIGLA] on the left, toggle on the right ── */
         <div
           style={{
-            padding: "20px 24px",
+            padding: "8px 20px",
             borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
             display: "flex",
             alignItems: "center",
-            gap: "12px",
+            gap: "8px",
             flexShrink: 0,
           }}
         >
@@ -131,15 +131,15 @@ const Sidebar = ({ onToggle }) => {
             src="/logo_without_text_official.png"
             alt="SIGLA logo"
             style={{
-              width: "72px",
-              height: "72px",
+              width: "64px",
+              height: "64px",
               objectFit: "contain",
               flexShrink: 0,
             }}
           />
           <span
             style={{
-              fontSize: "1.5rem",
+              fontSize: "1.4rem",
               fontWeight: 700,
               color: "white",
               whiteSpace: "nowrap",
@@ -202,9 +202,10 @@ const Sidebar = ({ onToggle }) => {
 
       {/* Navigation Menu */}
       <nav
+        className="sidebar-nav"
         style={{
           flex: 1,
-          padding: "16px 0",
+          padding: "8px 0",
           overflowY: "auto",
           overflowX: "hidden",
         }}
@@ -218,12 +219,12 @@ const Sidebar = ({ onToggle }) => {
               display: "flex",
               alignItems: "center",
               justifyContent: collapsed ? "center" : "flex-start",
-              gap: collapsed ? 0 : "16px",
-              padding: collapsed ? "12px 0" : "12px 24px",
+              gap: collapsed ? 0 : "14px",
+              padding: collapsed ? "10px 0" : "10px 20px",
               textDecoration: "none",
               transition: transitionStyle,
-              minHeight: "48px",
-              height: "48px",
+              minHeight: "44px",
+              height: "44px",
               whiteSpace: "nowrap",
               background: isActive
                 ? collapsed
@@ -257,7 +258,7 @@ const Sidebar = ({ onToggle }) => {
       <div
         style={{
           borderTop: "1px solid rgba(255, 255, 255, 0.2)",
-          padding: "16px 0",
+          padding: "8px 0",
           flexShrink: 0,
           background: "#1e3a8a",
         }}
@@ -269,13 +270,13 @@ const Sidebar = ({ onToggle }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: collapsed ? "center" : "flex-start",
-            gap: collapsed ? 0 : "16px",
+            gap: collapsed ? 0 : "14px",
             width: "100%",
             background: "none",
             border: "none",
-            padding: collapsed ? "12px 0" : "12px 24px",
-            minHeight: "48px",
-            height: "48px",
+            padding: collapsed ? "10px 0" : "10px 20px",
+            minHeight: "44px",
+            height: "44px",
             color: "rgba(255, 255, 255, 0.8)",
             cursor: "pointer",
             transition: transitionStyle,
