@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import {
   getAllUsers,
   getDeactivatedUsers,
-  getWarnedUsers,
+  getDeletedUsers,
   getUserStats,
-  warnUser,
   deactivateUser,
   reactivateUser,
   deleteUser,
@@ -16,7 +15,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import {
   Users,
   UserX,
-  AlertTriangle,
+  Trash2,
   Check,
   Search,
   ChevronUp,
@@ -47,9 +46,9 @@ const C = {
 
 // ── Dashboard card styles ──
 const injectCardStyles = () => {
-  if (document.getElementById("manage-users-card-styles")) return;
+  if (document.getElementById("manage-admins-card-styles")) return;
   const s = document.createElement("style");
-  s.id = "manage-users-card-styles";
+  s.id = "manage-admins-card-styles";
   s.textContent = `
     .mv-stat-card {
       background: white;
@@ -102,7 +101,7 @@ const SkeletonCard = () => (
   </div>
 );
 
-const SkeletonRows = ({ rows = 5, cols = 7 }) =>
+const SkeletonRows = ({ rows = 5, cols = 6 }) =>
   Array.from({ length: rows }).map((_, i) => (
     <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
       {Array.from({ length: cols }).map((_, j) => (
@@ -250,17 +249,6 @@ const StatusBadge = ({ status }) => {
   return <span style={chipStyle(bg)}>{status}</span>;
 };
 
-// ── Warning Badge ────────────────────────────────────────────
-const WarningBadge = ({ count }) => {
-  if (!count || count === 0) return null;
-  return (
-    <span className="ml-2" style={chipStyle(count >= 2 ? C.red : C.orange)}>
-      {count}/2
-    </span>
-  );
-};
-
-
 // ── Action Button ────────────────────────────────────────────
 const ActionBtn = ({ label, bg, onClick, disabled, title }) => (
   <button
@@ -279,14 +267,18 @@ const ActionBtn = ({ label, bg, onClick, disabled, title }) => (
   </button>
 );
 
+// ── Password rule: ≥8 chars, ≥1 letter, ≥1 number ─────────────
+const isValidPassword = (pw) =>
+  pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
+
 // ════════════════════════════════════════════════════════════
 // ── Main Component ─────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
-const ManageUsers = () => {
+const ManageAdministrators = () => {
   const [activeTab, setActiveTab] = useState("all");
   const toast = useToast();
   const [stats, setStats] = useState(null);
-  const [users, setUsers] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -303,20 +295,19 @@ const ManageUsers = () => {
   // Modal state
   const [editModal, setEditModal] = useState(null);
   const [createModal, setCreateModal] = useState(false);
+  const [confirmCreate, setConfirmCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
-    name: "",
     username: "",
-    email: "",
     password: "",
+    confirmPassword: "",
   });
-  const [warnModal, setWarnModal] = useState(null);
-  const [warnReason, setWarnReason] = useState("");
 
   // Edit form
   const [editForm, setEditForm] = useState({
     name: "",
     username: "",
     email: "",
+    password: "",
   });
 
   // ── Fetch data ──────────────────────────────────────────────
@@ -334,16 +325,16 @@ const ManageUsers = () => {
     try {
       if (activeTab === "all") {
         const data = await getAllUsers({ search: debouncedSearch, limit: 500 });
-        setUsers(data.users || []);
-      } else if (activeTab === "warned") {
-        const data = await getWarnedUsers();
-        setUsers(data.users || []);
+        setAdmins(data.users || []);
       } else if (activeTab === "deactivated") {
         const data = await getDeactivatedUsers();
-        setUsers(data.users || []);
+        setAdmins(data.users || []);
+      } else if (activeTab === "deleted") {
+        const data = await getDeletedUsers();
+        setAdmins(data.users || []);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to load users");
+      toast.error(err.response?.data?.message || "Failed to load administrators");
     } finally {
       setLoading(false);
       setPage(1);
@@ -372,7 +363,7 @@ const ManageUsers = () => {
     }
   };
 
-  const sortedUsers = [...users].sort((a, b) => {
+  const sortedAdmins = [...admins].sort((a, b) => {
     let va = a[sortField] ?? "";
     let vb = b[sortField] ?? "";
     if (typeof va === "string") va = va.toLowerCase();
@@ -383,90 +374,68 @@ const ManageUsers = () => {
   });
 
   // ── Paginate ────────────────────────────────────────────────
-  const totalPages = Math.ceil(sortedUsers.length / pageSize);
-  const paginatedUsers = sortedUsers.slice(
+  const totalPages = Math.ceil(sortedAdmins.length / pageSize);
+  const paginatedAdmins = sortedAdmins.slice(
     (page - 1) * pageSize,
     page * pageSize,
   );
-
-  // ── Create User ──────────────────────────────────────────────
-  const handleCreateUser = async () => {
-    if (!createForm.name.trim() || !createForm.username.trim() || !createForm.email.trim() || !createForm.password.trim()) {
-      showError("All fields are required");
-      return;
-    }
-    if (createForm.password.length < 6) {
-      showError("Password must be at least 6 characters");
-      return;
-    }
-    setActionLoading(true);
-    try {
-      await createUser(createForm);
-      showSuccess("User created successfully");
-      setCreateModal(false);
-      setCreateForm({ name: "", username: "", email: "", password: "" });
-      fetchStats();
-      fetchTabData();
-    } catch (err) {
-      showError(err.response?.data?.message || "Failed to create user");
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   // ── Actions ─────────────────────────────────────────────────
   const showSuccess = (msg) => toast.success(msg);
   const showError = (msg) => toast.error(msg);
 
-  const handleWarnOpen = (user) => {
-    setWarnReason("");
-    setWarnModal(user);
+  // ── Create Administrator ─────────────────────────────────────
+  // Step 1: validate the form, then open a confirmation dialog.
+  const handleCreateAdmin = () => {
+    if (!createForm.username.trim() || !createForm.password.trim()) {
+      showError("Username and password are required");
+      return;
+    }
+    if (!isValidPassword(createForm.password)) {
+      showError(
+        "Password must be at least 8 characters and include a letter and a number",
+      );
+      return;
+    }
+    if (createForm.password !== createForm.confirmPassword) {
+      showError("Passwords do not match");
+      return;
+    }
+    setConfirmCreate(true);
   };
 
-  const handleWarnSubmit = async () => {
+  // Step 2: actually create the administrator after confirmation.
+  const confirmCreateAdmin = async () => {
     setActionLoading(true);
     try {
-      const res = await warnUser(warnModal.id, { reason: warnReason });
-      if (res.warning_count >= 2) {
-        await deactivateUser(warnModal.id);
-        showSuccess("Warning issued (2/2). Account automatically suspended for 30 days.");
-      } else {
-        showSuccess(`Warning issued. User now has ${res.warning_count}/2 warnings.`);
-      }
-      setWarnModal(null);
-      setWarnReason("");
+      await createUser({
+        username: createForm.username.trim(),
+        password: createForm.password,
+      });
+      showSuccess("Administrator created successfully");
+      setConfirmCreate(false);
+      setCreateModal(false);
+      setCreateForm({ username: "", password: "", confirmPassword: "" });
       fetchStats();
       fetchTabData();
     } catch (err) {
-      showError(err.response?.data?.message || "Failed to issue warning");
+      showError(err.response?.data?.message || "Failed to create administrator");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDeactivate = async (id, warningCount) => {
-    if ((warningCount || 0) < 2) {
-      showError(
-        `User must have 2 warnings before being deactivated. Current: ${warningCount || 0}/2`,
-      );
-      return;
-    }
-    if (
-      !window.confirm(
-        "Deactivate this user? Their account will auto-reactivate after 30 days.",
-      )
-    )
+  const handleDeactivate = async (id) => {
+    if (!window.confirm("Deactivate this administrator? They will not be able to log in until reactivated."))
       return;
     setActionLoading(true);
     try {
       await deactivateUser(id);
-      showSuccess(
-        "User deactivated. Account will auto-reactivate after 30 days.",
-      );
+      showSuccess("Administrator deactivated.");
       fetchStats();
       fetchTabData();
     } catch (err) {
-      showError(err.response?.data?.message || "Failed to deactivate user");
+      showError(err.response?.data?.message || "Failed to deactivate administrator");
     } finally {
       setActionLoading(false);
     }
@@ -476,50 +445,64 @@ const ManageUsers = () => {
     setActionLoading(true);
     try {
       await reactivateUser(id);
-      showSuccess("User reactivated successfully. Warning count reset to 0.");
+      showSuccess("Administrator reactivated successfully.");
       fetchStats();
       fetchTabData();
     } catch (err) {
-      showError(err.response?.data?.message || "Failed to reactivate user");
+      showError(err.response?.data?.message || "Failed to reactivate administrator");
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Permanently delete this user? This cannot be undone."))
+    if (!window.confirm("Permanently delete this administrator? This cannot be undone."))
       return;
     setActionLoading(true);
     try {
       await deleteUser(id);
-      showSuccess("User permanently deleted");
+      showSuccess("Administrator permanently deleted");
       fetchStats();
       fetchTabData();
     } catch (err) {
-      showError(err.response?.data?.message || "Failed to delete user");
+      showError(err.response?.data?.message || "Failed to delete administrator");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleEditOpen = (user) => {
+  const handleEditOpen = (admin) => {
     setEditForm({
-      name: user.name || "",
-      username: user.username || "",
-      email: user.email || "",
+      name: admin.name || "",
+      username: admin.username || "",
+      email: admin.email || "",
+      password: "",
     });
-    setEditModal(user);
+    setEditModal(admin);
   };
 
   const handleEditSave = async () => {
+    // Password is optional on edit; validate only when a new one is entered.
+    if (editForm.password && !isValidPassword(editForm.password)) {
+      showError(
+        "Password must be at least 8 characters and include a letter and a number",
+      );
+      return;
+    }
     setActionLoading(true);
     try {
-      await updateUser(editModal.id, editForm);
-      showSuccess("User updated successfully");
+      const payload = {
+        name: editForm.name,
+        username: editForm.username,
+        email: editForm.email,
+      };
+      if (editForm.password) payload.password = editForm.password;
+      await updateUser(editModal.id, payload);
+      showSuccess("Administrator updated successfully");
       setEditModal(null);
       fetchTabData();
     } catch (err) {
-      showError(err.response?.data?.message || "Failed to update user");
+      showError(err.response?.data?.message || "Failed to update administrator");
     } finally {
       setActionLoading(false);
     }
@@ -527,30 +510,28 @@ const ManageUsers = () => {
 
   // ── Tabs ────────────────────────────────────────────────────
   const tabs = [
-    { key: "all", label: "All Users" },
-    { key: "warned", label: "Warned" },
+    { key: "all", label: "All Administrators" },
     { key: "deactivated", label: "Deactivated" },
+    { key: "deleted", label: "Deleted" },
   ];
 
-  // ── Format reactivation date ────────────────────────────────
-  const getReactivationDate = (deactivatedAt) => {
-    if (!deactivatedAt) return "—";
-    const date = new Date(deactivatedAt);
-    date.setDate(date.getDate() + 30);
-    return date.toLocaleDateString("en-PH", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  // ── Mask email ──────────────────────────────────────────────
+  const maskEmail = (email) => {
+    if (!email) return "—";
+    const [local, domain] = email.split("@");
+    if (!domain) return email;
+    const masked =
+      local.length <= 2 ? local[0] + "*" : local.slice(0, 2) + "***";
+    return `${masked}@${domain}`;
   };
 
   // ── Render table rows ───────────────────────────────────────
   const renderRows = () => {
-    if (paginatedUsers.length === 0) {
+    if (paginatedAdmins.length === 0) {
       return (
         <tr>
           <td
-            colSpan={activeTab === "deactivated" ? 7 : 6}
+            colSpan={6}
             className="text-center py-10"
             style={{ color: C.muted, fontSize: 13 }}
           >
@@ -560,7 +541,7 @@ const ManageUsers = () => {
       );
     }
 
-    return paginatedUsers.map((u) => (
+    return paginatedAdmins.map((u) => (
       <tr
         key={u.id}
         className="border-t hover:bg-gray-50 text-sm"
@@ -577,13 +558,9 @@ const ManageUsers = () => {
         </td>
         <td className="px-5 py-3.5 font-semibold" style={{ color: C.text }}>
           {u.username}
-          <WarningBadge count={u.warning_count} />
         </td>
         <td className="px-5 py-3.5" style={{ color: "#4b5563" }}>
-          {u.name}
-        </td>
-        <td className="px-5 py-3.5" style={{ color: "#4b5563" }}>
-          {u.email}
+          {maskEmail(u.email)}
         </td>
         <td className="px-5 py-3.5">
           <StatusBadge status={u.status} />
@@ -591,11 +568,6 @@ const ManageUsers = () => {
         <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 12 }}>
           {u.created_at ? new Date(u.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—"}
         </td>
-        {activeTab === "deactivated" && (
-          <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 12 }}>
-            Auto-reactivates: {getReactivationDate(u.deactivated_at)}
-          </td>
-        )}
         <td className="px-5 py-3.5">
           <div className="flex gap-1.5 flex-wrap">
             {activeTab === "all" && (
@@ -606,57 +578,9 @@ const ManageUsers = () => {
                   onClick={() => handleEditOpen(u)}
                 />
                 <ActionBtn
-                  label="Warn"
-                  bg={C.orange}
-                  onClick={() => handleWarnOpen(u)}
-                  disabled={(u.warning_count || 0) >= 2}
-                  title={
-                    (u.warning_count || 0) >= 2
-                      ? "User already has 2 warnings"
-                      : "Issue a warning"
-                  }
-                />
-                <ActionBtn
                   label="Deactivate"
                   bg={C.red}
-                  onClick={() => handleDeactivate(u.id, u.warning_count)}
-                  disabled={(u.warning_count || 0) < 2}
-                  title={
-                    (u.warning_count || 0) < 2
-                      ? `User needs ${2 - (u.warning_count || 0)} more warning(s) before deactivation`
-                      : "Deactivate user"
-                  }
-                />
-                <ActionBtn
-                  label="Delete"
-                  bg="#6b7280"
-                  onClick={() => handleDelete(u.id)}
-                />
-              </>
-            )}
-            {activeTab === "warned" && (
-              <>
-                <ActionBtn
-                  label="Warn"
-                  bg={C.orange}
-                  onClick={() => handleWarnOpen(u)}
-                  disabled={(u.warning_count || 0) >= 2}
-                  title={
-                    (u.warning_count || 0) >= 2
-                      ? "User already has 2 warnings"
-                      : "Issue a warning"
-                  }
-                />
-                <ActionBtn
-                  label="Deactivate"
-                  bg={C.red}
-                  onClick={() => handleDeactivate(u.id, u.warning_count)}
-                  disabled={(u.warning_count || 0) < 2}
-                  title={
-                    (u.warning_count || 0) < 2
-                      ? `User needs ${2 - (u.warning_count || 0)} more warning(s) before deactivation`
-                      : "Deactivate user"
-                  }
+                  onClick={() => handleDeactivate(u.id)}
                 />
                 <ActionBtn
                   label="Delete"
@@ -679,14 +603,14 @@ const ManageUsers = () => {
                 />
               </>
             )}
+            {activeTab === "deleted" && (
+              <span style={{ color: C.muted, fontSize: 12 }}>—</span>
+            )}
           </div>
         </td>
       </tr>
     ));
   };
-
-  const tableCols = activeTab === "deactivated" ? 8 : 7;
-  const isDeactivated = activeTab === "deactivated";
 
   // ── JSX ─────────────────────────────────────────────────────
   return (
@@ -695,10 +619,10 @@ const ManageUsers = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
-            Manage Users
+            Manage Administrators
           </h2>
           <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
-            Manage user accounts and access
+            Create and manage administrator accounts
           </p>
         </div>
         <button
@@ -720,7 +644,7 @@ const ManageUsers = () => {
           }}
         >
           <UserPlus size={16} />
-          Create User
+          Create Administrator
         </button>
       </div>
 
@@ -734,7 +658,7 @@ const ManageUsers = () => {
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard
-            title="Total Users"
+            title="Total Administrators"
             value={stats?.total}
             icon={Users}
             color="bg-blue-900"
@@ -746,16 +670,16 @@ const ManageUsers = () => {
             color="bg-green-500"
           />
           <StatCard
-            title="Warned"
-            value={stats?.warned}
-            icon={AlertTriangle}
-            color="bg-yellow-500"
-          />
-          <StatCard
             title="Deactivated"
             value={stats?.deactivated}
             icon={UserX}
             color="bg-red-500"
+          />
+          <StatCard
+            title="Deleted"
+            value={stats?.deleted}
+            icon={Trash2}
+            color="bg-gray-500"
           />
         </div>
       )}
@@ -792,7 +716,7 @@ const ManageUsers = () => {
           />
           <input
             type="text"
-            placeholder="Search users..."
+            placeholder="Search administrators..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl focus:outline-none"
@@ -816,56 +740,32 @@ const ManageUsers = () => {
       >
         {loading ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left" style={{ minWidth: 760 }}>
+            <table className="w-full text-left" style={{ minWidth: 640 }}>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
-                  <th className="px-5 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>ID</span>
-                  </th>
-                  <th className="px-5 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Username</span>
-                  </th>
-                  <th className="px-5 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Name</span>
-                  </th>
-                  <th className="px-5 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Email</span>
-                  </th>
-                  <th className="px-5 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Status</span>
-                  </th>
-                  {isDeactivated && (
-                    <th className="px-5 py-3">
-                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Auto-Reactivates</span>
+                  {["ID", "Username", "Email", "Status", "Registered", "Actions"].map((h) => (
+                    <th key={h} className="px-5 py-3">
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>{h}</span>
                     </th>
-                  )}
-                  <th className="px-5 py-3">
-                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Actions</span>
-                  </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                <SkeletonRows rows={5} cols={tableCols} />
+                <SkeletonRows rows={5} cols={6} />
               </tbody>
             </table>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-left" style={{ minWidth: 760 }}>
+              <table className="w-full text-left" style={{ minWidth: 640 }}>
                 <thead style={{ background: "#f9fafb" }}>
                   <tr>
                     <SortableHeader label="ID" sortKey="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     <SortableHeader label="Username" sortKey="username" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    <SortableHeader label="Name" sortKey="name" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     <SortableHeader label="Email" sortKey="email" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     <SortableHeader label="Status" sortKey="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                     <SortableHeader label="Registered" sortKey="created_at" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                    {isDeactivated && (
-                      <th className="px-5 py-3">
-                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Auto-Reactivates</span>
-                      </th>
-                    )}
                     <th className="px-5 py-3">
                       <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Actions</span>
                     </th>
@@ -874,7 +774,7 @@ const ManageUsers = () => {
                 <tbody>{renderRows()}</tbody>
               </table>
             </div>
-            {sortedUsers.length > pageSize && (
+            {sortedAdmins.length > pageSize && (
               <Pagination
                 page={page}
                 totalPages={totalPages}
@@ -884,67 +784,16 @@ const ManageUsers = () => {
                   setPageSize(size);
                   setPage(1);
                 }}
-                total={sortedUsers.length}
+                total={sortedAdmins.length}
               />
             )}
           </>
         )}
       </div>
 
-      {/* Warn Modal */}
-      {warnModal && (
-        <AppModal
-          title={`Issue Warning to ${warnModal.username}`}
-          onClose={() => setWarnModal(null)}
-        >
-          <div className="space-y-3">
-            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
-              This user currently has{" "}
-              <span className="font-semibold" style={{ color: C.orange }}>
-                {warnModal.warning_count || 0}/2
-              </span>{" "}
-              warnings. After 2 warnings, the account can be deactivated.
-            </p>
-            <div>
-              <label
-                className="block text-xs font-medium mb-1"
-                style={{ color: "#4b5563" }}
-              >
-                Reason <span style={{ color: C.muted }}>(optional)</span>
-              </label>
-              <textarea
-                value={warnReason}
-                onChange={(e) => setWarnReason(e.target.value)}
-                placeholder="Describe the reason for this warning..."
-                rows={3}
-                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none resize-none"
-                style={{ borderColor: C.border, background: C.surface }}
-              />
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleWarnSubmit}
-                disabled={actionLoading}
-                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ background: C.orange, color: "#fff" }}
-              >
-                {actionLoading ? "Issuing..." : "Issue Warning"}
-              </button>
-              <button
-                onClick={() => setWarnModal(null)}
-                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
-                style={{ borderColor: C.border, color: "#4b5563" }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </AppModal>
-      )}
-
-      {/* Edit User Modal */}
+      {/* Edit Administrator Modal */}
       {editModal && (
-        <AppModal title="Edit User" onClose={() => setEditModal(null)}>
+        <AppModal title="Edit Administrator" onClose={() => setEditModal(null)}>
           <div className="space-y-3">
             {["name", "username", "email"].map((field) => (
               <div key={field}>
@@ -969,6 +818,31 @@ const ManageUsers = () => {
                 />
               </div>
             ))}
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                New Password <span style={{ color: C.muted }}>(optional)</span>
+              </label>
+              <input
+                type="password"
+                value={editForm.password}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, password: e.target.value })
+                }
+                placeholder="Leave blank to keep current password"
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+              <p className="text-[11px] mt-1" style={{ color: C.muted }}>
+                If set: at least 8 characters, including a letter and a number.
+              </p>
+            </div>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleEditSave}
@@ -990,34 +864,14 @@ const ManageUsers = () => {
         </AppModal>
       )}
 
-      {/* Create User Modal */}
+      {/* Create Administrator Modal */}
       {createModal && (
-        <AppModal title="Create New User" onClose={() => setCreateModal(false)}>
+        <AppModal title="Create Administrator" onClose={() => setCreateModal(false)}>
           <div className="space-y-3">
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
-              Create a user account directly. This bypasses email verification and the account is immediately active.
+              Create an administrator account with a username and password. The
+              administrator links their email address on first login.
             </p>
-            <div>
-              <label
-                className="block text-xs font-medium mb-1"
-                style={{ color: "#4b5563" }}
-              >
-                Name
-              </label>
-              <input
-                type="text"
-                value={createForm.name}
-                onChange={(e) =>
-                  setCreateForm({ ...createForm, name: e.target.value })
-                }
-                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
-                style={{
-                  borderColor: C.border,
-                  background: C.surface,
-                  color: C.text,
-                }}
-              />
-            </div>
             <div>
               <label
                 className="block text-xs font-medium mb-1"
@@ -1030,27 +884,6 @@ const ManageUsers = () => {
                 value={createForm.username}
                 onChange={(e) =>
                   setCreateForm({ ...createForm, username: e.target.value })
-                }
-                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
-                style={{
-                  borderColor: C.border,
-                  background: C.surface,
-                  color: C.text,
-                }}
-              />
-            </div>
-            <div>
-              <label
-                className="block text-xs font-medium mb-1"
-                style={{ color: "#4b5563" }}
-              >
-                Email
-              </label>
-              <input
-                type="email"
-                value={createForm.email}
-                onChange={(e) =>
-                  setCreateForm({ ...createForm, email: e.target.value })
                 }
                 className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
                 style={{
@@ -1080,15 +913,39 @@ const ManageUsers = () => {
                   color: C.text,
                 }}
               />
+              <p className="text-[11px] mt-1" style={{ color: C.muted }}>
+                At least 8 characters, including a letter and a number.
+              </p>
+            </div>
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={createForm.confirmPassword}
+                onChange={(e) =>
+                  setCreateForm({ ...createForm, confirmPassword: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
             </div>
             <div className="flex gap-2 pt-2">
               <button
-                onClick={handleCreateUser}
+                onClick={handleCreateAdmin}
                 disabled={actionLoading}
                 className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
                 style={{ background: C.primary, color: "#fff" }}
               >
-                {actionLoading ? "Creating..." : "Create User"}
+                Create
               </button>
               <button
                 onClick={() => setCreateModal(false)}
@@ -1101,8 +958,45 @@ const ManageUsers = () => {
           </div>
         </AppModal>
       )}
+
+      {/* Create Confirmation Dialog */}
+      {confirmCreate && (
+        <AppModal
+          title="Confirm Administrator Creation"
+          onClose={() => setConfirmCreate(false)}
+        >
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
+              Create a new administrator account with username{" "}
+              <strong style={{ color: C.text }}>
+                {createForm.username.trim()}
+              </strong>
+              ? The assigned person can log in with these credentials and will
+              be asked to link an email on first login.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={confirmCreateAdmin}
+                disabled={actionLoading}
+                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ background: C.primary, color: "#fff" }}
+              >
+                {actionLoading ? "Creating..." : "Confirm & Create"}
+              </button>
+              <button
+                onClick={() => setConfirmCreate(false)}
+                disabled={actionLoading}
+                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ borderColor: C.border, color: "#4b5563" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </AppModal>
+      )}
     </div>
   );
 };
 
-export default ManageUsers;
+export default ManageAdministrators;

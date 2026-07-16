@@ -51,8 +51,8 @@ export const AuthProvider = ({ children }) => {
   const login = async (identifier, password) => {
     const data = await loginApi(identifier, password);
 
-    // Only allow admin to access admin panel
-    if (data.user.role === "user") {
+    // Only allow admin / master-admin accounts to access the admin platform
+    if (data.user.role !== "admin" && data.user.role !== "master_admin") {
       throw new Error("Access denied. Admin accounts only.");
     }
 
@@ -71,7 +71,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Helpers ───────────────────────────────────────────────
-  const isAdmin = user?.role === "admin";
+  const isMaster = user?.role === "master_admin";
+  const isAdmin = user?.role === "admin" || isMaster;
   const isLoggedIn = !!user;
 
   return (
@@ -82,6 +83,7 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         isAdmin,
+        isMaster,
         isLoggedIn,
       }}
     >

@@ -24,7 +24,6 @@ import {
   generateVideoFromSequence,
   activateWord,
 } from "../../api/wordApi.js";
-import { warnUser } from "../../api/userApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import AppModal from "../../components/AppModal.jsx";
 import {
@@ -35,7 +34,6 @@ import {
   Image,
   Plus,
   Upload,
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -122,8 +120,6 @@ const ManageWordBank = () => {
   const [generatingVideo, setGeneratingVideo] = useState(false);
   const [perSeqVideos, setPerSeqVideos] = useState({}); // sample_id -> video_url
   const [perSeqSpeeds, setPerSeqSpeeds] = useState({}); // sample_id -> playback speed
-  const [galleryWarnModal, setGalleryWarnModal] = useState(null); // { userId, username }
-  const [galleryWarnReason, setGalleryWarnReason] = useState("");
   const [showCriteria, setShowCriteria] = useState(false);
 
   // ── Fetch ───────────────────────────────────────────────────
@@ -250,19 +246,6 @@ const ManageWordBank = () => {
       await reloadSamples(wordId);
     } catch (err) {
       showError(err.response?.data?.message || "Failed to reject all by user");
-    }
-  };
-
-  // ── Warn user from gallery review ──────────────────────────
-  const handleWarnFromGallery = async () => {
-    if (!galleryWarnModal) return;
-    try {
-      const res = await warnUser(galleryWarnModal.userId, { reason: galleryWarnReason });
-      showSuccess(`Warning issued to ${galleryWarnModal.username}. They now have ${res.warning_count}/2 warnings.`);
-      setGalleryWarnModal(null);
-      setGalleryWarnReason("");
-    } catch (err) {
-      showError(err.response?.data?.message || "Failed to issue warning");
     }
   };
 
@@ -966,12 +949,6 @@ const ManageWordBank = () => {
                           >
                             Reject Submission
                           </button>
-                          <button
-                            onClick={() => { setGalleryWarnReason(""); setGalleryWarnModal({ userId: group.userId, username: group.username }); }}
-                            className="text-xs bg-orange-50 text-orange-700 hover:bg-orange-100 px-2 py-1 rounded flex items-center gap-1"
-                          >
-                            <AlertTriangle size={11} /> Warn User
-                          </button>
                         </>
                       )}
                       <button
@@ -1413,44 +1390,6 @@ className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outl
               </button>
               <button
                 onClick={closeModal}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </AppModal>
-      )}
-
-      {/* ── Warn User from Gallery Modal ──────────────────────── */}
-      {galleryWarnModal && (
-        <AppModal title={`Issue Warning to ${galleryWarnModal.username}`} onClose={() => setGalleryWarnModal(null)}>
-          <div className="space-y-3">
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Issue a warning to <strong>{galleryWarnModal.username}</strong> for submitting
-              inappropriate or non-compliant gesture samples. After 2 warnings their account can be deactivated.
-            </p>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Reason <span className="text-gray-400">(optional)</span>
-              </label>
-              <textarea
-                value={galleryWarnReason}
-                onChange={(e) => setGalleryWarnReason(e.target.value)}
-                placeholder="Describe the reason for this warning..."
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
-              />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleWarnFromGallery}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-2 rounded-lg transition"
-              >
-                Issue Warning
-              </button>
-              <button
-                onClick={() => setGalleryWarnModal(null)}
                 className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
               >
                 Cancel

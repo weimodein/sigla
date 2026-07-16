@@ -22,7 +22,6 @@ import {
   Users,
   BookOpen,
   Clock,
-  AlertTriangle,
   UserX,
   Trash2,
   Download,
@@ -106,25 +105,20 @@ const ReportsAnalytics = () => {
 
   const [userStats, setUserStats] = useState(null);
   const [wordStats, setWordStats] = useState(null);
-  const [allUsers, setAllUsers] = useState([]);
-  const [warnedUsers, setWarnedUsers] = useState([]);
   const [deactivatedUsers, setDeactivatedUsers] = useState([]);
   const [deletedUsers, setDeletedUsers] = useState([]);
   const [words, setWords] = useState([]);
   const [models, setModels] = useState([]);
 
   const [reportSections, setReportSections] = useState({
-    user_stats: true,
+    admin_stats: true,
     word_submissions: true,
     sample_counts: true,
-    registration_trends: true,
     model_accuracy: true,
-    warned_users: true,
-    deactivated_users: true,
-    deleted_users: true,
+    deactivated_admins: true,
+    deleted_admins: true,
   });
 
-  const [warnedPage, setWarnedPage] = useState(1);
   const [deactivatedPage, setDeactivatedPage] = useState(1);
   const [deletedPage, setDeletedPage] = useState(1);
   const PAGE_SIZE = 5;
@@ -144,8 +138,6 @@ const ReportsAnalytics = () => {
       setWordStats(wStats);
 
       const users = usersData.users || [];
-      setAllUsers(users);
-      setWarnedUsers(users.filter((u) => (u.warning_count || 0) > 0));
       setDeactivatedUsers(users.filter((u) => u.status === "deactivated"));
       setDeletedUsers(users.filter((u) => u.status === "deleted"));
       setWords(wordsData.words || []);
@@ -165,34 +157,11 @@ const ReportsAnalytics = () => {
 
   useEffect(() => {
     fetchAll();
-    setWarnedPage(1);
     setDeactivatedPage(1);
     setDeletedPage(1);
   }, [filter]);
 
   // ── Chart data helpers ──────────────────────────────────────
-  const registrationTrend = useMemo(() => {
-    const counts = {};
-    allUsers.forEach((u) => {
-      const date = new Date(u.created_at);
-      let key;
-      if (filter === "week")
-        key = date.toLocaleDateString("en-PH", { weekday: "short" });
-      else if (filter === "month")
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          day: "numeric",
-        });
-      else
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          year: "numeric",
-        });
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return Object.entries(counts).map(([name, users]) => ({ name, users }));
-  }, [allUsers, filter]);
-
   const submissionTrend = useMemo(() => {
     const counts = {};
     words.forEach((w) => {
@@ -277,16 +246,16 @@ const ReportsAnalytics = () => {
         doc.setFontSize(11);
       };
 
-      if (reportSections.user_stats) {
-        addSectionTitle("User Statistics");
+      if (reportSections.admin_stats) {
+        addSectionTitle("Administrator Statistics");
         autoTable(doc, {
           startY: y,
           head: [["Metric", "Count"]],
           body: [
-            ["Total Users", userStats?.total ?? 0],
+            ["Total Administrators", userStats?.total ?? 0],
             ["Active", userStats?.active ?? 0],
             ["Deactivated", userStats?.deactivated ?? 0],
-            ["Warned", userStats?.warned ?? 0],
+            ["Deleted", userStats?.deleted ?? 0],
           ],
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
@@ -326,19 +295,6 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (reportSections.registration_trends) {
-        addSectionTitle("Registration Trends");
-        autoTable(doc, {
-          startY: y,
-          head: [["Period", "New Users"]],
-          body: registrationTrend.map((r) => [r.name, r.users]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
       if (reportSections.model_accuracy) {
         addSectionTitle("Model Accuracy per Version");
         autoTable(doc, {
@@ -355,27 +311,14 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (reportSections.warned_users) {
-        addSectionTitle("Warned Users");
-        autoTable(doc, {
-          startY: y,
-          head: [["Username", "Email", "Warnings"]],
-          body: warnedUsers.map((u) => [u.username, u.email, `${u.warning_count}/2`]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (reportSections.deactivated_users) {
-        addSectionTitle("Deactivated Users");
+      if (reportSections.deactivated_admins) {
+        addSectionTitle("Deactivated Administrators");
         autoTable(doc, {
           startY: y,
           head: [["Username", "Email", "Deactivated At"]],
           body: deactivatedUsers.map((u) => [
             u.username,
-            u.email,
+            u.email || "—",
             u.deactivated_at ? new Date(u.deactivated_at).toLocaleDateString() : "—",
           ]),
           theme: "striped",
@@ -385,12 +328,12 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (reportSections.deleted_users) {
-        addSectionTitle("Deleted Users");
+      if (reportSections.deleted_admins) {
+        addSectionTitle("Deleted Administrators");
         autoTable(doc, {
           startY: y,
           head: [["Username", "Email"]],
-          body: deletedUsers.map((u) => [u.username, u.email]),
+          body: deletedUsers.map((u) => [u.username, u.email || "—"]),
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
@@ -465,18 +408,18 @@ const ReportsAnalytics = () => {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <SkeletonChart key={i} />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
             <SkeletonTable key={i} />
           ))}
         </div>
@@ -484,7 +427,7 @@ const ReportsAnalytics = () => {
           <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
           <div className="h-3 w-52 bg-gray-100 rounded mb-4" />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => (
+            {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-4 bg-gray-100 rounded" />
             ))}
           </div>
@@ -523,13 +466,13 @@ const ReportsAnalytics = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard
-          title="Total Users"
+          title="Total Administrators"
           value={userStats?.total}
           icon={Users}
           color="bg-blue-900"
-          onClick={() => navigate("/users")}
+          onClick={() => navigate("/administrators")}
         />
         <StatCard
           title="Total Words"
@@ -546,47 +489,23 @@ const ReportsAnalytics = () => {
           onClick={() => navigate("/word_bank?status=pending")}
         />
         <StatCard
-          title="Warned Users"
-          value={userStats?.warned}
-          icon={AlertTriangle}
-          color="bg-orange-500"
-          onClick={() => navigate("/users")}
-        />
-        <StatCard
           title="Deactivated"
           value={userStats?.deactivated}
           icon={UserX}
           color="bg-red-500"
-          onClick={() => navigate("/users")}
+          onClick={() => navigate("/administrators")}
         />
         <StatCard
           title="Deleted Accounts"
-          value={deletedUsers.length}
+          value={userStats?.deleted ?? deletedUsers.length}
           icon={Trash2}
           color="bg-gray-600"
-          onClick={() => navigate("/users")}
+          onClick={() => navigate("/administrators")}
         />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="dash-card">
-          <div className="dash-card-header">
-            <SectionHeader title="User Registration Trend" />
-          </div>
-          <div className="dash-card-body">
-            <ResponsiveContainer width="100%" height={220} debounce={200}>
-              <BarChart data={registrationTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="users" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
         <div className="dash-card">
           <div className="dash-card-header">
             <SectionHeader title="Word Submission Trend" />
@@ -639,7 +558,7 @@ const ReportsAnalytics = () => {
           </div>
         </div>
 
-        <div className="dash-card">
+        <div className="dash-card lg:col-span-2">
           <div className="dash-card-header">
             <SectionHeader title="Gesture Samples per Word (Top 10)" />
           </div>
@@ -680,66 +599,12 @@ const ReportsAnalytics = () => {
         </div>
       </div>
 
-      {/* User Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="dash-card">
-          <div className="dash-card-header">
-            <SectionHeader title="Warned Users" count={warnedUsers.length} />
-          </div>
-          <div className="dash-card-body">
-            <SimpleTable
-              headers={["Username", "Email", "Warnings"]}
-              rows={warnedUsers
-                .slice(
-                  (warnedPage - 1) * PAGE_SIZE,
-                  warnedPage * PAGE_SIZE,
-                )
-                .map((u) => [
-                  u.username,
-                  u.email,
-                  `${u.warning_count}/2`,
-                ])}
-              emptyMessage="No warned users"
-            />
-            {warnedUsers.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-                <span>
-                  Page {warnedPage} of{" "}
-                  {Math.ceil(warnedUsers.length / PAGE_SIZE)}
-                </span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setWarnedPage((p) => Math.max(1, p - 1))}
-                    disabled={warnedPage === 1}
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() =>
-                      setWarnedPage((p) =>
-                        Math.min(
-                          Math.ceil(warnedUsers.length / PAGE_SIZE),
-                          p + 1,
-                        ),
-                      )
-                    }
-                    disabled={
-                      warnedPage >= Math.ceil(warnedUsers.length / PAGE_SIZE)
-                    }
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Administrator Lists */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="dash-card">
           <div className="dash-card-header">
             <SectionHeader
-              title="Deactivated Users"
+              title="Deactivated Administrators"
               count={deactivatedUsers.length}
             />
           </div>
@@ -753,12 +618,12 @@ const ReportsAnalytics = () => {
                 )
                 .map((u) => [
                   u.username,
-                  u.email,
+                  u.email || "—",
                   u.deactivated_at
                     ? new Date(u.deactivated_at).toLocaleDateString("en-PH")
                     : "—",
                 ])}
-              emptyMessage="No deactivated users"
+              emptyMessage="No deactivated administrators"
             />
             {deactivatedUsers.length > PAGE_SIZE && (
               <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
@@ -810,7 +675,7 @@ const ReportsAnalytics = () => {
                   (deletedPage - 1) * PAGE_SIZE,
                   deletedPage * PAGE_SIZE,
                 )
-                .map((u) => [u.username, u.email])}
+                .map((u) => [u.username, u.email || "—"])}
               emptyMessage="No deleted accounts"
             />
             {deletedUsers.length > PAGE_SIZE && (
@@ -876,14 +741,12 @@ const ReportsAnalytics = () => {
         <div className="dash-card-body">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { key: "user_stats", label: "User Statistics" },
+              { key: "admin_stats", label: "Administrator Statistics" },
               { key: "word_submissions", label: "Word Submissions" },
               { key: "sample_counts", label: "Sample Counts" },
-              { key: "registration_trends", label: "Registration Trends" },
               { key: "model_accuracy", label: "Model Accuracy" },
-              { key: "warned_users", label: "Warned Users" },
-              { key: "deactivated_users", label: "Deactivated Users" },
-              { key: "deleted_users", label: "Deleted Accounts" },
+              { key: "deactivated_admins", label: "Deactivated Admins" },
+              { key: "deleted_admins", label: "Deleted Accounts" },
             ].map(({ key, label }) => (
               <label
                 key={key}

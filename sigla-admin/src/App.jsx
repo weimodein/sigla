@@ -8,13 +8,14 @@ import Layout from "./components/Layout.jsx";
 import Login from "./pages/auth/Login.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
-import ManageUsers from "./pages/users/ManageUsers.jsx";
+import ManageAdministrators from "./pages/administrators/ManageAdministrators.jsx";
 import ManageWordBank from "./pages/words/ManageWordBank.jsx";
 import ManageDataset from "./pages/words/ManageDataset.jsx";
 import ManageCategories from "./pages/categories/ManageCategories.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
 import AdministratorAccount from "./pages/adminaccount/AdministratorAccount.jsx";
 import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx";
+import ActivityLogs from "./pages/activitylogs/ActivityLogs.jsx";
 
 const App = () => {
   return (
@@ -38,11 +39,11 @@ const App = () => {
               }
             />
             <Route
-              path="/users"
+              path="/administrators"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <ManageUsers />
+                    <ManageAdministrators />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -103,6 +104,16 @@ const App = () => {
                 <ProtectedRoute>
                   <Layout>
                     <ReportsAnalytics />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activity-logs"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ActivityLogs />
                   </Layout>
                 </ProtectedRoute>
               }

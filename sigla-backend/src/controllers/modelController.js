@@ -5,9 +5,8 @@ const {
   ModelVersion,
   Word,
   User,
-  // ActivityLog,
-  Notification,
 } = require("../models/index.js");
+const { logActivity } = require("../utils/activityLogger.js");
 require("dotenv").config();
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
@@ -224,6 +223,14 @@ const trainModel = async (req, res) => {
       model: modelRecord,
     });
 
+    await logActivity({
+      user_id: req.user.id,
+      action: "trained_model",
+      target_type: "model",
+      target_id: modelRecord.id,
+      details: `Started training model version ${version_number}`,
+    });
+
     // ── Background training job ───────────────────────────────
     (async () => {
       try {
@@ -331,13 +338,13 @@ const testModel = async (req, res) => {
     });
 
     // Log activity
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "tested_model",
-    //   target_type: "model",
-    //   target_id: model.id,
-    //   details: `Tested model version ${model.version_number}. Accuracy: ${testResult.accuracy}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "tested_model",
+      target_type: "model",
+      target_id: model.id,
+      details: `Tested model version ${model.version_number}. Accuracy: ${testResult.accuracy}`,
+    });
 
     return res.status(200).json({
       message: "Model tested successfully",
@@ -422,42 +429,14 @@ const deployModel = async (req, res) => {
       console.error("Word activation error (non-fatal):", wordErr.message);
     }
 
-    // ── Notifications ─────────────────────────────────────────────────────────
-    try {
-      const activeUsers = await User.findAll({
-        where: { status: "active", role_id: 3 },
-        attributes: ["id"],
-      });
-
-      const newWordLabels = wordsToActivate.map((w) => w.label);
-      const wordNote =
-        newWordLabels.length > 0
-          ? ` ${newWordLabels.length} new word(s) added: ${newWordLabels.slice(0, 5).join(", ")}${newWordLabels.length > 5 ? "…" : ""}.`
-          : "";
-
-      const notifications = activeUsers.map((u) => ({
-        user_id: u.id,
-        title: "New Model Available",
-        message: `A new sign language model (${model.version_number}) has been deployed.${wordNote} Update your app to get the latest improvements.`,
-        type: "model_updated",
-      }));
-
-      if (notifications.length > 0)
-        await Notification.bulkCreate(notifications);
-    } catch (notifErr) {
-      console.error("Notification error (non-fatal):", notifErr.message);
-    }
-
     // Log activity
-    // try {
-    //   await ActivityLog.create({
-    //     user_id: req.user.id,
-    //     action: "deployed_model",
-    //     target_type: "model",
-    //     target_id: model.id,
-    //     details: `Deployed model version ${model.version_number}`,
-    //   });
-    // } catch (_) {}
+    await logActivity({
+      user_id: req.user.id,
+      action: "deployed_model",
+      target_type: "model",
+      target_id: model.id,
+      details: `Deployed model version ${model.version_number}`,
+    });
 
     return res.status(200).json({
       message: `Model ${model.version_number} deployed successfully`,
@@ -516,13 +495,13 @@ const revertModel = async (req, res) => {
     });
 
     // Log activity
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "reverted_model",
-    //   target_type: "model",
-    //   target_id: model.id,
-    //   details: `Reverted to model version ${model.version_number}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "reverted_model",
+      target_type: "model",
+      target_id: model.id,
+      details: `Reverted to model version ${model.version_number}`,
+    });
 
     return res.status(200).json({
       message: `Reverted to model version ${model.version_number} successfully`,
@@ -551,16 +530,18 @@ const deleteModel = async (req, res) => {
       });
     }
 
-    // Log before deleting
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "deleted_model",
-    //   target_type: "model",
-    //   target_id: model.id,
-    //   details: `Deleted model version ${model.version_number}`,
-    // });
+    const deletedModelId = model.id;
+    const deletedModelVersion = model.version_number;
 
     await model.destroy();
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "deleted_model",
+      target_type: "model",
+      target_id: deletedModelId,
+      details: `Deleted model version ${deletedModelVersion}`,
+    });
 
     return res.status(200).json({ message: "Model deleted successfully" });
   } catch (err) {

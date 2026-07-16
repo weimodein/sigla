@@ -12,7 +12,7 @@ const User = sequelize.define(
     role_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 3,
+      defaultValue: 1,
     },
     username: {
       type: DataTypes.STRING(50),
@@ -23,9 +23,11 @@ const User = sequelize.define(
       type: DataTypes.STRING(100),
       allowNull: true,
     },
+    // Nullable: administrators are created with a username + password only and
+    // link their email later on first login.
     email: {
       type: DataTypes.STRING(100),
-      allowNull: false,
+      allowNull: true,
       unique: true,
       validate: { isEmail: true },
     },

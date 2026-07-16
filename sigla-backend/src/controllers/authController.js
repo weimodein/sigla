@@ -1,8 +1,9 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
-const { User, EmailVerification, UserSetting } = require("../models/index.js");
+const { User, EmailVerification } = require("../models/index.js");
 const { sendVerificationCode } = require("../utils/mailer.js");
+const { logActivity } = require("../utils/activityLogger.js");
 require("dotenv").config();
 
 // ── Helper: generate 6-digit code ────────────────────────────
@@ -29,79 +30,6 @@ const getLatestVerification = async (email, type) => {
     },
     order: [["created_at", "DESC"]],
   });
-};
-
-// ── POST /api/auth/register ───────────────────────────────────
-const register = async (req, res) => {
-  try {
-    const { username, email } = req.body;
-
-    if (!username || !email) {
-      return res
-        .status(400)
-        .json({ message: "username and email are required" });
-    }
-
-    // Check if username or email already exists
-    const existing = await User.findOne({
-      where: { [Op.or]: [{ email }, { username }] },
-    });
-    if (existing) {
-      return res.status(409).json({
-        message:
-          existing.email === email
-            ? "Email already in use"
-            : "Username already taken",
-      });
-    }
-
-    // Check 1-minute resend cooldown
-    const recent = await EmailVerification.findOne({
-      where: {
-        email,
-        type: "registration",
-        last_sent_at: { [Op.gt]: new Date(Date.now() - 60 * 1000) },
-      },
-      order: [["created_at", "DESC"]],
-    });
-    if (recent) {
-      return res.status(429).json({
-        message: "Please wait 1 minute before requesting a new code",
-      });
-    }
-
-    // Invalidate any previous unused codes for this email
-    await EmailVerification.update(
-      { session_invalidated: true },
-      { where: { email, type: "registration", is_used: false } },
-    );
-
-    // Send new verification code — valid for 5 minutes
-    const code = generateCode();
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
-
-    await EmailVerification.create({
-      email,
-      code,
-      type: "registration",
-      expires_at: expires,
-      attempt_count: 0,
-      session_invalidated: false,
-      last_sent_at: new Date(),
-    });
-
-    res.status(200).json({
-      message: "Verification code sent to email",
-      email,
-    });
-
-    sendVerificationCode(email, code, "registration").catch((err) =>
-      console.error("Failed to send registration code to", email, err)
-    );
-  } catch (err) {
-    console.error("Register error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
 };
 
 // ── POST /api/auth/resend-code ────────────────────────────────
@@ -159,100 +87,9 @@ const resendCode = async (req, res) => {
   }
 };
 
-// ── POST /api/auth/verify-email ───────────────────────────────
-const verifyEmail = async (req, res) => {
-  try {
-    const { email, code } = req.body;
-
-    if (!email || !code) {
-      return res.status(400).json({ message: "Email and code are required" });
-    }
-
-    const record = await getLatestVerification(email, "registration");
-
-    if (!record) {
-      return res
-        .status(400)
-        .json({ message: "Invalid or expired verification code" });
-    }
-
-    if (record.code !== code) {
-      const newAttemptCount = record.attempt_count + 1;
-
-      if (newAttemptCount >= 5) {
-        await record.update({
-          attempt_count: newAttemptCount,
-          session_invalidated: true,
-        });
-        return res.status(400).json({
-          message:
-            "Maximum attempts exceeded. Please request a new verification code.",
-          session_invalidated: true,
-        });
-      }
-
-      await record.update({ attempt_count: newAttemptCount });
-      return res.status(400).json({
-        message: `Incorrect code. ${5 - newAttemptCount} attempt(s) remaining.`,
-        attempts_remaining: 5 - newAttemptCount,
-      });
-    }
-
-    // Code is correct — mark as used
-    await record.update({ is_used: true });
-
-    return res.status(200).json({ message: "Email verified successfully" });
-  } catch (err) {
-    console.error("Verify email error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ── POST /api/auth/set-password ───────────────────────────────
-// Final step of registration — creates the user account with status "active"
-// since email was already verified in the previous step
-const setPassword = async (req, res) => {
-  try {
-    const { username, email, password } = req.body;
-
-    if (!username || !email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Username, email, and password are required" });
-    }
-
-    // Confirm email was verified
-    const verified = await EmailVerification.findOne({
-      where: { email, type: "registration", is_used: true },
-    });
-    if (!verified) {
-      return res.status(400).json({ message: "Email not verified" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user with status "active" — email verification already confirms ownership
-    // No pending approval step is needed
-    const user = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-      role_id: 3,
-      status: "active",
-      warning_count: 0,
-    });
-
-    // Create default settings for the user
-    await UserSetting.create({ user_id: user.id });
-
-    return res.status(201).json({
-      message: "Account created successfully. You can now log in.",
-    });
-  } catch (err) {
-    console.error("Set password error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
+// NOTE: Public self-registration (register / verify-email / set-password) has
+// been removed. Administrator accounts are created only by the master
+// administrator via the Manage Administrators module.
 
 // ── POST /api/auth/login ──────────────────────────────────────
 // Accepts email OR username via identifier field
@@ -288,7 +125,7 @@ const login = async (req, res) => {
       return res.status(403).json({ message: "Account no longer exists" });
     }
 
-    const ROLE_MAP = { 1: "admin", 2: "moderator", 3: "user" };
+    const ROLE_MAP = { 1: "admin", 2: "master_admin", 3: "user" };
     const roleName = ROLE_MAP[user.role_id] ?? "user";
 
     const token = generateToken({
@@ -296,6 +133,17 @@ const login = async (req, res) => {
       role_name: roleName,
       status: user.status,
     });
+
+    // Audit sign-ins for admin accounts only.
+    if (roleName === "admin") {
+      await logActivity({
+        user_id: user.id,
+        action: "signed_in",
+        target_type: "user",
+        target_id: user.id,
+        details: `${user.username} signed in`,
+      });
+    }
 
     return res.status(200).json({
       message: "Login successful",
@@ -479,10 +327,7 @@ const getMe = async (req, res) => {
 };
 
 module.exports = {
-  register,
-  verifyEmail,
   verifyResetCode,
-  setPassword,
   login,
   forgotPassword,
   resetPassword,

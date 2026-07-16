@@ -8,6 +8,7 @@ import {
   Tag,
   Cpu,
   BarChart2,
+  ScrollText,
   Settings,
   LogOut,
   PanelLeftClose,
@@ -17,10 +18,11 @@ import {
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-  { label: "Manage Users", path: "/users", icon: Users },
+  { label: "Manage Administrators", path: "/administrators", icon: Users, masterOnly: true },
   { label: "Manage Dataset", path: "/dataset", icon: Database },
   { label: "Manage Categories", path: "/categories", icon: Tag },
   { label: "Manage Model", path: "/model", icon: Cpu },
+  { label: "Activity Logs", path: "/activity-logs", icon: ScrollText },
   { label: "Reports", path: "/reports", icon: BarChart2 },
   { label: "Administrator Account", path: "/admin_account", icon: Settings },
 ];
@@ -28,8 +30,11 @@ const navItems = [
 const Sidebar = ({ onToggle }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, isMaster } = useAuth();
   const navigate = useNavigate();
+
+  // Manage Administrators is exclusive to the master administrator.
+  const visibleNavItems = navItems.filter((item) => !item.masterOnly || isMaster);
 
   const handleLogout = () => setShowLogoutModal(true);
 
@@ -204,7 +209,7 @@ const Sidebar = ({ onToggle }) => {
           overflowX: "hidden",
         }}
       >
-        {navItems.map(({ label, path, icon: Icon }) => (
+        {visibleNavItems.map(({ label, path, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}
