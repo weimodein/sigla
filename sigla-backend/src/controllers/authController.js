@@ -109,13 +109,52 @@ const login = async (req, res) => {
       },
     });
 
+    // Generic response for unknown accounts — no tracking possible, and avoids
+    // revealing whether an identifier exists.
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // ── Login lockout (scope §13) ──────────────────────────────
+    // 5 consecutive failures → temporary lock; cooldown grows by 5 min each
+    // additional 5-failure cycle. A successful login resets everything.
+    const LOCK_THRESHOLD = 5;      // failures per lock cycle
+    const LOCK_STEP_MIN = 5;       // minutes added per lock cycle
+    const now = new Date();
+
+    // Already locked? Block before checking the password.
+    if (user.lockout_until && now < new Date(user.lockout_until)) {
+      const minsLeft = Math.ceil((new Date(user.lockout_until) - now) / 60000);
+      return res.status(429).json({
+        message: `Account temporarily locked due to multiple failed login attempts. Try again in ${minsLeft} minute(s).`,
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      const attempts = (user.failed_login_attempts || 0) + 1;
+
+      // Every LOCK_THRESHOLD consecutive failures triggers a lock with an
+      // incrementing cooldown.
+      if (attempts % LOCK_THRESHOLD === 0) {
+        const lockCount = (user.lockout_count || 0) + 1;
+        const cooldownMin = LOCK_STEP_MIN * lockCount;
+        const until = new Date(now.getTime() + cooldownMin * 60000);
+        await user.update({
+          failed_login_attempts: attempts,
+          lockout_count: lockCount,
+          lockout_until: until,
+        });
+        return res.status(429).json({
+          message: `Account temporarily locked after ${LOCK_THRESHOLD} failed attempts. Try again in ${cooldownMin} minute(s).`,
+        });
+      }
+
+      await user.update({ failed_login_attempts: attempts });
+      const remaining = LOCK_THRESHOLD - (attempts % LOCK_THRESHOLD);
+      return res.status(401).json({
+        message: `Invalid credentials. ${remaining} attempt(s) remaining before the account is locked.`,
+      });
     }
 
     if (user.status === "deactivated") {
@@ -123,6 +162,15 @@ const login = async (req, res) => {
     }
     if (user.status === "deleted") {
       return res.status(403).json({ message: "Account no longer exists" });
+    }
+
+    // Successful auth — fully reset the lockout state.
+    if (user.failed_login_attempts || user.lockout_until || user.lockout_count) {
+      await user.update({
+        failed_login_attempts: 0,
+        lockout_until: null,
+        lockout_count: 0,
+      });
     }
 
     const ROLE_MAP = { 1: "admin", 2: "master_admin", 3: "user" };

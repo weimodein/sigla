@@ -53,6 +53,25 @@ const User = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // ── Login lockout (scope §13) ──
+    // Consecutive failed attempts since the last successful login / reset.
+    failed_login_attempts: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    // When the current temporary lock expires (null = not locked).
+    lockout_until: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // How many times the account has been locked in the current failure streak;
+    // drives the incrementing cooldown (5 * lockout_count minutes).
+    lockout_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
   },
   {
     tableName: "users",
