@@ -101,7 +101,8 @@ const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) =
         className="rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
         style={{ border: `1px solid ${C.border}` }}
       >
-        <option value={20}>20 / page</option>
+        <option value={10}>10 / page</option>
+        <option value={25}>25 / page</option>
         <option value={50}>50 / page</option>
         <option value={100}>100 / page</option>
       </select>
@@ -186,7 +187,7 @@ const ActivityLogs = () => {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);

@@ -19,7 +19,7 @@ import {
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Manage Administrators", path: "/administrators", icon: Users, masterOnly: true },
-  { label: "Manage Dataset", path: "/dataset", icon: Database },
+  { label: "Manage Words", path: "/dataset", icon: Database },
   { label: "Manage Categories", path: "/categories", icon: Tag },
   { label: "Manage Model", path: "/model", icon: Cpu },
   { label: "Activity Logs", path: "/activity-logs", icon: ScrollText },
