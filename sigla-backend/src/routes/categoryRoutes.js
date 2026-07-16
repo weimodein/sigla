@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
+const requireSetupComplete = require("../middleware/requireSetupComplete.js");
 const {
   getAllCategories,
   createCategory,
@@ -10,6 +11,7 @@ const {
 } = require("../controllers/categoryController.js");
 
 router.use(authMiddleware);
+router.use(requireSetupComplete);
 
 router.get("/", roleMiddleware("admin"), getAllCategories);
 router.post("/", roleMiddleware("admin"), createCategory);

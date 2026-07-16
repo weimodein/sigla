@@ -3,6 +3,7 @@ const multer = require("multer");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
+const requireSetupComplete = require("../middleware/requireSetupComplete.js");
 const Word = require("../models/Word.js");
 const {
   getAllWords,
@@ -58,8 +59,9 @@ router.get("/word-bank", async (req, res) => {
   }
 });
 
-// All other routes require login
+// All other routes require login + completed first-login setup
 router.use(authMiddleware);
+router.use(requireSetupComplete);
 
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getWordStats);

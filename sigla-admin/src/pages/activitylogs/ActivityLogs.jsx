@@ -45,6 +45,10 @@ const ACTION_META = {
   deployed_model:       { label: "Deployed Model",       color: C.green },
   reverted_model:       { label: "Reverted Model",       color: C.orange },
   deleted_model:        { label: "Deleted Model",        color: C.red },
+  added_category:       { label: "Added Category",       color: C.green },
+  updated_category:     { label: "Updated Category",     color: C.primary },
+  deleted_category:     { label: "Deleted Category",     color: C.red },
+  completed_setup:      { label: "Completed Setup",      color: C.green },
 };
 
 const actionLabel = (a) =>
@@ -57,6 +61,7 @@ const TARGET_OPTIONS = [
   { value: "user", label: "Administrator" },
   { value: "word", label: "Word" },
   { value: "model", label: "Model" },
+  { value: "category", label: "Category" },
 ];
 
 // ── Action badge ─────────────────────────────────────────────

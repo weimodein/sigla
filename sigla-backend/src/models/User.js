@@ -72,6 +72,15 @@ const User = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+    // Forced first-login onboarding (scope §10): new admins must link a verified
+    // email and change their initial username/password before using the platform.
+    // Defaults true so admin-created accounts require setup; existing/seeded
+    // accounts are set false via migration.
+    must_complete_setup: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   },
   {
     tableName: "users",

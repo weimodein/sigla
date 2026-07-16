@@ -141,6 +141,8 @@ const createUser = async (req, res) => {
       password: hashedPassword,
       role_id: ADMIN_ROLE_ID,
       status: "active",
+      // New admins must complete first-login setup (link email + change credentials).
+      must_complete_setup: true,
     });
 
     // Create default settings for the new administrator
@@ -362,6 +364,72 @@ const updateUser = async (req, res) => {
   }
 };
 
+// ── POST /api/users/complete-setup ────────────────────────────
+// Finishes forced first-login onboarding for the logged-in account:
+// requires that an email is already linked (email-first), then sets the new
+// username + password and clears the must_complete_setup flag.
+const completeSetup = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    if (!user.must_complete_setup) {
+      return res.status(400).json({ message: "Account setup is already complete" });
+    }
+
+    // Email-first: an email must have been linked (via the verified email flow).
+    if (!user.email) {
+      return res
+        .status(400)
+        .json({ message: "Link and verify your email address first" });
+    }
+
+    if (!username || !username.trim() || !password) {
+      return res
+        .status(400)
+        .json({ message: "New username and password are required" });
+    }
+
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 8 characters and include a letter and a number",
+      });
+    }
+
+    const trimmedUsername = username.trim();
+    if (trimmedUsername !== user.username) {
+      const taken = await User.findOne({ where: { username: trimmedUsername } });
+      if (taken) {
+        return res.status(409).json({ message: "Username already taken" });
+      }
+    }
+
+    await user.update({
+      username: trimmedUsername,
+      password: await bcrypt.hash(password, 10),
+      must_complete_setup: false,
+    });
+
+    await logActivity({
+      user_id: user.id,
+      action: "completed_setup",
+      target_type: "user",
+      target_id: user.id,
+      details: "Completed first-login account setup",
+    });
+
+    return res.status(200).json({ message: "Account setup complete" });
+  } catch (err) {
+    console.error("Complete setup error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getDeactivatedUsers,
@@ -373,4 +441,5 @@ module.exports = {
   reactivateUser,
   deleteUser,
   updateUser,
+  completeSetup,
 };

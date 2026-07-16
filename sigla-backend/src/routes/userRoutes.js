@@ -16,17 +16,23 @@ const {
 } = require("../controllers/userController.js");
 const { getMySettings, updateMySettings } = require("../controllers/settingsController.js");
 const { requestEmailCode, verifyEmailCode } = require("../controllers/emailController.js");
+const { completeSetup } = require("../controllers/userController.js");
+const requireSetupComplete = require("../middleware/requireSetupComplete.js");
 
 // All routes require login
 router.use(authMiddleware);
 
-// ── Settings (any authenticated user) ────────────────────────
+// ── Onboarding-safe routes (usable while must_complete_setup is true) ──
 router.get("/settings", getMySettings);
 router.patch("/settings", updateMySettings);
-
-// ── Verified email add/change for the logged-in account ──────
+// Verified email add/change for the logged-in account
 router.post("/email/request-code", requestEmailCode);
 router.post("/email/verify", verifyEmailCode);
+// Finish forced first-login setup
+router.post("/complete-setup", completeSetup);
+
+// ── Everything below requires completed setup ────────────────
+router.use(requireSetupComplete);
 
 // ── Stats — open to any admin (dashboard + reports need the counts) ──
 router.get("/stats", roleMiddleware("admin"), getUserStats);

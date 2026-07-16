@@ -82,6 +82,8 @@ export const AuthProvider = ({ children }) => {
   const isMaster = user?.role === "master_admin";
   const isAdmin = user?.role === "admin" || isMaster;
   const isLoggedIn = !!user;
+  // New admins must complete first-login setup before using the platform.
+  const needsSetup = !!user?.must_complete_setup;
 
   return (
     <AuthContext.Provider
@@ -94,6 +96,7 @@ export const AuthProvider = ({ children }) => {
         isAdmin,
         isMaster,
         isLoggedIn,
+        needsSetup,
       }}
     >
       {children}

@@ -182,8 +182,8 @@ const login = async (req, res) => {
       status: user.status,
     });
 
-    // Audit sign-ins for admin accounts only.
-    if (roleName === "admin") {
+    // Audit sign-ins for admin and master-admin accounts.
+    if (roleName === "admin" || roleName === "master_admin") {
       await logActivity({
         user_id: user.id,
         action: "signed_in",
@@ -202,6 +202,7 @@ const login = async (req, res) => {
         email: user.email,
         role: roleName,
         created_at: user.created_at,
+        must_complete_setup: user.must_complete_setup,
       },
     });
   } catch (err) {

@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const { Category, Word } = require("../models/index.js");
 const { sequelize } = require("../config/db.js");
+const { logActivity } = require("../utils/activityLogger.js");
 
 // ── GET /api/categories ───────────────────────────────────────
 const getAllCategories = async (req, res) => {
@@ -59,6 +60,14 @@ const createCategory = async (req, res) => {
     const category = await Category.create({
       name: trimmed,
       description: description?.trim() || null,
+    });
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "added_category",
+      target_type: "category",
+      target_id: category.id,
+      details: `Added category: ${category.name}`,
     });
 
     return res.status(201).json({ category });
@@ -124,6 +133,15 @@ const updateCategory = async (req, res) => {
     );
 
     await t.commit();
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "updated_category",
+      target_type: "category",
+      target_id: category.id,
+      details: `Updated category: ${newName}`,
+    });
+
     return res.status(200).json({ category });
   } catch (err) {
     await t.rollback();
@@ -154,7 +172,18 @@ const deleteCategory = async (req, res) => {
       });
     }
 
+    const deletedName = category.name;
+    const deletedId = category.id;
     await category.destroy();
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "deleted_category",
+      target_type: "category",
+      target_id: deletedId,
+      details: `Deleted category: ${deletedName}`,
+    });
+
     return res.status(200).json({ message: "Category deleted" });
   } catch (err) {
     console.error("deleteCategory error:", err);

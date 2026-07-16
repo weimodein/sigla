@@ -17,6 +17,7 @@ import ManageModel from "./pages/model/ManageModel.jsx";
 import AdministratorAccount from "./pages/adminaccount/AdministratorAccount.jsx";
 import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx";
 import ActivityLogs from "./pages/activitylogs/ActivityLogs.jsx";
+import Onboarding from "./pages/onboarding/Onboarding.jsx";
 
 const App = () => {
   return (
@@ -27,6 +28,9 @@ const App = () => {
             {/* Public */}
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+
+            {/* Forced first-login onboarding (self-guards on auth + needsSetup) */}
+            <Route path="/onboarding" element={<Onboarding />} />
 
             {/* Protected — with sidebar layout */}
             <Route

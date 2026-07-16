@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 // Guards a route so only a master administrator can access it. Non-master
 // admins are redirected to the dashboard; unauthenticated users to login.
 const MasterRoute = ({ children }) => {
-  const { isLoggedIn, isMaster, loading } = useAuth();
+  const { isLoggedIn, isMaster, needsSetup, loading } = useAuth();
 
   if (loading) {
     return (
@@ -16,6 +16,11 @@ const MasterRoute = ({ children }) => {
 
   if (!isLoggedIn) {
     return <Navigate to="/login" replace />;
+  }
+
+  // New admins must finish first-login setup before accessing the platform.
+  if (needsSetup) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   if (!isMaster) {
