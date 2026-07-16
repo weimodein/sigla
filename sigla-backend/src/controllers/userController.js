@@ -301,9 +301,21 @@ const updateUser = async (req, res) => {
   try {
     const { username, name, email, password } = req.body;
 
-    const user = await User.findOne({
-      where: { id: req.params.id, role_id: ADMIN_ROLE_ID },
-    });
+    // Any admin may edit their OWN account; only a master admin may edit others.
+    const isSelf = String(req.params.id) === String(req.user.id);
+    const isMaster = req.user.role === "master_admin";
+    if (!isSelf && !isMaster) {
+      return res.status(403).json({
+        message: "Access denied. Only the master administrator can edit other accounts.",
+      });
+    }
+
+    // Self-edits may target a master account (role_id 2); master-edits of others
+    // target administrator accounts (role_id 1).
+    const where = isSelf
+      ? { id: req.params.id }
+      : { id: req.params.id, role_id: ADMIN_ROLE_ID };
+    const user = await User.findOne({ where });
 
     if (!user) {
       return res.status(404).json({ message: "Administrator not found" });

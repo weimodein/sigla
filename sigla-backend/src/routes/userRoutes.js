@@ -23,19 +23,21 @@ router.use(authMiddleware);
 router.get("/settings", getMySettings);
 router.patch("/settings", updateMySettings);
 
-// ── Static routes first ───────────────────────────────────────
+// ── Stats — open to any admin (dashboard + reports need the counts) ──
 router.get("/stats", roleMiddleware("admin"), getUserStats);
-router.get("/deactivated", roleMiddleware("admin"), getDeactivatedUsers);
-router.get("/deleted", roleMiddleware("admin"), getDeletedUsers);
 
-// ── Administrator management routes ───────────────────────────
-router.get("/", roleMiddleware("admin"), getAllUsers);
-router.post("/", roleMiddleware("admin"), createUser);
-router.get("/:id", roleMiddleware("admin"), getUserById);
-router.patch("/:id/deactivate", roleMiddleware("admin"), deactivateUser);
-router.patch("/:id/reactivate", roleMiddleware("admin"), reactivateUser);
+// ── Administrator management routes — MASTER ADMIN ONLY (scope §15) ──
+router.get("/deactivated", roleMiddleware("master_admin"), getDeactivatedUsers);
+router.get("/deleted", roleMiddleware("master_admin"), getDeletedUsers);
+router.get("/", roleMiddleware("master_admin"), getAllUsers);
+router.post("/", roleMiddleware("master_admin"), createUser);
+router.get("/:id", roleMiddleware("master_admin"), getUserById);
+router.patch("/:id/deactivate", roleMiddleware("master_admin"), deactivateUser);
+router.patch("/:id/reactivate", roleMiddleware("master_admin"), reactivateUser);
+// PUT /:id stays open to any admin so each account can edit ITSELF; the
+// controller allows the update only for self-edits or when the caller is master.
 router.put("/:id", roleMiddleware("admin"), updateUser);
-router.delete("/:id", roleMiddleware("admin"), deleteUser);
+router.delete("/:id", roleMiddleware("master_admin"), deleteUser);
 
 module.exports = router;
 

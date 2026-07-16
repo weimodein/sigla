@@ -6,6 +6,7 @@ import { getUserStats, getAllUsers } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
   BarChart,
   Bar,
@@ -99,6 +100,7 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 const ReportsAnalytics = () => {
   const toast = useToast();
   const navigate = useNavigate();
+  const { isMaster } = useAuth();
   const [filter, setFilter] = useState("month");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -127,10 +129,12 @@ const ReportsAnalytics = () => {
   const fetchAll = async () => {
     setLoading(true);
     try {
+      // The admin roster (GET /users) is master-only. Regular admins skip it
+      // and simply don't see the per-admin deactivated/deleted tables.
       const [uStats, wStats, usersData, wordsData] = await Promise.all([
         getUserStats(),
         getWordStats(),
-        getAllUsers({ limit: 500 }),
+        isMaster ? getAllUsers({ limit: 500 }) : Promise.resolve({ users: [] }),
         getAllWords({ limit: 500 }),
       ]);
 
@@ -159,7 +163,7 @@ const ReportsAnalytics = () => {
     fetchAll();
     setDeactivatedPage(1);
     setDeletedPage(1);
-  }, [filter]);
+  }, [filter, isMaster]);
 
   // ── Chart data helpers ──────────────────────────────────────
   const submissionTrend = useMemo(() => {
@@ -311,7 +315,7 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (reportSections.deactivated_admins) {
+      if (isMaster && reportSections.deactivated_admins) {
         addSectionTitle("Deactivated Administrators");
         autoTable(doc, {
           startY: y,
@@ -328,7 +332,7 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (reportSections.deleted_admins) {
+      if (isMaster && reportSections.deleted_admins) {
         addSectionTitle("Deleted Administrators");
         autoTable(doc, {
           startY: y,
@@ -599,7 +603,8 @@ const ReportsAnalytics = () => {
         </div>
       </div>
 
-      {/* Administrator Lists */}
+      {/* Administrator Lists — master admin only (per-admin data from /users) */}
+      {isMaster && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="dash-card">
           <div className="dash-card-header">
@@ -715,6 +720,7 @@ const ReportsAnalytics = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Generate Report */}
       <div className="dash-card">
@@ -745,8 +751,13 @@ const ReportsAnalytics = () => {
               { key: "word_submissions", label: "Word Submissions" },
               { key: "sample_counts", label: "Sample Counts" },
               { key: "model_accuracy", label: "Model Accuracy" },
-              { key: "deactivated_admins", label: "Deactivated Admins" },
-              { key: "deleted_admins", label: "Deleted Accounts" },
+              // Per-admin lists require the master-only /users roster
+              ...(isMaster
+                ? [
+                    { key: "deactivated_admins", label: "Deactivated Admins" },
+                    { key: "deleted_admins", label: "Deleted Accounts" },
+                  ]
+                : []),
             ].map(({ key, label }) => (
               <label
                 key={key}

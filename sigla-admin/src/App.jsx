@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import MasterRoute from "./components/MasterRoute.jsx";
 import Layout from "./components/Layout.jsx";
 
 // Pages
@@ -41,11 +42,11 @@ const App = () => {
             <Route
               path="/administrators"
               element={
-                <ProtectedRoute>
+                <MasterRoute>
                   <Layout>
                     <ManageAdministrators />
                   </Layout>
-                </ProtectedRoute>
+                </MasterRoute>
               }
             />
             <Route
