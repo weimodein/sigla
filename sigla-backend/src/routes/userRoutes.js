@@ -15,6 +15,7 @@ const {
   updateUser,
 } = require("../controllers/userController.js");
 const { getMySettings, updateMySettings } = require("../controllers/settingsController.js");
+const { requestEmailCode, verifyEmailCode } = require("../controllers/emailController.js");
 
 // All routes require login
 router.use(authMiddleware);
@@ -22,6 +23,10 @@ router.use(authMiddleware);
 // ── Settings (any authenticated user) ────────────────────────
 router.get("/settings", getMySettings);
 router.patch("/settings", updateMySettings);
+
+// ── Verified email add/change for the logged-in account ──────
+router.post("/email/request-code", requestEmailCode);
+router.post("/email/verify", verifyEmailCode);
 
 // ── Stats — open to any admin (dashboard + reports need the counts) ──
 router.get("/stats", roleMiddleware("admin"), getUserStats);

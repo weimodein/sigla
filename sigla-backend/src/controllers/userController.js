@@ -299,7 +299,9 @@ const deleteUser = async (req, res) => {
 // ── PUT /api/users/:id ────────────────────────────────────────
 const updateUser = async (req, res) => {
   try {
-    const { username, name, email, password } = req.body;
+    // Note: email is intentionally NOT accepted here — it can only be changed
+    // through the verified email flow (POST /users/email/request-code + verify).
+    const { username, name, password } = req.body;
 
     // Any admin may edit their OWN account; only a master admin may edit others.
     const isSelf = String(req.params.id) === String(req.user.id);
@@ -327,18 +329,11 @@ const updateUser = async (req, res) => {
         return res.status(409).json({ message: "Username already taken" });
       }
     }
-    if (email && email !== user.email) {
-      const taken = await User.findOne({ where: { email } });
-      if (taken) {
-        return res.status(409).json({ message: "Email already in use" });
-      }
-    }
 
     // Password is optional on edit — only updated when a new one is provided.
     const updates = {
       username: username || user.username,
       name: name !== undefined ? name : user.name,
-      email: email || user.email,
     };
     if (password) {
       if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {

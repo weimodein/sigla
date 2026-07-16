@@ -335,6 +335,14 @@ const resetPassword = async (req, res) => {
         .json({ message: "Email and password are required" });
     }
 
+    // Enforce the password rule (scope §13/§21): ≥8 chars, ≥1 letter, ≥1 number.
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 8 characters and include a letter and a number",
+      });
+    }
+
     const verified = await EmailVerification.findOne({
       where: { email, type: "password_reset", is_used: true },
       order: [["created_at", "DESC"]],

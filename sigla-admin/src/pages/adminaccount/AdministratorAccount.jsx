@@ -16,8 +16,23 @@ import {
   verifyResetCode,
   resetPassword,
   resendCode,
+  requestEmailCode,
+  verifyEmailCode,
 } from "../../api/authApi.js";
 import api from "../../api/authApi.js";
+
+// Password rule (scope §21): at least 8 chars, one letter, one number.
+const isValidPassword = (pw) =>
+  pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
+
+// Mask an email for display, e.g. "jhoren@gmail.com" -> "jh***@gmail.com".
+const maskEmail = (email) => {
+  if (!email) return "—";
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  const masked = local.length <= 2 ? local[0] + "*" : local.slice(0, 2) + "***";
+  return `${masked}@${domain}`;
+};
 
 // ── Color Palette ──
 const C = {
@@ -86,26 +101,95 @@ const ProfileField = ({ icon: Icon, label, value }) => (
 );
 
 const AdministratorAccount = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
-  // ── Profile state ─────────────────────────────────────────
+  // ── Profile state (username only — email has its own verified flow) ──
   const [isEditing, setIsEditing] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    username: "",
-    email: "",
-  });
+  const [profileForm, setProfileForm] = useState({ username: "" });
   const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
-      setProfileForm({
-        username: user.username || "",
-        email: user.email || "",
-      });
+      setProfileForm({ username: user.username || "" });
     }
   }, [user]);
+
+  // ── Email add/change flow (mirrors the password 3-step flow) ──
+  const [emailStep, setEmailStep] = useState(null); // null | "enter" | "verify"
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailCooldown, setEmailCooldown] = useState(0);
+
+  const startEmailCooldown = () => {
+    setEmailCooldown(60);
+    const interval = setInterval(() => {
+      setEmailCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleRequestEmailCode = async () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    setEmailLoading(true);
+    try {
+      await requestEmailCode(newEmail);
+      toast.success(`Verification code sent to ${newEmail}. Valid for 5 minutes.`);
+      setEmailStep("verify");
+      startEmailCooldown();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to send verification code");
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleResendEmailCode = async () => {
+    if (emailCooldown > 0) return;
+    try {
+      await requestEmailCode(newEmail);
+      toast.success("New verification code sent.");
+      startEmailCooldown();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to resend code");
+    }
+  };
+
+  const handleVerifyEmailCode = async () => {
+    if (emailCode.length !== 6) {
+      toast.error("Please enter the 6-digit verification code");
+      return;
+    }
+    setEmailLoading(true);
+    try {
+      await verifyEmailCode(newEmail, emailCode);
+      toast.success("Email verified and linked successfully.");
+      await refreshUser();
+      setEmailStep(null);
+      setNewEmail("");
+      setEmailCode("");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Invalid or expired code");
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const cancelEmailFlow = () => {
+    setEmailStep(null);
+    setNewEmail("");
+    setEmailCode("");
+  };
 
   // ── Change password state ─────────────────────────────────
   const [passStep, setPassStep] = useState(null);
@@ -179,8 +263,8 @@ const AdministratorAccount = () => {
       toast.error("Passwords do not match");
       return;
     }
-    if (newPass.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!isValidPassword(newPass)) {
+      toast.error("Password must be at least 8 characters and include a letter and a number");
       return;
     }
     setPassLoading(true);
@@ -199,10 +283,15 @@ const AdministratorAccount = () => {
   };
 
   const handleUpdateProfile = async () => {
+    if (!profileForm.username.trim()) {
+      toast.error("Username cannot be empty");
+      return;
+    }
     setProfileLoading(true);
     try {
-      await api.put(`/users/${user.id}`, profileForm);
+      await api.put(`/users/${user.id}`, { username: profileForm.username.trim() });
       toast.success("Profile updated successfully.");
+      await refreshUser();
       setIsEditing(false);
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to update profile");
@@ -212,10 +301,7 @@ const AdministratorAccount = () => {
   };
 
   const handleCancelEdit = () => {
-    setProfileForm({
-      username: user?.username || "",
-      email: user?.email || "",
-    });
+    setProfileForm({ username: user?.username || "" });
     setIsEditing(false);
   };
 
@@ -295,7 +381,7 @@ const AdministratorAccount = () => {
                     className="text-sm"
                     style={{ color: C.muted, margin: "2px 0 0" }}
                   >
-                    {user?.email}
+                    {user?.email ? maskEmail(user.email) : "No email linked"}
                   </p>
                   <span
                     className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full mt-1"
@@ -318,7 +404,11 @@ const AdministratorAccount = () => {
                   label="Username"
                   value={user?.username}
                 />
-                <ProfileField icon={Mail} label="Email" value={user?.email} />
+                <ProfileField
+                  icon={Mail}
+                  label="Email"
+                  value={user?.email ? maskEmail(user.email) : "No email linked"}
+                />
               </div>
             </div>
           </div>
@@ -365,40 +455,25 @@ const AdministratorAccount = () => {
                 </div>
               </div>
 
-              {/* Edit Fields */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    value={profileForm.username}
-                    onChange={(e) =>
-                      setProfileForm({
-                        ...profileForm,
-                        username: e.target.value,
-                      })
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={profileForm.email}
-                    onChange={(e) =>
-                      setProfileForm({
-                        ...profileForm,
-                        email: e.target.value,
-                      })
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                  />
-                </div>
+              {/* Edit Fields — username only; email is changed via its own verified flow */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={profileForm.username}
+                  onChange={(e) =>
+                    setProfileForm({
+                      ...profileForm,
+                      username: e.target.value,
+                    })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                />
+                <p className="text-xs text-gray-400 mt-2">
+                  To change your email address, use the Email section on the right.
+                </p>
               </div>
 
               {/* Save Bar */}
@@ -433,6 +508,141 @@ const AdministratorAccount = () => {
 
         {/* Right: Quick Actions */}
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Email Card — add/change with 6-digit verification */}
+          <div className="dash-card">
+            <div className="dash-card-header">
+              <h3 className="text-base font-semibold text-gray-800">Email Address</h3>
+            </div>
+            <div className="dash-card-body">
+              {!emailStep ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "8px",
+                        background: `${C.primary}15`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: C.primary,
+                      }}
+                    >
+                      <Mail size={16} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p className="text-sm font-medium" style={{ color: C.text, margin: 0 }}>
+                        {user?.email ? maskEmail(user.email) : "No email linked"}
+                      </p>
+                      <p className="text-xs" style={{ color: C.muted, margin: "1px 0 0" }}>
+                        {user?.email ? "Verified" : "Add an email to enable password recovery"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEmailStep("enter")}
+                    className="w-full text-sm font-semibold py-2 rounded-lg transition bg-blue-900 hover:bg-blue-800 text-white"
+                  >
+                    {user?.email ? "Change Email" : "Add Email Address"}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Step indicator */}
+                  <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
+                    {["enter", "verify"].map((s, i) => (
+                      <div
+                        key={s}
+                        style={{
+                          flex: 1,
+                          height: "3px",
+                          borderRadius: "2px",
+                          background:
+                            ["enter", "verify"].indexOf(emailStep) >= i ? C.primary : C.border,
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Step 1 — enter new email */}
+                  {emailStep === "enter" && (
+                    <>
+                      <p className="text-xs text-gray-500">
+                        Enter the email address to link. A 6-digit code will be sent to it.
+                      </p>
+                      <input
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                      />
+                      <button
+                        onClick={handleRequestEmailCode}
+                        disabled={emailLoading}
+                        className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                      >
+                        {emailLoading ? "Sending..." : "Send Verification Code"}
+                      </button>
+                      <button
+                        onClick={cancelEmailFlow}
+                        className="w-full text-sm text-gray-500 hover:text-gray-700 transition"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+
+                  {/* Step 2 — verify code */}
+                  {emailStep === "verify" && (
+                    <>
+                      <p className="text-xs text-gray-500">
+                        Enter the 6-digit code sent to{" "}
+                        <span className="font-medium">{newEmail}</span>.
+                      </p>
+                      <input
+                        type="text"
+                        value={emailCode}
+                        onChange={(e) =>
+                          setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                        }
+                        maxLength={6}
+                        placeholder="• • • • • •"
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-lg tracking-[0.5em] text-center focus:outline-none focus:ring-2 focus:ring-blue-900"
+                      />
+                      <button
+                        onClick={handleVerifyEmailCode}
+                        disabled={emailLoading || emailCode.length !== 6}
+                        className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                      >
+                        {emailLoading ? "Verifying..." : "Verify & Link Email"}
+                      </button>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <button
+                          onClick={() => {
+                            setEmailStep("enter");
+                            setEmailCode("");
+                          }}
+                          className="text-sm text-gray-500 hover:text-gray-700 transition"
+                        >
+                          Back
+                        </button>
+                        <button
+                          onClick={handleResendEmailCode}
+                          disabled={emailCooldown > 0}
+                          className="text-sm text-blue-900 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
+                        >
+                          {emailCooldown > 0 ? `Resend in ${emailCooldown}s` : "Resend code"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Change Password Card */}
           <div className="dash-card">
             <div className="dash-card-header">

@@ -63,6 +63,14 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  // ── Refresh the current user from the server (after profile/email change) ─
+  const refreshUser = async () => {
+    const data = await getMe();
+    setUser(data.user);
+    storage.set("user", JSON.stringify(data.user));
+    return data.user;
+  };
+
   // ── Logout ────────────────────────────────────────────────
   const logout = () => {
     storage.remove("token");
@@ -82,6 +90,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
+        refreshUser,
         isAdmin,
         isMaster,
         isLoggedIn,
