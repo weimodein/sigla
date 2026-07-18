@@ -113,13 +113,11 @@ const ReportsAnalytics = () => {
   const [models, setModels] = useState([]);
   const [categoryCount, setCategoryCount] = useState(null);
 
+  // Report sections per scope §20: word statistics, gesture sample counts, model accuracy.
   const [reportSections, setReportSections] = useState({
-    admin_stats: true,
-    word_submissions: true,
+    word_stats: true,
     sample_counts: true,
     model_accuracy: true,
-    deactivated_admins: true,
-    deleted_admins: true,
   });
 
   const [deactivatedPage, setDeactivatedPage] = useState(1);
@@ -262,34 +260,16 @@ const ReportsAnalytics = () => {
         doc.setFontSize(11);
       };
 
-      if (reportSections.admin_stats) {
-        addSectionTitle("Administrator Statistics");
-        autoTable(doc, {
-          startY: y,
-          head: [["Metric", "Count"]],
-          body: [
-            ["Total Administrators", userStats?.total ?? 0],
-            ["Active", userStats?.active ?? 0],
-            ["Deactivated", userStats?.deactivated ?? 0],
-            ["Deleted", userStats?.deleted ?? 0],
-          ],
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (reportSections.word_submissions) {
-        addSectionTitle("Word Submissions");
+      if (reportSections.word_stats) {
+        addSectionTitle("Word Statistics");
         autoTable(doc, {
           startY: y,
           head: [["Metric", "Count"]],
           body: [
             ["Total Words", wordStats?.total ?? 0],
-            ["Pending", wordStats?.pending ?? 0],
-            ["Approved", wordStats?.approved ?? 0],
-            ["Rejected", wordStats?.rejected ?? 0],
+            ["Active Words", wordStats?.active ?? 0],
+            ["Total Categories", categoryCount ?? 0],
+            ["Total Gesture Samples", wordStats?.total_samples ?? 0],
           ],
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
@@ -315,45 +295,17 @@ const ReportsAnalytics = () => {
         addSectionTitle("Model Accuracy per Version");
         autoTable(doc, {
           startY: y,
-          head: [["Version", "Accuracy"]],
+          head: [["Version", "Accuracy", "Status"]],
           body: models.map((m) => [
             m.version_number,
             m.accuracy ? `${(m.accuracy * 100).toFixed(1)}%` : "N/A",
+            m.status === "deployed" ? "Deployed" : (m.status || "—"),
           ]),
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
         });
         y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (isSuper && reportSections.deactivated_admins) {
-        addSectionTitle("Deactivated Administrators");
-        autoTable(doc, {
-          startY: y,
-          head: [["Username", "Email", "Deactivated At"]],
-          body: deactivatedUsers.map((u) => [
-            u.username,
-            u.email || "—",
-            u.deactivated_at ? new Date(u.deactivated_at).toLocaleDateString() : "—",
-          ]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (isSuper && reportSections.deleted_admins) {
-        addSectionTitle("Deleted Administrators");
-        autoTable(doc, {
-          startY: y,
-          head: [["Username", "Email"]],
-          body: deletedUsers.map((u) => [u.username, u.email || "—"]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
       }
 
       const filename = `sigla_report_${filter}_${new Date().toISOString().split("T")[0]}.pdf`;
@@ -752,17 +704,9 @@ const ReportsAnalytics = () => {
         <div className="dash-card-body">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { key: "admin_stats", label: "Administrator Statistics" },
-              { key: "word_submissions", label: "Word Submissions" },
-              { key: "sample_counts", label: "Sample Counts" },
+              { key: "word_stats", label: "Word Statistics" },
+              { key: "sample_counts", label: "Gesture Sample Counts" },
               { key: "model_accuracy", label: "Model Accuracy" },
-              // Per-admin lists require the super-only /users roster
-              ...(isSuper
-                ? [
-                    { key: "deactivated_admins", label: "Deactivated Admins" },
-                    { key: "deleted_admins", label: "Deleted Accounts" },
-                  ]
-                : []),
             ].map(({ key, label }) => (
               <label
                 key={key}
