@@ -114,7 +114,7 @@ const getUserById = async (req, res) => {
 };
 
 // ── POST /api/users ───────────────────────────────────────────
-// Master administrator creates an administrator account.
+// Super administrator creates an administrator account.
 // Only a username and password are required — the email is linked later
 // by the administrator on first login.
 const createUser = async (req, res) => {
@@ -305,16 +305,16 @@ const updateUser = async (req, res) => {
     // through the verified email flow (POST /users/email/request-code + verify).
     const { username, name, password } = req.body;
 
-    // Any admin may edit their OWN account; only a master admin may edit others.
+    // Any admin may edit their OWN account; only a super admin may edit others.
     const isSelf = String(req.params.id) === String(req.user.id);
-    const isMaster = req.user.role === "master_admin";
-    if (!isSelf && !isMaster) {
+    const isSuper = req.user.role === "super_admin";
+    if (!isSelf && !isSuper) {
       return res.status(403).json({
-        message: "Access denied. Only the master administrator can edit other accounts.",
+        message: "Access denied. Only the super administrator can edit other accounts.",
       });
     }
 
-    // Self-edits may target a master account (role_id 2); master-edits of others
+    // Self-edits may target a super account (role_id 2); super-edits of others
     // target administrator accounts (role_id 1).
     const where = isSelf
       ? { id: req.params.id }

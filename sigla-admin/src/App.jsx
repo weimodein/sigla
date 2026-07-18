@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import MasterRoute from "./components/MasterRoute.jsx";
+import SuperRoute from "./components/SuperRoute.jsx";
 import Layout from "./components/Layout.jsx";
 
 // Pages
@@ -46,11 +46,11 @@ const App = () => {
             <Route
               path="/administrators"
               element={
-                <MasterRoute>
+                <SuperRoute>
                   <Layout>
                     <ManageAdministrators />
                   </Layout>
-                </MasterRoute>
+                </SuperRoute>
               }
             />
             <Route

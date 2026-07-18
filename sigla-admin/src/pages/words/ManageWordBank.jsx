@@ -558,7 +558,7 @@ const ManageWordBank = () => {
   ];
 
   // ── Gallery threshold helpers ────────────────────────────────
-  const motionThreshold = 25;
+  const motionThreshold = 20;
   const approvedCount = galleryModal?.approved_sample_count || 0;
   const thresholdMet = approvedCount >= motionThreshold;
   const remaining = motionThreshold - approvedCount;

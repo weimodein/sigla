@@ -93,7 +93,7 @@ const ActivityBadge = ({ action }) => {
 const Dashboard = () => {
   const navigate = useNavigate();
   const toast = useToast();
-  const { user, isMaster } = useAuth();
+  const { user, isSuper } = useAuth();
 
   const [userStats, setUserStats]   = useState(null);
   const [wordStats, setWordStats]   = useState(null);
@@ -209,8 +209,8 @@ const Dashboard = () => {
           </div>
         </div>
         {/* 4 auto-placed cards — fill cols 1 & 2, rows 1 & 2 */}
-        {/* First card differs by account type (scope): master → total admins, admin → own account creation date */}
-        {isMaster ? (
+        {/* First card differs by account type (scope): super → total admins, admin → own account creation date */}
+        {isSuper ? (
           <StatCard title="Total Administrators" value={userStats?.total} icon={Users} color="bg-blue-900" onClick={() => navigate("/administrators")} />
         ) : (
           <StatCard title="Account Created" value={formatDate(user?.created_at)} icon={CalendarDays} color="bg-blue-900" />

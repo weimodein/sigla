@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { getUserStats, getAllUsers } from "../../api/userApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
+import { getCategories } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
@@ -20,11 +21,10 @@ import {
   Legend,
 } from "recharts";
 import {
-  Users,
   BookOpen,
-  Clock,
-  UserX,
-  Trash2,
+  Database,
+  Tag,
+  Cpu,
   Download,
 } from "lucide-react";
 
@@ -100,7 +100,7 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 const ReportsAnalytics = () => {
   const toast = useToast();
   const navigate = useNavigate();
-  const { isMaster } = useAuth();
+  const { isSuper } = useAuth();
   const [filter, setFilter] = useState("month");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -111,6 +111,7 @@ const ReportsAnalytics = () => {
   const [deletedUsers, setDeletedUsers] = useState([]);
   const [words, setWords] = useState([]);
   const [models, setModels] = useState([]);
+  const [categoryCount, setCategoryCount] = useState(null);
 
   const [reportSections, setReportSections] = useState({
     admin_stats: true,
@@ -129,17 +130,19 @@ const ReportsAnalytics = () => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      // The admin roster (GET /users) is master-only. Regular admins skip it
+      // The admin roster (GET /users) is super-only. Regular admins skip it
       // and simply don't see the per-admin deactivated/deleted tables.
-      const [uStats, wStats, usersData, wordsData] = await Promise.all([
+      const [uStats, wStats, usersData, wordsData, catsData] = await Promise.all([
         getUserStats(),
         getWordStats(),
-        isMaster ? getAllUsers({ limit: 500 }) : Promise.resolve({ users: [] }),
+        isSuper ? getAllUsers({ limit: 500 }) : Promise.resolve({ users: [] }),
         getAllWords({ limit: 500 }),
+        getCategories(),
       ]);
 
       setUserStats(uStats);
       setWordStats(wStats);
+      setCategoryCount((catsData.categories || []).length);
 
       const users = usersData.users || [];
       setDeactivatedUsers(users.filter((u) => u.status === "deactivated"));
@@ -163,7 +166,7 @@ const ReportsAnalytics = () => {
     fetchAll();
     setDeactivatedPage(1);
     setDeletedPage(1);
-  }, [filter, isMaster]);
+  }, [filter, isSuper]);
 
   // ── Chart data helpers ──────────────────────────────────────
   const submissionTrend = useMemo(() => {
@@ -213,6 +216,15 @@ const ReportsAnalytics = () => {
         })),
     [words]
   );
+
+  // Current model accuracy = the deployed model's accuracy (fallback: best model)
+  const currentModelAccuracy = useMemo(() => {
+    if (!models.length) return "—";
+    const deployed = models.find((m) => m.status === "deployed");
+    const best = [...models].sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0))[0];
+    const m = deployed || best;
+    return m?.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : "—";
+  }, [models]);
 
   const toggleSection = (key) =>
     setReportSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -315,7 +327,7 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (isMaster && reportSections.deactivated_admins) {
+      if (isSuper && reportSections.deactivated_admins) {
         addSectionTitle("Deactivated Administrators");
         autoTable(doc, {
           startY: y,
@@ -332,7 +344,7 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (isMaster && reportSections.deleted_admins) {
+      if (isSuper && reportSections.deleted_admins) {
         addSectionTitle("Deleted Administrators");
         autoTable(doc, {
           startY: y,
@@ -469,42 +481,35 @@ const ReportsAnalytics = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <StatCard
-          title="Total Administrators"
-          value={userStats?.total}
-          icon={Users}
-          color="bg-blue-900"
-          onClick={() => navigate("/administrators")}
-        />
+      {/* Summary Cards (scope §20): words, gesture samples, categories, model accuracy */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Words"
           value={wordStats?.total}
           icon={BookOpen}
-          color="bg-green-600"
+          color="bg-blue-900"
           onClick={() => navigate("/word_bank")}
         />
         <StatCard
-          title="Pending Reviews"
-          value={wordStats?.pending}
-          icon={Clock}
-          color="bg-yellow-500"
-          onClick={() => navigate("/word_bank?status=pending")}
+          title="Gesture Samples"
+          value={wordStats?.total_samples}
+          icon={Database}
+          color="bg-blue-700"
+          onClick={() => navigate("/word_bank")}
         />
         <StatCard
-          title="Deactivated"
-          value={userStats?.deactivated}
-          icon={UserX}
-          color="bg-red-500"
-          onClick={() => navigate("/administrators")}
+          title="Total Categories"
+          value={categoryCount}
+          icon={Tag}
+          color="bg-green-600"
+          onClick={() => navigate("/categories")}
         />
         <StatCard
-          title="Deleted Accounts"
-          value={userStats?.deleted ?? deletedUsers.length}
-          icon={Trash2}
-          color="bg-gray-600"
-          onClick={() => navigate("/administrators")}
+          title="Current Model Accuracy"
+          value={currentModelAccuracy}
+          icon={Cpu}
+          color="bg-purple-600"
+          onClick={() => navigate("/model")}
         />
       </div>
 
@@ -603,8 +608,8 @@ const ReportsAnalytics = () => {
         </div>
       </div>
 
-      {/* Administrator Lists — master admin only (per-admin data from /users) */}
-      {isMaster && (
+      {/* Administrator Lists — super admin only (per-admin data from /users) */}
+      {isSuper && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="dash-card">
           <div className="dash-card-header">
@@ -751,8 +756,8 @@ const ReportsAnalytics = () => {
               { key: "word_submissions", label: "Word Submissions" },
               { key: "sample_counts", label: "Sample Counts" },
               { key: "model_accuracy", label: "Model Accuracy" },
-              // Per-admin lists require the master-only /users roster
-              ...(isMaster
+              // Per-admin lists require the super-only /users roster
+              ...(isSuper
                 ? [
                     { key: "deactivated_admins", label: "Deactivated Admins" },
                     { key: "deleted_admins", label: "Deleted Accounts" },

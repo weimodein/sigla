@@ -369,13 +369,13 @@ const AdministratorAccount = () => {
                   borderBottom: `1px solid ${C.border}`,
                 }}
               >
-                <Avatar name={user?.name || user?.username} />
+                <Avatar name={user?.username} />
                 <div>
                   <p
                     className="text-base font-semibold"
                     style={{ color: C.text, margin: 0 }}
                   >
-                    {user?.name || user?.username}
+                    {user?.username}
                   </p>
                   <p
                     className="text-sm"
@@ -438,13 +438,13 @@ const AdministratorAccount = () => {
                   borderBottom: `1px solid ${C.border}`,
                 }}
               >
-                <Avatar name={user?.name || user?.username} />
+                <Avatar name={user?.username} />
                 <div>
                   <p
                     className="text-base font-semibold"
                     style={{ color: C.text, margin: 0 }}
                   >
-                    {user?.name || user?.username}
+                    {user?.username}
                   </p>
                   <p
                     className="text-sm"

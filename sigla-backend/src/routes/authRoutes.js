@@ -12,7 +12,7 @@ const {
 
 // Public routes
 // NOTE: Public self-registration is disabled — accounts are created only by a
-// master administrator via the Manage Administrators module. The register /
+// super administrator via the Manage Administrators module. The register /
 // verify-email / set-password self-signup endpoints have been removed.
 router.post("/login", login);
 router.post("/forgot-password", forgotPassword);

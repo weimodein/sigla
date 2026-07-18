@@ -18,7 +18,7 @@ import {
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-  { label: "Manage Administrators", path: "/administrators", icon: Users, masterOnly: true },
+  { label: "Manage Administrators", path: "/administrators", icon: Users, superOnly: true },
   { label: "Manage Words", path: "/dataset", icon: Database },
   { label: "Manage Categories", path: "/categories", icon: Tag },
   { label: "Manage Model", path: "/model", icon: Cpu },
@@ -30,11 +30,11 @@ const navItems = [
 const Sidebar = ({ onToggle }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const { user, logout, isMaster } = useAuth();
+  const { logout, isSuper } = useAuth();
   const navigate = useNavigate();
 
-  // Manage Administrators is exclusive to the master administrator.
-  const visibleNavItems = navItems.filter((item) => !item.masterOnly || isMaster);
+  // Manage Administrators is exclusive to the super administrator.
+  const visibleNavItems = navItems.filter((item) => !item.superOnly || isSuper);
 
   const handleLogout = () => setShowLogoutModal(true);
 
@@ -176,29 +176,6 @@ const Sidebar = ({ onToggle }) => {
         </div>
       )}
 
-      {/* User Info - conditionally rendered */}
-      {!collapsed && user?.name && (
-        <div
-          style={{
-            padding: "12px 24px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
-            flexShrink: 0,
-            transition: transitionStyle,
-          }}
-        >
-          <p
-            style={{
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              color: "white",
-              marginBottom: 0,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {user?.name}
-          </p>
-        </div>
-      )}
 
       {/* Navigation Menu */}
       <nav

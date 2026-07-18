@@ -88,7 +88,7 @@ const resendCode = async (req, res) => {
 };
 
 // NOTE: Public self-registration (register / verify-email / set-password) has
-// been removed. Administrator accounts are created only by the master
+// been removed. Administrator accounts are created only by the super
 // administrator via the Manage Administrators module.
 
 // ── POST /api/auth/login ──────────────────────────────────────
@@ -173,7 +173,7 @@ const login = async (req, res) => {
       });
     }
 
-    const ROLE_MAP = { 1: "admin", 2: "master_admin", 3: "user" };
+    const ROLE_MAP = { 1: "admin", 2: "super_admin", 3: "user" };
     const roleName = ROLE_MAP[user.role_id] ?? "user";
 
     const token = generateToken({
@@ -182,8 +182,8 @@ const login = async (req, res) => {
       status: user.status,
     });
 
-    // Audit sign-ins for admin and master-admin accounts.
-    if (roleName === "admin" || roleName === "master_admin") {
+    // Audit sign-ins for admin and super-admin accounts.
+    if (roleName === "admin" || roleName === "super_admin") {
       await logActivity({
         user_id: user.id,
         action: "signed_in",

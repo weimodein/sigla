@@ -3,7 +3,7 @@ export const API_URL =
 
 export const ROLES = {
   ADMIN: "admin",
-  MASTER_ADMIN: "master_admin",
+  SUPER_ADMIN: "super_admin",
 };
 
 // Administrator account statuses

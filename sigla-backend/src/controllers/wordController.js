@@ -22,7 +22,7 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 // All gestures are motion; a single flat cap/threshold applies to every word.
 const PER_USER_CAP = 25;         // max samples ONE user can contribute to a word
 const DEFAULT_SAMPLE_CAP = 25;   // total cap across all users (when no admin sample_limit)
-const ACTIVATION_THRESHOLD = 25; // approved samples needed before a word is deploy-eligible
+const ACTIVATION_THRESHOLD = 20; // approved samples needed before a word is deploy-eligible (scope §17)
 
 // ── Helper: normalize word label ──────────────────────────────
 const normalizeLabel = (label) =>

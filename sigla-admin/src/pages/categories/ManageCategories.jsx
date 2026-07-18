@@ -73,6 +73,8 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
   );
 };
 
+const PAGE_SIZE = 10;
+
 const ManageCategories = () => {
   const { success, error: errorToast } = useToast();
   const [categories, setCategories] = useState([]);
@@ -80,6 +82,7 @@ const ManageCategories = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [page, setPage] = useState(1);
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -94,6 +97,16 @@ const ManageCategories = () => {
   };
 
   useEffect(() => { fetchCategories(); }, []);
+
+  // Keep the current page valid as the list changes.
+  const totalPages = Math.max(1, Math.ceil(categories.length / PAGE_SIZE));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const paginatedCategories = categories.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
 
   const handleAdd = async (form) => {
     try {
@@ -181,7 +194,7 @@ const ManageCategories = () => {
                 <tr><td colSpan={4} style={{ textAlign: "center", padding: "40px", color: C.muted }}>Loading...</td></tr>
               ) : categories.length === 0 ? (
                 <tr><td colSpan={4} style={{ textAlign: "center", padding: "40px", color: C.muted }}>No categories yet. Add your first one.</td></tr>
-              ) : categories.map(cat => (
+              ) : paginatedCategories.map(cat => (
                 <tr key={cat.id} style={{ borderTop: `1px solid ${C.border}` }}>
                   <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937", textTransform: "capitalize" }}>{cat.name}</td>
                   <td className="px-5 py-3" style={{ color: "#6b7280" }}>{cat.description || "—"}</td>
@@ -209,6 +222,40 @@ const ManageCategories = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {!loading && categories.length > PAGE_SIZE && (
+          <div
+            className="flex items-center justify-between px-5 py-3.5"
+            style={{ borderTop: `1px solid ${C.border}`, fontSize: 13, color: "#6b7280" }}
+          >
+            <span>
+              Showing {(page - 1) * PAGE_SIZE + 1}–
+              {Math.min(page * PAGE_SIZE, categories.length)} of {categories.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition"
+                style={{ borderColor: C.border }}
+              >
+                Prev
+              </button>
+              <span className="px-3 font-medium" style={{ color: "#374151" }}>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="px-3 py-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition"
+                style={{ borderColor: C.border }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <CategoryFormModal
