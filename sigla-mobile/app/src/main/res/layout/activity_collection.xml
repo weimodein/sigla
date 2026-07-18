@@ -7,6 +7,7 @@
        - Cancel button (terminates entire collection and discards samples)
        - Two progress bars: current session capture progress + user's total quota used
 -->
+
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"

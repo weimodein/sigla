@@ -41,11 +41,10 @@ object ModelUpdateManager {
 
     // The motion model is the only model. hasLocalModel and hasLocalMotionModel
     // are kept as aliases so existing callers compile unchanged.
+    // The model file is the minimum requirement. Labels are optional because the
+    // app can fall back to the backend word-bank endpoint at runtime.
     fun hasLocalModel(context: Context): Boolean {
-        return listOf(
-            "sign_model_motion.tflite",
-            "labels_motion.json"
-        ).all { File(context.filesDir, it).exists() }
+        return File(context.filesDir, "sign_model_motion.tflite").exists()
     }
 
     fun hasLocalMotionModel(context: Context): Boolean = hasLocalModel(context)
@@ -95,18 +94,21 @@ object ModelUpdateManager {
 
                 Log.i(TAG, "Motion TFLite downloaded")
 
-                // ── Motion labels (required) ──────────────────────────────────
+                // ── Motion labels (optional for the current flow) ─────────────
+                // The app can still initialize the model and fetch labels from the
+                // backend word-bank endpoint, so a missing labels URL should not
+                // block the model download flow.
                 val labelsMotionUrl = model.labels_motion_url
                 if (labelsMotionUrl.isNullOrBlank()) {
-                    Log.e(TAG, "Backend returned no motion labels URL — check SUPABASE_URL on server")
-                    return@withContext false
+                    Log.w(TAG, "Backend returned no motion labels URL — continuing without downloading labels.json")
+                } else {
+                    val labelsMotionOk = downloadToFile(labelsMotionUrl, File(context.filesDir, "labels_motion.json"))
+                    if (!labelsMotionOk) {
+                        Log.w(TAG, "Motion labels download failed — the app will fall back to backend labels")
+                    } else {
+                        Log.i(TAG, "Motion labels downloaded")
+                    }
                 }
-                val labelsMotionOk = downloadToFile(labelsMotionUrl, File(context.filesDir, "labels_motion.json"))
-                if (!labelsMotionOk) {
-                    Log.e(TAG, "Motion labels download failed — falling back to any existing local model+labels")
-                    return@withContext hasLocalModel(context)
-                }
-                Log.i(TAG, "Motion labels downloaded")
 
                 // ── Save version + URL only after all required files succeeded ──
                 prefs(context).edit()
@@ -164,6 +166,7 @@ object ModelUpdateManager {
 
     // Atomically move the verified staging file onto the live destination.
     private fun swapIntoPlace(staging: File, dest: File): Boolean {
+        if (dest.exists()) dest.delete()
         if (staging.renameTo(dest)) return true
         // Cross-filesystem or existing-dest edge case: copy then clean up.
         return try {
@@ -197,13 +200,27 @@ object ModelUpdateManager {
                     Log.w(TAG, "Empty response body for $url")
                     return false
                 }
-                val tmp = File(dest.parent, dest.name + ".tmp")
+                val parent = dest.parentFile ?: run {
+                    Log.e(TAG, "No parent directory for ${dest.name}")
+                    return false
+                }
+                if (!parent.exists()) parent.mkdirs()
+                val tmp = File(parent, dest.name + ".tmp")
+                if (tmp.exists()) tmp.delete()
                 tmp.outputStream().use { out -> body.byteStream().copyTo(out) }
+                if (dest.exists()) dest.delete()
                 val renamed = tmp.renameTo(dest)
                 if (!renamed) {
-                    Log.e(TAG, "Failed to rename tmp file to ${dest.name} — disk full or permission error?")
-                    tmp.delete()
-                    return false
+                    try {
+                        tmp.inputStream().use { input ->
+                            dest.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        tmp.delete()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to copy tmp file to ${dest.name}: ${e.message}", e)
+                        tmp.delete()
+                        return false
+                    }
                 }
                 true
             }
@@ -317,12 +334,14 @@ object ModelUpdateManager {
                     return@withContext false
                 }
                 
-                // Download labels
+                // Download labels only if the backend provides a URL.
                 val labelsUrl = model.labels_motion_url
                 if (!labelsUrl.isNullOrBlank()) {
                     val labelsDest = File(context.filesDir, "labels_motion.json")
                     downloadToFile(labelsUrl, labelsDest)
                     Log.d(TAG, "Labels downloaded: ${labelsDest.exists()}")
+                } else {
+                    Log.w(TAG, "No labels URL returned by backend; continuing")
                 }
                 
                 // Save version
