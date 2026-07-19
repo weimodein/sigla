@@ -11,6 +11,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -209,11 +210,11 @@ class MainActivity : AppCompatActivity() {
                 
                 withContext(Dispatchers.Main) {
                     if (predictor.isReady) {
-                        binding.tvStatus.text = "✅ Models loaded ✓"
+                        binding.tvStatus.text = "Models loaded"
                         binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
-                        Log.d("MainActivity", "✅ Model ready with ${predictor.getLabelCount()} classes")
+                        Log.d("MainActivity", "Model ready with ${predictor.getLabelCount()} classes")
                     } else {
-                        binding.tvStatus.text = "⚠ Failed to load words from database"
+                        binding.tvStatus.text = "Failed to load words from database"
                         binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
                     }
                 }
@@ -457,52 +458,83 @@ class MainActivity : AppCompatActivity() {
 
     // ── Sidebar ───────────────────────────────────────────────────────────────
 
-    private fun setupSidebar() {
-        val drawer = binding.drawerLayout
+private fun setupSidebar() {
+    val drawer = binding.drawerLayout
 
-        // btnSidebar replaces btnMenu from the original pattern
-        binding.btnSidebar.setOnClickListener {
-            drawer.openDrawer(GravityCompat.START)
-        }
+    val navMainInterface = findViewById<LinearLayout>(R.id.navMainInterface)
+    val navWordBank = findViewById<LinearLayout>(R.id.navWordBank)
+    val navTranslationHistory = findViewById<LinearLayout>(R.id.navTranslationHistory)
+    val navSettings = findViewById<LinearLayout>(R.id.navSettings)
+    val navProfile = findViewById<View>(R.id.navProfile)
+    val navNotifications = findViewById<View>(R.id.navNotifications)
 
-        findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-        }
-        findViewById<View>(R.id.navWordBank)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, WordBankActivity::class.java))
-        }
-        findViewById<View>(R.id.navTranslationHistory)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, TranslationHistoryActivity::class.java))
-        }
-        findViewById<View>(R.id.navProfile)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            if (isSignedIn) {
-                startActivity(Intent(this, ProfileActivity::class.java))
-            } else {
-                openAuthDialog()
-            }
-        }
-        findViewById<View>(R.id.navNotifications)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            if (isSignedIn) {
-                startActivity(Intent(this, NotificationsActivity::class.java))
-            } else {
-                openAuthDialog()
-            }
-        }
-        findViewById<View>(R.id.navSettings)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-        findViewById<View?>(R.id.btnSidebarSignIn)?.setOnClickListener {
-            drawer.closeDrawers()
-            openAuthDialog()
-        }
-        refreshSidebarAuthState()
+    fun resetAll() {
+        navMainInterface.isSelected = false
+        navWordBank.isSelected = false
+        navTranslationHistory.isSelected = false
+        navSettings.isSelected = false
     }
 
+    // Default: Main Interface selected
+    resetAll()
+    navMainInterface.isSelected = true
+
+    binding.btnSidebar.setOnClickListener {
+        drawer.openDrawer(GravityCompat.START)
+    }
+
+    navMainInterface.setOnClickListener {
+        resetAll()
+        navMainInterface.isSelected = true
+        drawer.closeDrawer(GravityCompat.START)
+    }
+
+    navWordBank.setOnClickListener {
+        resetAll()
+        navWordBank.isSelected = true
+        drawer.closeDrawer(GravityCompat.START)
+        startActivity(Intent(this, WordBankActivity::class.java))
+    }
+
+    navTranslationHistory.setOnClickListener {
+        resetAll()
+        navTranslationHistory.isSelected = true
+        drawer.closeDrawer(GravityCompat.START)
+        startActivity(Intent(this, TranslationHistoryActivity::class.java))
+    }
+
+    navSettings.setOnClickListener {
+        resetAll()
+        navSettings.isSelected = true
+        drawer.closeDrawer(GravityCompat.START)
+        startActivity(Intent(this, SettingsActivity::class.java))
+    }
+
+    navProfile?.setOnClickListener {
+        drawer.closeDrawer(GravityCompat.START)
+        if (isSignedIn) {
+            startActivity(Intent(this, ProfileActivity::class.java))
+        } else {
+            openAuthDialog()
+        }
+    }
+
+    navNotifications?.setOnClickListener {
+        drawer.closeDrawer(GravityCompat.START)
+        if (isSignedIn) {
+            startActivity(Intent(this, NotificationsActivity::class.java))
+        } else {
+            openAuthDialog()
+        }
+    }
+
+    findViewById<View?>(R.id.btnSidebarSignIn)?.setOnClickListener {
+        drawer.closeDrawer(GravityCompat.START)
+        openAuthDialog()
+    }
+
+    refreshSidebarAuthState()
+}
     private fun openAuthDialog() {
         val dialog = AuthDialogFragment()
         dialog.onSignedIn = {

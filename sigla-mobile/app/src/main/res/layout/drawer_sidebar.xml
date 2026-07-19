@@ -8,402 +8,383 @@
     android:layout_height="match_parent"
     android:layout_gravity="start"
     android:orientation="vertical"
-    android:background="#E3F2FD"
+    android:background="#E5F3FE"
     android:elevation="8dp">
 
-    <!-- ── USER CARD ── -->
-    <androidx.cardview.widget.CardView
+    <!-- ── HEADER OUTER LAYER (lighter periwinkle curve peeking behind navy) ── -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        android:layout_marginTop="20dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="2dp"
-        app:cardBackgroundColor="#FFFFFF">
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:paddingBottom="14dp">
 
-        <LinearLayout
+        <!-- ── HEADER (curved top with white logo box) ── -->
+        <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:paddingTop="0dp"
+            android:paddingBottom="28dp">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:layout_alignParentTop="true"
+                android:background="@drawable/bg_header_curved_outer" />
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:background="@drawable/bg_header_curved"
+                android:paddingTop="12dp"
+                android:paddingBottom="28dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal">
+
+                    <FrameLayout
+                        android:layout_width="112dp"
+                        android:layout_height="112dp"
+                        android:layout_marginTop="-18dp"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_avatar_circle"
+                        android:foregroundGravity="center">
+
+                        <ImageView
+                            android:id="@+id/ivAvatar"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:src="@drawable/sigla"
+                            android:padding="12dp"
+                            android:scaleType="centerInside"
+                            android:contentDescription="SigLa logo" />
+
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/tvSidebarUsername"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="SigLa"
+                        android:textColor="#FFFFFF"
+                        android:textSize="19sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="SigLa"
+                        android:textColor="#B7C2DE"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp" />
+
+            </LinearLayout>
+
+        </RelativeLayout>
+    </RelativeLayout>
+
+    </FrameLayout>
+
+    <!-- ── NAVIGATION SECTION ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="18dp"
+        android:paddingBottom="10dp">
+
+        <FrameLayout
+            android:layout_width="30dp"
+            android:layout_height="match_parent">
+
+            <TextView
+                android:layout_width="90dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:rotation="-90"
+                android:text="NAVIGATION"
+                android:textColor="#8B96B8"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"
+                android:textStyle="bold"
+                android:singleLine="true" />
+
+        </FrameLayout>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="4dp"
+            android:background="#D8DEEC" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:paddingStart="10dp"
+            android:paddingEnd="12dp">
 
             <LinearLayout
+                android:id="@+id/navMainInterface"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="12dp">
+                android:padding="10dp"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/bg_nav_selected"
+                android:clickable="true"
+                android:focusable="true">
 
-                <ImageView
-                    android:id="@+id/ivAvatar"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:src="@android:drawable/ic_menu_myplaces"
-                    android:background="@drawable/bg_avatar"
-                    app:tint="#4A90E2"
-                    android:padding="12dp"
-                    android:scaleType="centerInside"
-                    android:contentDescription="User avatar" />
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@android:drawable/ic_menu_view"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="Main interface" />
+
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical"
-                    android:layout_marginStart="12dp">
+                    android:layout_marginStart="14dp">
 
                     <TextView
-                        android:id="@+id/tvSidebarUsername"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Guest User"
-                        android:textColor="#1F1F1F"
-                        android:textSize="16sp"
+                        android:text="Main Interface"
+                        android:textColor="#1A2E5A"
+                        android:textSize="14sp"
                         android:textStyle="bold" />
 
                     <TextView
-                        android:id="@+id/tvSidebarEmail"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Not signed in"
-                        android:textColor="#4A90E2"
-                        android:textSize="12sp"
-                        android:layout_marginTop="4dp" />
+                        android:text="Start translating"
+                        android:textColor="#6C7A9C"
+                        android:textSize="11sp"
+                        android:layout_marginTop="1dp" />
 
                 </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Shown when user is NOT logged in -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSidebarSignIn"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:text="Sign In / Sign Up"
-                android:textSize="13sp"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold"
-                app:backgroundTint="#4A90E2"
-                app:cornerRadius="12dp"
-                app:icon="@android:drawable/ic_menu_send"
-                app:iconGravity="textStart"
-                app:iconPadding="8dp"
-                app:iconTint="#FFFFFF"
-                android:visibility="visible" />
-
-        </LinearLayout>
-
-    </androidx.cardview.widget.CardView>
-
-    <!-- ── NAVIGATION SECTION CARD ── -->
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="4dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="2dp"
-        app:cardBackgroundColor="#FFFFFF">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="NAVIGATION"
-                android:textColor="#4A90E2"
-                android:textSize="11sp"
-                android:letterSpacing="0.15"
-                android:textStyle="bold"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:paddingTop="12dp"
-                android:paddingBottom="8dp" />
-
-            <!-- Main Interface -->
-            <LinearLayout
-                android:id="@+id/navMainInterface"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_marginBottom="2dp"
-                android:background="@drawable/bg_nav_item_selected"
-                android:clickable="true"
-                android:focusable="true">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_view"
-                    app:tint="#4A90E2"
-                    android:contentDescription="Main interface" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Main Interface"
-                    android:textColor="#4A90E2"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:layout_marginStart="14dp" />
-
-            </LinearLayout>
-
-            <!-- Word Bank -->
             <LinearLayout
                 android:id="@+id/navWordBank"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_marginBottom="2dp"
+                android:padding="10dp"
+                android:layout_marginBottom="4dp"
                 android:clickable="true"
                 android:focusable="true">
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_agenda"
-                    app:tint="#6C757D"
-                    android:contentDescription="Word bank" />
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_box">
 
-                <TextView
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@android:drawable/ic_menu_agenda"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="Word bank" />
+
+                </FrameLayout>
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Word Bank"
-                    android:textColor="#6C757D"
-                    android:textSize="14sp"
-                    android:layout_marginStart="14dp" />
+                    android:orientation="vertical"
+                    android:layout_marginStart="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Word Bank"
+                        android:textColor="#1A2E5A"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="View and customized FSL signs"
+                        android:textColor="#6C7A9C"
+                        android:textSize="11sp"
+                        android:layout_marginTop="1dp" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Translation History (scope: module for viewing past translated gestures) -->
             <LinearLayout
                 android:id="@+id/navTranslationHistory"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_marginBottom="2dp"
-                android:background="@drawable/bg_nav_item_default"
-                android:clickable="true"
-                android:focusable="true">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_recent_history"
-                    app:tint="#6C757D"
-                    android:contentDescription="Translation history" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Translation History"
-                    android:textColor="#6C757D"
-                    android:textSize="14sp"
-                    android:layout_marginStart="14dp" />
-
-            </LinearLayout>
-
-            <!-- Notifications -->
-            <LinearLayout
-                android:id="@+id/navNotifications"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_marginBottom="2dp"
-                android:background="@drawable/bg_nav_item_default"
-                android:clickable="true"
-                android:focusable="true">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_popup_reminder"
-                    app:tint="#6C757D"
-                    android:contentDescription="Notifications" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Notifications"
-                    android:textColor="#6C757D"
-                    android:textSize="14sp"
-                    android:layout_marginStart="14dp" />
-
-                <TextView
-                    android:id="@+id/tvNotifBadge"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:text="3"
-                    android:textColor="#FFFFFF"
-                    android:textSize="9sp"
-                    android:textStyle="bold"
-                    android:gravity="center"
-                    android:background="@drawable/bg_notif_badge"
-                    android:visibility="gone" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-    </androidx.cardview.widget.CardView>
-
-    <!-- ── ACCOUNT SECTION CARD ── -->
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="4dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="2dp"
-        app:cardBackgroundColor="#FFFFFF">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="ACCOUNT"
-                android:textColor="#4A90E2"
-                android:textSize="11sp"
-                android:letterSpacing="0.15"
-                android:textStyle="bold"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:paddingTop="12dp"
-                android:paddingBottom="8dp" />
-
-            <!-- Profile -->
-            <LinearLayout
-                android:id="@+id/navProfile"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_marginBottom="2dp"
-                android:background="@drawable/bg_nav_item_default"
+                android:padding="10dp"
+                android:layout_marginBottom="4dp"
                 android:clickable="true"
                 android:focusable="true">
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_myplaces"
-                    app:tint="#6C757D"
-                    android:contentDescription="Profile" />
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_box">
 
-                <TextView
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@android:drawable/ic_menu_recent_history"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="Translation history" />
+
+                </FrameLayout>
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Profile"
-                    android:textColor="#6C757D"
-                    android:textSize="14sp"
-                    android:layout_marginStart="14dp" />
+                    android:orientation="vertical"
+                    android:layout_marginStart="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Translation History"
+                        android:textColor="#1A2E5A"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Sign languages used"
+                        android:textColor="#6C7A9C"
+                        android:textSize="11sp"
+                        android:layout_marginTop="1dp" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Settings -->
             <LinearLayout
                 android:id="@+id/navSettings"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:layout_marginBottom="2dp"
-                android:background="@drawable/bg_nav_item_default"
+                android:padding="10dp"
                 android:clickable="true"
                 android:focusable="true">
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_preferences"
-                    app:tint="#6C757D"
-                    android:contentDescription="Settings" />
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_box">
 
-                <TextView
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@android:drawable/ic_menu_preferences"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="Settings" />
+
+                </FrameLayout>
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
                     android:text="Settings"
-                    android:textColor="#6C757D"
+                    android:textColor="#1A2E5A"
                     android:textSize="14sp"
-                    android:layout_marginStart="14dp" />
+                    android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="App references"
+                    android:textColor="#6C7A9C"
+                    android:textSize="11sp"
+                    android:layout_marginTop="1dp" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
         </LinearLayout>
 
-    </androidx.cardview.widget.CardView>
+    </LinearLayout>
 
-    <!-- ── SPACER ── -->
     <View
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- ── FOOTER CARD ── -->
-    <androidx.cardview.widget.CardView
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="12dp"
-        android:layout_marginTop="4dp"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="2dp"
-        app:cardBackgroundColor="#FFFFFF">
+        android:padding="16dp">
 
-        <TextView
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="SIGLA v2.0 · Filipino Sign Language"
-            android:textColor="#4A90E2"
-            android:textSize="10sp"
-            android:gravity="center"
-            android:padding="16dp" />
+            android:layout_gravity="end|bottom"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:alpha="0.35">
 
-    </androidx.cardview.widget.CardView>
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@android:drawable/ic_menu_myplaces"
+                app:tint="#1A2E5A"
+                android:contentDescription="SIGLA logo" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SIGLA"
+                android:textColor="#1A2E5A"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+    </FrameLayout>
 
 </LinearLayout>

@@ -21,7 +21,7 @@ android {
         debug {
             // Local backend for on-device testing (PC LAN IP, port 3000).
             // Requires the cleartext exception in network_security_config.xml.
-            buildConfigField("String", "BASE_URL", "\"http://192.168.100.6:3000/api/\"")
+            buildConfigField("String", "BASE_URL", "\"http://192.168.0.101:3000/api/\"")
         }
         release {
             isMinifyEnabled = true
@@ -30,7 +30,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "BASE_URL", "\"http://192.168.100.6:3000/api/\"")
+            buildConfigField("String", "BASE_URL", "\"http://192.168.0.101:3000/api/\"")
         }
     }
     compileOptions {
