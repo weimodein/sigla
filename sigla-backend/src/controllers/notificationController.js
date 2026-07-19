@@ -1,5 +1,4 @@
-const { Op } = require("sequelize");
-const { Notification, User } = require("../models/index.js");
+const { Notification } = require("../models/index.js");
 
 // ── GET /api/notifications ────────────────────────────────────
 // Get all notifications for the logged in user
@@ -120,99 +119,10 @@ const getUnreadCount = async (req, res) => {
   }
 };
 
-// ── POST /api/notifications/announce ─────────────────────────
-// Admin broadcasts an announcement to ALL active users
-// Creates one notification record per active user
-const broadcastAnnouncement = async (req, res) => {
-  try {
-    const { title, message } = req.body;
-
-    if (!title || !message) {
-      return res
-        .status(400)
-        .json({ message: "Title and message are required" });
-    }
-
-    // Get all active users
-    const activeUsers = await User.findAll({
-      where: { status: "active", role_id: 3 },
-      attributes: ["id"],
-    });
-
-    if (activeUsers.length === 0) {
-      return res
-        .status(200)
-        .json({ message: "No active users to notify", sent: 0 });
-    }
-
-    // Create one notification per active user
-    const notifications = activeUsers.map((user) => ({
-      user_id: user.id,
-      title,
-      message,
-      type: "announcement",
-      is_broadcast: true,
-      is_read: false,
-      delivered: false,
-      created_at: new Date(),
-    }));
-
-    await Notification.bulkCreate(notifications);
-
-    // Log activity
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "broadcast_announcement",
-    //   target_type: "announcement",
-    //   target_id: null,
-    //   details: `Broadcast announcement to ${activeUsers.length} users. Title: "${title}"`,
-    // });
-
-    return res.status(201).json({
-      message: "Announcement sent successfully",
-      sent: activeUsers.length,
-    });
-  } catch (err) {
-    console.error("Broadcast announcement error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ── GET /api/notifications/admin/all ─────────────────────────
-// Admin views all announcements ever sent
-const getAllAnnouncements = async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
-
-    const { count, rows } = await Notification.findAndCountAll({
-      where: { is_broadcast: true },
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [["created_at", "DESC"]],
-      // Group by title + message + created_at to avoid showing duplicate rows per user
-      attributes: ["title", "message", "created_at", "type"],
-      group: ["title", "message", "created_at", "type"],
-    });
-
-    return res.status(200).json({
-      total: count.length,
-      page: parseInt(page),
-      totalPages: Math.ceil(count.length / limit),
-      announcements: rows,
-    });
-  } catch (err) {
-    console.error("Get all announcements error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
 module.exports = {
   getNotifications,
   markAsRead,
   markAllAsRead,
   deleteNotification,
   getUnreadCount,
-  broadcastAnnouncement,
-  getAllAnnouncements,
 };

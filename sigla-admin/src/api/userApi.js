@@ -1,5 +1,7 @@
 import api from "./authApi.js";
 
+// Administrator account management (users table, role_id = 1)
+
 export const getAllUsers = async (params) => {
   const response = await api.get("/users", { params });
   return response.data;
@@ -10,33 +12,18 @@ export const getUserStats = async () => {
   return response.data;
 };
 
-export const getPendingUsers = async () => {
-  const response = await api.get("/users/pending");
-  return response.data;
-};
-
 export const getDeactivatedUsers = async () => {
   const response = await api.get("/users/deactivated");
   return response.data;
 };
 
-export const getWarnedUsers = async () => {
-  const response = await api.get("/users/warned");
+export const getDeletedUsers = async () => {
+  const response = await api.get("/users/deleted");
   return response.data;
 };
 
 export const getUserById = async (id) => {
   const response = await api.get(`/users/${id}`);
-  return response.data;
-};
-
-export const approveUser = async (id) => {
-  const response = await api.patch(`/users/${id}/approve`);
-  return response.data;
-};
-
-export const warnUser = async (id, data) => {
-  const response = await api.patch(`/users/${id}/warn`, data);
   return response.data;
 };
 
@@ -62,15 +49,5 @@ export const updateUser = async (id, data) => {
 
 export const createUser = async (data) => {
   const response = await api.post("/users", data);
-  return response.data;
-};
-
-export const getUserRegistrations = async (period = "month") => {
-  const response = await api.get("/users/registrations", { params: { period } });
-  return response.data;
-};
-
-export const getRecentActivity = async (limit = 10) => {
-  const response = await api.get("/users/activity", { params: { limit } });
   return response.data;
 };

@@ -24,11 +24,28 @@ const AppModal = ({ title, onClose, children, wide = false }) => {
       ?.classList.replace("modal-backdrop-in", "modal-backdrop-out");
   };
 
-  // Scroll lock
+  // Scroll lock — reference-counted so stacked/overlapping modals don't clobber
+  // each other. Only the first open modal locks the body; only the last to close
+  // restores it. Prevents the body from being stuck at overflow:hidden when two
+  // modals (e.g. a confirmation dialog over a form modal) overlap.
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    const count = Number(document.body.dataset.modalLockCount || "0");
+    if (count === 0) {
+      document.body.dataset.prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+    document.body.dataset.modalLockCount = String(count + 1);
+
+    return () => {
+      const next = Number(document.body.dataset.modalLockCount || "1") - 1;
+      if (next <= 0) {
+        document.body.style.overflow = document.body.dataset.prevOverflow || "";
+        delete document.body.dataset.modalLockCount;
+        delete document.body.dataset.prevOverflow;
+      } else {
+        document.body.dataset.modalLockCount = String(next);
+      }
+    };
   }, []);
 
   // Focus first element on open; restore on close

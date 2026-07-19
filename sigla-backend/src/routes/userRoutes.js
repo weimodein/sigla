@@ -4,48 +4,51 @@ const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
 const {
   getAllUsers,
-  getPendingUsers,
   getDeactivatedUsers,
-  getWarnedUsers,
+  getDeletedUsers,
   getUserStats,
   getUserById,
   createUser,
-  approveUser,
-  warnUser,
   deactivateUser,
   reactivateUser,
   deleteUser,
   updateUser,
-  getUserRegistrations,
-  // getRecentActivity,
 } = require("../controllers/userController.js");
 const { getMySettings, updateMySettings } = require("../controllers/settingsController.js");
+const { requestEmailCode, verifyEmailCode } = require("../controllers/emailController.js");
+const { completeSetup } = require("../controllers/userController.js");
+const requireSetupComplete = require("../middleware/requireSetupComplete.js");
 
 // All routes require login
 router.use(authMiddleware);
 
-// ── Settings (any authenticated user) ────────────────────────
+// ── Onboarding-safe routes (usable while must_complete_setup is true) ──
 router.get("/settings", getMySettings);
 router.patch("/settings", updateMySettings);
+// Verified email add/change for the logged-in account
+router.post("/email/request-code", requestEmailCode);
+router.post("/email/verify", verifyEmailCode);
+// Finish forced first-login setup
+router.post("/complete-setup", completeSetup);
 
-// ── Static routes first ───────────────────────────────────────
+// ── Everything below requires completed setup ────────────────
+router.use(requireSetupComplete);
+
+// ── Stats — open to any admin (dashboard + reports need the counts) ──
 router.get("/stats", roleMiddleware("admin"), getUserStats);
-router.get("/registrations", roleMiddleware("admin"), getUserRegistrations);
-// router.get("/activity", roleMiddleware("admin"), getRecentActivity);
-router.get("/pending", roleMiddleware("admin"), getPendingUsers);
-router.get("/deactivated", roleMiddleware("admin"), getDeactivatedUsers);
-router.get("/warned", roleMiddleware("admin"), getWarnedUsers);
 
-// ── Admin user management routes ──────────────────────────────
-router.get("/", roleMiddleware("admin"), getAllUsers);
-router.post("/create", roleMiddleware("admin"), createUser);
-router.get("/:id", roleMiddleware("admin"), getUserById);
-router.patch("/:id/approve", roleMiddleware("admin"), approveUser);
-router.patch("/:id/warn", roleMiddleware("admin"), warnUser);
-router.patch("/:id/deactivate", roleMiddleware("admin"), deactivateUser);
-router.patch("/:id/reactivate", roleMiddleware("admin"), reactivateUser);
+// ── Administrator management routes — SUPER ADMIN ONLY (scope §15) ──
+router.get("/deactivated", roleMiddleware("super_admin"), getDeactivatedUsers);
+router.get("/deleted", roleMiddleware("super_admin"), getDeletedUsers);
+router.get("/", roleMiddleware("super_admin"), getAllUsers);
+router.post("/", roleMiddleware("super_admin"), createUser);
+router.get("/:id", roleMiddleware("super_admin"), getUserById);
+router.patch("/:id/deactivate", roleMiddleware("super_admin"), deactivateUser);
+router.patch("/:id/reactivate", roleMiddleware("super_admin"), reactivateUser);
+// PUT /:id stays open to any admin so each account can edit ITSELF; the
+// controller allows the update only for self-edits or when the caller is super.
 router.put("/:id", roleMiddleware("admin"), updateUser);
-router.delete("/:id", roleMiddleware("admin"), deleteUser);
+router.delete("/:id", roleMiddleware("super_admin"), deleteUser);
 
 module.exports = router;
 
@@ -53,14 +56,12 @@ module.exports = router;
 
 // Test in Postman — login as admin first, use Bearer <token> in Authorization header:
 //
-// GET    /api/users                  → list all users
+// GET    /api/users                  → list all administrators
 // GET    /api/users/stats            → counts for dashboard
-// GET    /api/users/pending          → pending approvals
 // GET    /api/users/deactivated      → deactivated list
-// GET    /api/users/:id              → single user
-// PATCH  /api/users/:id/approve      → approve pending user
-// PATCH  /api/users/:id/warn         → issue warning to user (max 2 before deactivate)
-// PATCH  /api/users/:id/deactivate   → deactivate user (only after 2 warnings)
-// PATCH  /api/users/:id/reactivate   → manually reactivate deactivated user
-// PUT    /api/users/:id              → edit user info
-// DELETE /api/users/:id              → permanently delete user
+// GET    /api/users/:id              → single administrator
+// POST   /api/users                  → create administrator (username + password)
+// PATCH  /api/users/:id/deactivate   → deactivate administrator
+// PATCH  /api/users/:id/reactivate   → reactivate deactivated administrator
+// PUT    /api/users/:id              → edit administrator info
+// DELETE /api/users/:id              → permanently delete administrator

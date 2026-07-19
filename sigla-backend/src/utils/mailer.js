@@ -5,14 +5,16 @@ const client = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
 
 const sendVerificationCode = async (email, code, type) => {
   const subject =
-    type === "registration"
+    type === "registration" || type === "email_change"
       ? "SIGLA — Email Verification Code"
       : "SIGLA — Password Reset Code";
 
   const action =
     type === "registration"
       ? "complete your registration"
-      : "reset your password";
+      : type === "email_change"
+        ? "verify your email address"
+        : "reset your password";
 
   await client.transactionalEmails.sendTransacEmail({
     sender: {

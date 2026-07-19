@@ -7,8 +7,8 @@ const {
   GestureSample,
   User,
   Notification,
-  // ActivityLog,
 } = require("../models/index.js");
+const { logActivity } = require("../utils/activityLogger.js");
 
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -22,7 +22,7 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 // All gestures are motion; a single flat cap/threshold applies to every word.
 const PER_USER_CAP = 25;         // max samples ONE user can contribute to a word
 const DEFAULT_SAMPLE_CAP = 25;   // total cap across all users (when no admin sample_limit)
-const ACTIVATION_THRESHOLD = 25; // approved samples needed before a word is deploy-eligible
+const ACTIVATION_THRESHOLD = 20; // approved samples needed before a word is deploy-eligible (scope §17)
 
 // ── Helper: normalize word label ──────────────────────────────
 const normalizeLabel = (label) =>
@@ -443,6 +443,14 @@ const adminAddWord = async (req, res) => {
       approved_sample_count: 0,
       reviewed_by: req.user.id,
       reviewed_at: new Date(),
+    });
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "added_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Added word: ${word.label}`,
     });
 
     return res.status(201).json({
@@ -955,13 +963,13 @@ const approveSubmission = async (req, res) => {
       userApprovedAfter,
     );
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "approved_submission",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Approved submission for word: ${word.label} — ${totalApproved} total approved samples. Activated: ${activated}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "approved_submission",
+      target_type: "word",
+      target_id: word.id,
+      details: `Approved submission for word: ${word.label} — ${totalApproved} total approved samples. Activated: ${activated}`,
+    });
 
     return res.status(200).json({
       message: "Submission approved",
@@ -1023,13 +1031,13 @@ const rejectSubmission = async (req, res) => {
       userApprovedCount,
     );
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "rejected_submission",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Rejected submission for word: ${word.label}. Reason: ${reason || "No reason provided"}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "rejected_submission",
+      target_type: "word",
+      target_id: word.id,
+      details: `Rejected submission for word: ${word.label}. Reason: ${reason || "No reason provided"}`,
+    });
 
     return res
       .status(200)
@@ -1057,6 +1065,14 @@ const activateWord = async (req, res) => {
     }
 
     await word.update({ is_active: true });
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "activated_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Activated word: ${word.label}`,
+    });
 
     return res.status(200).json({ message: "Word activated successfully." });
   } catch (err) {
@@ -1094,13 +1110,13 @@ const approveWord = async (req, res) => {
       });
     }
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "approved_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Approved word: ${word.label}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "approved_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Approved word: ${word.label}`,
+    });
 
     return res
       .status(200)
@@ -1143,13 +1159,13 @@ const rejectWord = async (req, res) => {
       });
     }
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "rejected_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Rejected word: ${word.label}. Reason: ${reason || "No reason provided"}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "rejected_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Rejected word: ${word.label}. Reason: ${reason || "No reason provided"}`,
+    });
 
     return res.status(200).json({ message: "Word rejected successfully" });
   } catch (err) {
@@ -1206,13 +1222,13 @@ const updateWord = async (req, res) => {
           : word.sample_limit,
     });
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "updated_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Updated word: ${word.label}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "updated_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Updated word: ${word.label}`,
+    });
 
     return res.status(200).json({ message: "Word updated successfully" });
   } catch (err) {
@@ -1229,15 +1245,18 @@ const deleteWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "deleted_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Deleted word: ${word.label} — all associated gesture samples and word bank entry removed`,
-    // });
+    const deletedWordId = word.id;
+    const deletedWordLabel = word.label;
 
     await word.destroy();
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "deleted_word",
+      target_type: "word",
+      target_id: deletedWordId,
+      details: `Deleted word: ${deletedWordLabel} — all associated gesture samples and word bank entry removed`,
+    });
 
     return res.status(200).json({
       message:
@@ -1351,13 +1370,13 @@ const approveAllSamplesForWord = async (req, res) => {
       await sendSubmissionNotification(userId, word.label, pendingCount, pendingCount, cap, pendingCount);
     }
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "approved_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Approved all ${count} pending samples for word: ${word.label}. Activated: ${activated}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "approved_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Approved all ${count} pending samples for word: ${word.label}. Activated: ${activated}`,
+    });
 
     return res.status(200).json({
       message: `${count} samples approved`,
@@ -1410,13 +1429,13 @@ const rejectAllSamplesForWord = async (req, res) => {
       await sendSubmissionNotification(userId, word.label, 0, pendingCount, cap, 0);
     }
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "rejected_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Rejected all ${count} pending samples for word: ${word.label}`,
-    // });
+    await logActivity({
+      user_id: req.user.id,
+      action: "rejected_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Rejected all ${count} pending samples for word: ${word.label}`,
+    });
 
     return res.status(200).json({ message: `${count} samples rejected` });
   } catch (err) {
@@ -1841,6 +1860,14 @@ const uploadVideos = async (req, res) => {
     });
     await word.reload();
     await checkAndActivateWord(word, req.user.id);
+
+    await logActivity({
+      user_id: req.user.id,
+      action: "uploaded_samples",
+      target_type: "word",
+      target_id: word.id,
+      details: `Uploaded gesture samples for word: ${word.label} — ${successCount} processed, ${failCount} failed/skipped`,
+    });
 
     return res.status(207).json({
       message: `${successCount} file(s) processed, ${failCount} failed/skipped`,

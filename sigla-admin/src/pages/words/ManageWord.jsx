@@ -304,7 +304,7 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
 };
 
 // ── Main Page ─────────────────────────────────────────────────
-const ManageDataset = () => {
+const ManageWord = () => {
   const { success, error: errorToast } = useToast();
   const navigate = useNavigate();
   const [words, setWords] = useState([]);
@@ -370,7 +370,7 @@ const ManageDataset = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
-            Manage Dataset
+            Manage Words
           </h2>
           <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
             {total} word(s) in database
@@ -576,4 +576,4 @@ const ManageDataset = () => {
   );
 };
 
-export default ManageDataset;
+export default ManageWord;

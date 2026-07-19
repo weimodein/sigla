@@ -1,8 +1,10 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const ProtectedRoute = ({ children }) => {
-  const { isLoggedIn, needsSetup, loading } = useAuth();
+// Guards a route so only a super administrator can access it. Non-super
+// admins are redirected to the dashboard; unauthenticated users to login.
+const SuperRoute = ({ children }) => {
+  const { isLoggedIn, isSuper, needsSetup, loading } = useAuth();
 
   if (loading) {
     return (
@@ -21,7 +23,11 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/onboarding" replace />;
   }
 
+  if (!isSuper) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return children;
 };
 
-export default ProtectedRoute;
+export default SuperRoute;

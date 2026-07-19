@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
+const requireSetupComplete = require("../middleware/requireSetupComplete.js");
 const {
   getAllCategories,
   createCategory,
@@ -11,6 +12,8 @@ const {
 
 // Public — anyone, including guests, can read the category list
 router.get("/", getAllCategories);
+router.use(authMiddleware);
+router.use(requireSetupComplete);
 
 // Everything below still requires a logged-in admin
 router.use(authMiddleware);

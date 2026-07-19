@@ -24,13 +24,3 @@ export const getUnreadCount = async () => {
   const response = await api.get("/notifications/unread-count");
   return response.data;
 };
-
-export const broadcastAnnouncement = async (data) => {
-  const response = await api.post("/notifications/announce", data);
-  return response.data;
-};
-
-export const getAllAnnouncements = async () => {
-  const response = await api.get("/notifications/admin/all");
-  return response.data;
-};

@@ -17,6 +17,17 @@
   animation: slide-in 0.3s ease-out;
 }
 
+/* ── Sidebar nav: keep scrollable on very short screens but hide the track ── */
+.sidebar-nav {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* legacy Edge/IE */
+}
+.sidebar-nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;                  /* Chrome/Safari */
+}
+
 /* ── Shared Dashboard Design System ── */
 .dash-stat-card {
   background: white;

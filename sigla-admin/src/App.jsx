@@ -2,19 +2,22 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import SuperRoute from "./components/SuperRoute.jsx";
 import Layout from "./components/Layout.jsx";
 
 // Pages
 import Login from "./pages/auth/Login.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
-import ManageUsers from "./pages/users/ManageUsers.jsx";
+import ManageAdministrators from "./pages/administrators/ManageAdministrators.jsx";
 import ManageWordBank from "./pages/words/ManageWordBank.jsx";
-import ManageDataset from "./pages/words/ManageDataset.jsx";
+import ManageWord from "./pages/words/ManageWord.jsx";
 import ManageCategories from "./pages/categories/ManageCategories.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
 import AdministratorAccount from "./pages/adminaccount/AdministratorAccount.jsx";
 import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx";
+import ActivityLogs from "./pages/activitylogs/ActivityLogs.jsx";
+import Onboarding from "./pages/onboarding/Onboarding.jsx";
 
 const App = () => {
   return (
@@ -25,6 +28,9 @@ const App = () => {
             {/* Public */}
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+
+            {/* Forced first-login onboarding (self-guards on auth + needsSetup) */}
+            <Route path="/onboarding" element={<Onboarding />} />
 
             {/* Protected — with sidebar layout */}
             <Route
@@ -38,13 +44,13 @@ const App = () => {
               }
             />
             <Route
-              path="/users"
+              path="/administrators"
               element={
-                <ProtectedRoute>
+                <SuperRoute>
                   <Layout>
-                    <ManageUsers />
+                    <ManageAdministrators />
                   </Layout>
-                </ProtectedRoute>
+                </SuperRoute>
               }
             />
             <Route
@@ -62,7 +68,7 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <ManageDataset />
+                    <ManageWord />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -103,6 +109,16 @@ const App = () => {
                 <ProtectedRoute>
                   <Layout>
                     <ReportsAnalytics />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activity-logs"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ActivityLogs />
                   </Layout>
                 </ProtectedRoute>
               }

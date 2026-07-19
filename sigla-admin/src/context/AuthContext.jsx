@@ -51,8 +51,8 @@ export const AuthProvider = ({ children }) => {
   const login = async (identifier, password) => {
     const data = await loginApi(identifier, password);
 
-    // Only allow admin to access admin panel
-    if (data.user.role === "user") {
+    // Only allow admin / super-admin accounts to access the admin platform
+    if (data.user.role !== "admin" && data.user.role !== "super_admin") {
       throw new Error("Access denied. Admin accounts only.");
     }
 
@@ -63,6 +63,14 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  // ── Refresh the current user from the server (after profile/email change) ─
+  const refreshUser = async () => {
+    const data = await getMe();
+    setUser(data.user);
+    storage.set("user", JSON.stringify(data.user));
+    return data.user;
+  };
+
   // ── Logout ────────────────────────────────────────────────
   const logout = () => {
     storage.remove("token");
@@ -71,8 +79,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Helpers ───────────────────────────────────────────────
-  const isAdmin = user?.role === "admin";
+  const isSuper = user?.role === "super_admin";
+  const isAdmin = user?.role === "admin" || isSuper;
   const isLoggedIn = !!user;
+  // New admins must complete first-login setup before using the platform.
+  const needsSetup = !!user?.must_complete_setup;
 
   return (
     <AuthContext.Provider
@@ -81,8 +92,11 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
+        refreshUser,
         isAdmin,
+        isSuper,
         isLoggedIn,
+        needsSetup,
       }}
     >
       {children}

@@ -3,13 +3,14 @@ export const API_URL =
 
 export const ROLES = {
   ADMIN: "admin",
-  USER: "user",
+  SUPER_ADMIN: "super_admin",
 };
 
+// Administrator account statuses
 export const USER_STATUS = {
-  PENDING: "pending",
   ACTIVE: "active",
   DEACTIVATED: "deactivated",
+  DELETED: "deleted",
 };
 
 export const WORD_STATUS = {
