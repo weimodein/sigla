@@ -11,6 +11,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -461,68 +462,49 @@ class MainActivity : AppCompatActivity() {
 private fun setupSidebar() {
     val drawer = binding.drawerLayout
 
-    val navMainInterface = findViewById<LinearLayout>(R.id.navMainInterface)
-    val navWordBank = findViewById<LinearLayout>(R.id.navWordBank)
-    val navTranslationHistory = findViewById<LinearLayout>(R.id.navTranslationHistory)
-    val navSettings = findViewById<LinearLayout>(R.id.navSettings)
-    val navProfile = findViewById<View>(R.id.navProfile)
-    val navNotifications = findViewById<View>(R.id.navNotifications)
-
-    fun resetAll() {
-        navMainInterface.isSelected = false
-        navWordBank.isSelected = false
-        navTranslationHistory.isSelected = false
-        navSettings.isSelected = false
-    }
-
-    // Default: Main Interface selected
-    resetAll()
-    navMainInterface.isSelected = true
+    setActiveNavItem(R.id.navMainInterface)
 
     binding.btnSidebar.setOnClickListener {
         drawer.openDrawer(GravityCompat.START)
     }
 
-    navMainInterface.setOnClickListener {
-        resetAll()
-        navMainInterface.isSelected = true
+    findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
         drawer.closeDrawer(GravityCompat.START)
     }
 
-    navWordBank.setOnClickListener {
-        resetAll()
-        navWordBank.isSelected = true
+    findViewById<View>(R.id.navWordBank)?.setOnClickListener {
         drawer.closeDrawer(GravityCompat.START)
         startActivity(Intent(this, WordBankActivity::class.java))
+        finish()
     }
 
-    navTranslationHistory.setOnClickListener {
-        resetAll()
-        navTranslationHistory.isSelected = true
+    findViewById<View>(R.id.navTranslationHistory)?.setOnClickListener {
         drawer.closeDrawer(GravityCompat.START)
         startActivity(Intent(this, TranslationHistoryActivity::class.java))
+        finish()
     }
 
-    navSettings.setOnClickListener {
-        resetAll()
-        navSettings.isSelected = true
+    findViewById<View>(R.id.navSettings)?.setOnClickListener {
         drawer.closeDrawer(GravityCompat.START)
         startActivity(Intent(this, SettingsActivity::class.java))
+        finish()
     }
 
-    navProfile?.setOnClickListener {
+    findViewById<View>(R.id.navProfile)?.setOnClickListener {
         drawer.closeDrawer(GravityCompat.START)
         if (isSignedIn) {
             startActivity(Intent(this, ProfileActivity::class.java))
+            finish()
         } else {
             openAuthDialog()
         }
     }
 
-    navNotifications?.setOnClickListener {
+    findViewById<View>(R.id.navNotifications)?.setOnClickListener {
         drawer.closeDrawer(GravityCompat.START)
         if (isSignedIn) {
             startActivity(Intent(this, NotificationsActivity::class.java))
+            finish()
         } else {
             openAuthDialog()
         }
@@ -534,6 +516,33 @@ private fun setupSidebar() {
     }
 
     refreshSidebarAuthState()
+}
+
+private fun setActiveNavItem(activeId: Int) {
+    val navIds = listOf(
+        R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
+        R.id.navNotifications, R.id.navProfile, R.id.navSettings
+    )
+    navIds.forEach { id ->
+        val view = findViewById<LinearLayout>(id)
+        if (id == activeId) {
+            view?.setBackgroundResource(R.drawable.bg_nav_item_selected)
+            (view?.getChildAt(0) as? ImageView)?.imageTintList =
+                android.content.res.ColorStateList.valueOf(0xFF4A90E2.toInt())
+            (view?.getChildAt(1) as? TextView)?.apply {
+                setTextColor(0xFF4A90E2.toInt())
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            }
+        } else {
+            view?.setBackgroundResource(R.drawable.bg_nav_item_default)
+            (view?.getChildAt(0) as? ImageView)?.imageTintList =
+                android.content.res.ColorStateList.valueOf(0xFF6C757D.toInt())
+            (view?.getChildAt(1) as? TextView)?.apply {
+                setTextColor(0xFF6C757D.toInt())
+                setTypeface(null, android.graphics.Typeface.NORMAL)
+            }
+        }
+    }
 }
     private fun openAuthDialog() {
         val dialog = AuthDialogFragment()

@@ -59,7 +59,7 @@
     <color name="sig_icon_accent">#0D3E6B</color>
     <color name="sig_accent">#4A90E2</color>
     <color name="sig_accent_pill">#B9CDF0</color>
-    <color name="sig_nav_selected_fill">#E3F2FD</color>
+    <color name="sig_nav_selected_fill">#401E3B8B</color>
     <color name="sig_nav_selected_text">#4A90E2</color>
     <color name="sig_nav_default_text">#1A2E5A</color>
     <color name="sig_nav_default_subtitle">#6C7A9C</color>

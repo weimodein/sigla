@@ -529,11 +529,7 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- ── Sidebar (using your custom drawer_sidebar) ── -->
-    <include
-        layout="@layout/drawer_sidebar"
-        android:layout_width="280dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="start" />
+    <!-- ── Sidebar ── -->
+    <include layout="@layout/nav_sidebar" />
 
 </androidx.drawerlayout.widget.DrawerLayout>
