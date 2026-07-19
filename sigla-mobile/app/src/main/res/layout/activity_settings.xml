@@ -4,10 +4,13 @@
     Scope:
       - Volume level (SeekBar)
       - Voice type (toggle/selector: Male / Female)
-      - Light / Dark mode (toggle switch)        ← Text size removed
+      - Light / Dark mode (toggle switch)
       - Reset to Default button
       - Replay onboarding tutorial
       - Retractable sidebar (no back button — sidebar matches activity_main.xml pattern)
+
+    Header matches activity_word_bank.xml (same outer halo + navy curve
+    drawables/heights) so this screen reads as part of the same app family.
 -->
 <androidx.drawerlayout.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -19,35 +22,34 @@
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#E3F2FD">
+        android:background="@color/sig_page_bg">
 
         <!-- TOP BAR -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/topBarCard"
+        <FrameLayout
+            android:id="@+id/topBarOuterWrapper"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="0dp"
-            android:layout_marginTop="0dp"
-            android:layout_marginEnd="0dp"
-            app:cardCornerRadius="0dp"
-            app:cardElevation="4dp"
-            app:cardBackgroundColor="#E6001E3D"
-            app:strokeColor="#334A90E2"
-            app:strokeWidth="1dp">
+            android:layout_height="122dp"
+            android:background="@drawable/bg_topbar_outer"
+            android:elevation="6dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="110dp"
+                android:background="@drawable/bg_topbar_curved"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:layout_marginBottom="6dp"
                 android:orientation="horizontal"
-                android:padding="10dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
                 android:gravity="center_vertical">
 
                 <!-- Sidebar 3-line hamburger button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSidebar"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:padding="0dp"
@@ -55,12 +57,10 @@
                     app:icon="@drawable/ic_menu_lines"
                     app:iconGravity="textStart"
                     app:iconPadding="0dp"
-                    app:iconSize="20dp"
-                    app:iconTint="#FFFFFF"
-                    app:backgroundTint="#14FFFFFF"
-                    app:strokeColor="#33FFFFFF"
-                    app:strokeWidth="1dp"
-                    app:cornerRadius="10dp" />
+                    app:iconSize="24dp"
+                    app:iconTint="@color/sig_icon_accent"
+                    app:backgroundTint="@color/sig_header_button_bg"
+                    app:cornerRadius="14dp" />
 
                 <!-- Screen title + subtitle -->
                 <LinearLayout
@@ -68,37 +68,35 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical"
-                    android:layout_marginStart="12dp">
+                    android:layout_marginStart="14dp">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Settings"
                         android:textColor="#FFFFFF"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.1"
-                        android:fontFamily="sans-serif-medium" />
+                        android:textSize="22sp"
+                        android:fontFamily="@font/poppins_bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Sign Language Interpreter"
-                        android:textColor="#80B0D4FF"
-                        android:textSize="10sp"
-                        android:letterSpacing="0.03"
-                        android:fontFamily="sans-serif" />
+                        android:layout_marginTop="2dp"
+                        android:text="Filipino Sign Language Translator"
+                        android:textColor="#C2CFE3"
+                        android:textSize="11sp"
+                        android:fontFamily="@font/poppins_regular" />
 
                 </LinearLayout>
 
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+        </FrameLayout>
 
         <!-- SCROLLABLE BODY -->
         <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginTop="80dp"
+            android:layout_marginTop="122dp"
             android:fillViewport="true">
 
             <LinearLayout
@@ -114,13 +112,13 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="AUDIO"
-                    android:textColor="#0056A4"
-                    android:textSize="10sp"
+                    android:textColor="@color/sig_text_secondary"
+                    android:textSize="11sp"
                     android:letterSpacing="0.15"
-                    android:textStyle="bold"
+                    android:fontFamily="@font/poppins_bold"
                     android:paddingStart="20dp"
                     android:paddingEnd="20dp"
-                    android:paddingTop="20dp"
+                    android:paddingTop="18dp"
                     android:paddingBottom="8dp" />
 
                 <androidx.cardview.widget.CardView
@@ -128,8 +126,8 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
                     android:layout_marginEnd="16dp"
-                    app:cardBackgroundColor="#FFFFFF"
-                    app:cardCornerRadius="12dp"
+                    app:cardBackgroundColor="@color/sig_surface_card"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp">
 
                     <LinearLayout
@@ -138,8 +136,8 @@
                         android:orientation="vertical"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
-                        android:paddingTop="8dp"
-                        android:paddingBottom="16dp">
+                        android:paddingTop="14dp"
+                        android:paddingBottom="18dp">
 
                         <!-- Volume Level -->
                         <LinearLayout
@@ -147,58 +145,25 @@
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:paddingTop="8dp"
-                            android:paddingBottom="4dp">
+                            android:paddingBottom="10dp">
 
-                            <LinearLayout
+                            <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:orientation="vertical">
+                                android:text="Volume Level"
+                                android:textColor="@color/sig_text_primary"
+                                android:textSize="15sp"
+                                android:fontFamily="@font/poppins_bold" />
 
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Volume Level"
-                                    android:textColor="#1F1F1F"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="TTS and audio feedback volume"
-                                    android:textColor="#78909C"
-                                    android:textSize="11sp"
-                                    android:layout_marginTop="2dp" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
+                            <TextView
+                                android:id="@+id/tvVolumeValue"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:gravity="center_vertical"
-                                android:layout_marginStart="12dp">
-
-                                <ImageView
-                                    android:layout_width="16dp"
-                                    android:layout_height="16dp"
-                                    android:src="@android:drawable/ic_lock_silent_mode_off"
-                                    android:tint="#0056A4"
-                                    android:layout_marginEnd="4dp"
-                                    android:contentDescription="Volume" />
-
-                                <TextView
-                                    android:id="@+id/tvVolumeValue"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="70%"
-                                    android:textColor="#0056A4"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
-
-                            </LinearLayout>
+                                android:text="70%"
+                                android:textColor="@color/sig_text_primary"
+                                android:textSize="15sp"
+                                android:fontFamily="@font/poppins_bold" />
 
                         </LinearLayout>
 
@@ -208,59 +173,59 @@
                             android:layout_height="wrap_content"
                             android:max="100"
                             android:progress="70"
-                            android:progressTint="#0056A4"
-                            android:thumbTint="#0056A4"
-                            android:layout_marginBottom="8dp" />
+                            android:progressTint="@color/sig_icon_accent"
+                            android:thumbTint="@color/sig_icon_accent"
+                            android:layout_marginBottom="12dp" />
 
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F0F4FA" android:layout_marginBottom="8dp" />
+                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/sig_divider" android:layout_marginBottom="14dp" />
 
                         <!-- Voice Type toggle -->
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Voice Type"
-                            android:textColor="#1F1F1F"
-                            android:textSize="14sp"
-                            android:textStyle="bold"
+                            android:textColor="@color/sig_text_primary"
+                            android:textSize="15sp"
+                            android:fontFamily="@font/poppins_bold"
                             android:layout_marginBottom="4dp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Select voice for text-to-speech output"
-                            android:textColor="#78909C"
-                            android:textSize="11sp"
-                            android:layout_marginBottom="10dp" />
+                            android:textColor="@color/sig_text_secondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="14dp" />
 
                         <LinearLayout
                             android:layout_width="match_parent"
-                            android:layout_height="40dp"
-                            android:orientation="horizontal"
-                            android:background="@drawable/bg_toggle_track"
-                            android:padding="3dp">
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
 
                             <TextView
                                 android:id="@+id/btnVoiceMale"
                                 android:layout_width="0dp"
-                                android:layout_height="match_parent"
+                                android:layout_height="44dp"
                                 android:layout_weight="1"
-                                android:text="🔊 Male"
+                                android:layout_marginEnd="10dp"
+                                android:text="MALE"
                                 android:textColor="#FFFFFF"
                                 android:textSize="13sp"
-                                android:textStyle="bold"
+                                android:fontFamily="@font/poppins_bold"
                                 android:gravity="center"
                                 android:background="@drawable/bg_toggle_selected" />
 
                             <TextView
                                 android:id="@+id/btnVoiceFemale"
                                 android:layout_width="0dp"
-                                android:layout_height="match_parent"
+                                android:layout_height="44dp"
                                 android:layout_weight="1"
-                                android:text="🔊 Female"
-                                android:textColor="#78909C"
+                                android:text="FEMALE"
+                                android:textColor="@color/sig_text_primary"
                                 android:textSize="13sp"
+                                android:fontFamily="@font/poppins_bold"
                                 android:gravity="center"
-                                android:background="@android:color/transparent" />
+                                android:background="@drawable/bg_toggle_unselected_blue" />
 
                         </LinearLayout>
 
@@ -268,16 +233,16 @@
                 </androidx.cardview.widget.CardView>
 
                 <!-- ════════════════════════════════════
-                     SECTION: DISPLAY              (Text size removed)
+                     SECTION: DISPLAY
                 ════════════════════════════════════ -->
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="DISPLAY"
-                    android:textColor="#0056A4"
-                    android:textSize="10sp"
+                    android:textColor="@color/sig_text_secondary"
+                    android:textSize="11sp"
                     android:letterSpacing="0.15"
-                    android:textStyle="bold"
+                    android:fontFamily="@font/poppins_bold"
                     android:paddingStart="20dp"
                     android:paddingEnd="20dp"
                     android:paddingTop="20dp"
@@ -288,60 +253,65 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
                     android:layout_marginEnd="16dp"
-                    app:cardBackgroundColor="#FFFFFF"
-                    app:cardCornerRadius="12dp"
+                    app:cardBackgroundColor="@color/sig_surface_card"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
+                        android:layout_height="72dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
                         android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="8dp"
-                        android:paddingBottom="16dp">
+                        android:paddingEnd="16dp">
 
-                        <!-- Dark Mode toggle – only item in this card now -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="52dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
+                        <FrameLayout
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_circle_blue_light">
 
-                            <LinearLayout
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:orientation="vertical">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Dark Mode"
-                                    android:textColor="#1F1F1F"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:id="@+id/tvDarkModeSubtitle"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Currently using Light mode"
-                                    android:textColor="#78909C"
-                                    android:textSize="11sp"
-                                    android:layout_marginTop="2dp" />
-
-                            </LinearLayout>
-
-                            <com.google.android.material.switchmaterial.SwitchMaterial
-                                android:id="@+id/switchDarkMode"
+                            <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:checked="false"
-                                app:trackTint="@color/switch_track_tint"
-                                app:thumbTint="@color/switch_thumb_tint" />
+                                android:layout_gravity="center"
+                                android:text="🌙"
+                                android:textSize="16sp" />
+
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="14dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Dark Mode"
+                                android:textColor="@color/sig_text_primary"
+                                android:textSize="15sp"
+                                android:fontFamily="@font/poppins_bold" />
+
+                            <TextView
+                                android:id="@+id/tvDarkModeSubtitle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Currently using Light mode"
+                                android:textColor="@color/sig_text_secondary"
+                                android:textSize="12sp"
+                                android:layout_marginTop="2dp" />
 
                         </LinearLayout>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchDarkMode"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="false"
+                            app:trackTint="@color/switch_track_tint"
+                            app:thumbTint="@color/switch_thumb_tint" />
 
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
@@ -353,10 +323,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="APP"
-                    android:textColor="#0056A4"
-                    android:textSize="10sp"
+                    android:textColor="@color/sig_text_secondary"
+                    android:textSize="11sp"
                     android:letterSpacing="0.15"
-                    android:textStyle="bold"
+                    android:fontFamily="@font/poppins_bold"
                     android:paddingStart="20dp"
                     android:paddingEnd="20dp"
                     android:paddingTop="20dp"
@@ -367,72 +337,65 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
                     android:layout_marginEnd="16dp"
-                    app:cardBackgroundColor="#FFFFFF"
-                    app:cardCornerRadius="12dp"
+                    app:cardBackgroundColor="@color/sig_surface_card"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp">
 
                     <LinearLayout
+                        android:id="@+id/rowReplayTutorial"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
+                        android:layout_height="72dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp">
 
-                        <LinearLayout
-                            android:id="@+id/rowReplayTutorial"
-                            android:layout_width="match_parent"
-                            android:layout_height="60dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <LinearLayout
-                                android:layout_width="36dp"
-                                android:layout_height="36dp"
-                                android:gravity="center"
-                                android:background="@drawable/bg_icon_circle_blue_light"
-                                android:layout_marginEnd="14dp">
-
-                                <ImageView
-                                    android:layout_width="18dp"
-                                    android:layout_height="18dp"
-                                    android:src="@android:drawable/ic_media_play"
-                                    android:tint="#0056A4"
-                                    android:contentDescription="Tutorial" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:orientation="vertical">
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Replay Onboarding Tutorial"
-                                    android:textColor="#1F1F1F"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Review the app guide from the beginning"
-                                    android:textColor="#78909C"
-                                    android:textSize="11sp"
-                                    android:layout_marginTop="2dp" />
-
-                            </LinearLayout>
+                        <FrameLayout
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_circle_blue_light">
 
                             <ImageView
-                                android:layout_width="16dp"
-                                android:layout_height="16dp"
-                                android:src="@android:drawable/arrow_up_float"
-                                android:tint="#B0BEC5"
-                                android:contentDescription="Go" />
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:layout_gravity="center"
+                                android:src="@android:drawable/ic_media_play"
+                                app:tint="@color/sig_icon_badge_icon"
+                                android:contentDescription="Tutorial" />
+
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="14dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Replay Onboarding Tutorial"
+                                android:textColor="@color/sig_text_primary"
+                                android:textSize="15sp"
+                                android:fontFamily="@font/poppins_bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Review the app guide from the beginning"
+                                android:textColor="@color/sig_text_secondary"
+                                android:textSize="12sp"
+                                android:layout_marginTop="2dp" />
 
                         </LinearLayout>
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:src="@android:drawable/ic_media_play"
+                            app:tint="@color/sig_text_secondary"
+                            android:contentDescription="Go" />
 
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
@@ -440,71 +403,70 @@
                 <!-- ════════════════════════════════════
                      RESET TO DEFAULT BUTTON
                 ════════════════════════════════════ -->
-                <androidx.cardview.widget.CardView
+                <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"
                     android:layout_marginEnd="16dp"
                     android:layout_marginTop="20dp"
-                    app:cardBackgroundColor="#FFFFFF"
-                    app:cardCornerRadius="12dp"
+                    app:cardBackgroundColor="@color/sig_reset_card_bg"
+                    app:cardCornerRadius="16dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="@color/sig_border_reset_card"
                     app:cardElevation="2dp">
 
                     <LinearLayout
                         android:id="@+id/btnResetDefaults"
                         android:layout_width="match_parent"
-                        android:layout_height="56dp"
+                        android:layout_height="64dp"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp">
 
-                        <LinearLayout
+                        <FrameLayout
                             android:layout_width="36dp"
                             android:layout_height="36dp"
-                            android:gravity="center"
-                            android:background="@drawable/bg_icon_circle_orange_light"
-                            android:layout_marginEnd="14dp">
+                            android:background="@drawable/bg_icon_circle_red_light">
 
                             <ImageView
                                 android:layout_width="18dp"
                                 android:layout_height="18dp"
+                                android:layout_gravity="center"
                                 android:src="@android:drawable/ic_menu_revert"
-                                android:tint="#E65100"
+                                app:tint="@color/sig_reset_accent"
                                 android:contentDescription="Reset" />
 
-                        </LinearLayout>
+                        </FrameLayout>
 
-                        <TextView
+                        <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Reset to Default"
-                            android:textColor="#E65100"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
+                            android:layout_marginStart="14dp"
+                            android:orientation="vertical">
 
-                        <ImageView
-                            android:layout_width="16dp"
-                            android:layout_height="16dp"
-                            android:src="@android:drawable/arrow_up_float"
-                            android:tint="#FFCC80"
-                            android:contentDescription="Reset" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Reset to Default"
+                                android:textColor="@color/sig_reset_accent"
+                                android:textSize="15sp"
+                                android:fontFamily="@font/poppins_bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Restores all settings to their original configuration"
+                                android:textColor="@color/sig_reset_subtitle"
+                                android:textSize="12sp"
+                                android:layout_marginTop="2dp" />
+
+                        </LinearLayout>
 
                     </LinearLayout>
 
-                </androidx.cardview.widget.CardView>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Restores all settings to their original configuration."
-                    android:textColor="#90A4AE"
-                    android:textSize="11sp"
-                    android:gravity="center"
-                    android:paddingTop="8dp"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp" />
+                </com.google.android.material.card.MaterialCardView>
 
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>

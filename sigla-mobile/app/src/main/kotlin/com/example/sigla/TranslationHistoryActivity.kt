@@ -1,11 +1,12 @@
 package com.example.sigla
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -195,15 +196,18 @@ class TranslationHistoryActivity : AppCompatActivity() {
     }
 
     private fun confirmClearAll() {
-        AlertDialog.Builder(this)
-            .setTitle("Clear History")
-            .setMessage("Are you sure you want to permanently remove all translation history?")
-            .setPositiveButton("Clear All") { _, _ ->
-                historyManager.clearAll()
-                refreshList()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            historyManager.clearAll()
+            refreshList()
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     // ── UI state ──────────────────────────────────────────────────────────────
@@ -249,6 +253,12 @@ class HistoryAdapter(
     companion object {
         private const val VIEW_TYPE_HEADER = 0
         private const val VIEW_TYPE_ENTRY  = 1
+
+        private fun confidenceColor(confidence: Int): Int = when {
+            confidence >= 80 -> 0xFF43A047.toInt() // green
+            confidence >= 50 -> 0xFFFFA726.toInt() // orange
+            else             -> 0xFFEF5350.toInt() // red
+        }
     }
 
     // ── ViewHolders ───────────────────────────────────────────────────────────
@@ -258,11 +268,11 @@ class HistoryAdapter(
     }
 
     class EntryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val tvGestureTypeBadge : TextView    = view.findViewById(R.id.tvGestureTypeBadge)
         val tvWord             : TextView    = view.findViewById(R.id.tvWord)
         val tvConfidence       : TextView    = view.findViewById(R.id.tvConfidence)
         val tvTime             : TextView    = view.findViewById(R.id.tvTime)
-        val btnDelete          : ImageButton = view.findViewById(R.id.btnDelete)
+        val progressConfidence : ProgressBar = view.findViewById(R.id.progressConfidence)
+        val btnDelete          : View        = view.findViewById(R.id.btnDelete)
     }
 
     // ── Adapter overrides ─────────────────────────────────────────────────────
@@ -298,14 +308,8 @@ class HistoryAdapter(
                     tvConfidence.text = "${e.confidence}% confidence"
                     tvTime.text       = TranslationHistoryManager.formatTime(e.timestamp)
 
-                    // Badge: normalise to uppercase for display
-                    val badgeLabel = e.gestureType.uppercase()
-                    tvGestureTypeBadge.text = badgeLabel
-
-                    // Blue for STATIC, teal for MOTION — matches UI version colours
-                    val badgeColor = if (badgeLabel == "STATIC") 0xFF0056A4.toInt()
-                                     else                        0xFF00796B.toInt()
-                    tvGestureTypeBadge.setBackgroundColor(badgeColor)
+                    progressConfidence.progress = e.confidence
+                    progressConfidence.progressTintList = ColorStateList.valueOf(confidenceColor(e.confidence))
 
                     // Delete button passes flatIndex back to the Activity
                     btnDelete.setOnClickListener { onDelete(item.flatIndex) }

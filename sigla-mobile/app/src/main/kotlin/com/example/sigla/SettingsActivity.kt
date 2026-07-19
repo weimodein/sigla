@@ -1,6 +1,5 @@
 package com.example.sigla
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -12,14 +11,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import com.google.android.material.button.MaterialButton
-import kotlinx.coroutines.launch
 
 /**
  * SettingsActivity.kt
@@ -36,35 +33,25 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var drawer: DrawerLayout
     private lateinit var session: SessionManager
+    private lateinit var appSettings: AppSettings
 
-    // ── Default values ────────────────────────────────────────────────────────
-    companion object {
-        const val DEFAULT_VOLUME         = 70
-        const val DEFAULT_VOICE          = "MALE"   // "MALE" or "FEMALE"
-        const val DEFAULT_DARK_MODE      = false
-
-        // SharedPreferences keys
-        const val PREF_VOLUME    = "pref_volume"
-        const val PREF_VOICE     = "pref_voice_type"
-        const val PREF_DARK_MODE = "pref_dark_mode"
-    }
-
-    // In-memory state
-    private var currentVolume   = DEFAULT_VOLUME
-    private var currentVoice    = DEFAULT_VOICE
-    private var currentDarkMode = DEFAULT_DARK_MODE
+    // In-memory state, mirrors AppSettings (the store MainActivity/WordDetailActivity's
+    // TTS actually reads — everything here must go through it, not a separate prefs file)
+    private var currentVolume   = 0
+    private var currentVoice    = "MALE"
+    private var currentDarkMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
         session = SessionManager.getInstance(this)
+        appSettings = AppSettings.getInstance(this)
         drawer = findViewById(R.id.drawerLayout)
 
         setupTopBar()
         setupSidebar()
         loadPreferences()
-        lifecycleScope.launch { try { pullAndApplySettings() } catch (_: Exception) { } }
         bindVolumeSeekBar()
         bindVoiceToggle()
         bindDarkModeSwitch()
@@ -188,54 +175,12 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // ── Backend sync ──────────────────────────────────────────────────────────
-
-    private suspend fun pullAndApplySettings() {
-        if (!session.isLoggedIn) return
-        val response = try {
-            ApiClient.get(session.token).getMySettings()
-        } catch (_: Exception) { return }
-        if (!response.isSuccessful) return
-        val s = response.body()?.settings ?: return
-
-        // Write to SettingsActivity's prefs
-        getSharedPreferences("sigla_prefs", Context.MODE_PRIVATE).edit()
-            .putString(PREF_VOICE, s.voice_type.uppercase())
-            .putBoolean(PREF_DARK_MODE, s.dark_mode)
-            .apply()
-
-        // Keep AppSettings in sync
-        val app = AppSettings.getInstance(this)
-        app.voiceType  = s.voice_type
-        app.isDarkMode = s.dark_mode
-
-        AppCompatDelegate.setDefaultNightMode(
-            if (s.dark_mode) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-        )
-        loadPreferences()
-    }
-
-    private fun pushSettings() {
-        if (!session.isLoggedIn) return
-        lifecycleScope.launch {
-            try {
-                ApiClient.get(session.token).updateMySettings(
-                    UpdateSettingsRequest(
-                        voice_type = currentVoice.lowercase(),
-                        dark_mode  = currentDarkMode
-                    )
-                )
-            } catch (_: Exception) { }
-        }
-    }
-
     // ── Load saved preferences ────────────────────────────────────────────────
 
     private fun loadPreferences() {
-        val prefs = getSharedPreferences("sigla_prefs", Context.MODE_PRIVATE)
-        currentVolume = prefs.getInt(PREF_VOLUME, DEFAULT_VOLUME)
-        currentVoice = prefs.getString(PREF_VOICE, DEFAULT_VOICE) ?: DEFAULT_VOICE
-        currentDarkMode = prefs.getBoolean(PREF_DARK_MODE, DEFAULT_DARK_MODE)
+        currentVolume = appSettings.volume
+        currentVoice = if (appSettings.voiceType == AppSettings.VOICE_FEMALE) "FEMALE" else "MALE"
+        currentDarkMode = appSettings.isDarkMode
 
         // Volume
         findViewById<SeekBar>(R.id.seekVolume)?.progress = currentVolume
@@ -244,26 +189,10 @@ class SettingsActivity : AppCompatActivity() {
         // Voice
         applyVoiceSelection(currentVoice, animate = false)
 
-        // Hide unused text size controls
-        //findViewById<View>(R.id.seekTextSize)?.visibility = View.GONE
-        //findViewById<View>(R.id.tvTextSizeValue)?.visibility = View.GONE
-
         // Dark mode
         val darkSwitch = findViewById<SwitchMaterial>(R.id.switchDarkMode)
         darkSwitch?.isChecked = currentDarkMode
         updateDarkModeSubtitle(currentDarkMode)
-    }
-
-    private fun savePreference(key: String, value: Any) {
-        val prefs = getSharedPreferences("sigla_prefs", Context.MODE_PRIVATE)
-        with(prefs.edit()) {
-            when (value) {
-                is Int -> putInt(key, value)
-                is String -> putString(key, value)
-                is Boolean -> putBoolean(key, value)
-            }
-            apply()
-        }
     }
 
     // ── Volume ────────────────────────────────────────────────────────────────
@@ -277,7 +206,7 @@ class SettingsActivity : AppCompatActivity() {
                 currentVolume = progress
                 tvValue?.text = "$progress%"
                 if (fromUser) {
-                    savePreference(PREF_VOLUME, currentVolume)
+                    appSettings.volume = currentVolume
                 }
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
@@ -290,13 +219,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun bindVoiceToggle() {
         findViewById<View>(R.id.btnVoiceMale)?.setOnClickListener {
             applyVoiceSelection("MALE")
-            savePreference(PREF_VOICE, "MALE")
-            pushSettings()
+            appSettings.voiceType = AppSettings.VOICE_MALE
         }
         findViewById<View>(R.id.btnVoiceFemale)?.setOnClickListener {
             applyVoiceSelection("FEMALE")
-            savePreference(PREF_VOICE, "FEMALE")
-            pushSettings()
+            appSettings.voiceType = AppSettings.VOICE_FEMALE
         }
     }
 
@@ -304,25 +231,19 @@ class SettingsActivity : AppCompatActivity() {
         currentVoice = voice
         val male   = findViewById<TextView>(R.id.btnVoiceMale)
         val female = findViewById<TextView>(R.id.btnVoiceFemale)
-        val selectedBg      = R.drawable.bg_toggle_selected
-        val unselectedBg    = android.R.color.transparent
         val selectedColor   = getColor(android.R.color.white)
-        val unselectedColor = getColor(android.R.color.darker_gray)
+        val unselectedColor = getColor(R.color.sig_toggle_unselected_text)
 
         if (voice == "MALE") {
-            male?.setBackgroundResource(selectedBg)
+            male?.setBackgroundResource(R.drawable.bg_toggle_selected)
             male?.setTextColor(selectedColor)
-            male?.setTypeface(null, android.graphics.Typeface.BOLD)
-            female?.setBackgroundResource(unselectedBg)
+            female?.setBackgroundResource(R.drawable.bg_toggle_unselected_blue)
             female?.setTextColor(unselectedColor)
-            female?.setTypeface(null, android.graphics.Typeface.NORMAL)
         } else {
-            female?.setBackgroundResource(selectedBg)
+            female?.setBackgroundResource(R.drawable.bg_toggle_selected)
             female?.setTextColor(selectedColor)
-            female?.setTypeface(null, android.graphics.Typeface.BOLD)
-            male?.setBackgroundResource(unselectedBg)
+            male?.setBackgroundResource(R.drawable.bg_toggle_unselected_blue)
             male?.setTextColor(unselectedColor)
-            male?.setTypeface(null, android.graphics.Typeface.NORMAL)
         }
     }
 
@@ -333,12 +254,11 @@ class SettingsActivity : AppCompatActivity() {
         switch?.setOnCheckedChangeListener { _, isChecked ->
             currentDarkMode = isChecked
             updateDarkModeSubtitle(isChecked)
-            savePreference(PREF_DARK_MODE, isChecked)
+            appSettings.isDarkMode = isChecked
             AppCompatDelegate.setDefaultNightMode(
                 if (isChecked) AppCompatDelegate.MODE_NIGHT_YES
                 else AppCompatDelegate.MODE_NIGHT_NO
             )
-            pushSettings()
         }
     }
 
@@ -351,30 +271,30 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun bindResetButton() {
         findViewById<View>(R.id.btnResetDefaults).setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("Reset to Default")
-                .setMessage("All settings will be restored to their original configuration. Continue?")
-                .setPositiveButton("Reset") { _, _ ->
-                    currentVolume = DEFAULT_VOLUME
-                    currentVoice = DEFAULT_VOICE
-                    currentDarkMode = DEFAULT_DARK_MODE
+            val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+            val dialog = AlertDialog.Builder(this).setView(view).create()
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-                    savePreference(PREF_VOLUME, currentVolume)
-                    savePreference(PREF_VOICE, currentVoice)
-                    savePreference(PREF_DARK_MODE, currentDarkMode)
+            view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Reset to default?"
+            view.findViewById<TextView>(R.id.tvConfirmMessage).text =
+                "All settings will be restored to their original configuration."
+            view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "RESET"
 
-                    loadPreferences()
-                    pushSettings()
+            view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+            view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+                appSettings.resetToDefault()
+                loadPreferences()
 
-                    AppCompatDelegate.setDefaultNightMode(
-                        if (currentDarkMode) AppCompatDelegate.MODE_NIGHT_YES
-                        else AppCompatDelegate.MODE_NIGHT_NO
-                    )
+                AppCompatDelegate.setDefaultNightMode(
+                    if (currentDarkMode) AppCompatDelegate.MODE_NIGHT_YES
+                    else AppCompatDelegate.MODE_NIGHT_NO
+                )
 
-                    Toast.makeText(this, "Settings reset to default.", Toast.LENGTH_SHORT).show()
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+                Toast.makeText(this, "Settings reset to default.", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+
+            dialog.show()
         }
     }
 

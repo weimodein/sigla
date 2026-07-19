@@ -10,6 +10,12 @@ load_dotenv()
 FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 
+# Train-time mirror augmentation (doubles every real training sample with a
+# horizontally-flipped copy, so the model sees both hand orientations) — see
+# mirror_sequence() below. Off by default; flip only after validating per-class
+# recall across the full vocabulary, not just the words currently of interest.
+MIRROR_AUGMENTATION_ENABLED = os.getenv("MIRROR_AUGMENTATION_ENABLED", "false").lower() == "true"
+
 # Backend API configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
 ML_API_KEY  = os.getenv("ML_API_KEY")  # Must be set in .env
@@ -258,6 +264,12 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
             # this class just won't have a data point in the evaluation split.
             train_seqs, val_seqs = sequences, []
 
+        # Mirror-augment the TRAIN portion only (doubles it with flipped copies) —
+        # same train-only rule as the noise/speed/dropout augmentation below, so the
+        # validation split stays 100% real and unmirrored.
+        if MIRROR_AUGMENTATION_ENABLED:
+            train_seqs = train_seqs + [mirror_sequence(s) for s in train_seqs]
+
         # Augment the TRAIN portion only — evaluation stays 100% real, unaugmented.
         # 25 sequences × 6 = 150 augmented + 25 real = 175 total
         target = max(len(train_seqs) * 6, 150)
@@ -285,6 +297,33 @@ def save_label_map(label_map: dict, path: str) -> None:
     with open(path, "w") as f:
         json.dump(label_map, f, indent=2)
     print(f"Label map saved to {path}")
+
+
+def mirror_sequence(seq: np.ndarray) -> np.ndarray:
+    """
+    Horizontally mirror an already-normalized motion sequence: negate x for every
+    present hand block, and negate+swap the pose block's L/R paired points (same
+    convention as MainActivity.kt's mirrorHandX/mirrorPoseBlock — operates on
+    wrist/shoulder-relative coordinates post-normalize_frame, so the mirror is
+    `-x`, not `1-x`). Absent (all-zero) hand/pose blocks are left untouched.
+    """
+    out = seq.copy()
+    for f in range(out.shape[0]):
+        frame = out[f]
+        for hand in range(2):
+            base = hand * 63
+            if not np.any(frame[base:base + 63]):
+                continue
+            for j in range(21):
+                frame[base + j * 3] = -frame[base + j * 3]
+        if np.any(frame[_POSE_BASE:_POSE_BASE + 21]):
+            for k in range(7):
+                frame[_POSE_BASE + k * 3] = -frame[_POSE_BASE + k * 3]
+            for a, b in ((1, 2), (3, 4), (5, 6)):
+                for off in range(3):
+                    ai, bi = _POSE_BASE + a * 3 + off, _POSE_BASE + b * 3 + off
+                    frame[ai], frame[bi] = frame[bi], frame[ai]
+    return out
 
 
 def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:

@@ -8,11 +8,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:text="Today"
-    android:textColor="#0056A4"
-    android:textSize="12sp"
-    android:textStyle="bold"
-    android:letterSpacing="0.1"
+    android:textColor="@color/sig_text_primary"
+    android:textSize="13sp"
+    android:fontFamily="@font/poppins_bold"
     android:paddingStart="4dp"
     android:paddingEnd="4dp"
-    android:paddingTop="16dp"
-    android:paddingBottom="6dp" />
+    android:paddingTop="10dp"
+    android:paddingBottom="8dp" />

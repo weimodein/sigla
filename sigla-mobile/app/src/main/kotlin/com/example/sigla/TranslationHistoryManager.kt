@@ -45,13 +45,15 @@ class TranslationHistoryManager private constructor(private val context: Context
         }
     }
 
+    /** Always returns newest-first, regardless of the order entries were stored in. */
     fun getAll(): List<TranslationEntry> {
         val json = prefs.getString(KEY_HISTORY, null) ?: return emptyList()
-        return try { 
-            gson.fromJson(json, listType) 
-        } catch (e: Exception) { 
-            emptyList() 
+        val list: List<TranslationEntry> = try {
+            gson.fromJson(json, listType)
+        } catch (e: Exception) {
+            emptyList()
         }
+        return list.sortedByDescending { it.timestamp }
     }
 
     fun add(word: String, confidence: Int, gestureType: String) {

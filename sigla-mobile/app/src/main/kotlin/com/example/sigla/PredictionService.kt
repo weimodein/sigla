@@ -22,9 +22,18 @@ private const val MIN_MOTION_FRAMES      = 8      // begin inference once this m
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
 private const val MOTION_THRESHOLD       = 0.60f  // min confidence to accept a prediction
 private const val MOTION_EARLY_CONF      = 0.60f  // confidence for early-exit streak counting
-private const val MOTION_EARLY_STREAK    = 5      // consistent frames before firing early
+// Raised from 5/6 to 10/10 (2026-07-19) after simulating the live streak/early-exit logic
+// against every real stored sample: at the old values, several signs that share an opening
+// movement with another sign (GOOD EVENING/GOOD AFTERNOON, GOOD MORNING/HELLO, YES/YESTERDAY,
+// HOW ARE YOU) could fire on that shared opening before the distinguishing tail of the
+// gesture was ever captured (avg. fire point ~15/30 frames), causing wrong live predictions
+// that never showed up in test.py's full-window evaluation. Requiring a longer streak fixed
+// every one of those (94.3% -> 99.3% simulated early-fire accuracy across all 13 words) with
+// no regression on any word that was already firing correctly. See PredictionService's
+// runAndMaybeFire() for how this streak is counted.
+private const val MOTION_EARLY_STREAK    = 10     // consistent frames before firing early
 private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence fires immediately
-private const val EARLY_EXIT_STREAK      = 6
+private const val EARLY_EXIT_STREAK      = 10
 private const val VELOCITY_WINDOW        = 8
 private const val BUFFER_CAPACITY        = 90     // rolling frame buffer size
 private const val NO_HAND_TIMEOUT        = 6      // frames with no hands before firing onNoHands

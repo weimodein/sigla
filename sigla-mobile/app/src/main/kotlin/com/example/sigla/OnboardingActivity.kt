@@ -5,14 +5,22 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.button.MaterialButton
 
-data class OnboardingPage(val icon: String, val title: String, val description: String)
+data class OnboardingPage(
+    @DrawableRes val iconRes: Int,
+    val eyebrow: String,
+    val title: String,
+    val description: String
+)
 
 class OnboardingActivity : AppCompatActivity() {
 
@@ -23,24 +31,22 @@ class OnboardingActivity : AppCompatActivity() {
 
     private val pages = listOf(
         OnboardingPage(
-            "\uD83D\uDCF7", // camera
-            "Main Interface",
-            "Point your camera at sign language gestures and SIGLA will instantly translate them to text and speech. Use the flip button to switch cameras, and the Filipino toggle to see translations."
+            R.drawable.ic_camera_line,
+            "Translate",
+            "Main interface",
+            "Ready to translate? Position the person signing in front of the camera and make sure their gestures are clearly visible. SigLa will recognize the signs and provide text and speech translations. You can switch cameras using the Flip Camera button and view Filipino translations by enabling the Filipino toggle."
         ),
         OnboardingPage(
-            "\uD83D\uDCD6", // book
-            "Word Bank",
-            "Browse all recognized gestures organized by category. Each word shows a demonstration video and audio pronunciation so you can learn Filipino Sign Language at your own pace."
+            R.drawable.ic_book_line,
+            "Learn",
+            "Word bank",
+            "Browse recognized sign language gestures organized by category. Tap any word to watch a demonstration video and hear its pronunciation, allowing you to learn and practice Filipino Sign Language at your own pace."
         ),
         OnboardingPage(
-            "\u270D\uFE0F", // writing
-            "Suggest a Word",
-            "Help expand SIGLA's vocabulary! Submit new words with gesture samples captured from your camera. Your contributions are reviewed by administrators before being added to the system."
-        ),
-        OnboardingPage(
-            "\u2630", // menu
+            R.drawable.ic_menu_line,
+            "Explore",
             "Navigation",
-            "Use the sidebar menu to access all features: Word Bank, Translation History, Suggest a Word, Notifications, Profile, and Settings. Swipe from the left edge or tap the menu button."
+            "Access all of SigLa’s features through the sidebar menu, including the Main Interface, Word Bank, Translation History, and Settings. Swipe from the left edge of the screen or tap the Menu button to open the menu."
         )
     )
 
@@ -85,14 +91,17 @@ class OnboardingActivity : AppCompatActivity() {
         finish()
     }
 
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
     private fun setupIndicators() {
         for (i in pages.indices) {
             val dot = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(16, 16).apply {
-                    marginStart = 8
-                    marginEnd = 8
+                layoutParams = LinearLayout.LayoutParams(dp(7), dp(7)).apply {
+                    marginStart = dp(4)
+                    marginEnd = dp(4)
                 }
-                setBackgroundColor(0x44FFFFFF)
+                background = ContextCompat.getDrawable(context, R.drawable.bg_indicator_dot)
             }
             indicatorLayout.addView(dot)
         }
@@ -100,8 +109,14 @@ class OnboardingActivity : AppCompatActivity() {
 
     private fun updateIndicators(position: Int) {
         for (i in 0 until indicatorLayout.childCount) {
-            indicatorLayout.getChildAt(i).setBackgroundColor(
-                if (i == position) 0xFF667EEA.toInt() else 0x44FFFFFF
+            val dot = indicatorLayout.getChildAt(i)
+            val isActive = i == position
+            val params = dot.layoutParams as LinearLayout.LayoutParams
+            params.width = if (isActive) dp(20) else dp(7)
+            dot.layoutParams = params
+            dot.setBackgroundColor(
+                if (isActive) ContextCompat.getColor(this, R.color.colorTeal)
+                else ContextCompat.getColor(this, R.color.colorIndicatorInactive)
             )
         }
     }
@@ -111,7 +126,8 @@ class OnboardingAdapter(private val pages: List<OnboardingPage>) :
     RecyclerView.Adapter<OnboardingAdapter.VH>() {
 
     class VH(view: View) : RecyclerView.ViewHolder(view) {
-        val icon: TextView = view.findViewById(R.id.tvPageIcon)
+        val icon: ImageView = view.findViewById(R.id.ivIcon)
+        val eyebrow: TextView = view.findViewById(R.id.tvPageEyebrow)
         val title: TextView = view.findViewById(R.id.tvPageTitle)
         val description: TextView = view.findViewById(R.id.tvPageDescription)
     }
@@ -124,7 +140,8 @@ class OnboardingAdapter(private val pages: List<OnboardingPage>) :
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val page = pages[position]
-        holder.icon.text = page.icon
+        holder.icon.setImageResource(page.iconRes)
+        holder.eyebrow.text = page.eyebrow
         holder.title.text = page.title
         holder.description.text = page.description
     }

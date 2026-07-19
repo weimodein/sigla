@@ -1,13 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/colorBackground">
+    android:background="@color/colorOnboardingBg">
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!-- Brand mark + step counter, drawn on top of each page's navy header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/app_brand_mark"
+            android:fontFamily="@font/poppins_bold"
+            android:textSize="13sp"
+            android:letterSpacing="0.05"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/tvStepCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/poppins_medium"
+            android:textSize="12sp"
+            android:textColor="#8AFFFFFF" />
+    </LinearLayout>
 
     <!-- Bottom controls -->
     <LinearLayout
@@ -38,7 +66,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/skip"
-                android:textColor="@color/colorTextMuted" />
+                android:fontFamily="@font/poppins_medium"
+                android:textColor="@color/colorTeal" />
 
             <View
                 android:layout_width="0dp"
@@ -50,9 +79,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
                 android:text="@string/next"
+                android:fontFamily="@font/poppins_bold"
                 android:textSize="16sp"
-                app:backgroundTint="#1e3b8b"
-                xmlns:app="http://schemas.android.com/apk/res-auto" />
+                app:backgroundTint="@color/colorNavy"
+                app:cornerRadius="24dp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

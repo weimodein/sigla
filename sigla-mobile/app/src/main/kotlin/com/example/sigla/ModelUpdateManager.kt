@@ -20,6 +20,7 @@ object ModelUpdateManager {
     private const val KEY_VERSION = "cached_version"
     private const val KEY_STATIC_URL = "cached_static_url"
     private const val WORD_BANK_CACHE_FILE = "word_bank_cache.json"
+    private const val CATEGORIES_CACHE_FILE = "categories_cache.json"
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -268,6 +269,30 @@ object ModelUpdateManager {
                 Log.i(TAG, "Word bank cached (${words.size} words)")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to cache word bank: ${e.message}")
+            }
+        }
+    }
+
+    fun loadCachedCategories(context: Context): List<CategoryItem>? {
+        val file = File(context.filesDir, CATEGORIES_CACHE_FILE)
+        if (!file.exists()) return null
+        return try {
+            val type = object : TypeToken<List<CategoryItem>>() {}.type
+            gson.fromJson<List<CategoryItem>>(file.readText(), type)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load cached categories: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun cacheCategories(context: Context, categories: List<CategoryItem>) {
+        withContext(Dispatchers.IO) {
+            try {
+                val file = File(context.filesDir, CATEGORIES_CACHE_FILE)
+                file.writeText(gson.toJson(categories))
+                Log.i(TAG, "Categories cached (${categories.size})")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to cache categories: ${e.message}")
             }
         }
     }

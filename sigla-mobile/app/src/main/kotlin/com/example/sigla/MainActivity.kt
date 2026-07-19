@@ -244,15 +244,7 @@ class MainActivity : AppCompatActivity() {
     // ── Backend Initialization ────────────────────────────────────────────────
 
     private fun applyTtsVoice() {
-        val preferFemale = appSettings.voiceType == AppSettings.VOICE_FEMALE
-        val voices = tts?.voices ?: return
-        val match = voices
-            .filter { it.locale.language == "en" && !it.isNetworkConnectionRequired }
-            .firstOrNull { v ->
-                val n = v.name.lowercase()
-                if (preferFemale) n.contains("female") else n.contains("male") && !n.contains("female")
-            }
-        if (match != null) tts?.voice = match
+        TtsVoiceHelper.applyPreferredVoice(tts, appSettings)
     }
 
     private fun initTts() {
@@ -517,33 +509,8 @@ class MainActivity : AppCompatActivity() {
             checkAuthState()
             refreshSidebarAuthState()
             loadFilipinoTranslations()
-            applyAccountSettings()
         }
         dialog.show(supportFragmentManager, "auth")
-    }
-
-    private fun applyAccountSettings() {
-        lifecycleScope.launch {
-            try {
-                val response = ApiClient.get(session.token).getMySettings()
-                if (!response.isSuccessful) return@launch
-                val s = response.body()?.settings ?: return@launch
-
-                getSharedPreferences("sigla_prefs", android.content.Context.MODE_PRIVATE).edit()
-                    .putString(SettingsActivity.PREF_VOICE, s.voice_type.uppercase())
-                    .putBoolean(SettingsActivity.PREF_DARK_MODE, s.dark_mode)
-                    .apply()
-
-                val app = AppSettings.getInstance(this@MainActivity)
-                app.voiceType  = s.voice_type
-                app.isDarkMode = s.dark_mode
-
-                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
-                    if (s.dark_mode) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
-                    else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
-                )
-            } catch (_: Exception) { }
-        }
     }
 
     private fun refreshSidebarAuthState() {

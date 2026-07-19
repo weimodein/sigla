@@ -1,100 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView
+<!-- item_history_entry.xml
+     Row: hand icon, word + time, color-coded confidence bar, delete button.
+-->
+<com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="6dp"
-    app:cardCornerRadius="14dp"
-    app:cardElevation="2dp"
-    app:cardBackgroundColor="#FFFFFF">
+    android:layout_marginBottom="10dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="1.5dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="@color/sig_border_card"
+    app:cardBackgroundColor="@color/sig_surface_card">
 
-    <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="8dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="14dp">
+        android:padding="14dp">
 
-        <!-- Gesture type badge: STATIC or MOTION -->
+        <FrameLayout
+            android:id="@+id/flIconBox"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_icon_circle_blue_light"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_one_hand"
+                android:contentDescription="Gesture" />
+
+        </FrameLayout>
+
         <TextView
-            android:id="@+id/tvGestureTypeBadge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="STATIC"
-            android:textColor="#FFFFFF"
-            android:textSize="9sp"
-            android:textStyle="bold"
-            android:background="#0056A4"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:layout_marginEnd="12dp" />
-
-        <!-- Word + confidence + time -->
-        <LinearLayout
+            android:id="@+id/tvWord"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
+            android:text="Hello"
+            android:textColor="@color/sig_text_primary"
+            android:textSize="17sp"
+            android:fontFamily="@font/poppins_bold"
+            app:layout_constraintStart_toEndOf="@id/flIconBox"
+            app:layout_constraintTop_toTopOf="@id/flIconBox"
+            app:layout_constraintEnd_toStartOf="@id/tvTime" />
 
-            <TextView
-                android:id="@+id/tvWord"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="HELLO"
-                android:textColor="#1A1A2E"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+        <TextView
+            android:id="@+id/tvTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="11:02 PM"
+            android:textColor="@color/sig_text_secondary"
+            android:textSize="11sp"
+            android:fontFamily="@font/poppins_regular"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="4dp">
+        <ProgressBar
+            android:id="@+id/progressConfidence"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="5dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginEnd="10dp"
+            android:max="100"
+            android:progressDrawable="@drawable/progress_confidence_bar"
+            app:layout_constraintStart_toStartOf="@id/tvWord"
+            app:layout_constraintTop_toBottomOf="@id/tvWord"
+            app:layout_constraintEnd_toStartOf="@id/btnDelete" />
 
-                <TextView
-                    android:id="@+id/tvConfidence"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="98% confidence"
-                    android:textColor="#4A90E2"
-                    android:textSize="12sp" />
+        <TextView
+            android:id="@+id/tvConfidence"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="98% confidence"
+            android:textColor="@color/sig_text_secondary"
+            android:textSize="11sp"
+            android:fontFamily="@font/poppins_regular"
+            app:layout_constraintStart_toStartOf="@id/tvWord"
+            app:layout_constraintTop_toBottomOf="@id/progressConfidence" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=" · "
-                    android:textColor="#B0BEC5"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/tvTime"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="2:45 PM"
-                    android:textColor="#90A4AE"
-                    android:textSize="12sp" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-        <!-- Delete button using built-in Android drawable only -->
-        <ImageButton
+        <FrameLayout
             android:id="@+id/btnDelete"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:src="@android:drawable/ic_menu_delete"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:tint="#EF5350"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@drawable/bg_icon_circle_blue_light"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Delete this entry"
-            android:padding="6dp" />
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
 
-    </LinearLayout>
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="center"
+                android:src="@android:drawable/ic_menu_delete"
+                app:tint="@color/sig_delete_icon"
+                android:contentDescription="@null" />
 
-</androidx.cardview.widget.CardView>
+        </FrameLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>

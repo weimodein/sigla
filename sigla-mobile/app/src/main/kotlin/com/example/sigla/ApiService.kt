@@ -20,6 +20,15 @@ data class AuthResponse(
     val user: UserResponse? = null
 )
 
+data class CategoryItem(
+    val id: Int,
+    val name: String,
+    val description: String? = null,
+    val word_count: Int = 0
+)
+
+data class CategoriesResponse(val categories: List<CategoryItem>)
+
 data class UserResponse(
     val id: Int = 0,
     val username: String = "",
@@ -126,6 +135,10 @@ interface ApiService {
     // Words (public)
     @GET("words/word-bank")
     suspend fun getWordBank(): Response<WordBankResponse>
+
+    // Categories (public read)
+    @GET("categories")
+    suspend fun getCategories(): Response<CategoriesResponse>
 
     // Notifications (auth)
     @GET("notifications")

@@ -15,6 +15,7 @@
     
 
     <application
+        android:name=".SiglaApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="SIGLA"
@@ -41,6 +42,8 @@
         <activity android:name=".CollectionActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".TranslationHistoryActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".WordBankActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".CategoryWordListActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".WordDetailActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".NotificationsActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".ProfileActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".SettingsActivity" android:exported="false" android:screenOrientation="portrait" />

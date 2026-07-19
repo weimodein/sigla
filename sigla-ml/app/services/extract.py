@@ -7,7 +7,7 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
-from app.utils.preprocessor import center_on_peak_velocity, FEATURE_SIZE, SEQUENCE_LENGTH
+from app.utils.preprocessor import center_on_peak_velocity, normalize_sequence, FEATURE_SIZE, SEQUENCE_LENGTH
 
 _KEY_LANDMARKS = [0, 4, 8, 12, 16, 20]
 _KEY_XY = [idx for i in _KEY_LANDMARKS for idx in (i * 3, i * 3 + 1)]
@@ -172,6 +172,14 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
             return None
 
         seq_np = np.array(sequence, dtype=np.float32)
+        # Normalize BEFORE windowing, not after — matches the mobile pipeline
+        # (HandLandmarkHelper normalizes each frame as it's captured, then
+        # PredictionService/CollectionActivity window the normalized buffer).
+        # Picking the peak-velocity window on raw image-space coordinates instead
+        # measures whole-hand/arm translation across the frame, not just intra-hand
+        # articulation, so it can select a different moment of the gesture than what
+        # live inference's extractMotionWindow() would pick for the same clip.
+        seq_np = normalize_sequence(seq_np)
         seq_np = center_on_peak_velocity(seq_np)
         return seq_np.tolist()
     finally:

@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- drawer_sidebar.xml -->
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- nav_sidebar.xml -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/sidebarDrawer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_gravity="start"
-    android:orientation="vertical"
-    android:background="#F4F7FC"
-    android:elevation="8dp">
+    android:background="@color/sig_page_bg"
+    android:elevation="8dp"
+    android:orientation="vertical">
 
     <!-- ── HEADER OUTER LAYER (lighter periwinkle curve peeking behind navy) ── -->
     <FrameLayout
@@ -18,77 +17,41 @@
         android:background="@drawable/bg_header_curved_outer"
         android:paddingStart="8dp"
         android:paddingEnd="8dp"
-        android:paddingBottom="14dp">
+        android:paddingBottom="12dp">
 
-        <!-- ── HEADER (curved navy) ── -->
-        <RelativeLayout
+        <!-- ── HEADER (curved navy, brand mark) ── -->
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_header_curved"
-            android:paddingTop="32dp"
-            android:paddingBottom="28dp">
+            android:background="@drawable/bg_header_curved">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal">
-
-            <!-- Avatar -->
-            <ImageView
-                android:id="@+id/ivAvatar"
-                android:layout_width="88dp"
-                android:layout_height="88dp"
-                android:src="@android:drawable/ic_menu_myplaces"
-                android:background="@drawable/bg_avatar_circle"
-                app:tint="#1A2E5A"
-                android:padding="20dp"
-                android:scaleType="centerInside"
-                android:contentDescription="User avatar" />
-
-            <!-- Username -->
-            <TextView
-                android:id="@+id/tvSidebarUsername"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="Guest User"
-                android:textColor="#FFFFFF"
-                android:textSize="19sp"
-                android:textStyle="bold" />
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingTop="48dp"
+                android:paddingBottom="50dp">
 
-            <!-- Email / status: hidden in this design, kept for future use -->
-            <TextView
-                android:id="@+id/tvSidebarEmail"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Not signed in"
-                android:textColor="#B7C2DE"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp"
-                android:visibility="gone" />
+                <ImageView
+                    android:layout_width="84dp"
+                    android:layout_height="84dp"
+                    android:contentDescription="SigLa logo"
+                    android:src="@drawable/ic_sigla_mark_white" />
 
-            <!-- Shown when user is NOT logged in -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSidebarSignIn"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_marginTop="16dp"
-                android:minWidth="180dp"
-                android:text="Sign In / Sign Up"
-                android:textSize="13sp"
-                android:textColor="#FFFFFF"
-                android:textAllCaps="false"
-                app:backgroundTint="@android:color/transparent"
-                android:background="@drawable/bg_signin_outline"
-                app:cornerRadius="20dp"
-                app:strokeWidth="0dp"
-                app:elevation="0dp"
-                android:visibility="visible" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:letterSpacing="0.05"
+                    android:text="S i g L a"
+                    android:textColor="#FFFFFF"
+                    android:textSize="18sp" />
 
-        </LinearLayout>
+            </LinearLayout>
 
-        </RelativeLayout>
+        </FrameLayout>
 
     </FrameLayout>
 
@@ -97,7 +60,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingTop="18dp"
+        android:paddingLeft="12dp"
+        android:paddingTop="60dp"
         android:paddingBottom="10dp">
 
         <!-- Rotated section label -->
@@ -109,14 +73,14 @@
                 android:layout_width="90dp"
                 android:layout_height="18dp"
                 android:layout_gravity="center"
+                android:fontFamily="@font/poppins_bold"
                 android:gravity="center"
-                android:rotation="-90"
-                android:text="NAVIGATION"
-                android:textColor="#8B96B8"
-                android:textSize="10sp"
                 android:letterSpacing="0.15"
-                android:textStyle="bold"
-                android:singleLine="true" />
+                android:rotation="-90"
+                android:singleLine="true"
+                android:text="NAVIGATION"
+                android:textColor="@color/sig_text_secondary"
+                android:textSize="10sp" />
 
         </FrameLayout>
 
@@ -126,7 +90,7 @@
             android:layout_height="match_parent"
             android:layout_marginTop="4dp"
             android:layout_marginBottom="4dp"
-            android:background="#D8DEEC" />
+            android:background="@color/sig_divider" />
 
         <!-- Nav items -->
         <LinearLayout
@@ -137,18 +101,18 @@
             android:paddingStart="10dp"
             android:paddingEnd="12dp">
 
-            <!-- Main Interface (selected) -->
+            <!-- Main Interface -->
             <LinearLayout
                 android:id="@+id/navMainInterface"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="10dp"
                 android:layout_marginBottom="4dp"
                 android:background="@drawable/bg_nav_selected"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="10dp">
 
                 <FrameLayout
                     android:layout_width="40dp"
@@ -159,34 +123,35 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:src="@android:drawable/ic_menu_view"
-                        app:tint="#FFFFFF"
-                        android:contentDescription="Main interface" />
+                        android:contentDescription="Main interface"
+                        android:src="@drawable/ic_camera_line"
+                        app:tint="#FFFFFF" />
 
                 </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="14dp">
+                    android:orientation="vertical">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_bold"
                         android:text="Main Interface"
-                        android:textColor="#1A2E5A"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                        android:textColor="@color/sig_nav_default_text"
+                        android:textSize="14sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:fontFamily="@font/poppins_regular"
                         android:text="Start translating"
-                        android:textColor="#6C7A9C"
-                        android:textSize="11sp"
-                        android:layout_marginTop="1dp" />
+                        android:textColor="@color/sig_nav_default_subtitle"
+                        android:textSize="11sp" />
 
                 </LinearLayout>
 
@@ -197,12 +162,12 @@
                 android:id="@+id/navWordBank"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="10dp"
                 android:layout_marginBottom="4dp"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="10dp">
 
                 <FrameLayout
                     android:layout_width="40dp"
@@ -213,34 +178,35 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:src="@android:drawable/ic_menu_agenda"
-                        app:tint="#FFFFFF"
-                        android:contentDescription="Word bank" />
+                        android:contentDescription="Word bank"
+                        android:src="@drawable/ic_book_line"
+                        app:tint="#FFFFFF" />
 
                 </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="14dp">
+                    android:orientation="vertical">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_bold"
                         android:text="Word Bank"
-                        android:textColor="#1A2E5A"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                        android:textColor="@color/sig_nav_default_text"
+                        android:textSize="14sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="View and Customized FSL Signs"
-                        android:textColor="#6C7A9C"
-                        android:textSize="11sp"
-                        android:layout_marginTop="1dp" />
+                        android:layout_marginTop="1dp"
+                        android:fontFamily="@font/poppins_regular"
+                        android:text="View FSL Signs"
+                        android:textColor="@color/sig_nav_default_subtitle"
+                        android:textSize="11sp" />
 
                 </LinearLayout>
 
@@ -251,12 +217,12 @@
                 android:id="@+id/navTranslationHistory"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="10dp"
                 android:layout_marginBottom="4dp"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="10dp">
 
                 <FrameLayout
                     android:layout_width="40dp"
@@ -267,202 +233,35 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:src="@android:drawable/ic_menu_recent_history"
-                        app:tint="#FFFFFF"
-                        android:contentDescription="Translation history" />
+                        android:contentDescription="Translation history"
+                        android:src="@drawable/ic_history_line"
+                        app:tint="#FFFFFF" />
 
                 </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="14dp">
+                    android:orientation="vertical">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_bold"
                         android:text="Translation History"
-                        android:textColor="#1A2E5A"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                        android:textColor="@color/sig_nav_default_text"
+                        android:textSize="14sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:fontFamily="@font/poppins_regular"
                         android:text="Sign Languages Used"
-                        android:textColor="#6C7A9C"
-                        android:textSize="11sp"
-                        android:layout_marginTop="1dp" />
-
-                </LinearLayout>
-
-            </LinearLayout>
-
-            <!-- Notifications -->
-            <LinearLayout
-                android:id="@+id/navNotifications"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="10dp"
-                android:clickable="true"
-                android:focusable="true">
-
-                <FrameLayout
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_icon_box">
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:layout_gravity="center"
-                        android:src="@android:drawable/ic_popup_reminder"
-                        app:tint="#FFFFFF"
-                        android:contentDescription="Notifications" />
-
-                </FrameLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="14dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Notifications"
-                        android:textColor="#1A2E5A"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="View announcements and updates"
-                        android:textColor="#6C7A9C"
-                        android:textSize="11sp"
-                        android:layout_marginTop="1dp" />
-
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvNotifBadge"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:text="3"
-                    android:textColor="#FFFFFF"
-                    android:textSize="9sp"
-                    android:textStyle="bold"
-                    android:gravity="center"
-                    android:background="@drawable/bg_notif_badge"
-                    android:visibility="gone" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-    </LinearLayout>
-
-    <!-- ── ACCOUNT SECTION ── -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
-
-        <!-- Rotated section label -->
-        <FrameLayout
-            android:layout_width="30dp"
-            android:layout_height="match_parent">
-
-            <TextView
-                android:layout_width="70dp"
-                android:layout_height="18dp"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:rotation="-90"
-                android:text="ACCOUNT"
-                android:textColor="#8B96B8"
-                android:textSize="10sp"
-                android:letterSpacing="0.15"
-                android:textStyle="bold"
-                android:singleLine="true" />
-
-        </FrameLayout>
-
-        <!-- Divider -->
-        <View
-            android:layout_width="1dp"
-            android:layout_height="match_parent"
-            android:layout_marginTop="4dp"
-            android:layout_marginBottom="4dp"
-            android:background="#D8DEEC" />
-
-        <!-- Nav items -->
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:paddingStart="10dp"
-            android:paddingEnd="12dp">
-
-            <!-- Profile -->
-            <LinearLayout
-                android:id="@+id/navProfile"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="10dp"
-                android:layout_marginBottom="4dp"
-                android:clickable="true"
-                android:focusable="true">
-
-                <FrameLayout
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_icon_box">
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:layout_gravity="center"
-                        android:src="@android:drawable/ic_menu_myplaces"
-                        app:tint="#FFFFFF"
-                        android:contentDescription="Profile" />
-
-                </FrameLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="14dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Profile"
-                        android:textColor="#1A2E5A"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Your Information"
-                        android:textColor="#6C7A9C"
-                        android:textSize="11sp"
-                        android:layout_marginTop="1dp" />
+                        android:textColor="@color/sig_nav_default_subtitle"
+                        android:textSize="11sp" />
 
                 </LinearLayout>
 
@@ -473,11 +272,11 @@
                 android:id="@+id/navSettings"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="10dp"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="10dp">
 
                 <FrameLayout
                     android:layout_width="40dp"
@@ -488,34 +287,35 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:src="@android:drawable/ic_menu_preferences"
-                        app:tint="#FFFFFF"
-                        android:contentDescription="Settings" />
+                        android:contentDescription="Settings"
+                        android:src="@drawable/ic_settings_line"
+                        app:tint="#F6F6F6" />
 
                 </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="14dp">
+                    android:orientation="vertical">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:fontFamily="@font/poppins_bold"
                         android:text="Settings"
-                        android:textColor="#1A2E5A"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
+                        android:textColor="@color/sig_nav_default_text"
+                        android:textSize="14sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:fontFamily="@font/poppins_regular"
                         android:text="App References"
-                        android:textColor="#6C7A9C"
-                        android:textSize="11sp"
-                        android:layout_marginTop="1dp" />
+                        android:textColor="@color/sig_nav_default_subtitle"
+                        android:textSize="11sp" />
 
                 </LinearLayout>
 
@@ -526,12 +326,13 @@
     </LinearLayout>
 
     <!-- ── SPACER ── -->
+
+    <!-- ── FOOTER WATERMARK ── -->
     <View
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- ── FOOTER WATERMARK (bottom-right logo) ── -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -541,26 +342,25 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end|bottom"
-            android:orientation="vertical"
+            android:alpha="0.45"
             android:gravity="center_horizontal"
-            android:alpha="0.35">
+            android:orientation="vertical">
 
             <ImageView
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:src="@android:drawable/ic_menu_myplaces"
-                app:tint="#1A2E5A"
-                android:contentDescription="SIGLA logo" />
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:contentDescription="SigLa logo"
+                android:src="@drawable/ic_sigla_mark" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="SIGLA"
-                android:textColor="#1A2E5A"
-                android:textSize="10sp"
-                android:textStyle="bold"
+                android:layout_marginTop="2dp"
+                android:fontFamily="@font/poppins_bold"
                 android:letterSpacing="0.1"
-                android:layout_marginTop="2dp" />
+                android:text="SigLa"
+                android:textColor="@color/sig_nav_default_text"
+                android:textSize="10sp" />
 
         </LinearLayout>
 
