@@ -5,6 +5,7 @@ console.log('🔍 PG_URI after dotenv load:', process.env.PG_URI ? '✅ EXISTS' 
 console.log('🔍 All env keys containing DB:', Object.keys(process.env).filter(k => k.includes('DB') || k.includes('PG')));
 
 const { connectDB } = require("./src/config/db.js");
+const { seedSuperAdmin } = require("./src/seeders/seedSuperAdmin.js");
 
 // module dependencies
 const express = require("express");
@@ -69,8 +70,8 @@ app.use("/api/ml", mlRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 
-// database connection
-connectDB();
+// database connection, then seed the super administrator (idempotent)
+connectDB().then(() => seedSuperAdmin());
 
 // server
 const PORT = process.env.PORT || 3000;
