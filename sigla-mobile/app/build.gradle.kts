@@ -21,7 +21,9 @@ android {
         debug {
             // Local backend for on-device testing (PC LAN IP, port 3000).
             // Requires the cleartext exception in network_security_config.xml.
-            buildConfigField("String", "BASE_URL", "\"http://192.168.100.6:3000/api/\"")
+            buildConfigField("String", "BASE_URL", "\"http://192.168.0.101:3000/api/\"")
+            // Local Python TTS service (edge-tts via FastAPI, PC LAN IP, port 8001).
+            buildConfigField("String", "TTS_URL", "\"http://192.168.0.101:8001/\"")
         }
         release {
             isMinifyEnabled = true
@@ -30,7 +32,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "BASE_URL", "\"http://192.168.100.6:3000/api/\"")
+            buildConfigField("String", "BASE_URL", "\"http://192.168.0.101:3000/api/\"")
+            buildConfigField("String", "TTS_URL", "\"http://192.168.0.101:8001/\"")
         }
     }
     compileOptions {
@@ -54,7 +57,8 @@ dependencies {
     implementation("androidx.cardview:cardview:1.0.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.viewpager2:viewpager2:1.0.0")
-    
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // CameraX
     implementation("androidx.camera:camera-core:1.3.0")
     implementation("androidx.camera:camera-camera2:1.3.0")
@@ -72,6 +76,7 @@ dependencies {
     // Retrofit for API calls
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
     
     // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

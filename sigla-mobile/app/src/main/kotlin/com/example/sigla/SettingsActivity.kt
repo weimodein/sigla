@@ -105,10 +105,13 @@ class SettingsActivity : AppCompatActivity() {
         setActiveNavItem(R.id.navSettings)
 
         findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+        drawer.closeDrawer(GravityCompat.START)  
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
+        startActivity(intent)
+        overridePendingTransition(0, 0)
+    }
         findViewById<View>(R.id.navWordBank)?.setOnClickListener {
             drawer.closeDrawer(GravityCompat.START)
             startActivity(Intent(this, WordBankActivity::class.java))

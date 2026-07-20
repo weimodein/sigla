@@ -1,7 +1,6 @@
 package com.example.sigla
 
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -17,7 +16,6 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /**
  * Full-screen word detail: word label, demo video/image, and an Add to
@@ -45,8 +43,6 @@ class WordDetailActivity : AppCompatActivity() {
 
     private var word: WordBankWord? = null
 
-    private var tts: TextToSpeech? = null
-    private var isTtsReady = false
     private val appSettings by lazy { AppSettings.getInstance(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,13 +57,6 @@ class WordDetailActivity : AppCompatActivity() {
 
         bindViews()
         btnBack.setOnClickListener { finish() }
-
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.ENGLISH
-                isTtsReady = true
-            }
-        }
 
         val wordId = intent.getIntExtra(EXTRA_WORD_ID, -1)
         loadWord(wordId)
@@ -212,19 +201,12 @@ class WordDetailActivity : AppCompatActivity() {
     }
 
     private fun speakWord(label: String) {
-        if (isTtsReady) {
-            TtsVoiceHelper.applyPreferredVoice(tts, appSettings)
-            val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
-            val params = Bundle().apply {
-                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
-            }
-            tts?.speak(label, TextToSpeech.QUEUE_FLUSH, params, null)
-        }
+        SpeechHelper.speak(this, label, appSettings, lifecycleScope)
     }
 
     override fun onDestroy() {
         videoDemo.stopPlayback()
-        tts?.shutdown()
+        SpeechHelper.stop()
         super.onDestroy()
     }
 }

@@ -146,13 +146,13 @@ class ProfileActivity : AppCompatActivity() {
         setActiveNavItem(R.id.navProfile)
 
         mapOf(
-            R.id.navMainInterface       to { startActivity(Intent(this, MainActivity::class.java)); finish() },
-            R.id.navWordBank            to { startActivity(Intent(this, WordBankActivity::class.java)); finish() },
-            R.id.navTranslationHistory  to { startActivity(Intent(this, TranslationHistoryActivity::class.java)); finish() },
-            R.id.navNotifications       to {
-                if (session.isLoggedIn) { startActivity(Intent(this, NotificationsActivity::class.java)); finish() }
-                else openAuthDialog()
-            },
+        R.id.navMainInterface       to {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        startActivity(intent)
+        overridePendingTransition(0, 0)
+        },
             R.id.navProfile             to { /* already here */ },
             R.id.navSettings            to { startActivity(Intent(this, SettingsActivity::class.java)); finish() },
         ).forEach { (id, action) ->

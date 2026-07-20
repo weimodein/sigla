@@ -12,6 +12,7 @@ import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import kotlin.math.sqrt
 
 private const val TAG = "HandLandmarkHelper"
 
@@ -28,44 +29,26 @@ private const val POSE_LSHOULDER = 1
 private const val POSE_RSHOULDER = 2
 
 // Pose is detected only every Nth camera frame (hands run on every frame) and the
-// most recent pose result is merged into each hand frame. This trades ≤N frames
-// (~100 ms) of pose staleness for ~1/N of the pose compute — pose anchors
-// (shoulders/nose) are near-static, so the normalized block barely changes between
-// consecutive frames. Training uses same-frame pose; raise/lower this only with an
-// on-device accuracy check.
+// most recent pose result is merged into each hand frame.
 private const val POSE_DETECT_INTERVAL = 3
 
 data class LandmarkResult(
     val handsDetected: Int,
     val features: FloatArray,
-    // Per hand: a flat FloatArray of interleaved x,y (21 landmarks → 42 floats) in raw
-    // frame coords, for the on-screen overlay. Flat arrays avoid the ~42 boxed Pair
-    // allocations per frame that were feeding the GC. Empty list = no hands.
     val landmarks: List<FloatArray>,
-    // Per hand-slot MediaPipe handedness ("Left"/"Right"/null) and its score,
-    // aligned to the same slot index as `features` (slot 0 = features[0..62]).
     val handedness: List<String?> = emptyList(),
     val handednessScore: List<Float> = emptyList()
 )
 
 class HandLandmarkHelper(
     private val context: Context,
-    // Callback invoked on the MediaPipe internal thread — caller must marshal to UI thread if needed
-    private val onResult: ((LandmarkResult) -> Unit)? = null
+    var onResult: ((LandmarkResult) -> Unit)? = null
 ) {
     private var landmarker: HandLandmarker? = null
     private var poseLandmarker: PoseLandmarker? = null
 
-    // LIVE_STREAM mode: async, non-blocking — fastest for real-time camera feeds
     val isLiveStream: Boolean get() = onResult != null
 
-    // ── LIVE_STREAM hand↔pose merge ───────────────────────────────────────────
-    // The hand callback emits immediately, merged with the newest pose result seen
-    // so far (snapshot, not same-timestamp pairing). Waiting for the same-frame
-    // pose partner added the pose inference time to every emitted frame and made
-    // the overlay stutter; a ≤POSE_DETECT_INTERVAL-frames-stale pose block is the
-    // deliberate latency/accuracy trade instead. Zero pose (before the first pose
-    // result) is the same absent-pose sentinel training data contains.
     @Volatile private var lastPoseResult: PoseLandmarkerResult? = null
     private var poseFrameCounter = 0
 
@@ -80,9 +63,6 @@ class HandLandmarkHelper(
             )
             .setRunningMode(mode)
             .setNumHands(2)
-            // Match the training extraction settings (sigla-ml/app/services/extract.py):
-            // detection/presence/tracking all 0.5, so the phone reproduces the same
-            // landmarks the model was trained on.
             .setMinHandDetectionConfidence(0.5f)
             .setMinHandPresenceConfidence(0.5f)
             .setMinTrackingConfidence(0.5f)
@@ -103,7 +83,6 @@ class HandLandmarkHelper(
                     .build()
             )
             .setRunningMode(mode)
-            // Match extract.py _make_pose_landmarker: 1 pose, all confidences 0.5.
             .setNumPoses(1)
             .setMinPoseDetectionConfidence(0.5f)
             .setMinPosePresenceConfidence(0.5f)
@@ -131,8 +110,6 @@ class HandLandmarkHelper(
                 null
             }
         }
-        // Pose is non-fatal: without it the pose block stays zeros (the trained-in
-        // "absent pose" sentinel) and hand-only recognition keeps working.
         poseLandmarker = try {
             val pl = buildPoseLandmarker(Delegate.GPU)
             Log.i(TAG, "PoseLandmarker ready [GPU]")
@@ -150,28 +127,11 @@ class HandLandmarkHelper(
         }
     }
 
-    // Synchronous — use only in IMAGE mode (CollectionActivity)
-    fun detect(bitmap: Bitmap): LandmarkResult {
-        val lmk = landmarker ?: return empty()
-        return try {
-            val mpImage = BitmapImageBuilder(bitmap).build()
-            val result  = lmk.detect(mpImage)
-            // Like extract.py: pose is only detected on frames that have hands.
-            val pose = if (result.landmarks().isNotEmpty()) poseLandmarker?.detect(mpImage) else null
-            parseResult(result, pose)
-        } catch (e: Exception) {
-            Log.e(TAG, "Detection error: ${e.message}")
-            empty()
-        }
-    }
-
-    // Async — use in LIVE_STREAM mode (MainActivity); result delivered via onResult callback
     fun detectAsync(bitmap: Bitmap, frameTimestampMs: Long) {
         val lmk = landmarker ?: return
         try {
-            val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
+            val mpImage = BitmapImageBuilder(bitmap).build()
             lmk.detectAsync(mpImage, frameTimestampMs)
-            // Pose only every Nth frame — hands run every frame.
             poseFrameCounter++
             if (poseFrameCounter >= POSE_DETECT_INTERVAL) {
                 poseFrameCounter = 0
@@ -182,49 +142,54 @@ class HandLandmarkHelper(
         }
     }
 
+    fun detect(bitmap: Bitmap): LandmarkResult {
+        val lmk = landmarker ?: return empty()
+        return try {
+            val mpImage = BitmapImageBuilder(bitmap).build()
+            val result = lmk.detect(mpImage)
+            val pose = if (result.landmarks().isNotEmpty()) poseLandmarker?.detect(mpImage) else null
+            parseResult(result, pose)
+        } catch (e: Exception) {
+            Log.e(TAG, "Detection error: ${e.message}")
+            empty()
+        }
+    }
+
     private fun parseResult(result: HandLandmarkerResult, pose: PoseLandmarkerResult?): LandmarkResult {
         val features = FloatArray(FEATURE_SIZE)
         if (result.landmarks().isEmpty()) return empty()
 
         val numHands = minOf(result.landmarks().size, 2)
-        val drawData    = ArrayList<FloatArray>(numHands)
-        val handLabels  = ArrayList<String?>(numHands)
-        val handScores  = ArrayList<Float>(numHands)
+        val drawData = ArrayList<FloatArray>(numHands)
+        val handLabels = ArrayList<String?>(numHands)
+        val handScores = ArrayList<Float>(numHands)
         for (i in 0 until numHands) {
-            val lms  = result.landmarks()[i]
+            val lms = result.landmarks()[i]
             val base = i * 63
-            val pts  = FloatArray(42)  // interleaved x,y for the overlay (raw coords)
+            val pts = FloatArray(42)
             for (j in lms.indices) {
                 val lm = lms[j]
-                features[base + j * 3    ] = lm.x()
+                features[base + j * 3] = lm.x()
                 features[base + j * 3 + 1] = lm.y()
                 features[base + j * 3 + 2] = lm.z()
-                pts[j * 2]     = lm.x()
+                pts[j * 2] = lm.x()
                 pts[j * 2 + 1] = lm.y()
             }
-            // Position/scale-invariant normalization of this hand's block — MUST match
-            // sigla-ml preprocessor.normalize_frame exactly (wrist-center on landmark 0,
-            // scale by 2D wrist→landmark-9 distance, epsilon 1e-6). Only the model's
-            // `features` are normalized; drawData stays in raw frame coords for drawing.
             normalizeHandBlock(features, base)
             drawData.add(pts)
 
-            // Handedness for this slot ("Left"/"Right"), same index as the feature block.
             val cat = result.handednesses().getOrNull(i)?.getOrNull(0)
             handLabels.add(cat?.categoryName())
             handScores.add(cat?.score() ?: 0f)
         }
 
-        // Pose block: raw keypoints at [126..146], then normalized as one block.
-        // Absent pose (detection failed / landmarker unavailable) stays 21 zeros —
-        // the same sentinel extract.py stores.
         val poseLms = pose?.landmarks()?.firstOrNull()
         if (poseLms != null) {
             for (k in POSE_KEYPOINTS.indices) {
                 val kp = POSE_KEYPOINTS[k]
                 if (kp < poseLms.size) {
                     val lm = poseLms[kp]
-                    features[POSE_BASE + k * 3    ] = lm.x()
+                    features[POSE_BASE + k * 3] = lm.x()
                     features[POSE_BASE + k * 3 + 1] = lm.y()
                     features[POSE_BASE + k * 3 + 2] = lm.z()
                 }
@@ -243,28 +208,22 @@ class HandLandmarkHelper(
     }
 }
 
-// Normalize one hand's 63-float block in place: wrist-center (landmark 0) + scale
-// by the 2D wrist→landmark-9 distance. Must match sigla-ml normalize_frame exactly.
-// File-level (not class) so plain JUnit parity tests can call it without a Context.
+// ─── Normalization functions (top-level) ───
 internal fun normalizeHandBlock(features: FloatArray, base: Int) {
     val wx = features[base]
     val wy = features[base + 1]
     val wz = features[base + 2]
     val mx = features[base + 9 * 3]
     val my = features[base + 9 * 3 + 1]
-    var d = kotlin.math.sqrt((mx - wx) * (mx - wx) + (my - wy) * (my - wy))
+    var d = sqrt((mx - wx) * (mx - wx) + (my - wy) * (my - wy))
     if (d < 1e-6f) d = 1e-6f
     for (j in 0..20) {
-        features[base + j * 3]     = (features[base + j * 3]     - wx) / d
+        features[base + j * 3] = (features[base + j * 3] - wx) / d
         features[base + j * 3 + 1] = (features[base + j * 3 + 1] - wy) / d
         features[base + j * 3 + 2] = (features[base + j * 3 + 2] - wz) / d
     }
 }
 
-// Normalize the 21-float pose block in place: center on the shoulder midpoint
-// (x,y,z), scale by the 2D L↔R shoulder distance, epsilon 1e-6. Must match
-// sigla-ml preprocessor.normalize_frame's pose block exactly. All-zero block
-// (absent pose) is left untouched as the sentinel.
 internal fun normalizePoseBlock(features: FloatArray) {
     var present = false
     for (k in POSE_BASE until FEATURE_SIZE) {
@@ -280,10 +239,10 @@ internal fun normalizePoseBlock(features: FloatArray) {
     val cx = (lsx + rsx) / 2f
     val cy = (lsy + rsy) / 2f
     val cz = (lsz + rsz) / 2f
-    var sw = kotlin.math.sqrt((rsx - lsx) * (rsx - lsx) + (rsy - lsy) * (rsy - lsy))
+    var sw = sqrt((rsx - lsx) * (rsx - lsx) + (rsy - lsy) * (rsy - lsy))
     if (sw < 1e-6f) sw = 1e-6f
     for (k in 0..6) {
-        features[POSE_BASE + k * 3]     = (features[POSE_BASE + k * 3]     - cx) / sw
+        features[POSE_BASE + k * 3] = (features[POSE_BASE + k * 3] - cx) / sw
         features[POSE_BASE + k * 3 + 1] = (features[POSE_BASE + k * 3 + 1] - cy) / sw
         features[POSE_BASE + k * 3 + 2] = (features[POSE_BASE + k * 3 + 2] - cz) / sw
     }

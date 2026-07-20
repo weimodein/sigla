@@ -47,9 +47,12 @@ object NavigationHelper {
         sidebar.findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
             drawerLayout.closeDrawers()
             if (current != Screen.MAIN) {
-                activity.startActivity(Intent(activity, MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
-                activity.finish()
+                val intent = Intent(activity, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                }
+                activity.startActivity(intent)
+                activity.overridePendingTransition(0, 0)   // <-- explicit activity receiver
+                // DO NOT call activity.finish() here
             }
         }
 

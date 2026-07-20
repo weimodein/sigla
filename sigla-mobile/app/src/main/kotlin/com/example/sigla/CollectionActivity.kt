@@ -33,7 +33,7 @@ private const val TARGET_ADMIN = 300
 
 // Timing constants
 private const val SEQUENCE_LENGTH = 30
-private const val STATIC_FRAMES_PER_SAMPLE = 7  // more frames → more stable averaged feature vector
+private const val STATIC_FRAMES_PER_SAMPLE = 7
 private const val MIN_FRAMES = 8
 private const val COUNTDOWN_FRAMES = 15
 private const val COOLDOWN_FRAMES = 20
@@ -86,7 +86,7 @@ class CollectionActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         session = SessionManager.getInstance(this)
-        landmarker = HandLandmarkHelper(this)
+        landmarker = HandLandmarkHelper(this)  // ★ No listener – synchronous mode
 
         // Get intent extras for suggest mode
         val wordLabel = intent.getStringExtra("word_label")
@@ -271,17 +271,17 @@ class CollectionActivity : AppCompatActivity() {
             val prepared = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
             val result = landmarker.detect(prepared)
             val thumb = Bitmap.createScaledBitmap(prepared, 320, 240, true)
-            
+
             // Mirror features for front camera
             val finalFeatures = if (isFrontCamera) {
                 mirrorHandX(result.features)
             } else {
                 result.features
             }
-            
+
             runOnUiThread {
                 binding.overlayView.setLandmarks(
-                    result.landmarks,  // Pass directly, no mirroring
+                    result.landmarks,
                     binding.cameraPreview.width.toFloat(),
                     binding.cameraPreview.height.toFloat()
                 )
@@ -343,13 +343,11 @@ class CollectionActivity : AppCompatActivity() {
         }
 
         val handOk = handsDetected > 0 && isHandValid(features, isMotion)
-        // features are already mirrored for front camera in processFrame() — use as-is
         val finalFeatures = features
 
         when (state) {
             CollectState.WAITING -> {
-                binding.tvOverlay.text =
-                    "Show your hand to begin…"
+                binding.tvOverlay.text = "Show your hand to begin…"
                 binding.tvOverlay.visibility = View.VISIBLE
                 if (handOk) {
                     state = CollectState.COUNTDOWN
@@ -482,7 +480,6 @@ class CollectionActivity : AppCompatActivity() {
     // ── Save helpers with backend upload ──────────────────────────────────────
 
     private fun saveSample(features: FloatArray, frameBitmap: Bitmap) {
-
         // Also save locally
         try {
             if (saveDir == null) {
@@ -520,7 +517,6 @@ class CollectionActivity : AppCompatActivity() {
 
     private fun saveSequence(buffer: List<FloatArray>, frameBitmaps: List<Bitmap>) {
         // Center the 30-frame window on peak-velocity frame so training data matches
-        // inference's extractMotionWindow() centering — eliminates training-inference mismatch
         val peakIdx = peakVelocityIndex(buffer)
         val half = SEQUENCE_LENGTH / 2
         var start = (peakIdx - half).coerceAtLeast(0)
@@ -531,7 +527,6 @@ class CollectionActivity : AppCompatActivity() {
         val centeredImages = frameBitmaps.subList(start.coerceAtMost(frameBitmaps.lastIndex),
             end.coerceAtMost(frameBitmaps.size)).toMutableList()
 
-        // Pad to exactly SEQUENCE_LENGTH if shorter than window
         while (centeredBuffer.size < SEQUENCE_LENGTH) centeredBuffer.add(centeredBuffer.last().copyOf())
         while (centeredImages.size < SEQUENCE_LENGTH) centeredImages.add(centeredImages.last())
 
@@ -564,7 +559,6 @@ class CollectionActivity : AppCompatActivity() {
     private fun updateCountDisplay() {
         binding.tvSessionCount.text = "$count / $targetCount"
     }
-
 
     // ── Done screen ───────────────────────────────────────────────────────────
 

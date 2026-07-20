@@ -103,6 +103,7 @@ class PredictionService(private val context: Context) {
     fun getLabelCount(): Int = motionLabels.size
 
     fun init() {
+        if (isReady) return
         try {
             Log.d(TAG, "=== INIT START ===")
             val options = Interpreter.Options().apply { numThreads = 2 }

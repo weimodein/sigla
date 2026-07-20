@@ -236,10 +236,13 @@ class WordBankActivity : AppCompatActivity() {
         setActiveNavItem(R.id.navWordBank)
 
         findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+        drawerLayout.closeDrawer(GravityCompat.START)
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
+        startActivity(intent)
+        overridePendingTransition(0, 0)
+    }
         findViewById<View>(R.id.navWordBank)?.setOnClickListener {
             drawerLayout.closeDrawer(GravityCompat.START)
         }
