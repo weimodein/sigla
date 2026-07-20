@@ -5,19 +5,18 @@ import {
   getAllWords,
   adminAddWord,
   updateWord,
-  activateWord,
   deleteWord,
   uploadVideos,
+  setWordVideo,
 } from "../../api/wordApi.js";
 import { getCategories } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
   Plus,
   Upload,
+  Film,
   Trash2,
   Pencil,
-  ToggleLeft,
-  ToggleRight,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -303,6 +302,99 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
   );
 };
 
+// ── Demo Video Modal (single demonstration clip for the mobile app) ──
+const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
+  const { success, error: errorToast } = useToast();
+  const fileRef = useRef();
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const currentUrl = word?.video_url
+    ? word.video_url.startsWith("/")
+      ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${word.video_url}`
+      : word.video_url
+    : null;
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const ext = file.name.split(".").pop().toLowerCase();
+      await setWordVideo(word.id, { video_base64: base64, video_ext: ext });
+      success("Demo video updated");
+      onSuccess();
+      onClose();
+    } catch (err) {
+      errorToast(err.response?.data?.message || "Failed to set demo video");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <AppModal title={`Demo Video — ${word?.label}`} onClose={onClose}>
+      <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
+        This is the single demonstration video shown to learners in the mobile app.
+        Uploading replaces any existing demo video. (This does not add training samples.)
+      </p>
+
+      {currentUrl && (
+        <p style={{ fontSize: "0.8rem", marginBottom: "16px" }}>
+          <a href={currentUrl} target="_blank" rel="noreferrer" style={{ color: C.secondary, textDecoration: "underline" }}>
+            View current demo video ↗
+          </a>
+        </p>
+      )}
+
+      <div
+        onClick={() => fileRef.current?.click()}
+        style={{
+          border: `2px dashed ${C.border}`, borderRadius: "10px", padding: "32px", textAlign: "center",
+          cursor: "pointer", marginBottom: "16px", background: "#f9fafb",
+        }}
+      >
+        <Film size={28} style={{ color: C.muted, margin: "0 auto 8px" }} />
+        <p style={{ fontSize: "0.875rem", color: "#374151" }}>
+          Click to select one demo video (.MOV, .MP4)
+        </p>
+        <p style={{ fontSize: "0.75rem", color: C.muted }}>A single file — replaces the current demo video</p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="video/*,.mov"
+          style={{ display: "none" }}
+          onChange={(e) => setFile(e.target.files?.[0] || null)}
+        />
+      </div>
+
+      {file && (
+        <p style={{ fontSize: "0.875rem", color: "#374151", marginBottom: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          Selected: {file.name}
+        </p>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>
+          Cancel
+        </button>
+        <button onClick={handleUpload} disabled={!file || uploading}
+          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: !file || uploading ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: !file || uploading ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
+          {uploading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
+          {word?.video_url ? "Replace Video" : "Upload Video"}
+        </button>
+      </div>
+    </AppModal>
+  );
+};
+
 // ── Main Page ─────────────────────────────────────────────────
 const ManageWord = () => {
   const { success, error: errorToast } = useToast();
@@ -316,6 +408,7 @@ const ManageWord = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [editWord, setEditWord] = useState(null);
   const [uploadWord, setUploadWord] = useState(null);
+  const [demoVideoWord, setDemoVideoWord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const fetchWords = async () => {
@@ -336,16 +429,6 @@ const ManageWord = () => {
 
   useEffect(() => { fetchWords(); }, [page]);
   useEffect(() => { setPage(1); fetchWords(); }, [search, filterCategory]);
-
-  const handleActivate = async (word) => {
-    try {
-      await activateWord(word.id);
-      success(`"${word.label}" ${word.is_active ? "deactivated" : "activated"}`);
-      fetchWords();
-    } catch (err) {
-      errorToast(err.response?.data?.message || "Failed to update");
-    }
-  };
 
   const handleDelete = async (word) => {
     try {
@@ -478,7 +561,7 @@ const ManageWord = () => {
                   <td className="px-5 py-3" style={{ color: "#6b7280", textTransform: "capitalize" }}>{word.category || "—"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>{word.approved_sample_count ?? 0}</td>
                   <td className="px-5 py-3">
-                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 600,
+                    <span title="Words become active automatically when a model is deployed" style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 600,
                       background: word.is_active ? "#dcfce7" : "#f3f4f6",
                       color: word.is_active ? "#166534" : "#6b7280" }}>
                       {word.is_active ? "Active" : "Inactive"}
@@ -486,19 +569,17 @@ const ManageWord = () => {
                   </td>
                   <td className="px-5 py-3">
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <button title="Upload files" onClick={() => setUploadWord(word)}
+                      <button title="Upload dataset clips for training" onClick={() => setUploadWord(word)}
                         style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.8rem", color: "#374151" }}>
-                        <Upload size={14} /> Upload
+                        <Upload size={14} /> Dataset Clips
+                      </button>
+                      <button title="Set the single demonstration video shown in the mobile app" onClick={() => setDemoVideoWord(word)}
+                        style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${word.video_url ? "#bbf7d0" : C.border}`, background: word.video_url ? "#f0fdf4" : "white", cursor: "pointer", fontSize: "0.8rem", color: word.video_url ? "#166534" : "#374151" }}>
+                        <Film size={14} /> Demo Video
                       </button>
                       <button title="Edit word" onClick={() => setEditWord(word)}
                         style={{ padding: "6px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", display: "flex", alignItems: "center" }}>
                         <Pencil size={14} color="#374151" />
-                      </button>
-                      <button title={word.is_active ? "Deactivate" : "Activate"} onClick={() => handleActivate(word)}
-                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                        {word.is_active
-                          ? <ToggleRight size={18} color={C.green} />
-                          : <ToggleLeft size={18} color={C.muted} />}
                       </button>
                       <button title="Delete" onClick={() => setDeleteConfirm(word)}
                         style={{ padding: "6px", borderRadius: "6px", border: `1px solid #fecaca`, background: "#fff5f5", cursor: "pointer", display: "flex", alignItems: "center" }}>
@@ -554,6 +635,15 @@ const ManageWord = () => {
           word={uploadWord}
           open={!!uploadWord}
           onClose={() => setUploadWord(null)}
+          onSuccess={fetchWords}
+        />
+      )}
+
+      {demoVideoWord && (
+        <DemoVideoModal
+          word={demoVideoWord}
+          open={!!demoVideoWord}
+          onClose={() => setDemoVideoWord(null)}
           onSuccess={fetchWords}
         />
       )}

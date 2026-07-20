@@ -4,17 +4,21 @@ require("dotenv").config();
 const { connectDB } = require("../config/db.js");
 const { Category } = require("../models/index.js");
 
+// Canonical FSL categories — must match the admin (ManageWordBank.jsx) and
+// mobile (WordBankActivity.FSL_CATEGORIES) lists so category names align with
+// each Word's `category` value and word counts are non-zero.
 const DEFAULTS = [
-  "greeting",
-  "survival",
-  "number",
-  "calendar",
-  "days",
-  "family",
-  "relationships",
-  "color",
-  "food",
-  "drink",
+  "introducing oneself",
+  "ordering food",
+  "buying items",
+  "asking for prices",
+  "giving numbers",
+  "requesting assistance",
+  "asking for directions",
+  "confirming information",
+  "communicating basic needs",
+  "alphabets",
+  "numbers",
   "additional words",
 ];
 

@@ -13,6 +13,7 @@ const { logActivity } = require("../utils/activityLogger.js");
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const SUPABASE_BUCKET      = process.env.SUPABASE_BUCKET_GESTURES || "gesture-samples";
+const SUPABASE_BUCKET_VIDEOS = process.env.SUPABASE_BUCKET_VIDEOS || "gesture-videos";
 
 // Fall back to local disk only when Supabase env vars are missing (dev without .env)
 const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
@@ -213,6 +214,54 @@ const saveImage = async (base64, index, folder = "static") => {
   } catch (e) {
     return `landmark_direct_${Date.now()}_${index}`;
   }
+};
+
+// ── Upload a demonstration video to Supabase Storage ─────────
+// Mirrors saveImage: pushes to the gesture-videos bucket and returns the
+// public URL. Falls back to local disk when Supabase env vars are absent.
+const VIDEO_CONTENT_TYPES = {
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  avi: "video/x-msvideo",
+  mkv: "video/x-matroska",
+};
+
+const saveVideo = async (buffer, ext, wordId) => {
+  const cleanExt = (ext || "mp4").replace(/[^a-z0-9]/gi, "").toLowerCase() || "mp4";
+  const contentType = VIDEO_CONTENT_TYPES[cleanExt] || "application/octet-stream";
+  const filename = `gesture_${wordId}_${Date.now()}.${cleanExt}`;
+
+  if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+    try {
+      const storagePath = filename;
+      const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET_VIDEOS}/${storagePath}`;
+      const res = await axios.post(url, buffer, {
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          "Content-Type": contentType,
+          "x-upsert": "true",
+        },
+        maxBodyLength: Infinity,
+        validateStatus: null, // don't throw on non-2xx, log it instead
+      });
+      if (res.status >= 200 && res.status < 300) {
+        return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_VIDEOS}/${storagePath}`;
+      }
+      console.error(`Supabase video upload failed [${res.status}]:`, JSON.stringify(res.data));
+      throw new Error(`Supabase ${res.status}: ${JSON.stringify(res.data)}`);
+    } catch (e) {
+      console.error("Supabase video upload error:", e.message);
+      throw e; // propagate so the upload fails visibly instead of saving broken paths
+    }
+  }
+
+  // Local fallback
+  const videosDir = path.join(__dirname, "../../uploads/videos");
+  if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
+  const filepath = path.join(videosDir, filename);
+  fs.writeFileSync(filepath, buffer);
+  return `/uploads/videos/${filename}`;
 };
 
 // ── GET /api/words ────────────────────────────────────────────
@@ -1776,14 +1825,12 @@ async function setVideo(req, res) {
     let videoUrl = req.body.video_url || null;
 
     if (!videoUrl && req.body.video_base64) {
-      const ext = (req.body.video_ext || "mp4").replace(/[^a-z0-9]/gi, "");
-      const videosDir = path.join(__dirname, "../../uploads/videos");
-      if (!fs.existsSync(videosDir))
-        fs.mkdirSync(videosDir, { recursive: true });
-      const filename = `gesture_${word.id}_${Date.now()}.${ext}`;
-      const filepath = path.join(videosDir, filename);
-      fs.writeFileSync(filepath, Buffer.from(req.body.video_base64, "base64"));
-      videoUrl = `/uploads/videos/${filename}`;
+      // Uploading a new file replaces any existing demo video (one per word)
+      videoUrl = await saveVideo(
+        Buffer.from(req.body.video_base64, "base64"),
+        req.body.video_ext,
+        word.id,
+      );
     }
 
     if (!videoUrl)
@@ -1792,6 +1839,14 @@ async function setVideo(req, res) {
         .json({ message: "Either video_url or video_base64 is required" });
 
     await word.update({ video_url: videoUrl });
+
+    await logActivity({
+      user_id: req.user?.id,
+      action: "set_word_video",
+      target_type: "word",
+      target_id: word.id,
+      details: `Set demo video for word: ${word.label}`,
+    });
 
     return res
       .status(200)

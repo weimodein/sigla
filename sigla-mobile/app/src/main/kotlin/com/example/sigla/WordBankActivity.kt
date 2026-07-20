@@ -169,9 +169,27 @@ class WordBankActivity : AppCompatActivity() {
     }
 
     private fun refreshCategoryGrid() {
-        if (dbCategories.isEmpty()) {
+        // Nothing to show until words load. Categories are a nicety on top of the
+        // word list — the grid must NOT be gated on the categories API succeeding.
+        if (allWords.isEmpty()) {
             gridAdapter.setItems(emptyList())
+            if (isGridMode) {
+                emptyState.visibility = if (isLoading) View.GONE else View.VISIBLE
+            }
             return
+        }
+
+        if (isGridMode) emptyState.visibility = View.GONE
+
+        // Prefer the DB categories; fall back to the categories present on the
+        // loaded words so the grid still works when /categories is empty.
+        val categoryNames: List<String> = if (dbCategories.isNotEmpty()) {
+            dbCategories.map { it.name }
+        } else {
+            allWords.map { it.category }
+                .filter { it.isNotBlank() }
+                .distinctBy { it.lowercase() }
+                .sorted()
         }
 
         val items = mutableListOf<CategoryGridItem>()
@@ -180,7 +198,7 @@ class WordBankActivity : AppCompatActivity() {
             val favoritesCount = allWords.count { favoritesManager.isFavorite(it.id) }
             items.add(CategoryGridItem(displayName = "Favorites", wordCount = favoritesCount, isFavorites = true))
             items.add(CategoryGridItem(displayName = "All Words", wordCount = allWords.size, isAllWords = true))
-            dbCategories.map { it.name }.forEach { catName ->
+            categoryNames.forEach { catName ->
                 val count = allWords.count { it.category.equals(catName, ignoreCase = true) }
                 items.add(CategoryGridItem(displayName = catName, wordCount = count))
             }
@@ -215,9 +233,9 @@ class WordBankActivity : AppCompatActivity() {
         tvEntryCount.visibility = View.GONE
         rvWords.visibility = View.GONE
         emptyState.visibility = View.GONE
-        if (dbCategories.isEmpty()) {
-            progressLoading.visibility = View.VISIBLE
-        }
+        // Spinner reflects whether words are still loading — never gate it on the
+        // categories API, which may legitimately return empty.
+        progressLoading.visibility = if (isLoading && allWords.isEmpty()) View.VISIBLE else View.GONE
     }
 
 
@@ -355,7 +373,11 @@ class WordBankActivity : AppCompatActivity() {
             } finally {
                 progressLoading.visibility = View.GONE
                 isLoading = false
-                if (allWords.isEmpty()) {
+                if (isGridMode) {
+                    // Re-render the grid now that loading finished; this also drives
+                    // the empty-state message when there are genuinely no words.
+                    refreshCategoryGrid()
+                } else if (allWords.isEmpty()) {
                     emptyState.visibility = View.VISIBLE
                     rvWords.visibility = View.GONE
                 }
@@ -384,9 +406,10 @@ class WordBankActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 // Network unavailable — cached categories (if any) are already shown above
-            } finally {
-                progressLoading.visibility = View.GONE
             }
+            // Note: the loading spinner is owned solely by loadWords(); categories
+            // are supplementary and must not hide/show it (they can arrive before or
+            // after the word fetch and would otherwise leave a stuck or premature state).
         }
     }
 

@@ -5,6 +5,7 @@ const {
   ModelVersion,
   Word,
   User,
+  GestureSample,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
 require("dotenv").config();
@@ -414,16 +415,42 @@ const deployModel = async (req, res) => {
       await model.update({ status: "deployed", deployed_at: new Date() });
     }
 
-    // ── Activate approved words ──────────────────────────────────────────────
+    // ── Activate the words that were used for training ───────────────────────
+    // Every word whose samples fed this training run becomes visible in the
+    // mobile word bank. The eligibility filter mirrors mlController.getApprovedDataset
+    // so the activated set stays in lock-step with what was actually trained.
     // Wrapped in try/catch — failure here must never leave the model stuck.
-    let wordsToActivate = [];
     try {
-      wordsToActivate = await Word.findAll({
-        where: { status: "approved", is_active: false },
+      const trainedSamples = await GestureSample.findAll({
+        attributes: ["word_id"],
+        where: {
+          [Op.or]: [
+            { status: "approved" },
+            { status: "pending", is_validated: true },
+          ],
+        },
+        include: [
+          {
+            model: Word,
+            as: "word",
+            attributes: [],
+            required: true,
+            where: {
+              [Op.or]: [{ status: "approved" }, { is_active: true }],
+            },
+          },
+        ],
       });
 
-      for (const word of wordsToActivate) {
-        await word.update({ is_active: true });
+      const trainedWordIds = [
+        ...new Set(trainedSamples.map((s) => s.word_id)),
+      ];
+
+      if (trainedWordIds.length > 0) {
+        await Word.update(
+          { is_active: true },
+          { where: { id: { [Op.in]: trainedWordIds }, is_active: false } },
+        );
       }
     } catch (wordErr) {
       console.error("Word activation error (non-fatal):", wordErr.message);

@@ -253,6 +253,23 @@ object ModelUpdateManager {
         return if (file.exists()) file else null
     }
 
+    // ── Demo video cache ─────────────────────────────────────────
+    // Videos are downloaded only when the user explicitly taps the
+    // placeholder, then cached for offline playback on later visits.
+
+    fun getLocalVideo(context: Context, wordId: Int): File? {
+        val file = File(context.filesDir, "wb_video_$wordId")
+        return if (file.exists() && file.length() > 0) file else null
+    }
+
+    suspend fun downloadWordVideo(context: Context, wordId: Int, url: String): File? {
+        return withContext(Dispatchers.IO) {
+            val dest = File(context.filesDir, "wb_video_$wordId")
+            val ok = downloadToFile(url, dest)
+            if (ok) dest else null
+        }
+    }
+
     suspend fun downloadWordBankImages(context: Context, words: List<WordBankWord>) {
         withContext(Dispatchers.IO) {
             for (word in words) {

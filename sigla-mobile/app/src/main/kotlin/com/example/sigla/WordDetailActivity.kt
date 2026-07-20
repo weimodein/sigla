@@ -151,41 +151,7 @@ class WordDetailActivity : AppCompatActivity() {
 
         when {
             !resolvedVideo.isNullOrBlank() -> {
-                noMediaPlaceholder.visibility = View.GONE
-                ivThumbnail.visibility        = View.GONE
-                videoDemo.visibility          = View.VISIBLE
-                playOverlay.visibility        = View.VISIBLE
-                progressVideo.visibility      = View.VISIBLE
-                tvMediaCaption.text = "Demo Video"
-
-                videoDemo.setVideoPath(resolvedVideo)
-                videoDemo.setOnPreparedListener { mp ->
-                    progressVideo.visibility = View.GONE
-                    mp.isLooping = true
-                    val seconds = mp.duration / 1000
-                    tvMediaCaption.text = "Demo Video · %d:%02d".format(seconds / 60, seconds % 60)
-                }
-                videoDemo.setOnErrorListener { _, _, _ ->
-                    progressVideo.visibility  = View.GONE
-                    videoDemo.visibility      = View.GONE
-                    playOverlay.visibility    = View.GONE
-                    noMediaPlaceholder.visibility = View.VISIBLE
-                    true
-                }
-                videoDemo.setOnCompletionListener {
-                    playOverlay.visibility = View.VISIBLE
-                }
-                val toggle = View.OnClickListener {
-                    if (videoDemo.isPlaying) {
-                        videoDemo.pause()
-                        playOverlay.visibility = View.VISIBLE
-                    } else {
-                        videoDemo.start()
-                        playOverlay.visibility = View.GONE
-                    }
-                }
-                videoDemo.setOnClickListener(toggle)
-                playOverlay.setOnClickListener(toggle)
+                setupVideoPlaceholder(w, resolvedVideo)
             }
 
             thumbSource != null -> {
@@ -209,6 +175,93 @@ class WordDetailActivity : AppCompatActivity() {
                 tvMediaCaption.text = ""
             }
         }
+    }
+
+    // ── Tap-to-download demo video ───────────────────────────────
+    // The video is never streamed automatically. We show a placeholder;
+    // the first tap downloads it once (cached for offline use), later
+    // taps play the cached local file with no network access.
+
+    private fun setupVideoPlaceholder(w: WordBankWord, resolvedVideo: String) {
+        ivThumbnail.visibility        = View.GONE
+        videoDemo.visibility          = View.GONE
+        progressVideo.visibility      = View.GONE
+        noMediaPlaceholder.visibility = View.VISIBLE
+        playOverlay.visibility        = View.VISIBLE
+
+        val cached = ModelUpdateManager.getLocalVideo(this, w.id)
+        if (cached != null) {
+            tvMediaCaption.text = "Demo Video · tap to play"
+            val start = View.OnClickListener { playLocalVideo(cached) }
+            playOverlay.setOnClickListener(start)
+            noMediaPlaceholder.setOnClickListener(start)
+        } else {
+            tvMediaCaption.text = "Tap to download demo video"
+            val download = View.OnClickListener { downloadThenPlay(w, resolvedVideo) }
+            playOverlay.setOnClickListener(download)
+            noMediaPlaceholder.setOnClickListener(download)
+        }
+    }
+
+    private fun downloadThenPlay(w: WordBankWord, resolvedVideo: String) {
+        playOverlay.visibility        = View.GONE
+        noMediaPlaceholder.visibility = View.GONE
+        progressVideo.visibility      = View.VISIBLE
+        tvMediaCaption.text = "Downloading demo video…"
+        playOverlay.setOnClickListener(null)
+        noMediaPlaceholder.setOnClickListener(null)
+
+        lifecycleScope.launch {
+            val file = ModelUpdateManager.downloadWordVideo(this@WordDetailActivity, w.id, resolvedVideo)
+            progressVideo.visibility = View.GONE
+            if (file != null) {
+                playLocalVideo(file)
+            } else {
+                Toast.makeText(this@WordDetailActivity, "Failed to download video", Toast.LENGTH_SHORT).show()
+                // Revert to the download placeholder so the user can retry
+                setupVideoPlaceholder(w, resolvedVideo)
+            }
+        }
+    }
+
+    private fun playLocalVideo(file: java.io.File) {
+        noMediaPlaceholder.visibility = View.GONE
+        ivThumbnail.visibility        = View.GONE
+        videoDemo.visibility          = View.VISIBLE
+        playOverlay.visibility        = View.GONE
+        progressVideo.visibility      = View.VISIBLE
+        tvMediaCaption.text = "Demo Video"
+
+        videoDemo.setVideoPath(file.absolutePath)
+        videoDemo.setOnPreparedListener { mp ->
+            progressVideo.visibility = View.GONE
+            mp.isLooping = true
+            val seconds = mp.duration / 1000
+            tvMediaCaption.text = "Demo Video · %d:%02d".format(seconds / 60, seconds % 60)
+        }
+        videoDemo.setOnErrorListener { _, _, _ ->
+            progressVideo.visibility  = View.GONE
+            videoDemo.visibility      = View.GONE
+            playOverlay.visibility    = View.GONE
+            noMediaPlaceholder.visibility = View.VISIBLE
+            tvMediaCaption.text = "Video unavailable"
+            true
+        }
+        videoDemo.setOnCompletionListener {
+            playOverlay.visibility = View.VISIBLE
+        }
+        val toggle = View.OnClickListener {
+            if (videoDemo.isPlaying) {
+                videoDemo.pause()
+                playOverlay.visibility = View.VISIBLE
+            } else {
+                videoDemo.start()
+                playOverlay.visibility = View.GONE
+            }
+        }
+        videoDemo.setOnClickListener(toggle)
+        playOverlay.setOnClickListener(toggle)
+        videoDemo.start()
     }
 
     private fun speakWord(label: String) {
