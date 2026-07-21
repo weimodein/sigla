@@ -185,10 +185,8 @@ const ManageModel = () => {
           setTrainingModelId(null);
           setTrainingVersion("");
           showSuccess(`Model ${model.version_number} trained successfully`);
-          const motionNote = model.motion_trained
-            ? `Motion model trained (${model.motion_classes} classes).`
-            : `Motion model NOT trained — need at least 2 motion gesture classes.`;
-          setResultModal({ title: "Training Results", data: { message: motionNote, model } });
+          const trainedNote = `Model trained on ${model.total_classes ?? "—"} gesture class(es).`;
+          setResultModal({ title: "Training Results", data: { message: trainedNote, model } });
           fetchData();
         } else if (model.status === "failed") {
           clearInterval(pollingRef.current);

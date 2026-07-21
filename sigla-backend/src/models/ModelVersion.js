@@ -18,15 +18,7 @@ const ModelVersion = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    motion_tflite_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
     h5_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    motion_h5_url: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
@@ -34,22 +26,9 @@ const ModelVersion = sequelize.define(
       type: DataTypes.FLOAT,
       allowNull: true,
     },
-    motion_accuracy: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-    },
     total_classes: {
       type: DataTypes.INTEGER,
       allowNull: true,
-    },
-    motion_classes: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    motion_trained: {
-      type: DataTypes.BOOLEAN,
-      allowNull: true,
-      defaultValue: false,
     },
     trained_by: {
       type: DataTypes.INTEGER,
@@ -72,10 +51,6 @@ const ModelVersion = sequelize.define(
       },
     },
     training_error: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    word_bank_url: {
       type: DataTypes.TEXT,
       allowNull: true,
     },

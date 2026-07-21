@@ -58,8 +58,6 @@ def get_model_urls(version_number: str) -> dict:
     files = [
         ("tflite_url",        "sign_model_motion.tflite"),
         ("h5_url",            "sign_model_motion.h5"),
-        ("motion_tflite_url", "sign_model_motion.tflite"),
-        ("motion_h5_url",     "sign_model_motion.h5"),
         ("labels_motion_url", "labels_motion.json"),
     ]
 

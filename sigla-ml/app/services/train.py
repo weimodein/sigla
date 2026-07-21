@@ -174,18 +174,13 @@ def train(version_number: str, model_id: int) -> dict:
     print(f"Training complete for version: {version_number}")
     print(f"{'='*50}\n")
 
-    # NOTE: the "accuracy"/"tflite_url"/"h5_url" keys carry the motion model's
-    # values so the backend (which reads those generic keys) stays compatible.
+    # Every gesture is motion, so there is a single model — its values are
+    # reported under the generic keys the backend and both clients read.
     return {
         "version_number":     version_number,
         "model_id":           model_id,
         "total_classes":      total_classes,
         "accuracy":           round(float(accuracy), 4),
-        "motion_accuracy":    round(float(accuracy), 4),
-        "motion_trained":     True,
-        "motion_classes":     total_classes,
         "tflite_url":         motion_tflite_url,
         "h5_url":             motion_h5_url,
-        "motion_tflite_url":  motion_tflite_url,
-        "motion_h5_url":      motion_h5_url,
     }

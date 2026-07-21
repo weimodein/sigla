@@ -127,13 +127,9 @@ const getLatestModel = async (req, res) => {
         "id",
         "version_number",
         "tflite_url",
-        "motion_tflite_url",
         "accuracy",
-        "motion_accuracy",
         "deployed_at",
         "total_classes",
-        "motion_classes",
-        "motion_trained",
         "checksum",
       ],
       order: [["deployed_at", "DESC"]],
@@ -154,7 +150,6 @@ const getLatestModel = async (req, res) => {
       model: {
         ...model.toJSON(),
         tflite_url: base ? `${base}/sign_model_motion.tflite` : model.tflite_url,
-        motion_tflite_url: base ? `${base}/sign_model_motion.tflite` : model.motion_tflite_url,
         labels_motion_url: base ? `${base}/labels_motion.json` : null,
       },
     });
@@ -247,11 +242,6 @@ const trainModel = async (req, res) => {
           total_classes:     r.total_classes       || null,
           tflite_url:        r.tflite_url          || null,
           h5_url:            r.h5_url              || null,
-          motion_tflite_url: r.motion_tflite_url   || null,
-          motion_h5_url:     r.motion_h5_url       || null,
-          motion_accuracy:   r.motion_accuracy     || null,
-          motion_trained:    r.motion_trained      || false,
-          motion_classes:    r.motion_classes      || null,
           trained_at:        new Date(),
           training_error:    null,
         });
