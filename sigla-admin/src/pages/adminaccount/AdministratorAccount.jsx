@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
+import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
 import {
   Mail,
   Pencil,
+  AlertTriangle,
   Lock,
   LogOut,
   Shield,
@@ -137,6 +139,7 @@ const AdministratorAccount = () => {
   const [emailStep, setEmailStep] = useState(null); // null | "enter" | "verify"
   const [emailLoading, setEmailLoading] = useState(false);
   const [newEmail, setNewEmail] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState(false);
   const [emailCode, setEmailCode] = useState("");
   const [emailCooldown, setEmailCooldown] = useState(0);
 
@@ -153,11 +156,24 @@ const AdministratorAccount = () => {
     }, 1000);
   };
 
-  const handleRequestEmailCode = async () => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
-      toast.error("Please enter a valid email address");
+  // Validate the shape, then confirm when the domain is unfamiliar — a typo
+  // like "gmail.com" -> "gmaasdasd.com" is syntactically valid and would
+  // otherwise send the code to an address the user cannot read.
+  const handleRequestEmailCode = () => {
+    const emailError = validateEmail(newEmail);
+    if (emailError) {
+      toast.error(emailError);
       return;
     }
+    if (!isKnownDomain(newEmail)) {
+      setConfirmEmail(true);
+      return;
+    }
+    sendEmailCode();
+  };
+
+  const sendEmailCode = async () => {
+    setConfirmEmail(false);
     setEmailLoading(true);
     try {
       await requestEmailCode(newEmail);
@@ -912,6 +928,99 @@ const AdministratorAccount = () => {
           </div>
         </div>
       </div>
+
+      {/* Unfamiliar-domain confirmation — a mistyped address sends the code
+          somewhere unreadable, and it cannot be resent for 1 minute. */}
+      {confirmEmail && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            background: "rgba(0,0,0,0.4)",
+          }}
+          onClick={() => setConfirmEmail(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+              width: "100%",
+              maxWidth: 420,
+              padding: 24,
+            }}
+          >
+            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+              <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: C.text, margin: 0 }}>
+                Double-check this email address
+              </h3>
+            </div>
+            <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "0 0 8px" }}>
+              The verification code will be sent to:
+            </p>
+            <p
+              style={{
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                color: C.text,
+                wordBreak: "break-all",
+                background: "#f9fafb",
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: "10px 12px",
+                margin: "0 0 12px",
+              }}
+            >
+              {newEmail}
+            </p>
+            <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 20px" }}>
+              If this is mistyped you will not receive the code, and a new one
+              cannot be sent for 1 minute.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConfirmEmail(false)}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: 8,
+                  border: `1px solid ${C.border}`,
+                  background: "white",
+                  color: "#374151",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Go back and edit
+              </button>
+              <button
+                onClick={sendEmailCode}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: C.primary,
+                  color: "white",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Send code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

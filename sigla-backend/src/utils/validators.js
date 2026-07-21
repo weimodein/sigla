@@ -37,4 +37,38 @@ const validateUsername = (username) => {
   return { value };
 };
 
-module.exports = { validatePassword, validateUsername, PASSWORD_MESSAGE };
+// Email column is VARCHAR(100).
+const EMAIL_MAX = 100;
+
+// Requires a TLD of at least two letters, so "a@b.c" and "user@domain" fail.
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
+
+const EMAIL_MESSAGE = "Please enter a valid email address";
+
+// Returns an error string, or null when the address is well formed.
+//
+// NOTE: this proves shape only. A syntactically perfect address on a domain
+// that does not exist (e.g. a "gmail.com" -> "gmaasdasd.com" typo) cannot be
+// caught here — the UI adds a confirmation step for unrecognised domains.
+const validateEmail = (email) => {
+  if (typeof email !== "string" || !email.trim()) {
+    return "Email is required";
+  }
+  const value = email.trim();
+  if (value.length > EMAIL_MAX) {
+    return `Email must be at most ${EMAIL_MAX} characters`;
+  }
+  if (!EMAIL_RX.test(value)) return EMAIL_MESSAGE;
+  // Consecutive dots, or a dot adjacent to the "@" or the ends.
+  if (value.includes("..")) return EMAIL_MESSAGE;
+  if (/^\.|\.$|\.@|@\./.test(value)) return EMAIL_MESSAGE;
+  return null;
+};
+
+module.exports = {
+  validatePassword,
+  validateUsername,
+  validateEmail,
+  PASSWORD_MESSAGE,
+  EMAIL_MESSAGE,
+};

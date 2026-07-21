@@ -7,7 +7,8 @@ import {
   verifyEmailCode,
   completeSetup,
 } from "../../api/authApi.js";
-import { Mail, UserCog, Check } from "lucide-react";
+import { Mail, UserCog, Check, AlertTriangle } from "lucide-react";
+import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
 
 const C = {
   text: "#1f2937",
@@ -33,6 +34,9 @@ const Onboarding = () => {
   const [emailCode, setEmailCode] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  // Set when the address is well formed but its domain is unfamiliar — the user
+  // confirms before a code is sent to a possibly mistyped address.
+  const [confirmEmail, setConfirmEmail] = useState(false);
 
   // Credentials flow
   const [username, setUsername] = useState("");
@@ -64,11 +68,24 @@ const Onboarding = () => {
   if (!user) return <Navigate to="/login" replace />;
   if (!needsSetup) return <Navigate to="/dashboard" replace />;
 
-  const handleRequestEmailCode = async () => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
-      toast.error("Please enter a valid email address");
+  // Step 1: validate the shape, then ask for confirmation when the domain is
+  // unfamiliar. A typo like "gmail.com" -> "gmaasdasd.com" is syntactically
+  // valid, so only a second look catches it.
+  const handleRequestEmailCode = () => {
+    const emailError = validateEmail(newEmail);
+    if (emailError) {
+      toast.error(emailError);
       return;
     }
+    if (!isKnownDomain(newEmail)) {
+      setConfirmEmail(true);
+      return;
+    }
+    sendEmailCode();
+  };
+
+  const sendEmailCode = async () => {
+    setConfirmEmail(false);
     setEmailLoading(true);
     try {
       await requestEmailCode(newEmail);
@@ -342,6 +359,99 @@ const Onboarding = () => {
           </button>
         </div>
       </div>
+
+      {/* Unfamiliar-domain confirmation — the code can only be sent once per
+          minute, so a mistyped address is costly to recover from. */}
+      {confirmEmail && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            background: "rgba(0,0,0,0.4)",
+          }}
+          onClick={() => setConfirmEmail(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+              width: "100%",
+              maxWidth: 420,
+              padding: 24,
+            }}
+          >
+            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+              <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: C.text, margin: 0 }}>
+                Double-check this email address
+              </h3>
+            </div>
+            <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "0 0 8px" }}>
+              The verification code will be sent to:
+            </p>
+            <p
+              style={{
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                color: C.text,
+                wordBreak: "break-all",
+                background: "#f9fafb",
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: "10px 12px",
+                margin: "0 0 12px",
+              }}
+            >
+              {newEmail}
+            </p>
+            <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 20px" }}>
+              If this is mistyped you will not receive the code, and a new one
+              cannot be sent for 1 minute.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConfirmEmail(false)}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: 8,
+                  border: `1px solid ${C.border}`,
+                  background: "white",
+                  color: "#374151",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Go back and edit
+              </button>
+              <button
+                onClick={sendEmailCode}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: C.primary,
+                  color: "white",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Send code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

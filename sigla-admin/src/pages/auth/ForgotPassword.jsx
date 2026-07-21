@@ -8,6 +8,7 @@ import {
   resendCode,
 } from "../../api/authApi.js";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { validateEmail } from "../../utils/emailValidation.js";
 
 const C = {
   text: "#1f2937",
@@ -129,6 +130,13 @@ const ForgotPassword = () => {
 
   const handleForgot = useCallback(async (e) => {
     e.preventDefault();
+    // Shape check only — no unfamiliar-domain prompt here, since a recovery
+    // address already belongs to an existing account.
+    const emailError = validateEmail(email);
+    if (emailError) {
+      toast.error(emailError);
+      return;
+    }
     setLoading(true);
     try {
       await forgotPassword(email);

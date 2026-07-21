@@ -2,6 +2,7 @@ const { Op } = require("sequelize");
 const { Administrator, EmailVerification } = require("../models/index.js");
 const { sendVerificationCode } = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
+const { validateEmail } = require("../utils/validators.js");
 
 const TYPE = "email_change";
 const CODE_TTL_MS = 5 * 60 * 1000;   // 5 minutes
@@ -30,12 +31,9 @@ const requestEmailCode = async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
-    }
-    // Basic email shape check (mirrors the model's isEmail validation)
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ message: "Please enter a valid email address" });
+    const emailError = validateEmail(email);
+    if (emailError) {
+      return res.status(400).json({ message: emailError });
     }
 
     // Reject if the email is already linked to a different account.
