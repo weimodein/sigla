@@ -5,8 +5,7 @@ const axios = require("axios");
 const {
   Word,
   GestureSample,
-  User,
-  Notification,
+  Administrator,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
 
@@ -57,42 +56,6 @@ const getUserSampleCount = async (userId, wordId) => {
 const getApprovedSampleCount = async (wordId) => {
   return await GestureSample.count({
     where: { word_id: wordId, status: "approved" },
-  });
-};
-
-// ── Helper: send submission result notification ───────────────
-const sendSubmissionNotification = async (
-  userId,
-  wordLabel,
-  approved,
-  total,
-  maxLimit,
-  totalUserApproved = approved,
-) => {
-  let title, message;
-
-  if (approved === 0) {
-    // All rejected
-    title = "Submission Rejected";
-    message = `None of your submitted samples for "${wordLabel}" were approved. Please review the terms and conditions and the gesture collection instructions before submitting again.`;
-  } else if (approved === total) {
-    // All approved
-    title = "Submission Approved";
-    message = `All ${approved} of your submitted samples for "${wordLabel}" have been accepted. Your contribution has been successfully added to the system.`;
-  } else {
-    // Partial
-    const remaining = Math.max(0, maxLimit - totalUserApproved);
-    title = "Submission Partially Approved";
-    message = `${approved} out of ${total} submitted samples for "${wordLabel}" were approved. You may still contribute up to ${remaining} more samples for this word.`;
-  }
-
-  await Notification.create({
-    user_id: userId,
-    title,
-    message,
-    type: "submission_result",
-    is_read: false,
-    delivered: false,
   });
 };
 
@@ -292,11 +255,11 @@ const getAllWords = async (req, res) => {
       where,
       include: [
         {
-          model: User,
+          model: Administrator,
           as: "submitter",
           attributes: ["id", "username"],
         },
-        { model: User, as: "reviewer", attributes: ["id", "username"] },
+        { model: Administrator, as: "reviewer", attributes: ["id", "username"] },
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -355,16 +318,16 @@ const getWordById = async (req, res) => {
       where: { id: req.params.id },
       include: [
         {
-          model: User,
+          model: Administrator,
           as: "submitter",
           attributes: ["id", "username"],
         },
-        { model: User, as: "reviewer", attributes: ["id", "username"] },
+        { model: Administrator, as: "reviewer", attributes: ["id", "username"] },
         {
           model: GestureSample,
           as: "samples",
           include: [
-            { model: User, as: "submitter", attributes: ["id", "username"] },
+            { model: Administrator, as: "submitter", attributes: ["id", "username"] },
           ],
         },
       ],
@@ -382,7 +345,7 @@ const getWordById = async (req, res) => {
 };
 
 // ── POST /api/words ───────────────────────────────────────────
-// User submits a new word — normalizes label before duplicate check
+// Administrator submits a new word — normalizes label before duplicate check
 const submitWord = async (req, res) => {
   try {
     const {
@@ -495,7 +458,7 @@ const adminAddWord = async (req, res) => {
     });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "added_word",
       target_type: "word",
       target_id: word.id,
@@ -575,7 +538,7 @@ const adminUploadSamples = async (req, res) => {
 };
 
 // ── POST /api/words/:id/samples ───────────────────────────────
-// User uploads gesture samples — enforces per-user per-word cap
+// Administrator uploads gesture samples — enforces per-user per-word cap
 const uploadSamples = async (req, res) => {
   try {
     const word = await Word.findOne({ where: { id: req.params.id } });
@@ -897,19 +860,6 @@ const approveAllSamplesByUser = async (req, res) => {
 
     await checkAndActivateWord(word, req.user.id);
     const approvedCount = await getApprovedSampleCount(word.id);
-    const cap = getSampleCap(word);
-    const userApprovedAfter = approvedBefore + pendingCount;
-
-    if (pendingCount > 0) {
-      await sendSubmissionNotification(
-        req.params.userId,
-        word.label,
-        pendingCount,
-        pendingCount,
-        cap,
-        userApprovedAfter,
-      );
-    }
 
     return res.status(200).json({
       message: "All samples from user approved",
@@ -943,19 +893,6 @@ const rejectAllSamplesByUser = async (req, res) => {
         },
       },
     );
-
-    const cap = getSampleCap(word);
-
-    if (pendingCount > 0) {
-      await sendSubmissionNotification(
-        req.params.userId,
-        word.label,
-        0,
-        pendingCount,
-        cap,
-        existingApproved,
-      );
-    }
 
     return res.status(200).json({ message: "All samples from user rejected" });
   } catch (err) {
@@ -999,21 +936,10 @@ const approveSubmission = async (req, res) => {
     );
 
     const totalApproved = await getApprovedSampleCount(word.id);
-    const cap = getSampleCap(word);
     const activated = await checkAndActivateWord(word, req.user.id);
-    const userApprovedAfter = approvedBeforeCount + pendingCount;
-
-    await sendSubmissionNotification(
-      user_id,
-      word.label,
-      pendingCount,
-      pendingCount,
-      cap,
-      userApprovedAfter,
-    );
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "approved_submission",
       target_type: "word",
       target_id: word.id,
@@ -1069,19 +995,8 @@ const rejectSubmission = async (req, res) => {
       });
     }
 
-    const cap = getSampleCap(word);
-    const userApprovedCount = userSamples.filter((s) => s.status === "approved").length;
-    await sendSubmissionNotification(
-      user_id,
-      word.label,
-      0,
-      userSamples.length,
-      cap,
-      userApprovedCount,
-    );
-
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "rejected_submission",
       target_type: "word",
       target_id: word.id,
@@ -1116,7 +1031,7 @@ const activateWord = async (req, res) => {
     await word.update({ is_active: true });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "activated_word",
       target_type: "word",
       target_id: word.id,
@@ -1148,19 +1063,8 @@ const approveWord = async (req, res) => {
       reviewed_at: new Date(),
     });
 
-    if (word.submitted_by) {
-      await Notification.create({
-        user_id: word.submitted_by,
-        title: "Word Approved",
-        message: `Your submitted word "${word.label}" has been approved. It will appear in the app after the next model update.`,
-        type: "word_approved",
-        is_read: false,
-        delivered: false,
-      });
-    }
-
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "approved_word",
       target_type: "word",
       target_id: word.id,
@@ -1195,21 +1099,8 @@ const rejectWord = async (req, res) => {
       reviewed_at: new Date(),
     });
 
-    if (word.submitted_by) {
-      await Notification.create({
-        user_id: word.submitted_by,
-        title: "Word Rejected",
-        message: reason
-          ? `Your submitted word "${word.label}" was rejected. Reason: ${reason}`
-          : `Your submitted word "${word.label}" was rejected. Please review the terms and conditions and gesture collection instructions before submitting again.`,
-        type: "word_rejected",
-        is_read: false,
-        delivered: false,
-      });
-    }
-
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "rejected_word",
       target_type: "word",
       target_id: word.id,
@@ -1272,7 +1163,7 @@ const updateWord = async (req, res) => {
     });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "updated_word",
       target_type: "word",
       target_id: word.id,
@@ -1300,7 +1191,7 @@ const deleteWord = async (req, res) => {
     await word.destroy();
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "deleted_word",
       target_type: "word",
       target_id: deletedWordId,
@@ -1328,7 +1219,7 @@ const getSamples = async (req, res) => {
     const samples = await GestureSample.findAll({
       where: { word_id: word.id },
       include: [
-        { model: User, as: "submitter", attributes: ["id", "username"] },
+        { model: Administrator, as: "submitter", attributes: ["id", "username"] },
       ],
       order: [["created_at", "DESC"]],
     });
@@ -1413,14 +1304,8 @@ const approveAllSamplesForWord = async (req, res) => {
 
     await word.update({ approved_sample_count: totalApproved });
 
-    // Notify each affected submitter
-    const cap = getSampleCap(word);
-    for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
-      await sendSubmissionNotification(userId, word.label, pendingCount, pendingCount, cap, pendingCount);
-    }
-
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "approved_word",
       target_type: "word",
       target_id: word.id,
@@ -1472,14 +1357,8 @@ const rejectAllSamplesForWord = async (req, res) => {
       });
     }
 
-    // Notify each affected submitter
-    const cap = getSampleCap(word);
-    for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
-      await sendSubmissionNotification(userId, word.label, 0, pendingCount, cap, 0);
-    }
-
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "rejected_word",
       target_type: "word",
       target_id: word.id,
@@ -1505,7 +1384,7 @@ const getMotionSequences = async (req, res) => {
     const samples = await GestureSample.findAll({
       where: { word_id: word.id, status: "approved" },
       include: [
-        { model: User, as: "submitter", attributes: ["id", "username"] },
+        { model: Administrator, as: "submitter", attributes: ["id", "username"] },
       ],
       order: [["created_at", "ASC"]],
     });
@@ -1841,7 +1720,7 @@ async function setVideo(req, res) {
     await word.update({ video_url: videoUrl });
 
     await logActivity({
-      user_id: req.user?.id,
+      administrator_id: req.user.id,
       action: "set_word_video",
       target_type: "word",
       target_id: word.id,
@@ -1917,7 +1796,7 @@ const uploadVideos = async (req, res) => {
     await checkAndActivateWord(word, req.user.id);
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "uploaded_samples",
       target_type: "word",
       target_id: word.id,

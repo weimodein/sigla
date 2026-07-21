@@ -34,10 +34,3 @@ export const MODEL_STATUS = {
   DEPLOYED: "deployed",
   INACTIVE: "inactive",
 };
-
-export const NOTIFICATION_TYPE = {
-  GENERAL: "general",
-  WORD_APPROVED: "word_approved",
-  WORD_REJECTED: "word_rejected",
-  MODEL_UPDATED: "model_updated",
-};

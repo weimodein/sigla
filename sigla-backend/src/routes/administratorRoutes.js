@@ -3,28 +3,25 @@ const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
 const {
-  getAllUsers,
-  getDeactivatedUsers,
-  getDeletedUsers,
-  getUserStats,
-  getUserById,
-  createUser,
-  deactivateUser,
-  reactivateUser,
-  deleteUser,
-  updateUser,
-} = require("../controllers/userController.js");
-const { getMySettings, updateMySettings } = require("../controllers/settingsController.js");
+  getAllAdministrators,
+  getDeactivatedAdministrators,
+  getDeletedAdministrators,
+  getAdministratorStats,
+  getAdministratorById,
+  createAdministrator,
+  deactivateAdministrator,
+  reactivateAdministrator,
+  deleteAdministrator,
+  updateAdministrator,
+} = require("../controllers/administratorController.js");
 const { requestEmailCode, verifyEmailCode } = require("../controllers/emailController.js");
-const { completeSetup } = require("../controllers/userController.js");
+const { completeSetup } = require("../controllers/administratorController.js");
 const requireSetupComplete = require("../middleware/requireSetupComplete.js");
 
 // All routes require login
 router.use(authMiddleware);
 
 // ── Onboarding-safe routes (usable while must_complete_setup is true) ──
-router.get("/settings", getMySettings);
-router.patch("/settings", updateMySettings);
 // Verified email add/change for the logged-in account
 router.post("/email/request-code", requestEmailCode);
 router.post("/email/verify", verifyEmailCode);
@@ -35,20 +32,20 @@ router.post("/complete-setup", completeSetup);
 router.use(requireSetupComplete);
 
 // ── Stats — open to any admin (dashboard + reports need the counts) ──
-router.get("/stats", roleMiddleware("admin"), getUserStats);
+router.get("/stats", roleMiddleware("admin"), getAdministratorStats);
 
 // ── Administrator management routes — SUPER ADMIN ONLY (scope §15) ──
-router.get("/deactivated", roleMiddleware("super_admin"), getDeactivatedUsers);
-router.get("/deleted", roleMiddleware("super_admin"), getDeletedUsers);
-router.get("/", roleMiddleware("super_admin"), getAllUsers);
-router.post("/", roleMiddleware("super_admin"), createUser);
-router.get("/:id", roleMiddleware("super_admin"), getUserById);
-router.patch("/:id/deactivate", roleMiddleware("super_admin"), deactivateUser);
-router.patch("/:id/reactivate", roleMiddleware("super_admin"), reactivateUser);
+router.get("/deactivated", roleMiddleware("super_admin"), getDeactivatedAdministrators);
+router.get("/deleted", roleMiddleware("super_admin"), getDeletedAdministrators);
+router.get("/", roleMiddleware("super_admin"), getAllAdministrators);
+router.post("/", roleMiddleware("super_admin"), createAdministrator);
+router.get("/:id", roleMiddleware("super_admin"), getAdministratorById);
+router.patch("/:id/deactivate", roleMiddleware("super_admin"), deactivateAdministrator);
+router.patch("/:id/reactivate", roleMiddleware("super_admin"), reactivateAdministrator);
 // PUT /:id stays open to any admin so each account can edit ITSELF; the
 // controller allows the update only for self-edits or when the caller is super.
-router.put("/:id", roleMiddleware("admin"), updateUser);
-router.delete("/:id", roleMiddleware("super_admin"), deleteUser);
+router.put("/:id", roleMiddleware("admin"), updateAdministrator);
+router.delete("/:id", roleMiddleware("super_admin"), deleteAdministrator);
 
 module.exports = router;
 
@@ -56,12 +53,12 @@ module.exports = router;
 
 // Test in Postman — login as admin first, use Bearer <token> in Authorization header:
 //
-// GET    /api/users                  → list all administrators
-// GET    /api/users/stats            → counts for dashboard
-// GET    /api/users/deactivated      → deactivated list
-// GET    /api/users/:id              → single administrator
-// POST   /api/users                  → create administrator (username + password)
-// PATCH  /api/users/:id/deactivate   → deactivate administrator
-// PATCH  /api/users/:id/reactivate   → reactivate deactivated administrator
-// PUT    /api/users/:id              → edit administrator info
-// DELETE /api/users/:id              → permanently delete administrator
+// GET    /api/administrators                  → list all administrators
+// GET    /api/administrators/stats            → counts for dashboard
+// GET    /api/administrators/deactivated      → deactivated list
+// GET    /api/administrators/:id              → single administrator
+// POST   /api/administrators                  → create administrator (username + password)
+// PATCH  /api/administrators/:id/deactivate   → deactivate administrator
+// PATCH  /api/administrators/:id/reactivate   → reactivate deactivated administrator
+// PUT    /api/administrators/:id              → edit administrator info
+// DELETE /api/administrators/:id              → permanently delete administrator

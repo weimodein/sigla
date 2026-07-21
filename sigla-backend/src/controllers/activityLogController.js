@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { ActivityLog, User } = require("../models/index.js");
+const { ActivityLog, Administrator } = require("../models/index.js");
 
 // ── GET /api/activity-logs ────────────────────────────────────
 // Read-only, system-wide audit trail. Supports filtering by action,
@@ -21,7 +21,7 @@ const getActivityLogs = async (req, res) => {
     const where = {};
     // When mine=true, scope to the logged-in account's own actions
     // (used by the dashboard's "recent activity" feed).
-    if (mine === "true") where.user_id = req.user.id;
+    if (mine === "true") where.administrator_id = req.user.id;
     if (action) where.action = action;
     if (target_type) where.target_type = target_type;
     if (search) where.details = { [Op.iLike]: `%${search}%` };
@@ -41,8 +41,8 @@ const getActivityLogs = async (req, res) => {
       where,
       include: [
         {
-          model: User,
-          as: "user",
+          model: Administrator,
+          as: "administrator",
           attributes: ["id", "username", "name"],
           required: false,
         },

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, memo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
-import { getUserStats, getAllUsers } from "../../api/userApi.js";
+import { getAdministratorStats, getAllAdministrators } from "../../api/administratorApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
 import { getCategories } from "../../api/categoryApi.js";
@@ -128,12 +128,12 @@ const ReportsAnalytics = () => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      // The admin roster (GET /users) is super-only. Regular admins skip it
+      // The admin roster (GET /administrators) is super-only. Regular admins skip it
       // and simply don't see the per-admin deactivated/deleted tables.
       const [uStats, wStats, usersData, wordsData, catsData] = await Promise.all([
-        getUserStats(),
+        getAdministratorStats(),
         getWordStats(),
-        isSuper ? getAllUsers({ limit: 500 }) : Promise.resolve({ users: [] }),
+        isSuper ? getAllAdministrators({ limit: 500 }) : Promise.resolve({ administrators: [] }),
         getAllWords({ limit: 500 }),
         getCategories(),
       ]);
@@ -142,7 +142,7 @@ const ReportsAnalytics = () => {
       setWordStats(wStats);
       setCategoryCount((catsData.categories || []).length);
 
-      const users = usersData.users || [];
+      const users = usersData.administrators || [];
       setDeactivatedUsers(users.filter((u) => u.status === "deactivated"));
       setDeletedUsers(users.filter((u) => u.status === "deleted"));
       setWords(wordsData.words || []);

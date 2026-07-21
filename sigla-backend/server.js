@@ -15,10 +15,9 @@ const path = require("path");
 
 // route imports
 const authRoutes = require("./src/routes/authRoutes.js");
-const userRoutes = require("./src/routes/userRoutes.js");
+const administratorRoutes = require("./src/routes/administratorRoutes.js");
 const wordRoutes = require("./src/routes/wordRoutes.js");
 const modelRoutes = require("./src/routes/modelRoutes.js");
-const notificationRoutes = require("./src/routes/notificationRoutes.js");
 const mlRoutes = require("./src/routes/mlRoutes.js"); // ML service routes (internal)
 const categoryRoutes = require("./src/routes/categoryRoutes.js");
 const activityLogRoutes = require("./src/routes/activityLogRoutes.js");
@@ -62,10 +61,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // route setup
 app.use("/api/auth", authLimiter, authRoutes);
-app.use("/api/users", userRoutes);
+app.use("/api/administrators", administratorRoutes);
 app.use("/api/words", wordRoutes);
 app.use("/api/models", modelRoutes);
-app.use("/api/notifications", notificationRoutes);
 app.use("/api/ml", mlRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/activity-logs", activityLogRoutes);

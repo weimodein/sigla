@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import {
-  getAllUsers,
-  getDeactivatedUsers,
-  getDeletedUsers,
-  getUserStats,
-  deactivateUser,
-  reactivateUser,
-  deleteUser,
-  updateUser,
-  createUser,
-} from "../../api/userApi.js";
+  getAllAdministrators,
+  getDeactivatedAdministrators,
+  getDeletedAdministrators,
+  getAdministratorStats,
+  deactivateAdministrator,
+  reactivateAdministrator,
+  deleteAdministrator,
+  updateAdministrator,
+  createAdministrator,
+} from "../../api/administratorApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
   Users,
@@ -313,7 +313,7 @@ const ManageAdministrators = () => {
   // ── Fetch data ──────────────────────────────────────────────
   const fetchStats = async () => {
     try {
-      const data = await getUserStats();
+      const data = await getAdministratorStats();
       setStats(data);
     } catch {
       // non-blocking
@@ -324,14 +324,14 @@ const ManageAdministrators = () => {
     setLoading(true);
     try {
       if (activeTab === "all") {
-        const data = await getAllUsers({ search: debouncedSearch, limit: 500 });
-        setAdmins(data.users || []);
+        const data = await getAllAdministrators({ search: debouncedSearch, limit: 500 });
+        setAdmins(data.administrators || []);
       } else if (activeTab === "deactivated") {
-        const data = await getDeactivatedUsers();
-        setAdmins(data.users || []);
+        const data = await getDeactivatedAdministrators();
+        setAdmins(data.administrators || []);
       } else if (activeTab === "deleted") {
-        const data = await getDeletedUsers();
-        setAdmins(data.users || []);
+        const data = await getDeletedAdministrators();
+        setAdmins(data.administrators || []);
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to load administrators");
@@ -408,7 +408,7 @@ const ManageAdministrators = () => {
   const confirmCreateAdmin = async () => {
     setActionLoading(true);
     try {
-      await createUser({
+      await createAdministrator({
         username: createForm.username.trim(),
         password: createForm.password,
       });
@@ -430,7 +430,7 @@ const ManageAdministrators = () => {
       return;
     setActionLoading(true);
     try {
-      await deactivateUser(id);
+      await deactivateAdministrator(id);
       showSuccess("Administrator deactivated.");
       fetchStats();
       fetchTabData();
@@ -444,7 +444,7 @@ const ManageAdministrators = () => {
   const handleReactivate = async (id) => {
     setActionLoading(true);
     try {
-      await reactivateUser(id);
+      await reactivateAdministrator(id);
       showSuccess("Administrator reactivated successfully.");
       fetchStats();
       fetchTabData();
@@ -460,7 +460,7 @@ const ManageAdministrators = () => {
       return;
     setActionLoading(true);
     try {
-      await deleteUser(id);
+      await deleteAdministrator(id);
       showSuccess("Administrator permanently deleted");
       fetchStats();
       fetchTabData();
@@ -497,7 +497,7 @@ const ManageAdministrators = () => {
         email: editForm.email,
       };
       if (editForm.password) payload.password = editForm.password;
-      await updateUser(editModal.id, payload);
+      await updateAdministrator(editModal.id, payload);
       showSuccess("Administrator updated successfully");
       setEditModal(null);
       fetchTabData();

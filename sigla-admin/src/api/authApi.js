@@ -67,18 +67,18 @@ export const resendCode = async (email, type) => {
 // ── Verified email add/change (authenticated) ─────────────────
 // Sends a 6-digit code to the NEW email being added/changed.
 export const requestEmailCode = async (email) => {
-  const response = await api.post("/users/email/request-code", { email });
+  const response = await api.post("/administrators/email/request-code", { email });
   return response.data;
 };
 
 export const verifyEmailCode = async (email, code) => {
-  const response = await api.post("/users/email/verify", { email, code });
+  const response = await api.post("/administrators/email/verify", { email, code });
   return response.data;
 };
 
 // Finish forced first-login onboarding (email must already be linked).
 export const completeSetup = async ({ username, password }) => {
-  const response = await api.post("/users/complete-setup", { username, password });
+  const response = await api.post("/administrators/complete-setup", { username, password });
   return response.data;
 };
 

@@ -63,7 +63,7 @@ const createCategory = async (req, res) => {
     });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "added_category",
       target_type: "category",
       target_id: category.id,
@@ -135,7 +135,7 @@ const updateCategory = async (req, res) => {
     await t.commit();
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "updated_category",
       target_type: "category",
       target_id: category.id,
@@ -177,7 +177,7 @@ const deleteCategory = async (req, res) => {
     await category.destroy();
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "deleted_category",
       target_type: "category",
       target_id: deletedId,

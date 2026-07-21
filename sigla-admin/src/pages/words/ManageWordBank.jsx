@@ -1219,8 +1219,8 @@ const ManageWordBank = () => {
               <input
                 type="text"
                 value={addForm.label}
-                onChange={(e) => setAddForm({ ...addForm, label: e.target.value })}
-                placeholder="e.g. Hello"
+                onChange={(e) => setAddForm({ ...addForm, label: e.target.value.toUpperCase() })}
+                placeholder="e.g. HELLO"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
@@ -1251,8 +1251,10 @@ const ManageWordBank = () => {
               <input
                 type="text"
                 value={addForm.filipino_translation}
-                onChange={(e) => setAddForm({ ...addForm, filipino_translation: e.target.value })}
-                placeholder="e.g. Kumusta"
+                onChange={(e) =>
+                  setAddForm({ ...addForm, filipino_translation: e.target.value.toUpperCase() })
+                }
+                placeholder="e.g. KUMUSTA"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
@@ -1286,7 +1288,7 @@ const ManageWordBank = () => {
               Select gesture images from your device. The system will automatically extract hand landmark
               coordinates from each image using MediaPipe. Uploaded samples are automatically marked as
               approved and count toward the activation threshold
-              (25 samples required).
+              ({motionThreshold} samples required).
             </p>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Gesture Images *</label>
@@ -1331,7 +1333,7 @@ const ManageWordBank = () => {
               <input
                 type="text"
                 value={editForm.label}
-                onChange={(e) => setEditForm({ ...editForm, label: e.target.value })}
+                onChange={(e) => setEditForm({ ...editForm, label: e.target.value.toUpperCase() })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
@@ -1361,8 +1363,10 @@ const ManageWordBank = () => {
               <input
                 type="text"
                 value={editForm.filipino_translation}
-                onChange={(e) => setEditForm({ ...editForm, filipino_translation: e.target.value })}
-                placeholder="e.g. Kumusta"
+                onChange={(e) =>
+                  setEditForm({ ...editForm, filipino_translation: e.target.value.toUpperCase() })
+                }
+                placeholder="e.g. KUMUSTA"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>

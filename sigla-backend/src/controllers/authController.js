@@ -1,7 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
-const { User, EmailVerification } = require("../models/index.js");
+const { Administrator, EmailVerification } = require("../models/index.js");
 const { sendVerificationCode } = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
 require("dotenv").config();
@@ -103,7 +103,7 @@ const login = async (req, res) => {
         .json({ message: "Email/username and password are required" });
     }
 
-    const user = await User.findOne({
+    const user = await Administrator.findOne({
       where: {
         [Op.or]: [{ email: identifier }, { username: identifier }],
       },
@@ -185,9 +185,9 @@ const login = async (req, res) => {
     // Audit sign-ins for admin and super-admin accounts.
     if (roleName === "admin" || roleName === "super_admin") {
       await logActivity({
-        user_id: user.id,
+        administrator_id: user.id,
         action: "signed_in",
-        target_type: "user",
+        target_type: "administrator",
         target_id: user.id,
         details: `${user.username} signed in`,
       });
@@ -196,7 +196,7 @@ const login = async (req, res) => {
     return res.status(200).json({
       message: "Login successful",
       token,
-      user: {
+      administrator: {
         id: user.id,
         username: user.username,
         email: user.email,
@@ -220,7 +220,7 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const user = await User.findOne({ where: { email } });
+    const user = await Administrator.findOne({ where: { email } });
     if (!user) {
       // Don't reveal if email exists
       return res
@@ -254,7 +254,7 @@ const forgotPassword = async (req, res) => {
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
     await EmailVerification.create({
-      user_id: user.id,
+      administrator_id: user.id,
       email,
       code,
       type: "password_reset",
@@ -356,7 +356,7 @@ const resetPassword = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    await User.update({ password: hashedPassword }, { where: { email } });
+    await Administrator.update({ password: hashedPassword }, { where: { email } });
 
     return res.status(200).json({ message: "Password reset successfully" });
   } catch (err) {
@@ -368,16 +368,16 @@ const resetPassword = async (req, res) => {
 // ── GET /api/auth/me ──────────────────────────────────────────
 const getMe = async (req, res) => {
   try {
-    const user = await User.findOne({
+    const administrator = await Administrator.findOne({
       where: { id: req.user.id },
       attributes: { exclude: ["password"] },
     });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!administrator) {
+      return res.status(404).json({ message: "Administrator not found" });
     }
 
-    return res.status(200).json({ user });
+    return res.status(200).json({ administrator });
   } catch (err) {
     console.error("Get me error:", err);
     return res.status(500).json({ message: "Server error" });

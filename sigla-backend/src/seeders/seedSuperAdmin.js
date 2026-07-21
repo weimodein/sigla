@@ -3,7 +3,7 @@
 // Runs automatically on server startup (see server.js). Ensures a fresh
 // deployment always has a super administrator (role_id = 2) without a
 // developer creating one by hand. Mirrors the admin-creation flow in
-// userController.createUser for field parity.
+// administratorController.createAdministrator for field parity.
 //
 // Credentials come from the environment with safe defaults:
 //   SUPER_ADMIN_USERNAME (default "superadmin")
@@ -14,14 +14,14 @@
 // administrator. Email is linked during that setup, so it starts as null.
 
 const bcrypt = require("bcrypt");
-const { User, UserSetting } = require("../models/index.js");
+const { Administrator } = require("../models/index.js");
 
 const SUPER_ADMIN_ROLE_ID = 2;
 
 const seedSuperAdmin = async () => {
   try {
     // Never create a second super admin.
-    const existing = await User.findOne({
+    const existing = await Administrator.findOne({
       where: { role_id: SUPER_ADMIN_ROLE_ID },
     });
     if (existing) {
@@ -35,7 +35,7 @@ const seedSuperAdmin = async () => {
     const password = process.env.SUPER_ADMIN_PASSWORD || "ChangeMe!123";
 
     // Guard against colliding with an existing non-super account (username is unique).
-    const usernameTaken = await User.findOne({ where: { username } });
+    const usernameTaken = await Administrator.findOne({ where: { username } });
     if (usernameTaken) {
       console.warn(
         `Super admin seed: username "${username}" is already taken by a non-super account — skipped. ` +
@@ -46,7 +46,7 @@ const seedSuperAdmin = async () => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
+    const user = await Administrator.create({
       username,
       email: null, // linked during first-login setup
       password: hashedPassword,
@@ -55,9 +55,6 @@ const seedSuperAdmin = async () => {
       // Force first-login onboarding (link verified email + change credentials).
       must_complete_setup: true,
     });
-
-    // Default settings row, matching userController.createUser.
-    await UserSetting.create({ user_id: user.id });
 
     console.log(
       `Super admin seed: created super administrator "${username}". ` +

@@ -58,7 +58,7 @@ const actionLabel = (a) =>
 const ACTION_OPTIONS = Object.keys(ACTION_META);
 
 const TARGET_OPTIONS = [
-  { value: "user", label: "Administrator" },
+  { value: "administrator", label: "Administrator" },
   { value: "word", label: "Word" },
   { value: "model", label: "Model" },
   { value: "category", label: "Category" },
@@ -398,7 +398,7 @@ const ActivityLogs = () => {
                     style={{ borderTop: `1px solid ${C.border}` }}
                   >
                     <td className="px-5 py-3.5 font-semibold" style={{ color: C.text }}>
-                      {log.user?.username || log.user?.name || "System"}
+                      {log.administrator?.username || log.administrator?.name || "System"}
                     </td>
                     <td className="px-5 py-3.5">
                       <ActionBadge action={log.action} />

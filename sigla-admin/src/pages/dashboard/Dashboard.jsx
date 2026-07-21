@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getUserStats } from "../../api/userApi.js";
+import { getAdministratorStats } from "../../api/administratorApi.js";
 import { getWordStats } from "../../api/wordApi.js";
 import { getAllModels, getModelStats } from "../../api/modelApi.js";
 import { getCategories } from "../../api/categoryApi.js";
@@ -44,7 +44,8 @@ const formatDate = (dateStr) =>
       })
     : "—";
 
-// ── Stat Card ──
+// ── Stat Card ── colored icon circle (left) + label + value, matching the
+// Manage Administrators cards.
 const StatCard = ({ title, value, icon: Icon, color, onClick }) => (
   <div
     className="dash-stat-card flex items-center gap-4 min-w-0"
@@ -107,7 +108,7 @@ const Dashboard = () => {
     const fetchAll = async () => {
       try {
         const [users, words, models, modelsAll, cats, activity] = await Promise.all([
-          getUserStats(),
+          getAdministratorStats(),
           getWordStats(),
           getModelStats(),
           getAllModels(),
@@ -215,9 +216,9 @@ const Dashboard = () => {
         ) : (
           <StatCard title="Account Created" value={formatDate(user?.created_at)} icon={CalendarDays} color="bg-blue-900" />
         )}
-        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800"    onClick={() => navigate("/word_bank")} />
-        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700"    onClick={() => navigate("/word_bank")} />
-        <StatCard title="Total Categories"    value={categoryCount}            icon={Tag}           color="bg-yellow-500"  onClick={() => navigate("/categories")} />
+        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800"   onClick={() => navigate("/word_bank")} />
+        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700"   onClick={() => navigate("/word_bank")} />
+        <StatCard title="Total Categories"    value={categoryCount}            icon={Tag}           color="bg-yellow-500" onClick={() => navigate("/categories")} />
       </div>
 
       {/* ── Model accuracy by version ── */}

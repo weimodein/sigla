@@ -13,7 +13,7 @@ const ActivityLog = sequelize.define(
     },
     // The administrator who performed the action. Nullable so the trail
     // survives even if the actor account is later deleted.
-    user_id: {
+    administrator_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },

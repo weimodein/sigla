@@ -289,7 +289,7 @@ const AdministratorAccount = () => {
     }
     setProfileLoading(true);
     try {
-      await api.put(`/users/${user.id}`, { username: profileForm.username.trim() });
+      await api.put(`/administrators/${user.id}`, { username: profileForm.username.trim() });
       toast.success("Profile updated successfully.");
       await refreshUser();
       setIsEditing(false);

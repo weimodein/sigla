@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { User, EmailVerification } = require("../models/index.js");
+const { Administrator, EmailVerification } = require("../models/index.js");
 const { sendVerificationCode } = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
 
@@ -23,7 +23,7 @@ const getLatestVerification = async (email) =>
     order: [["created_at", "DESC"]],
   });
 
-// ── POST /api/users/email/request-code ────────────────────────
+// ── POST /api/administrators/email/request-code ────────────────────────
 // Authenticated. Sends a 6-digit code to the NEW email the caller wants to
 // add/link, proving they control that address before it's saved.
 const requestEmailCode = async (req, res) => {
@@ -39,7 +39,7 @@ const requestEmailCode = async (req, res) => {
     }
 
     // Reject if the email is already linked to a different account.
-    const existing = await User.findOne({ where: { email } });
+    const existing = await Administrator.findOne({ where: { email } });
     if (existing && existing.id !== req.user.id) {
       return res.status(409).json({ message: "Email already in use" });
     }
@@ -72,7 +72,7 @@ const requestEmailCode = async (req, res) => {
 
     const code = generateCode();
     await EmailVerification.create({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       email,
       code,
       type: TYPE,
@@ -93,7 +93,7 @@ const requestEmailCode = async (req, res) => {
   }
 };
 
-// ── POST /api/users/email/verify ──────────────────────────────
+// ── POST /api/administrators/email/verify ──────────────────────────────
 // Authenticated. Verifies the 6-digit code and links the email to the caller.
 const verifyEmailCode = async (req, res) => {
   try {
@@ -110,7 +110,7 @@ const verifyEmailCode = async (req, res) => {
         .json({ message: "Invalid or expired verification code" });
     }
     // The code must belong to the caller's own request.
-    if (record.user_id !== req.user.id) {
+    if (record.administrator_id !== req.user.id) {
       return res.status(403).json({ message: "This code is not for your account" });
     }
 
@@ -135,18 +135,18 @@ const verifyEmailCode = async (req, res) => {
     }
 
     // Correct — re-check uniqueness at commit time, then link the email.
-    const taken = await User.findOne({ where: { email } });
+    const taken = await Administrator.findOne({ where: { email } });
     if (taken && taken.id !== req.user.id) {
       return res.status(409).json({ message: "Email already in use" });
     }
 
     await record.update({ is_used: true });
-    await User.update({ email }, { where: { id: req.user.id } });
+    await Administrator.update({ email }, { where: { id: req.user.id } });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "updated_admin",
-      target_type: "user",
+      target_type: "administrator",
       target_id: req.user.id,
       details: "Linked/updated own email address (verified)",
     });

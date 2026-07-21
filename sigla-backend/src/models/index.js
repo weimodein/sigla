@@ -1,57 +1,39 @@
-const User = require("./User.js");
+const Administrator = require("./Administrator.js");
 const EmailVerification = require("./EmailVerification.js");
 const Word = require("./Word.js");
 const GestureSample = require("./GestureSample.js");
 const ModelVersion = require("./ModelVersion.js");
-const Notification = require("./Notification.js");
-const Report = require("./Report.js");
-const UserSetting = require("./UserSetting.js");
 const Category = require("./Category.js");
 const ActivityLog = require("./ActivityLog.js");
 
 // ── Associations ──────────────────────────────────────────────
 
-// EmailVerification belongs to User
-EmailVerification.belongsTo(User, { foreignKey: "user_id", as: "user" });
+// EmailVerification belongs to Administrator
+EmailVerification.belongsTo(Administrator, { foreignKey: "administrator_id", as: "administrator" });
 
-// Word belongs to User (submitted_by)
-Word.belongsTo(User, { foreignKey: "submitted_by", as: "submitter" });
-Word.belongsTo(User, { foreignKey: "reviewed_by", as: "reviewer" });
-User.hasMany(Word, { foreignKey: "submitted_by", as: "submitted_words" });
+// Word belongs to Administrator (submitted_by)
+Word.belongsTo(Administrator, { foreignKey: "submitted_by", as: "submitter" });
+Word.belongsTo(Administrator, { foreignKey: "reviewed_by", as: "reviewer" });
+Administrator.hasMany(Word, { foreignKey: "submitted_by", as: "submitted_words" });
 
-// GestureSample belongs to Word and User
+// GestureSample belongs to Word and Administrator
 GestureSample.belongsTo(Word, { foreignKey: "word_id", as: "word" });
-GestureSample.belongsTo(User, { foreignKey: "submitted_by", as: "submitter" });
+GestureSample.belongsTo(Administrator, { foreignKey: "submitted_by", as: "submitter" });
 Word.hasMany(GestureSample, { foreignKey: "word_id", as: "samples" });
 
-// ModelVersion belongs to User (trained_by)
-ModelVersion.belongsTo(User, { foreignKey: "trained_by", as: "trainer" });
+// ModelVersion belongs to Administrator (trained_by)
+ModelVersion.belongsTo(Administrator, { foreignKey: "trained_by", as: "trainer" });
 
-// Notification belongs to User
-Notification.belongsTo(User, { foreignKey: "user_id", as: "user" });
-User.hasMany(Notification, { foreignKey: "user_id", as: "notifications" });
-
-// Report belongs to User
-Report.belongsTo(User, { foreignKey: "submitted_by", as: "submitter" });
-Report.belongsTo(User, { foreignKey: "resolved_by", as: "resolver" });
-
-// UserSetting belongs to User
-UserSetting.belongsTo(User, { foreignKey: "user_id", as: "user" });
-User.hasOne(UserSetting, { foreignKey: "user_id", as: "settings" });
-
-// ActivityLog belongs to User
-ActivityLog.belongsTo(User, { foreignKey: "user_id", as: "user" });
-User.hasMany(ActivityLog, { foreignKey: "user_id", as: "logs" });
+// ActivityLog belongs to Administrator
+ActivityLog.belongsTo(Administrator, { foreignKey: "administrator_id", as: "administrator" });
+Administrator.hasMany(ActivityLog, { foreignKey: "administrator_id", as: "logs" });
 
 module.exports = {
-  User,
+  Administrator,
   EmailVerification,
   Word,
   GestureSample,
   ModelVersion,
-  Notification,
-  Report,
-  UserSetting,
   Category,
   ActivityLog,
 };

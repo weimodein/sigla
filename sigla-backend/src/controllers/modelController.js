@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const {
   ModelVersion,
   Word,
-  User,
+  Administrator,
   GestureSample,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
@@ -79,7 +79,7 @@ async function syncModelFilesToDeployed(model) {
 const getAllModels = async (req, res) => {
   try {
     const models = await ModelVersion.findAll({
-      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
+      include: [{ model: Administrator, as: "trainer", attributes: ["id", "username"] }],
       order: [["created_at", "DESC"]],
     });
 
@@ -170,7 +170,7 @@ const getModelById = async (req, res) => {
   try {
     const model = await ModelVersion.findOne({
       where: { id: req.params.id },
-      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
+      include: [{ model: Administrator, as: "trainer", attributes: ["id", "username"] }],
     });
 
     if (!model) {
@@ -225,7 +225,7 @@ const trainModel = async (req, res) => {
     });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "trained_model",
       target_type: "model",
       target_id: modelRecord.id,
@@ -280,7 +280,7 @@ const getModelStatus = async (req, res) => {
   try {
     const model = await ModelVersion.findOne({
       where: { id: req.params.id },
-      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
+      include: [{ model: Administrator, as: "trainer", attributes: ["id", "username"] }],
     });
     if (!model) return res.status(404).json({ message: "Model not found" });
     return res.status(200).json({ model });
@@ -340,7 +340,7 @@ const testModel = async (req, res) => {
 
     // Log activity
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "tested_model",
       target_type: "model",
       target_id: model.id,
@@ -458,7 +458,7 @@ const deployModel = async (req, res) => {
 
     // Log activity
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "deployed_model",
       target_type: "model",
       target_id: model.id,
@@ -523,7 +523,7 @@ const revertModel = async (req, res) => {
 
     // Log activity
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "reverted_model",
       target_type: "model",
       target_id: model.id,
@@ -563,7 +563,7 @@ const deleteModel = async (req, res) => {
     await model.destroy();
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "deleted_model",
       target_type: "model",
       target_id: deletedModelId,

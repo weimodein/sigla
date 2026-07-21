@@ -1,8 +1,7 @@
 const bcrypt = require("bcrypt");
 const { Op } = require("sequelize");
 const {
-  User,
-  UserSetting,
+  Administrator,
   Word,
   GestureSample,
 } = require("../models/index.js");
@@ -11,8 +10,8 @@ const { logActivity } = require("../utils/activityLogger.js");
 // Administrator accounts live in the users table under role_id = 1.
 const ADMIN_ROLE_ID = 1;
 
-// ── GET /api/users ────────────────────────────────────────────
-const getAllUsers = async (req, res) => {
+// ── GET /api/administrators ────────────────────────────────────────────
+const getAllAdministrators = async (req, res) => {
   try {
     const { status, search, page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
@@ -27,7 +26,7 @@ const getAllUsers = async (req, res) => {
       ];
     }
 
-    const { count, rows } = await User.findAndCountAll({
+    const { count, rows } = await Administrator.findAndCountAll({
       where,
       attributes: { exclude: ["password"] },
       limit: parseInt(limit),
@@ -39,7 +38,7 @@ const getAllUsers = async (req, res) => {
       total: count,
       page: parseInt(page),
       totalPages: Math.ceil(count / limit),
-      users: rows,
+      administrators: rows,
     });
   } catch (err) {
     console.error("Get all administrators error:", err);
@@ -47,44 +46,44 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-// ── GET /api/users/deactivated ────────────────────────────────
-const getDeactivatedUsers = async (req, res) => {
+// ── GET /api/administrators/deactivated ────────────────────────────────
+const getDeactivatedAdministrators = async (req, res) => {
   try {
-    const users = await User.findAll({
+    const administrators = await Administrator.findAll({
       where: { status: "deactivated", role_id: ADMIN_ROLE_ID },
       attributes: { exclude: ["password"] },
       order: [["deactivated_at", "DESC"]],
     });
-    return res.status(200).json({ users });
+    return res.status(200).json({ administrators });
   } catch (err) {
     console.error("Get deactivated administrators error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
 
-// ── GET /api/users/deleted ────────────────────────────────────
-const getDeletedUsers = async (req, res) => {
+// ── GET /api/administrators/deleted ────────────────────────────────────
+const getDeletedAdministrators = async (req, res) => {
   try {
-    const users = await User.findAll({
+    const administrators = await Administrator.findAll({
       where: { status: "deleted", role_id: ADMIN_ROLE_ID },
       attributes: { exclude: ["password"] },
       order: [["updated_at", "DESC"]],
     });
-    return res.status(200).json({ users });
+    return res.status(200).json({ administrators });
   } catch (err) {
     console.error("Get deleted administrators error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
 
-// ── GET /api/users/stats ──────────────────────────────────────
-const getUserStats = async (req, res) => {
+// ── GET /api/administrators/stats ──────────────────────────────────────
+const getAdministratorStats = async (req, res) => {
   try {
     const [total, active, deactivated, deleted] = await Promise.all([
-      User.count({ where: { role_id: ADMIN_ROLE_ID } }),
-      User.count({ where: { role_id: ADMIN_ROLE_ID, status: "active" } }),
-      User.count({ where: { role_id: ADMIN_ROLE_ID, status: "deactivated" } }),
-      User.count({ where: { role_id: ADMIN_ROLE_ID, status: "deleted" } }),
+      Administrator.count({ where: { role_id: ADMIN_ROLE_ID } }),
+      Administrator.count({ where: { role_id: ADMIN_ROLE_ID, status: "active" } }),
+      Administrator.count({ where: { role_id: ADMIN_ROLE_ID, status: "deactivated" } }),
+      Administrator.count({ where: { role_id: ADMIN_ROLE_ID, status: "deleted" } }),
     ]);
 
     return res.status(200).json({ total, active, deactivated, deleted });
@@ -94,30 +93,36 @@ const getUserStats = async (req, res) => {
   }
 };
 
-// ── GET /api/users/:id ────────────────────────────────────────
-const getUserById = async (req, res) => {
+// ── GET /api/administrators/:id ────────────────────────────────────────
+const getAdministratorById = async (req, res) => {
   try {
-    const user = await User.findOne({
+    // A non-numeric :id would reach Postgres as an invalid integer cast and
+    // surface as a 500. Treat it as "not found" instead.
+    if (!/^\d+$/.test(req.params.id)) {
+      return res.status(404).json({ message: "Administrator not found" });
+    }
+
+    const administrator = await Administrator.findOne({
       where: { id: req.params.id, role_id: ADMIN_ROLE_ID },
       attributes: { exclude: ["password"] },
     });
 
-    if (!user) {
+    if (!administrator) {
       return res.status(404).json({ message: "Administrator not found" });
     }
 
-    return res.status(200).json({ user });
+    return res.status(200).json({ administrator });
   } catch (err) {
     console.error("Get administrator by id error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
 
-// ── POST /api/users ───────────────────────────────────────────
+// ── POST /api/administrators ───────────────────────────────────────────
 // Super administrator creates an administrator account.
 // Only a username and password are required — the email is linked later
 // by the administrator on first login.
-const createUser = async (req, res) => {
+const createAdministrator = async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -128,14 +133,14 @@ const createUser = async (req, res) => {
     }
 
     // Check for an existing username (email is linked later, so not checked here)
-    const existing = await User.findOne({ where: { username } });
+    const existing = await Administrator.findOne({ where: { username } });
     if (existing) {
       return res.status(409).json({ message: "Username already taken" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
+    const user = await Administrator.create({
       username,
       email: null,
       password: hashedPassword,
@@ -145,20 +150,17 @@ const createUser = async (req, res) => {
       must_complete_setup: true,
     });
 
-    // Create default settings for the new administrator
-    await UserSetting.create({ user_id: user.id });
-
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "created_admin",
-      target_type: "user",
+      target_type: "administrator",
       target_id: user.id,
       details: `Created administrator account: ${user.username}`,
     });
 
     return res.status(201).json({
       message: "Administrator account created successfully",
-      user: {
+      administrator: {
         id: user.id,
         username: user.username,
         status: user.status,
@@ -170,10 +172,10 @@ const createUser = async (req, res) => {
   }
 };
 
-// ── PATCH /api/users/:id/deactivate ──────────────────────────
-const deactivateUser = async (req, res) => {
+// ── PATCH /api/administrators/:id/deactivate ──────────────────────────
+const deactivateAdministrator = async (req, res) => {
   try {
-    const user = await User.findOne({
+    const user = await Administrator.findOne({
       where: { id: req.params.id, status: "active", role_id: ADMIN_ROLE_ID },
     });
 
@@ -187,9 +189,9 @@ const deactivateUser = async (req, res) => {
     });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "deactivated_admin",
-      target_type: "user",
+      target_type: "administrator",
       target_id: user.id,
       details: `Deactivated administrator: ${user.username}`,
     });
@@ -203,10 +205,10 @@ const deactivateUser = async (req, res) => {
   }
 };
 
-// ── PATCH /api/users/:id/reactivate ──────────────────────────
-const reactivateUser = async (req, res) => {
+// ── PATCH /api/administrators/:id/reactivate ──────────────────────────
+const reactivateAdministrator = async (req, res) => {
   try {
-    const user = await User.findOne({
+    const user = await Administrator.findOne({
       where: { id: req.params.id, status: "deactivated", role_id: ADMIN_ROLE_ID },
     });
 
@@ -220,9 +222,9 @@ const reactivateUser = async (req, res) => {
     });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "reactivated_admin",
-      target_type: "user",
+      target_type: "administrator",
       target_id: user.id,
       details: `Reactivated administrator: ${user.username}`,
     });
@@ -234,13 +236,13 @@ const reactivateUser = async (req, res) => {
   }
 };
 
-// ── DELETE /api/users/:id ─────────────────────────────────────
+// ── DELETE /api/administrators/:id ─────────────────────────────────────
 // Soft delete — sets status to "deleted" to preserve activity logs.
 // Cancels the administrator's pending word submissions and detaches
 // their approved gesture samples so the dataset stays intact.
-const deleteUser = async (req, res) => {
+const deleteAdministrator = async (req, res) => {
   try {
-    const user = await User.findOne({
+    const user = await Administrator.findOne({
       where: {
         id: req.params.id,
         role_id: ADMIN_ROLE_ID,
@@ -281,9 +283,9 @@ const deleteUser = async (req, res) => {
     await user.update({ status: "deleted" });
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "deleted_admin",
-      target_type: "user",
+      target_type: "administrator",
       target_id: user.id,
       details: `Deleted administrator: ${user.username}`,
     });
@@ -298,8 +300,8 @@ const deleteUser = async (req, res) => {
   }
 };
 
-// ── PUT /api/users/:id ────────────────────────────────────────
-const updateUser = async (req, res) => {
+// ── PUT /api/administrators/:id ────────────────────────────────────────
+const updateAdministrator = async (req, res) => {
   try {
     // Note: email is intentionally NOT accepted here — it can only be changed
     // through the verified email flow (POST /users/email/request-code + verify).
@@ -319,14 +321,14 @@ const updateUser = async (req, res) => {
     const where = isSelf
       ? { id: req.params.id }
       : { id: req.params.id, role_id: ADMIN_ROLE_ID };
-    const user = await User.findOne({ where });
+    const user = await Administrator.findOne({ where });
 
     if (!user) {
       return res.status(404).json({ message: "Administrator not found" });
     }
 
     if (username && username !== user.username) {
-      const taken = await User.findOne({ where: { username } });
+      const taken = await Administrator.findOne({ where: { username } });
       if (taken) {
         return res.status(409).json({ message: "Username already taken" });
       }
@@ -350,9 +352,9 @@ const updateUser = async (req, res) => {
     await user.update(updates);
 
     await logActivity({
-      user_id: req.user.id,
+      administrator_id: req.user.id,
       action: "updated_admin",
-      target_type: "user",
+      target_type: "administrator",
       target_id: user.id,
       details: `Updated administrator account: ${user.username}${password ? " (password changed)" : ""}`,
     });
@@ -364,7 +366,7 @@ const updateUser = async (req, res) => {
   }
 };
 
-// ── POST /api/users/complete-setup ────────────────────────────
+// ── POST /api/administrators/complete-setup ────────────────────────────
 // Finishes forced first-login onboarding for the logged-in account:
 // requires that an email is already linked (email-first), then sets the new
 // username + password and clears the must_complete_setup flag.
@@ -372,7 +374,7 @@ const completeSetup = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    const user = await User.findByPk(req.user.id);
+    const user = await Administrator.findByPk(req.user.id);
     if (!user) {
       return res.status(404).json({ message: "Account not found" });
     }
@@ -403,7 +405,7 @@ const completeSetup = async (req, res) => {
 
     const trimmedUsername = username.trim();
     if (trimmedUsername !== user.username) {
-      const taken = await User.findOne({ where: { username: trimmedUsername } });
+      const taken = await Administrator.findOne({ where: { username: trimmedUsername } });
       if (taken) {
         return res.status(409).json({ message: "Username already taken" });
       }
@@ -416,9 +418,9 @@ const completeSetup = async (req, res) => {
     });
 
     await logActivity({
-      user_id: user.id,
+      administrator_id: user.id,
       action: "completed_setup",
-      target_type: "user",
+      target_type: "administrator",
       target_id: user.id,
       details: "Completed first-login account setup",
     });
@@ -431,15 +433,15 @@ const completeSetup = async (req, res) => {
 };
 
 module.exports = {
-  getAllUsers,
-  getDeactivatedUsers,
-  getDeletedUsers,
-  getUserStats,
-  getUserById,
-  createUser,
-  deactivateUser,
-  reactivateUser,
-  deleteUser,
-  updateUser,
+  getAllAdministrators,
+  getDeactivatedAdministrators,
+  getDeletedAdministrators,
+  getAdministratorStats,
+  getAdministratorById,
+  createAdministrator,
+  deactivateAdministrator,
+  reactivateAdministrator,
+  deleteAdministrator,
+  updateAdministrator,
   completeSetup,
 };

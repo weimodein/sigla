@@ -9,7 +9,7 @@ const EmailVerification = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
-    user_id: {
+    administrator_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },

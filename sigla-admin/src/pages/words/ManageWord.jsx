@@ -134,7 +134,8 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
           <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Filipino Translation</label>
           <input
             value={form.filipino_translation}
-            onChange={e => setForm(f => ({ ...f, filipino_translation: e.target.value }))}
+            onChange={e => setForm(f => ({ ...f, filipino_translation: e.target.value.toUpperCase() }))}
+            placeholder="e.g. MAGANDANG UMAGA"
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
           />
         </div>
