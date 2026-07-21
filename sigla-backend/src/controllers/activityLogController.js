@@ -43,7 +43,7 @@ const getActivityLogs = async (req, res) => {
         {
           model: Administrator,
           as: "administrator",
-          attributes: ["id", "username", "name"],
+          attributes: ["id", "username"],
           required: false,
         },
       ],

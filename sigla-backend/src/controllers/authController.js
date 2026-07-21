@@ -10,6 +10,11 @@ require("dotenv").config();
 const generateCode = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
+// 0 = super administrator, 1 = administrator. These are the only valid roles;
+// the administrators table is exclusive to admin accounts. Shared by login()
+// and getMe() so both return the same role string for a given role_id.
+const ROLE_MAP = { 0: "super_admin", 1: "admin" };
+
 // ── Helper: generate JWT ──────────────────────────────────────
 const generateToken = ({ id, role_name, status }) =>
   jwt.sign(
@@ -173,9 +178,6 @@ const login = async (req, res) => {
       });
     }
 
-    // 0 = super administrator, 1 = administrator. These are the only valid roles;
-    // the administrators table is exclusive to admin accounts.
-    const ROLE_MAP = { 0: "super_admin", 1: "admin" };
     const roleName = ROLE_MAP[user.role_id];
 
     // An unmapped role_id means corrupt data. Fail loudly rather than silently
@@ -390,7 +392,14 @@ const getMe = async (req, res) => {
       return res.status(404).json({ message: "Administrator not found" });
     }
 
-    return res.status(200).json({ administrator });
+    // The raw row carries role_id only. Map it to the same role string login()
+    // returns, so a session restored via getMe() keeps its role (and isSuper).
+    return res.status(200).json({
+      administrator: {
+        ...administrator.toJSON(),
+        role: ROLE_MAP[administrator.role_id],
+      },
+    });
   } catch (err) {
     console.error("Get me error:", err);
     return res.status(500).json({ message: "Server error" });

@@ -3,12 +3,14 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
-  User,
   Mail,
   Pencil,
   Lock,
   LogOut,
   Shield,
+  ShieldCheck,
+  Calendar,
+  Hash,
   X,
   Check,
 } from "lucide-react";
@@ -65,40 +67,55 @@ const Avatar = ({ name, size = 72 }) => (
   </div>
 );
 
-// ── Profile field (read-only row) ──
-const ProfileField = ({ icon: Icon, label, value }) => (
+// ── Read-only detail row (icon tile + label + value) ──
+const DetailRow = ({ icon: Icon, label, children, last = false }) => (
   <div
     style={{
       display: "flex",
       alignItems: "center",
       gap: "14px",
       padding: "14px 0",
-      borderBottom: `1px solid ${C.border}`,
+      borderBottom: last ? "none" : `1px solid ${C.border}`,
     }}
   >
     <div
       style={{
         width: 36,
+        minWidth: 36,
         padding: "8px",
         borderRadius: "8px",
         background: "#f3f4f6",
         color: C.muted,
         display: "flex",
-        minWidth: 36,
       }}
     >
       <Icon size={16} />
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
-      <p className="text-xs" style={{ color: C.muted }}>
+      <p className="text-xs" style={{ color: C.muted, margin: 0 }}>
         {label}
       </p>
-      <p className="text-sm font-medium" style={{ color: C.text }}>
-        {value}
-      </p>
+      <div
+        className="text-sm font-medium"
+        style={{ color: C.text, marginTop: "2px" }}
+      >
+        {children}
+      </div>
     </div>
   </div>
 );
+
+// Format a date for display, guarding against a missing/invalid value.
+const formatJoinDate = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
 
 const AdministratorAccount = () => {
   const { user, logout, refreshUser } = useAuth();
@@ -342,7 +359,8 @@ const AdministratorAccount = () => {
           alignItems: "start",
         }}
       >
-        {/* Left: Profile Information */}
+        {/* Left: Profile Information + Account Details */}
+        <div>
         {!isEditing ? (
           <div className="dash-card">
             <div className="dash-card-header">
@@ -364,9 +382,6 @@ const AdministratorAccount = () => {
                   display: "flex",
                   alignItems: "center",
                   gap: "16px",
-                  marginBottom: "40px",
-                  paddingBottom: "20px",
-                  borderBottom: `1px solid ${C.border}`,
                 }}
               >
                 <Avatar name={user?.username} />
@@ -397,19 +412,6 @@ const AdministratorAccount = () => {
                 </div>
               </div>
 
-              {/* Detail Rows */}
-              <div className="grid grid-cols-2 gap-x-6">
-                <ProfileField
-                  icon={User}
-                  label="Username"
-                  value={user?.username}
-                />
-                <ProfileField
-                  icon={Mail}
-                  label="Email"
-                  value={user?.email ? maskEmail(user.email) : "No email linked"}
-                />
-              </div>
             </div>
           </div>
         ) : (
@@ -505,6 +507,49 @@ const AdministratorAccount = () => {
             </div>
           </div>
         )}
+
+        {/* Account Details — read-only facts about this account. Sits outside
+            the edit/read ternary so it stays visible while editing. */}
+        <div className="dash-card">
+          <div className="dash-card-header">
+            <h3 className="text-base font-semibold text-gray-800">
+              Account Details
+            </h3>
+          </div>
+          <div className="dash-card-body" style={{ paddingTop: "4px", paddingBottom: "8px" }}>
+            <DetailRow icon={Calendar} label="Member since">
+              {formatJoinDate(user?.created_at)}
+            </DetailRow>
+
+            <DetailRow icon={ShieldCheck} label="Account status">
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: user?.status === "active" ? "#22c55e" : "#ef4444",
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ textTransform: "capitalize" }}>
+                  {user?.status || "—"}
+                </span>
+              </span>
+            </DetailRow>
+
+            <DetailRow icon={Shield} label="Role">
+              <span style={{ textTransform: "capitalize" }}>
+                {user?.role ? user.role.replace("_", " ") : "—"}
+              </span>
+            </DetailRow>
+
+            <DetailRow icon={Hash} label="Account ID" last>
+              {user?.id != null ? `#${user.id}` : "—"}
+            </DetailRow>
+          </div>
+        </div>
+        </div>
 
         {/* Right: Quick Actions */}
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
