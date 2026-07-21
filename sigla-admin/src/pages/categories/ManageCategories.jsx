@@ -7,7 +7,15 @@ import {
   deleteCategory,
 } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
-import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  Tag,
+  Check,
+  AlertCircle,
+} from "lucide-react";
 
 const C = {
   primary: "#1e3a8a",
@@ -16,6 +24,29 @@ const C = {
   green: "#22c55e",
   red: "#ef4444",
 };
+
+// ── Stat Card ─────────────────────────────────────────────────
+const StatCard = ({ title, value, icon: Icon, color }) => (
+  <div className="dash-stat-card flex items-center gap-4">
+    <div className={`p-3 rounded-full ${color}`}>
+      <Icon size={20} className="text-white" />
+    </div>
+    <div>
+      <p className="text-xs text-gray-500">{title}</p>
+      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
+    </div>
+  </div>
+);
+
+const SkeletonCard = () => (
+  <div className="dash-stat-card flex items-center gap-4">
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+    <div className="space-y-2 flex-1">
+      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
+    </div>
+  </div>
+);
 
 const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabel }) => {
   const [form, setForm] = useState({ name: "", description: "" });
@@ -108,6 +139,11 @@ const ManageCategories = () => {
     page * PAGE_SIZE,
   );
 
+  // Summary counts derived from the category list already in state — each row
+  // carries word_count from the API, so no extra request is needed.
+  const inUseCount = categories.filter((c) => c.word_count > 0).length;
+  const emptyCount = categories.length - inUseCount;
+
   const handleAdd = async (form) => {
     try {
       await createCategory(form);
@@ -152,7 +188,7 @@ const ManageCategories = () => {
             Manage Categories
           </h2>
           <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
-            {categories.length} category(ies)
+            Organize words into categories
           </p>
         </div>
         <button
@@ -168,6 +204,36 @@ const ManageCategories = () => {
           <Plus size={16} /> Add Category
         </button>
       </div>
+
+      {/* ── Summary cards ── */}
+      {loading ? (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <StatCard
+            title="Total Categories"
+            value={categories.length}
+            icon={Tag}
+            color="bg-blue-900"
+          />
+          <StatCard
+            title="In Use"
+            value={inUseCount}
+            icon={Check}
+            color="bg-green-500"
+          />
+          <StatCard
+            title="Empty"
+            value={emptyCount}
+            icon={AlertCircle}
+            color="bg-gray-500"
+          />
+        </div>
+      )}
 
       {/* Table */}
       <div

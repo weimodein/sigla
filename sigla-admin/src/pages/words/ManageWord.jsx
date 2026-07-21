@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AppModal from "../../components/AppModal.jsx";
 import {
   getAllWords,
+  getWordStats,
   adminAddWord,
   updateWord,
   deleteWord,
@@ -22,6 +23,9 @@ import {
   Search,
   Loader2,
   Brain,
+  Database,
+  Check,
+  Clock,
 } from "lucide-react";
 
 const C = {
@@ -34,6 +38,29 @@ const C = {
 };
 
 const PAGE_SIZE = 10;
+
+// ── Stat Card ─────────────────────────────────────────────────
+const StatCard = ({ title, value, icon: Icon, color }) => (
+  <div className="dash-stat-card flex items-center gap-4">
+    <div className={`p-3 rounded-full ${color}`}>
+      <Icon size={20} className="text-white" />
+    </div>
+    <div>
+      <p className="text-xs text-gray-500">{title}</p>
+      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
+    </div>
+  </div>
+);
+
+const SkeletonCard = () => (
+  <div className="dash-stat-card flex items-center gap-4">
+    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+    <div className="space-y-2 flex-1">
+      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
+    </div>
+  </div>
+);
 
 // ── Word Form Modal (Add or Edit) ─────────────────────────────
 const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
@@ -411,6 +438,18 @@ const ManageWord = () => {
   const [uploadWord, setUploadWord] = useState(null);
   const [demoVideoWord, setDemoVideoWord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [stats, setStats] = useState(null);
+
+  // Summary-card counts come from a separate endpoint than the table, so they
+  // are refreshed here — every mutation already routes through fetchWords().
+  const fetchStats = async () => {
+    try {
+      setStats(await getWordStats());
+    } catch {
+      // Non-blocking: the table still renders if only the cards fail.
+      setStats(null);
+    }
+  };
 
   const fetchWords = async () => {
     setLoading(true);
@@ -421,6 +460,7 @@ const ManageWord = () => {
       const data = await getAllWords(params);
       setWords(data.words || []);
       setTotal(data.total || 0);
+      fetchStats();
     } catch {
       errorToast("Failed to load words");
     } finally {
@@ -457,7 +497,7 @@ const ManageWord = () => {
             Manage Words
           </h2>
           <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
-            {total} word(s) in database
+            Add words and upload gesture samples for recognition
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -487,6 +527,42 @@ const ManageWord = () => {
           </button>
         </div>
       </div>
+
+      {/* ── Summary cards ── */}
+      {!stats ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatCard
+            title="Total Words"
+            value={stats.total}
+            icon={Database}
+            color="bg-blue-900"
+          />
+          <StatCard
+            title="Active"
+            value={stats.active}
+            icon={Check}
+            color="bg-green-500"
+          />
+          <StatCard
+            title="Ready to Activate"
+            value={stats.ready_to_activate}
+            icon={Clock}
+            color="bg-yellow-500"
+          />
+          <StatCard
+            title="Gesture Samples"
+            value={stats.total_samples}
+            icon={Film}
+            color="bg-blue-700"
+          />
+        </div>
+      )}
 
       {/* Filters */}
       <div
