@@ -1,7 +1,7 @@
 // Idempotent super-administrator seed.
 //
 // Runs automatically on server startup (see server.js). Ensures a fresh
-// deployment always has a super administrator (role_id = 2) without a
+// deployment always has a super administrator (role_id = 0) without a
 // developer creating one by hand. Mirrors the admin-creation flow in
 // administratorController.createAdministrator for field parity.
 //
@@ -16,7 +16,7 @@
 const bcrypt = require("bcrypt");
 const { Administrator } = require("../models/index.js");
 
-const SUPER_ADMIN_ROLE_ID = 2;
+const SUPER_ADMIN_ROLE_ID = 0;
 
 const seedSuperAdmin = async () => {
   try {

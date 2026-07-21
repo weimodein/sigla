@@ -9,6 +9,7 @@ const Administrator = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
+    // 0 = super administrator, 1 = administrator (the default for new accounts).
     role_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -18,10 +19,6 @@ const Administrator = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: false,
       unique: true,
-    },
-    name: {
-      type: DataTypes.STRING(100),
-      allowNull: true,
     },
     // Nullable: administrators are created with a username + password only and
     // link their email later on first login.
@@ -44,10 +41,6 @@ const Administrator = sequelize.define(
       validate: {
         isIn: [["active", "deactivated", "deleted"]],
       },
-    },
-    warning_count: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0,
     },
     deactivated_at: {
       type: DataTypes.DATE,

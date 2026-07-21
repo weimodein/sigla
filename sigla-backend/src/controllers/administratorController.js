@@ -7,7 +7,7 @@ const {
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
 
-// Administrator accounts live in the users table under role_id = 1.
+// Regular administrator accounts are role_id = 1 (0 = super administrator).
 const ADMIN_ROLE_ID = 1;
 
 // ── GET /api/administrators ────────────────────────────────────────────
@@ -305,7 +305,7 @@ const updateAdministrator = async (req, res) => {
   try {
     // Note: email is intentionally NOT accepted here — it can only be changed
     // through the verified email flow (POST /users/email/request-code + verify).
-    const { username, name, password } = req.body;
+    const { username, password } = req.body;
 
     // Any admin may edit their OWN account; only a super admin may edit others.
     const isSelf = String(req.params.id) === String(req.user.id);
@@ -316,7 +316,7 @@ const updateAdministrator = async (req, res) => {
       });
     }
 
-    // Self-edits may target a super account (role_id 2); super-edits of others
+    // Self-edits may target a super account (role_id 0); super-edits of others
     // target administrator accounts (role_id 1).
     const where = isSelf
       ? { id: req.params.id }
@@ -337,7 +337,6 @@ const updateAdministrator = async (req, res) => {
     // Password is optional on edit — only updated when a new one is provided.
     const updates = {
       username: username || user.username,
-      name: name !== undefined ? name : user.name,
     };
     if (password) {
       if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {

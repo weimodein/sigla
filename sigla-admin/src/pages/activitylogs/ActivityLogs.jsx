@@ -398,7 +398,7 @@ const ActivityLogs = () => {
                     style={{ borderTop: `1px solid ${C.border}` }}
                   >
                     <td className="px-5 py-3.5 font-semibold" style={{ color: C.text }}>
-                      {log.administrator?.username || log.administrator?.name || "System"}
+                      {log.administrator?.username || "System"}
                     </td>
                     <td className="px-5 py-3.5">
                       <ActionBadge action={log.action} />

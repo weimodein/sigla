@@ -173,8 +173,21 @@ const login = async (req, res) => {
       });
     }
 
-    const ROLE_MAP = { 1: "admin", 2: "super_admin", 3: "user" };
-    const roleName = ROLE_MAP[user.role_id] ?? "user";
+    // 0 = super administrator, 1 = administrator. These are the only valid roles;
+    // the administrators table is exclusive to admin accounts.
+    const ROLE_MAP = { 0: "super_admin", 1: "admin" };
+    const roleName = ROLE_MAP[user.role_id];
+
+    // An unmapped role_id means corrupt data. Fail loudly rather than silently
+    // downgrading the account to a role that cannot access anything.
+    if (!roleName) {
+      console.error(
+        `Login blocked: unmapped role_id ${user.role_id} for "${user.username}"`,
+      );
+      return res.status(403).json({
+        message: "Account role is invalid. Contact your administrator.",
+      });
+    }
 
     const token = generateToken({
       id: user.id,

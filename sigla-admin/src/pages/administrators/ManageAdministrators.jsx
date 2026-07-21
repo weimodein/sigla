@@ -473,7 +473,6 @@ const ManageAdministrators = () => {
 
   const handleEditOpen = (admin) => {
     setEditForm({
-      name: admin.name || "",
       username: admin.username || "",
       email: admin.email || "",
       password: "",
@@ -492,7 +491,6 @@ const ManageAdministrators = () => {
     setActionLoading(true);
     try {
       const payload = {
-        name: editForm.name,
         username: editForm.username,
         email: editForm.email,
       };
