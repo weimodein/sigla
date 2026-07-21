@@ -4,6 +4,7 @@ const { Op } = require("sequelize");
 const { Administrator, EmailVerification } = require("../models/index.js");
 const { sendVerificationCode } = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
+const { validatePassword } = require("../utils/validators.js");
 require("dotenv").config();
 
 // ── Helper: generate 6-digit code ────────────────────────────
@@ -352,11 +353,9 @@ const resetPassword = async (req, res) => {
     }
 
     // Enforce the password rule (scope §13/§21): ≥8 chars, ≥1 letter, ≥1 number.
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-      return res.status(400).json({
-        message:
-          "Password must be at least 8 characters and include a letter and a number",
-      });
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
     }
 
     const verified = await EmailVerification.findOne({

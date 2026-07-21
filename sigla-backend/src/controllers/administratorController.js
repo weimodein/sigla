@@ -6,6 +6,7 @@ const {
   GestureSample,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
+const { validatePassword, validateUsername } = require("../utils/validators.js");
 
 // Regular administrator accounts are role_id = 1 (0 = super administrator).
 const ADMIN_ROLE_ID = 1;
@@ -132,8 +133,21 @@ const createAdministrator = async (req, res) => {
       });
     }
 
+    const checkedUsername = validateUsername(username);
+    if (checkedUsername.error) {
+      return res.status(400).json({ message: checkedUsername.error });
+    }
+    const trimmedUsername = checkedUsername.value;
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
+    }
+
     // Check for an existing username (email is linked later, so not checked here)
-    const existing = await Administrator.findOne({ where: { username } });
+    const existing = await Administrator.findOne({
+      where: { username: trimmedUsername },
+    });
     if (existing) {
       return res.status(409).json({ message: "Username already taken" });
     }
@@ -141,7 +155,7 @@ const createAdministrator = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await Administrator.create({
-      username,
+      username: trimmedUsername,
       email: null,
       password: hashedPassword,
       role_id: ADMIN_ROLE_ID,
@@ -327,23 +341,32 @@ const updateAdministrator = async (req, res) => {
       return res.status(404).json({ message: "Administrator not found" });
     }
 
-    if (username && username !== user.username) {
-      const taken = await Administrator.findOne({ where: { username } });
-      if (taken) {
-        return res.status(409).json({ message: "Username already taken" });
+    // Username is optional on edit — the form may send a partial payload, in
+    // which case the existing username is kept. Validate only what was supplied.
+    let nextUsername = user.username;
+    if (username) {
+      const checkedUsername = validateUsername(username);
+      if (checkedUsername.error) {
+        return res.status(400).json({ message: checkedUsername.error });
+      }
+      nextUsername = checkedUsername.value;
+
+      if (nextUsername !== user.username) {
+        const taken = await Administrator.findOne({
+          where: { username: nextUsername },
+        });
+        if (taken) {
+          return res.status(409).json({ message: "Username already taken" });
+        }
       }
     }
 
     // Password is optional on edit — only updated when a new one is provided.
-    const updates = {
-      username: username || user.username,
-    };
+    const updates = { username: nextUsername };
     if (password) {
-      if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-        return res.status(400).json({
-          message:
-            "Password must be at least 8 characters and include a letter and a number",
-        });
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        return res.status(400).json({ message: passwordError });
       }
       updates.password = await bcrypt.hash(password, 10);
     }
@@ -395,14 +418,17 @@ const completeSetup = async (req, res) => {
         .json({ message: "New username and password are required" });
     }
 
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-      return res.status(400).json({
-        message:
-          "Password must be at least 8 characters and include a letter and a number",
-      });
+    const checkedUsername = validateUsername(username);
+    if (checkedUsername.error) {
+      return res.status(400).json({ message: checkedUsername.error });
     }
 
-    const trimmedUsername = username.trim();
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
+    }
+
+    const trimmedUsername = checkedUsername.value;
     if (trimmedUsername !== user.username) {
       const taken = await Administrator.findOne({ where: { username: trimmedUsername } });
       if (taken) {
