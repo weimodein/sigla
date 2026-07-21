@@ -2,29 +2,33 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import Sidebar from "./Sidebar.jsx";
+import { getSidebarCollapsed } from "./sidebarState.js";
 import { X } from "lucide-react";
 
 const SIDEBAR_EXPANDED  = "280px";
 const SIDEBAR_COLLAPSED = "70px";
 
 const Layout = ({ children }) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Mirrors the Sidebar's persisted state so the content margin matches the
+  // sidebar width on first paint (see components/sidebarState.js).
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(getSidebarCollapsed);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const { logout } = useAuth();
   const navigate = useNavigate();
 
-  // Keep CSS variable in sync so modals can centre themselves within the content area
+  // Keep CSS variable in sync so modals can centre themselves within the content
+  // area — seeded from the restored state, not hardcoded to expanded.
   useEffect(() => {
-    document.documentElement.style.setProperty("--sidebar-width", SIDEBAR_EXPANDED);
-  }, []);
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
+    );
+  }, [sidebarCollapsed]);
 
   const handleToggle = (collapsed) => {
     document.body.classList.add("sidebar-transitioning");
+    // --sidebar-width is updated by the effect above, which reacts to this state.
     setSidebarCollapsed(collapsed);
-    document.documentElement.style.setProperty(
-      "--sidebar-width",
-      collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED
-    );
     setTimeout(() => {
       document.body.classList.remove("sidebar-transitioning");
     }, 250);

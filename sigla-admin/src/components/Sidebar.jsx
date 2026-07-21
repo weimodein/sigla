@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { navItems } from "./navItems.js";
+import { getSidebarCollapsed, setSidebarCollapsed } from "./sidebarState.js";
 import {
   LogOut,
   PanelLeftClose,
@@ -16,7 +17,8 @@ const TEXT = "#1f2937";
 const MUTED = "#6b7280";
 
 const Sidebar = ({ onToggle, onLogout }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  // Lazy initialiser: restores the persisted width on the first render.
+  const [collapsed, setCollapsed] = useState(getSidebarCollapsed);
   const { isSuper } = useAuth();
 
   // Manage Administrators is exclusive to the super administrator.
@@ -27,6 +29,7 @@ const Sidebar = ({ onToggle, onLogout }) => {
   const handleToggle = () => {
     const next = !collapsed;
     setCollapsed(next);
+    setSidebarCollapsed(next);
     if (onToggle) onToggle(next);
   };
 
