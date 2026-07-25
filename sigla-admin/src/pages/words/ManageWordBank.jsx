@@ -354,7 +354,7 @@ const ManageWordBank = () => {
   const [editForm, setEditForm] = useState({
     label: "", description: "",
     sign_type: "FSL", category: "additional words",
-    filipino_translation: "", sample_limit: "",
+    filipino_translation: "",
   });
 
   const handleEditOpen = (word) => {
@@ -364,23 +364,14 @@ const ManageWordBank = () => {
       sign_type: word.sign_type || "FSL",
       category: word.category || "additional words",
       filipino_translation: word.filipino_translation || "",
-      sample_limit: word.sample_limit != null ? String(word.sample_limit) : "",
     });
     setModal({ type: "edit", data: word });
   };
 
   const handleEditSave = async () => {
-    const limitVal = editForm.sample_limit.trim();
-    if (limitVal !== "" && (isNaN(parseInt(limitVal)) || parseInt(limitVal) < 1)) {
-      showError("Sample limit must be a positive number or left blank for default");
-      return;
-    }
     setActionLoading(true);
     try {
-      await updateWord(editModal.id, {
-        ...editForm,
-        sample_limit: limitVal === "" ? null : parseInt(limitVal),
-      });
+      await updateWord(editModal.id, { ...editForm });
       showSuccess("Word updated successfully");
       closeModal();
       fetchWords();
@@ -699,8 +690,7 @@ const ManageWordBank = () => {
                         {word.approved_sample_count || 0}/{word.total_samples || 0} approved
                       </span>
                       {(() => {
-                        const defaultCap = 25;
-                        const limit = word.sample_limit != null ? word.sample_limit : defaultCap;
+                        const limit = 25;
                         const total = word.total_samples || 0;
                         const reached = total >= limit;
                         return (
@@ -1369,20 +1359,6 @@ const ManageWordBank = () => {
                 placeholder="e.g. KUMUSTA"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Sample Limit</label>
-              <input
-                type="number"
-                min="1"
-                value={editForm.sample_limit}
-                onChange={(e) => setEditForm({ ...editForm, sample_limit: e.target.value })}
-                placeholder={`Default: 25`}
-className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Total gesture samples to collect across all users. Each user can contribute up to 25 samples individually. Leave blank to use the default (25).
-              </p>
             </div>
             <div className="flex gap-2 pt-2">
               <button

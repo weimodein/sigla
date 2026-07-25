@@ -4,7 +4,7 @@ const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
 const requireSetupComplete = require("../middleware/requireSetupComplete.js");
-const Word = require("../models/Word.js");
+const { Word, Category } = require("../models/index.js");
 const {
   getAllWords,
   getWordStats,
@@ -38,19 +38,27 @@ const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize
 // Public route for mobile word bank
 router.get("/word-bank", async (req, res) => {
   try {
-    const words = await Word.findAll({
+    const rows = await Word.findAll({
       where: { is_active: true },
       attributes: [
         "id",
         "label",
         "description",
         "sign_type",
-        "category",
         "thumbnail_url",
         "video_url",
         "filipino_translation",
       ],
+      include: [{ model: Category, as: "category_ref", attributes: ["name"] }],
       order: [["label", "ASC"]],
+    });
+    // Emit `category` as a name string (default "additional words") — the shape
+    // the mobile app's ModelInfo expects. category_id stays internal.
+    const words = rows.map((w) => {
+      const json = w.toJSON();
+      const category = json.category_ref?.name || "additional words";
+      delete json.category_ref;
+      return { ...json, category };
     });
     res.json({ words });
   } catch (err) {

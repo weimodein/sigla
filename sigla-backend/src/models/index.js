@@ -16,6 +16,11 @@ Word.belongsTo(Administrator, { foreignKey: "submitted_by", as: "submitter" });
 Word.belongsTo(Administrator, { foreignKey: "reviewed_by", as: "reviewer" });
 Administrator.hasMany(Word, { foreignKey: "submitted_by", as: "submitted_words" });
 
+// Word belongs to Category. Aliased "category_ref" so it does not collide with
+// the flattened `category` name emitted in API responses.
+Word.belongsTo(Category, { foreignKey: "category_id", as: "category_ref" });
+Category.hasMany(Word, { foreignKey: "category_id", as: "words" });
+
 // GestureSample belongs to Word and Administrator
 GestureSample.belongsTo(Word, { foreignKey: "word_id", as: "word" });
 GestureSample.belongsTo(Administrator, { foreignKey: "submitted_by", as: "submitter" });

@@ -10,15 +10,10 @@ const getAllCategories = async (req, res) => {
       order: [["name", "ASC"]],
     });
 
-    // Attach word count per category (case-insensitive match against Word.category)
+    // Attach word count per category — a plain FK count now.
     const result = await Promise.all(
       categories.map(async (cat) => {
-        const word_count = await Word.count({
-          where: sequelize.where(
-            sequelize.fn("LOWER", sequelize.col("category")),
-            cat.name.toLowerCase(),
-          ),
-        });
+        const word_count = await Word.count({ where: { category_id: cat.id } });
         return {
           id: cat.id,
           name: cat.name,
@@ -110,17 +105,8 @@ const updateCategory = async (req, res) => {
         return res.status(409).json({ message: "Category name already exists" });
       }
 
-      // Cascade rename: update all Word.category rows that referenced the old name
-      await Word.update(
-        { category: newName },
-        {
-          where: sequelize.where(
-            sequelize.fn("LOWER", sequelize.col("category")),
-            category.name.toLowerCase(),
-          ),
-          transaction: t,
-        },
-      );
+      // No cascade needed: words reference category_id, so they follow a rename
+      // automatically. (Previously this hand-updated every Word.category row.)
     }
 
     await category.update(
@@ -158,12 +144,9 @@ const deleteCategory = async (req, res) => {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    const word_count = await Word.count({
-      where: sequelize.where(
-        sequelize.fn("LOWER", sequelize.col("category")),
-        category.name.toLowerCase(),
-      ),
-    });
+    // Friendly pre-check. The FK's ON DELETE RESTRICT enforces this at the DB
+    // level too, so the catch below still guards against a race.
+    const word_count = await Word.count({ where: { category_id: category.id } });
 
     if (word_count > 0) {
       return res.status(400).json({
@@ -186,6 +169,13 @@ const deleteCategory = async (req, res) => {
 
     return res.status(200).json({ message: "Category deleted" });
   } catch (err) {
+    // A foreign-key violation means words were attached between the check and
+    // the delete — surface the same clear message rather than a bare 500.
+    if (err.name === "SequelizeForeignKeyConstraintError") {
+      return res.status(400).json({
+        message: "Cannot delete: words are still assigned to this category",
+      });
+    }
     console.error("deleteCategory error:", err);
     return res.status(500).json({ message: "Server error" });
   }

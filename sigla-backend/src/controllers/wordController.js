@@ -6,8 +6,33 @@ const {
   Word,
   GestureSample,
   Administrator,
+  Category,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
+const { sequelize } = require("../config/db.js");
+
+// Resolve a category *name* (what the form and mobile send) to its id, or null
+// when the name is blank or matches no category. Case-insensitive, mirroring the
+// old text join. Returns the FK the words table now stores.
+const resolveCategoryId = async (name) => {
+  if (!name || !String(name).trim()) return null;
+  const cat = await Category.findOne({
+    where: sequelize.where(
+      sequelize.fn("LOWER", sequelize.col("name")),
+      String(name).trim().toLowerCase(),
+    ),
+  });
+  return cat ? cat.id : null;
+};
+
+// Flatten a Word instance (with category_ref included) to the API shape the
+// clients expect: a `category` name string, defaulting to "additional words".
+const withCategoryName = (word) => {
+  const json = typeof word.toJSON === "function" ? word.toJSON() : word;
+  const name = json.category_ref?.name || "additional words";
+  delete json.category_ref;
+  return { ...json, category: name };
+};
 
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -21,7 +46,7 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 // ── Sample caps ───────────────────────────────────────────────
 // All gestures are motion; a single flat cap/threshold applies to every word.
 const PER_USER_CAP = 25;         // max samples ONE user can contribute to a word
-const DEFAULT_SAMPLE_CAP = 25;   // total cap across all users (when no admin sample_limit)
+const DEFAULT_SAMPLE_CAP = 25;   // flat total-sample cap per word, across all users
 const ACTIVATION_THRESHOLD = 20; // approved samples needed before a word is deploy-eligible (scope §17)
 
 // ── Helper: normalize word label ──────────────────────────────
@@ -31,13 +56,11 @@ const normalizeLabel = (label) =>
     .replace(/[^\w\s]/g, "")
     .trim();
 
-// ── Helper: total cap for a word (admin-set sample_limit or default) ───
-const getSampleCap = (word) => {
-  if (word && typeof word === "object" && word.sample_limit != null) {
-    return word.sample_limit;
-  }
-  return DEFAULT_SAMPLE_CAP;
-};
+// ── Helper: total sample cap per word ─────────────────────────
+// A flat default applies to every word. (The `word` argument is kept so the
+// call sites are unchanged and a per-word cap could return later.)
+// eslint-disable-next-line no-unused-vars
+const getSampleCap = (word) => DEFAULT_SAMPLE_CAP;
 
 // ── Helper: per-user cap ──────────────────────────────────────
 const getPerUserCap = () => PER_USER_CAP;
@@ -242,7 +265,8 @@ const getAllWords = async (req, res) => {
     const where = {};
     if (status) where.status = status;
     if (sign_type) where.sign_type = sign_type;
-    if (category) where.category = category;
+    // The filter arrives as a category name; resolve it to the FK.
+    if (category) where.category_id = await resolveCategoryId(category);
     if (search) {
       where[Op.or] = [
         { label: { [Op.iLike]: `%${search}%` } },
@@ -259,6 +283,7 @@ const getAllWords = async (req, res) => {
           attributes: ["id", "username"],
         },
         { model: Administrator, as: "reviewer", attributes: ["id", "username"] },
+        { model: Category, as: "category_ref", attributes: ["name"] },
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -269,7 +294,7 @@ const getAllWords = async (req, res) => {
       total: count,
       page: parseInt(page),
       totalPages: Math.ceil(count / limit),
-      words: rows,
+      words: rows.map(withCategoryName),
     });
   } catch (err) {
     console.error("Get all words error:", err);
@@ -383,7 +408,7 @@ const submitWord = async (req, res) => {
       normalized_label: normalized,
       description: description || null,
       sign_type,
-      category: category || "additional words",
+      category_id: await resolveCategoryId(category),
       submitted_by: req.user.id,
       status: "pending",
       is_locked: false,
@@ -445,7 +470,7 @@ const adminAddWord = async (req, res) => {
       normalized_label: normalized,
       description: description || null,
       sign_type,
-      category: category || "additional words",
+      category_id: await resolveCategoryId(category),
       filipino_translation: filipino_translation || null,
       submitted_by: req.user.id,
       status: "approved",
@@ -871,7 +896,6 @@ const updateWord = async (req, res) => {
       sign_type,
       category,
       filipino_translation,
-      sample_limit,
     } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
@@ -879,35 +903,26 @@ const updateWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    // Validate sample_limit when provided
-    if (sample_limit !== undefined && sample_limit !== null) {
-      const parsed = parseInt(sample_limit);
-      if (isNaN(parsed) || parsed < 1) {
-        return res
-          .status(400)
-          .json({ message: "sample_limit must be a positive integer" });
-      }
-    }
-
     const updatedLabel = label || word.label;
     const updatedNormalized = normalizeLabel(updatedLabel);
+
+    // Only touch the category when the form supplied one; a blank/absent value
+    // leaves the existing link intact.
+    const nextCategoryId =
+      category !== undefined && category !== null && String(category).trim() !== ""
+        ? await resolveCategoryId(category)
+        : word.category_id;
 
     await word.update({
       label: updatedLabel,
       normalized_label: updatedNormalized,
       description: description ?? word.description,
       sign_type: sign_type || word.sign_type,
-      category: category || word.category,
+      category_id: nextCategoryId,
       filipino_translation:
         filipino_translation !== undefined
           ? filipino_translation
           : word.filipino_translation,
-      sample_limit:
-        sample_limit !== undefined
-          ? sample_limit === null
-            ? null
-            : parseInt(sample_limit)
-          : word.sample_limit,
     });
 
     await logActivity({
