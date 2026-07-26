@@ -112,32 +112,6 @@
                             android:visibility="gone"
                             android:fontFamily="sans-serif" />
 
-                        <!-- Confidence + gesture type badge -->
-                        <TextView
-                            android:id="@+id/tvConfidence"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="98%  [STATIC]"
-                            android:textColor="#B0D4FF"
-                            android:textSize="12sp"
-                            android:layout_marginTop="8dp"
-                            android:fontFamily="sans-serif" />
-
-                        <!-- Filipino toggle button -->
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnToggleFilipino"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="32dp"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:text="Show Filipino"
-                            android:textColor="#6AB0FF"
-                            android:textSize="11sp"
-                            android:layout_marginTop="10dp"
-                            app:strokeColor="#6AB0FF"
-                            app:cornerRadius="16dp" />
-
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -391,6 +365,25 @@
                     </LinearLayout>
 
                 </FrameLayout>
+
+                <!-- Filipino toggle. Lives here rather than inside cardResult: that card is
+                     invisible except for ~2s after each recognition, which made the toggle
+                     unreachable most of the time. -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleFilipino"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:layout_gravity="start"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="4dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="Show Filipino"
+                    android:textColor="#6AB0FF"
+                    android:textSize="11sp"
+                    app:strokeColor="#6AB0FF"
+                    app:cornerRadius="16dp" />
 
                 <!-- Green detection loader -->
                 <TextView

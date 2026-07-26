@@ -302,11 +302,10 @@ const ManageAdministrators = () => {
     confirmPassword: "",
   });
 
-  // Edit form
+  // Edit form. Username and password are the only editable fields: email is owned
+  // by the verified email-change flow, never set on an admin's behalf.
   const [editForm, setEditForm] = useState({
-    name: "",
     username: "",
-    email: "",
     password: "",
   });
 
@@ -474,13 +473,16 @@ const ManageAdministrators = () => {
   const handleEditOpen = (admin) => {
     setEditForm({
       username: admin.username || "",
-      email: admin.email || "",
       password: "",
     });
     setEditModal(admin);
   };
 
   const handleEditSave = async () => {
+    if (!editForm.username.trim()) {
+      showError("Username is required");
+      return;
+    }
     // Password is optional on edit; validate only when a new one is entered.
     if (editForm.password && !isValidPassword(editForm.password)) {
       showError(
@@ -491,8 +493,7 @@ const ManageAdministrators = () => {
     setActionLoading(true);
     try {
       const payload = {
-        username: editForm.username,
-        email: editForm.email,
+        username: editForm.username.trim(),
       };
       if (editForm.password) payload.password = editForm.password;
       await updateAdministrator(editModal.id, payload);
@@ -793,29 +794,27 @@ const ManageAdministrators = () => {
       {editModal && (
         <AppModal title="Edit Administrator" onClose={() => setEditModal(null)}>
           <div className="space-y-3">
-            {["name", "username", "email"].map((field) => (
-              <div key={field}>
-                <label
-                  className="block text-xs font-medium mb-1 capitalize"
-                  style={{ color: "#4b5563" }}
-                >
-                  {field}
-                </label>
-                <input
-                  type="text"
-                  value={editForm[field]}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, [field]: e.target.value })
-                  }
-                  className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
-                  style={{
-                    borderColor: C.border,
-                    background: C.surface,
-                    color: C.text,
-                  }}
-                />
-              </div>
-            ))}
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Username
+              </label>
+              <input
+                type="text"
+                value={editForm.username}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, username: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+            </div>
             <div>
               <label
                 className="block text-xs font-medium mb-1"

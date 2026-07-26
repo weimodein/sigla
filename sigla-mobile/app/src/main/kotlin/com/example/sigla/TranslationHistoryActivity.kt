@@ -1,12 +1,10 @@
 package com.example.sigla
 
 import android.content.Intent
-import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -253,12 +251,6 @@ class HistoryAdapter(
     companion object {
         private const val VIEW_TYPE_HEADER = 0
         private const val VIEW_TYPE_ENTRY  = 1
-
-        private fun confidenceColor(confidence: Int): Int = when {
-            confidence >= 80 -> 0xFF43A047.toInt() // green
-            confidence >= 50 -> 0xFFFFA726.toInt() // orange
-            else             -> 0xFFEF5350.toInt() // red
-        }
     }
 
     // ── ViewHolders ───────────────────────────────────────────────────────────
@@ -268,11 +260,9 @@ class HistoryAdapter(
     }
 
     class EntryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val tvWord             : TextView    = view.findViewById(R.id.tvWord)
-        val tvConfidence       : TextView    = view.findViewById(R.id.tvConfidence)
-        val tvTime             : TextView    = view.findViewById(R.id.tvTime)
-        val progressConfidence : ProgressBar = view.findViewById(R.id.progressConfidence)
-        val btnDelete          : View        = view.findViewById(R.id.btnDelete)
+        val tvWord    : TextView = view.findViewById(R.id.tvWord)
+        val tvTime    : TextView = view.findViewById(R.id.tvTime)
+        val btnDelete : View     = view.findViewById(R.id.btnDelete)
     }
 
     // ── Adapter overrides ─────────────────────────────────────────────────────
@@ -304,12 +294,8 @@ class HistoryAdapter(
                 (holder as EntryViewHolder).apply {
                     val e = item.entry
 
-                    tvWord.text       = e.word
-                    tvConfidence.text = "${e.confidence}% confidence"
-                    tvTime.text       = TranslationHistoryManager.formatTime(e.timestamp)
-
-                    progressConfidence.progress = e.confidence
-                    progressConfidence.progressTintList = ColorStateList.valueOf(confidenceColor(e.confidence))
+                    tvWord.text = e.word
+                    tvTime.text = TranslationHistoryManager.formatTime(e.timestamp)
 
                     // Delete button passes flatIndex back to the Activity
                     btnDelete.setOnClickListener { onDelete(item.flatIndex) }

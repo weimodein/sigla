@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- item_history_entry.xml
-     Row: hand icon, word + time, color-coded confidence bar, delete button.
+     Row: hand icon, word + time, delete button.
 -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -14,10 +14,15 @@
     app:strokeColor="@color/sig_border_card"
     app:cardBackgroundColor="@color/sig_surface_card">
 
+    <!-- Single-line row: icon → word → time → delete, all vertically centered.
+         The 40dp icon sets the row height. -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="14dp">
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp">
 
         <FrameLayout
             android:id="@+id/flIconBox"
@@ -25,7 +30,8 @@
             android:layout_height="40dp"
             android:background="@drawable/bg_icon_circle_blue_light"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent">
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
 
             <ImageView
                 android:layout_width="22dp"
@@ -46,46 +52,27 @@
             android:textColor="@color/sig_text_primary"
             android:textSize="17sp"
             android:fontFamily="@font/poppins_bold"
+            android:maxLines="1"
+            android:ellipsize="end"
             app:layout_constraintStart_toEndOf="@id/flIconBox"
-            app:layout_constraintTop_toTopOf="@id/flIconBox"
-            app:layout_constraintEnd_toStartOf="@id/tvTime" />
+            app:layout_constraintEnd_toStartOf="@id/tvTime"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
 
         <TextView
             android:id="@+id/tvTime"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
             android:text="11:02 PM"
             android:textColor="@color/sig_text_secondary"
             android:textSize="11sp"
             android:fontFamily="@font/poppins_regular"
+            app:layout_constraintEnd_toStartOf="@id/btnDelete"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintBottom_toBottomOf="parent" />
 
-        <ProgressBar
-            android:id="@+id/progressConfidence"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="0dp"
-            android:layout_height="5dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginEnd="10dp"
-            android:max="100"
-            android:progressDrawable="@drawable/progress_confidence_bar"
-            app:layout_constraintStart_toStartOf="@id/tvWord"
-            app:layout_constraintTop_toBottomOf="@id/tvWord"
-            app:layout_constraintEnd_toStartOf="@id/btnDelete" />
-
-        <TextView
-            android:id="@+id/tvConfidence"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="98% confidence"
-            android:textColor="@color/sig_text_secondary"
-            android:textSize="11sp"
-            android:fontFamily="@font/poppins_regular"
-            app:layout_constraintStart_toStartOf="@id/tvWord"
-            app:layout_constraintTop_toBottomOf="@id/progressConfidence" />
-
+        <!-- Owns the right edge; tvTime anchors to its start so the two never overlap. -->
         <FrameLayout
             android:id="@+id/btnDelete"
             android:layout_width="32dp"
@@ -96,6 +83,7 @@
             android:foreground="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Delete this entry"
             app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent">
 
             <ImageView

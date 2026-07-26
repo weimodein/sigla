@@ -2,7 +2,7 @@
 <!-- activity_translation_history.xml
      Scope rules:
        - Shows list of all previously translated gestures
-       - Each entry: translated word, confidence % (color-coded bar), time detected
+       - Each entry: translated word, time detected
        - Entries grouped by date, most recent at top
        - Max 200 entries; older entries auto-removed when limit reached
        - Swipe left on entry OR tap delete button to delete individual entry

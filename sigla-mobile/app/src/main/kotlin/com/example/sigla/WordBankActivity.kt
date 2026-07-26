@@ -26,6 +26,8 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.recyclerview.widget.GridLayoutManager
 
@@ -45,7 +47,13 @@ class WordBankActivity : AppCompatActivity() {
     private lateinit var categoryGridContainer: LinearLayout
     private lateinit var rvCategoryGrid: RecyclerView
     private lateinit var gridAdapter: CategoryGridAdapter
+    private lateinit var btnDownloadAllVideos: MaterialButton
     private var isGridMode = true
+
+    // Bulk demo-video download state. The dialog reference is kept so onDestroy
+    // can dismiss it and avoid leaking the window.
+    private var downloadJob: Job? = null
+    private var downloadDialog: AlertDialog? = null
 
     private var selectedCategory = "All Categories"
     private var gridCategoryFilter = "All Categories"
@@ -94,10 +102,11 @@ class WordBankActivity : AppCompatActivity() {
         setupTopBar()
         setupSidebar()
         setupRecyclerView()
-        setupCategoryGrid() 
+        setupCategoryGrid()
         setupCategoryDropdown()
         setupSearch()
         wireListeners()
+        bindDownloadAllButton()
         showGridMode()
 
         // Initialize custom category manager
@@ -157,6 +166,7 @@ class WordBankActivity : AppCompatActivity() {
         progressLoading = findViewById(R.id.progressLoading)
         categoryGridContainer = findViewById(R.id.categoryGridContainer)
         rvCategoryGrid = findViewById(R.id.rvCategoryGrid)
+        btnDownloadAllVideos = findViewById(R.id.btnDownloadAllVideos)
     }
 
     // ── Category Grid ───────────────────────────────────────────────────────────────
@@ -343,6 +353,7 @@ class WordBankActivity : AppCompatActivity() {
                 allWords = cached
                 applyFilters()
                 refreshCategoryGrid()
+                refreshDownloadAllEnabled()
                 progressLoading.visibility = View.GONE
                 isLoading = false
                 // Download missing images in background
@@ -357,7 +368,8 @@ class WordBankActivity : AppCompatActivity() {
                     if (fresh.isNotEmpty() && fresh != allWords) {
                         allWords = fresh
                         applyFilters()
-                        refreshCategoryGrid() 
+                        refreshCategoryGrid()
+                        refreshDownloadAllEnabled()
                         // Cache the fresh data
                         ModelUpdateManager.cacheWordBank(this@WordBankActivity, fresh)
                         // Download images in background
@@ -373,6 +385,7 @@ class WordBankActivity : AppCompatActivity() {
             } finally {
                 progressLoading.visibility = View.GONE
                 isLoading = false
+                refreshDownloadAllEnabled()
                 if (isGridMode) {
                     // Re-render the grid now that loading finished; this also drives
                     // the empty-state message when there are genuinely no words.
@@ -701,6 +714,208 @@ class WordBankActivity : AppCompatActivity() {
         //    }
         //    true
         //}
+    }
+
+    // ── Bulk demo-video download ──────────────────────────────────────────────
+    // Individual videos are still tap-to-download in WordDetailActivity; this
+    // fetches every missing one in a single pass so the word bank works offline.
+    // Videos come straight from their storage URLs (no API endpoint mediates
+    // them), so this is entirely a client-side loop over the words we already hold.
+
+    private fun bindDownloadAllButton() {
+        btnDownloadAllVideos.setOnClickListener { onDownloadAllClicked() }
+        // Nothing to download until the word list arrives; refreshDownloadAllEnabled()
+        // switches it on from loadWords().
+        btnDownloadAllVideos.isEnabled = false
+    }
+
+    /**
+     * The button is live only when there are words to act on and no batch is running.
+     * Called wherever [allWords] changes, and around the batch itself.
+     */
+    private fun refreshDownloadAllEnabled() {
+        btnDownloadAllVideos.isEnabled = allWords.isNotEmpty() && downloadJob?.isActive != true
+    }
+
+    private fun onDownloadAllClicked() {
+        if (downloadJob?.isActive == true) return
+
+        if (allWords.isEmpty()) {
+            Toast.makeText(this, "Words are still loading. Please try again.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val pending = ModelUpdateManager.pendingVideoDownloads(this, allWords)
+        if (pending.isEmpty()) {
+            showAllDownloadedDialog()
+            return
+        }
+
+        if (!NetworkUtils.isOnline(this)) {
+            Toast.makeText(this, "No internet connection.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        showConfirmDownloadDialog(pending.size)
+    }
+
+    // Nothing left to fetch — offer the way back out instead of a dead end.
+    private fun showAllDownloadedDialog() {
+        val cached = ModelUpdateManager.cachedVideoCount(this, allWords)
+        if (cached == 0) {
+            Toast.makeText(this, "No demo videos are available to download.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        // Reached when nothing is pending — which covers both "everything is cached" and
+        // "the remaining words have no demo video at all", so the copy stays neutral.
+        view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Nothing left to download"
+        view.findViewById<TextView>(R.id.tvConfirmMessage).text =
+            "$cached demo video${if (cached != 1) "s are" else " is"} saved for offline use " +
+            "(${formatBytes(ModelUpdateManager.cachedVideoBytes(this, allWords))})."
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).text = "CLOSE"
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "CLEAR"
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            dialog.dismiss()
+            lifecycleScope.launch {
+                val removed = ModelUpdateManager.clearCachedVideos(this@WordBankActivity, allWords)
+                Toast.makeText(
+                    this@WordBankActivity,
+                    "Cleared $removed downloaded video${if (removed != 1) "s" else ""}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showConfirmDownloadDialog(pendingCount: Int) {
+        val metered = NetworkUtils.isMetered(this)
+
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Download all demo videos?"
+
+        // No size metadata exists for video_url, so we can only state a count here,
+        // never an estimated download size.
+        val base = "$pendingCount demo video${if (pendingCount != 1) "s" else ""} " +
+            "will be downloaded for offline use."
+        view.findViewById<TextView>(R.id.tvConfirmMessage).text = if (metered) {
+            "$base\n\nYou're on mobile data. This may use a significant amount of data — " +
+                "Wi-Fi is recommended."
+        } else {
+            base
+        }
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text =
+            if (metered) "DOWNLOAD ANYWAY" else "DOWNLOAD"
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            dialog.dismiss()
+            startBulkDownload()
+        }
+
+        dialog.show()
+    }
+
+    private fun startBulkDownload() {
+        val view = layoutInflater.inflate(R.layout.dialog_download_all_videos, null)
+        val dialog = AlertDialog.Builder(this).setView(view).setCancelable(false).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val tvCounter = view.findViewById<TextView>(R.id.tvDownloadCounter)
+        val tvCurrent = view.findViewById<TextView>(R.id.tvDownloadCurrentWord)
+        val progressBar = view.findViewById<ProgressBar>(R.id.progressDownloadAll)
+
+        view.findViewById<MaterialButton>(R.id.btnDownloadCancel).setOnClickListener {
+            downloadJob?.cancel()
+        }
+
+        dialog.show()
+        downloadDialog = dialog
+
+        downloadJob = lifecycleScope.launch {
+            btnDownloadAllVideos.isEnabled = false
+            // Written from the IO dispatcher, read on the main thread after cancellation.
+            val savedSoFar = java.util.concurrent.atomic.AtomicInteger(0)
+            try {
+                val result = ModelUpdateManager.downloadAllWordVideos(
+                    this@WordBankActivity,
+                    allWords
+                ) { progress ->
+                    savedSoFar.set(progress.completed)
+                    // onProgress arrives on the IO dispatcher — never touch views from there.
+                    runOnUiThread {
+                        val done = progress.completed + progress.failed
+                        tvCounter.text = "Downloading ${done.coerceAtMost(progress.total)} of ${progress.total}…"
+                        progressBar.max = progress.total.coerceAtLeast(1)
+                        progressBar.progress = done
+                        tvCurrent.text = progress.currentLabel?.let { "Current: $it" } ?: ""
+                    }
+                }
+
+                dismissDownloadDialog()
+                val message = if (result.failed == 0) {
+                    "${result.completed} demo video${if (result.completed != 1) "s" else ""} downloaded"
+                } else {
+                    "${result.completed} downloaded, ${result.failed} failed"
+                }
+                Toast.makeText(this@WordBankActivity, message, Toast.LENGTH_LONG).show()
+            } catch (e: CancellationException) {
+                // User pressed Cancel, or the activity went away. Completed files stay
+                // on disk, so a later run resumes rather than starting over.
+                dismissDownloadDialog()
+                // Only worth telling the user when the screen is still around; if the
+                // activity is going away the cancellation isn't something they chose.
+                if (!isFinishing && !isDestroyed) {
+                    val saved = savedSoFar.get()
+                    Toast.makeText(
+                        this@WordBankActivity,
+                        "Download cancelled — $saved video${if (saved != 1) "s" else ""} saved",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                throw e
+            } catch (e: Exception) {
+                dismissDownloadDialog()
+                Toast.makeText(this@WordBankActivity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                // Runs on the cancellation path too. Guarded because the activity may
+                // already be going away, which is what cancelled the job in the first place.
+                // Cleared first: this job is finishing, and refreshDownloadAllEnabled()
+                // consults downloadJob.isActive — which is still true inside this block.
+                downloadJob = null
+                if (!isFinishing && !isDestroyed) refreshDownloadAllEnabled()
+            }
+        }
+    }
+
+    private fun dismissDownloadDialog() {
+        downloadDialog?.let { if (it.isShowing) it.dismiss() }
+        downloadDialog = null
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L * 1024L -> "%.1f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
+        bytes >= 1024L * 1024L -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+        bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
+        else -> "$bytes B"
+    }
+
+    override fun onDestroy() {
+        // lifecycleScope already cancels downloadJob; this just prevents a leaked window.
+        dismissDownloadDialog()
+        super.onDestroy()
     }
 
     // ── Back press ────────────────────────────────────────────────────────────

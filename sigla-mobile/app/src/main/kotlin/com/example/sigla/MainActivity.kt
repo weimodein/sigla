@@ -119,6 +119,10 @@ class MainActivity : AppCompatActivity() {
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
 
+    // Last recognized label, so the Filipino toggle can re-show its translation
+    // immediately instead of waiting for the next recognition.
+    private var lastLabel: String? = null
+
     // ── Auth state ────────────────────────────────────────────────────────────
     private var isSignedIn      = false
     private var currentUsername = ""
@@ -271,13 +275,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadFilipinoTranslations() {
         lifecycleScope.launch(Dispatchers.IO) {
+            // Network first, cache as the offline fallback. The reverse order meant a
+            // translation edited in the admin panel never reached this screen: once
+            // word_bank_cache.json existed the elvis chain short-circuited and the API
+            // was never called again.
             val words: List<WordBankWord> = try {
-                // Prefer local cache — works offline
-                ModelUpdateManager.loadCachedWordBank(this@MainActivity)
-                    ?: ApiClient.get(session.token).getWordBank().body()?.words
-                    ?: emptyList()
+                val fresh = ApiClient.get(session.token).getWordBank().body()?.words
+                if (!fresh.isNullOrEmpty()) {
+                    ModelUpdateManager.cacheWordBank(this@MainActivity, fresh)
+                    fresh
+                } else {
+                    ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
+                }
             } catch (e: Exception) {
-                emptyList()
+                // Offline or server down — whatever was cached is still better than nothing.
+                Log.w(TAG, "Word bank fetch failed, using cache: ${e.message}")
+                ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
             }
 
             val map = mutableMapOf<String, String>()
@@ -287,8 +300,17 @@ class MainActivity : AppCompatActivity() {
                     map[word.label.lowercase()] = translation
                 }
             }
+            // Never trade a populated map for an empty one: this now runs on every
+            // onResume, and a failed fetch with no cache would otherwise wipe working
+            // translations until the next successful load.
+            if (map.isEmpty() && filipinoMap.isNotEmpty()) {
+                Log.w(TAG, "Word bank returned no translations; keeping ${filipinoMap.size} existing")
+                return@launch
+            }
+
             withContext(Dispatchers.Main) {
                 filipinoMap = map
+                Log.i(TAG, "Loaded ${map.size} Filipino translation(s)")
                 // Also save to history manager if needed
                 words.forEach { word ->
                     if (!word.filipino_translation.isNullOrBlank()) {
@@ -335,12 +357,12 @@ class MainActivity : AppCompatActivity() {
                 "latchedSlot0=$latchedMirrorSlot0 latchedSlot1=$latchedMirrorSlot1")
             maxHandsSeenThisGesture = 0
             runOnUiThread {
+                // Confidence is no longer shown to the user, but it is still recorded
+                // with each history entry (see historyManager.add below).
                 val pct = (result.confidence * 100).toInt()
-                val tag = if (result.isMotion) "MOTION" else "STATIC"
-                val ee  = if (result.earlyExit) " ⚡" else ""
 
+                lastLabel = result.label
                 binding.tvResult.text         = result.label.uppercase()
-                binding.tvConfidence.text     = "$pct%  [$tag]$ee"
                 binding.cardResult.visibility = View.VISIBLE
                 binding.progressBuffer.progress = 0
                 binding.tvBufferPercent.text = "0%"
@@ -352,13 +374,18 @@ class MainActivity : AppCompatActivity() {
                 historyManager.add(result.label, pct, if (result.isMotion) "motion" else "static")
 
                 // Filipino translation
-                // FIX: removed redundant `filipino?.let` — direct assignment after null check
                 val filipino = getFilipinoTranslation(result.label)
                 if (filipino != null && showFilipino) {
                     binding.tvFilipinoResult.text = filipino
                     binding.tvFilipinoResult.visibility = View.VISIBLE
                 } else {
                     binding.tvFilipinoResult.visibility = View.GONE
+                    // Distinguishes "no translation for this label" from "toggle is off" —
+                    // the missing-entry case used to fail silently.
+                    if (filipino == null) {
+                        Log.d(TAG, "No Filipino translation for '${result.label}' " +
+                            "(${filipinoMap.size} translation(s) loaded)")
+                    }
                 }
 
                 binding.cardResult.postDelayed(
@@ -422,7 +449,15 @@ class MainActivity : AppCompatActivity() {
             showFilipino = !showFilipino
             appSettings.showFilipino = showFilipino
             updateFilipinoToggleLabel()
-            if (!showFilipino) binding.tvFilipinoResult.visibility = View.GONE
+            // Re-show the current word's translation right away; waiting for the next
+            // recognition made the toggle look broken.
+            val translation = if (showFilipino) lastLabel?.let { getFilipinoTranslation(it) } else null
+            if (translation != null) {
+                binding.tvFilipinoResult.text = translation
+                binding.tvFilipinoResult.visibility = View.VISIBLE
+            } else {
+                binding.tvFilipinoResult.visibility = View.GONE
+            }
         }
 
         // Emergency — hold 2 seconds
@@ -874,6 +909,8 @@ private fun setActiveNavItem(activeId: Int) {
         super.onResume()
         refreshSidebarAuthState()
         refreshNotifBadge()
+        // Picks up translations edited in the admin panel without needing a restart.
+        loadFilipinoTranslations()
     }
 
     private fun refreshNotifBadge() {

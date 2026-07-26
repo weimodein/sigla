@@ -8,7 +8,10 @@ import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -189,45 +192,76 @@ object ModelUpdateManager {
         return "$url${sep}cb=${System.nanoTime()}"
     }
 
-    private fun downloadToFile(url: String, dest: File): Boolean {
+    /**
+     * Download [url] to [dest], retrying ONCE with a cache-buster on failure. The retry
+     * rides out a transient network blip and also defeats a stale CDN copy, mirroring the
+     * attempt list in [downloadAndVerify].
+     *
+     * [onCall] receives each attempt's [Call] so a caller can abort an in-flight download.
+     * [shouldRetry] gates the second attempt: the bulk path uses it to avoid firing a fresh
+     * request after the user cancelled, since a cancelled call fails exactly like a flaky one.
+     */
+    private fun downloadWithRetry(
+        url: String,
+        dest: File,
+        onCall: ((Call) -> Unit)? = null,
+        shouldRetry: () -> Boolean = { true }
+    ): Boolean {
+        if (downloadToFile(url, dest, onCall)) return true
+        if (!shouldRetry()) return false
+        Log.w(TAG, "Retrying ${dest.name} with cache-buster")
+        return downloadToFile(appendCacheBuster(url), dest, onCall)
+    }
+
+    /**
+     * Streams [url] into [dest] via a `.tmp` staging file, then renames it into place so a
+     * truncated download is never visible as [dest].
+     *
+     * [onCall] is invoked with the in-flight [Call] before it executes, letting a caller
+     * cancel it mid-stream. A cancelled call surfaces here as an IOException; the `finally`
+     * block removes the partial `.tmp` on every failure path.
+     */
+    private fun downloadToFile(url: String, dest: File, onCall: ((Call) -> Unit)? = null): Boolean {
+        val parent = dest.parentFile ?: run {
+            Log.e(TAG, "No parent directory for ${dest.name}")
+            return false
+        }
+        if (!parent.exists()) parent.mkdirs()
+        val tmp = File(parent, dest.name + ".tmp")
         return try {
             val request = Request.Builder().url(url).build()
-            http.newCall(request).execute().use { response ->
+            val call = http.newCall(request)
+            onCall?.invoke(call)
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.w(TAG, "Download failed for $url: ${response.code}")
-                    return false
+                    return@use false
                 }
                 val body = response.body ?: run {
                     Log.w(TAG, "Empty response body for $url")
-                    return false
+                    return@use false
                 }
-                val parent = dest.parentFile ?: run {
-                    Log.e(TAG, "No parent directory for ${dest.name}")
-                    return false
-                }
-                if (!parent.exists()) parent.mkdirs()
-                val tmp = File(parent, dest.name + ".tmp")
                 if (tmp.exists()) tmp.delete()
                 tmp.outputStream().use { out -> body.byteStream().copyTo(out) }
                 if (dest.exists()) dest.delete()
-                val renamed = tmp.renameTo(dest)
-                if (!renamed) {
-                    try {
-                        tmp.inputStream().use { input ->
-                            dest.outputStream().use { output -> input.copyTo(output) }
-                        }
-                        tmp.delete()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to copy tmp file to ${dest.name}: ${e.message}", e)
-                        tmp.delete()
-                        return false
+                if (tmp.renameTo(dest)) return@use true
+                // Cross-filesystem or existing-dest edge case: copy then clean up.
+                try {
+                    tmp.inputStream().use { input ->
+                        dest.outputStream().use { output -> input.copyTo(output) }
                     }
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to copy tmp file to ${dest.name}: ${e.message}", e)
+                    false
                 }
-                true
             }
         } catch (e: Exception) {
             Log.e(TAG, "downloadToFile error for $url: ${e.message}", e)
             false
+        } finally {
+            // Covers the cancelled-mid-stream case: never leave a partial .tmp behind.
+            if (tmp.exists()) tmp.delete()
         }
     }
 
@@ -265,8 +299,139 @@ object ModelUpdateManager {
     suspend fun downloadWordVideo(context: Context, wordId: Int, url: String): File? {
         return withContext(Dispatchers.IO) {
             val dest = File(context.filesDir, "wb_video_$wordId")
-            val ok = downloadToFile(url, dest)
+            // Same retry as the bulk path, so both behave alike on a flaky connection.
+            val ok = downloadWithRetry(url, dest)
             if (ok) dest else null
+        }
+    }
+
+    // ── Bulk demo-video download ─────────────────────────────────
+    // Same cache keys as the single tap-to-download path above, so the two
+    // interoperate: whatever the batch saves, WordDetailActivity plays offline,
+    // and whatever the batch failed to fetch stays tappable per-word.
+
+    /** Snapshot of a bulk download in flight. [currentLabel] is the word being fetched. */
+    data class VideoDownloadProgress(
+        val completed: Int,
+        val total: Int,
+        val failed: Int,
+        val currentLabel: String?
+    )
+
+    /**
+     * Words that have a demo video on the server but no cached copy on disk yet.
+     *
+     * A word whose URL cannot be resolved is excluded rather than counted as a failure:
+     * no amount of retrying fixes it, so including it would only inflate the batch total
+     * and make the completion message read as if the network misbehaved.
+     */
+    fun pendingVideoDownloads(context: Context, words: List<WordBankWord>): List<WordBankWord> =
+        words.filter {
+            !it.video_url.isNullOrBlank() &&
+                !ApiClient.resolveUrl(it.video_url).isNullOrBlank() &&
+                getLocalVideo(context, it.id) == null
+        }
+
+    /** How many of [words] already have their demo video cached locally. */
+    fun cachedVideoCount(context: Context, words: List<WordBankWord>): Int =
+        words.count { getLocalVideo(context, it.id) != null }
+
+    /** Total bytes on disk for the cached demo videos of [words]. */
+    fun cachedVideoBytes(context: Context, words: List<WordBankWord>): Long =
+        words.sumOf { getLocalVideo(context, it.id)?.length() ?: 0L }
+
+    /** Deletes every cached demo video for [words]. Returns how many files were removed. */
+    suspend fun clearCachedVideos(context: Context, words: List<WordBankWord>): Int {
+        return withContext(Dispatchers.IO) {
+            var removed = 0
+            for (word in words) {
+                val file = getLocalVideo(context, word.id) ?: continue
+                if (file.delete()) removed++ else Log.w(TAG, "Could not delete video for word ${word.id}")
+            }
+            Log.i(TAG, "Cleared $removed cached demo video(s)")
+            removed
+        }
+    }
+
+    /**
+     * Downloads every missing demo video in [words], one at a time.
+     *
+     * Already-cached files are skipped, so cancelling and re-running resumes
+     * where it left off instead of starting over. A single failure never aborts
+     * the batch — it is counted in [VideoDownloadProgress.failed] and the loop
+     * continues, matching how [downloadWordBankImages] treats thumbnails.
+     *
+     * Cancellation takes effect immediately, including mid-file: the in-flight OkHttp call
+     * is aborted so the user never waits out the 120s read timeout, and the partial `.tmp`
+     * is discarded. Whole files already on disk are kept.
+     *
+     * [onProgress] is invoked on the IO dispatcher — callers touching views must
+     * hop to the main thread themselves.
+     */
+    suspend fun downloadAllWordVideos(
+        context: Context,
+        words: List<WordBankWord>,
+        onProgress: (VideoDownloadProgress) -> Unit
+    ): VideoDownloadProgress {
+        return withContext(Dispatchers.IO) {
+            val pending = pendingVideoDownloads(context, words)
+            val total = pending.size
+            var completed = 0
+            var failed = 0
+
+            // Abort whatever download is in flight the moment this coroutine is cancelled,
+            // instead of letting copyTo run to completion on a file nobody wants anymore.
+            val inFlight = java.util.concurrent.atomic.AtomicReference<Call?>(null)
+            val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { cause ->
+                if (cause != null) inFlight.get()?.cancel()
+            }
+
+            try {
+                onProgress(VideoDownloadProgress(0, total, 0, null))
+
+                for (word in pending) {
+                    ensureActive()
+                    onProgress(VideoDownloadProgress(completed, total, failed, word.label))
+
+                    val dest = File(context.filesDir, "wb_video_${word.id}")
+                    val job = coroutineContext[Job]
+
+                    // pendingVideoDownloads guarantees this resolves; count it rather than
+                    // skipping so completed + failed always reconciles with total, even if
+                    // that filter and this loop ever drift apart.
+                    val url = ApiClient.resolveUrl(word.video_url)
+                    val ok = if (url.isNullOrBlank()) {
+                        Log.w(TAG, "Unresolvable video URL for word ${word.id} reached the batch loop")
+                        false
+                    } else {
+                        downloadWithRetry(
+                            url,
+                            dest,
+                            onCall = { call -> inFlight.set(call) },
+                            shouldRetry = { job?.isActive != false }
+                        )
+                    }
+                    inFlight.set(null)
+
+                    // Cancelling aborts the in-flight call, which reads as an ordinary
+                    // failure above. Bail out before tallying it so a cancelled word is
+                    // never counted as failed.
+                    ensureActive()
+
+                    if (ok) {
+                        completed++
+                    } else {
+                        failed++
+                        Log.w(TAG, "Demo video download failed for word ${word.id}")
+                    }
+                    onProgress(VideoDownloadProgress(completed, total, failed, word.label))
+                }
+            } finally {
+                cancelHandle?.dispose()
+            }
+
+            Log.i(TAG, "Bulk demo-video download finished: $completed ok, $failed failed of $total")
+            VideoDownloadProgress(completed, total, failed, null)
         }
     }
 
