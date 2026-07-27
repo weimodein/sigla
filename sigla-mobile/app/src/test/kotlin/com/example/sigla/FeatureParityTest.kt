@@ -125,6 +125,20 @@ class FeatureParityTest {
     }
 
     @Test
+    fun exactlySequenceLengthIsIdentity() {
+        // With exactly SEQUENCE_LENGTH frames the only possible window is [0:30],
+        // so both sides must return the input unchanged. Pinned because sigla-ml's
+        // center_on_peak_velocity has the matching `n == SEQUENCE_LENGTH` branch, and
+        // on the EXTRACTION side that branch was a real bug: clips surviving at exactly
+        // 30 frames were stored with no window ever selected (extract.py now resamples
+        // above SEQUENCE_LENGTH and passes force=True). If either side is ever changed
+        // to window a 30-frame input differently, this test fails and forces the other
+        // side to be updated in lockstep.
+        val frames = makeSequence(30, 25, pose = true, slot = 0)
+        assertEquals(25, peakIndex(frames))   // motion stays where it is
+    }
+
+    @Test
     fun velocityIgnoresWristCenteredHandTranslation() {
         // After normalize_frame the hand blocks are wrist-centred, so translating a
         // hand cannot change them. The pose block is shoulder-centred and DOES move.

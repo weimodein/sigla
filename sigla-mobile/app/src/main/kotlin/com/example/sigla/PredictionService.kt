@@ -469,6 +469,18 @@ class PredictionService(private val context: Context) {
 
     // Centre a 30-frame window on the peak-velocity frame — mirrors the training-time
     // center_on_peak_velocity() so inference sees the same temporal alignment.
+    //
+    // The `size == SEQUENCE_LENGTH` early return below is an identity, not a shortcut:
+    // with exactly 30 frames the only possible window IS [0:30]. It is kept because it
+    // is free and matches sigla-ml's default path.
+    //
+    // On the EXTRACTION side the same branch was a real bug — extract.py fed it clips
+    // that happened to survive at exactly 30 frames, so they were stored with no window
+    // ever selected and the velocity signal never consulted. That path now resamples
+    // above SEQUENCE_LENGTH first and passes force=True. Here it is harmless: the live
+    // buffer holds MIN_MOTION_FRAMES..BUFFER_CAPACITY (8..90) frames and only lands on
+    // exactly 30 transiently. Do NOT "fix" this side to match without re-checking
+    // parity — the two must agree on what a 30-frame input yields.
     private fun extractMotionWindow(frames: List<FloatArray>): List<FloatArray> {
         if (frames.size == SEQUENCE_LENGTH) return frames
 

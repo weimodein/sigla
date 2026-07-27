@@ -177,7 +177,38 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
         # articulation, so it can select a different moment of the gesture than what
         # live inference's extractMotionWindow() would pick for the same clip.
         seq_np = normalize_sequence(seq_np)
-        seq_np = center_on_peak_velocity(seq_np)
+
+        # A sequence of EXACTLY SEQUENCE_LENGTH frames cannot be windowed: the only
+        # possible window is [0:SEQUENCE_LENGTH], the clip unchanged. It used to hit
+        # center_on_peak_velocity's `n == SEQUENCE_LENGTH` early return and get stored
+        # with no window ever chosen — the velocity signal was never consulted.
+        #
+        # This is easy to land on. `sequence` is not `sample_count`: leading frames
+        # with no detected hand are dropped entirely (the `elif sequence:` above only
+        # appends once the sequence has started), so a 45-frame clip whose signer's
+        # hands enter 15 frames in survives at exactly 30. With 1-2 s source clips
+        # that was most of the dataset.
+        #
+        # Resample slightly above SEQUENCE_LENGTH so the windower always has real
+        # choice. Linear interpolation along the time axis preserves the trajectory;
+        # it only changes where frame boundaries fall.
+        if len(seq_np) == SEQUENCE_LENGTH:
+            target = SEQUENCE_LENGTH * 2
+            src = np.linspace(0, SEQUENCE_LENGTH - 1, target)
+            seq_np = np.array(
+                [np.interp(src, np.arange(SEQUENCE_LENGTH), seq_np[:, c])
+                 for c in range(seq_np.shape[1])],
+                dtype=np.float32,
+            ).T
+
+        # force=True so the shortcut can never silently fire here again, even if the
+        # resample above is ever removed or bypassed.
+        seq_np = center_on_peak_velocity(seq_np, force=True)
+
+        if len(seq_np) != SEQUENCE_LENGTH:
+            print(f"[extract] WARNING: windowed sequence is {len(seq_np)} frames, "
+                  f"expected {SEQUENCE_LENGTH} — refusing to store a wrong-width sample")
+            return None
         return seq_np.tolist()
     finally:
         # Release the capture BEFORE unlinking — on Windows the file stays

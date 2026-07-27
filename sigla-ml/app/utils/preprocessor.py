@@ -166,14 +166,32 @@ def frame_velocity(prev: np.ndarray, cur: np.ndarray) -> float:
     return float(np.sqrt(total))
 
 
-def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
+def center_on_peak_velocity(sequence: np.ndarray, force: bool = False) -> np.ndarray:
     """
     Center a motion sequence on its peak-velocity frame.
     Mirrors PredictionService.extractMotionWindow() so training and inference
     see the same temporal alignment.
+
+    `force=False` (default) keeps the `n == SEQUENCE_LENGTH` shortcut, which is
+    correct for the TRAIN path: stored rows are already exactly SEQUENCE_LENGTH
+    frames, so there is no wider sequence to choose a window from and re-running
+    the search would return the same frames at extra cost.
+
+    `force=True` is for the EXTRACTION path. It skips that shortcut so the caller
+    can never silently store an unwindowed clip. Note this alone cannot rescue an
+    n == SEQUENCE_LENGTH input — with exactly 30 frames the only possible window
+    IS [0:30] — so extract.py must also hand in MORE than SEQUENCE_LENGTH frames.
+    The flag exists so that if it ever doesn't, the behaviour is a deliberate
+    identity rather than an invisible early return.
+
+    History: extract.py used to call this without `force` while sampling
+    `min(total_frames, SEQUENCE_LENGTH * 2)` frames and dropping leading
+    hand-less frames. Any clip that landed on exactly 30 was stored with NO
+    window ever selected — the velocity signal was never consulted. With 1-2 s
+    source clips that was most of the dataset.
     """
     n = len(sequence)
-    if n == SEQUENCE_LENGTH:
+    if n == SEQUENCE_LENGTH and not force:
         return sequence
 
     # Find peak-velocity frame
