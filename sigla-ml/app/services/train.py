@@ -153,8 +153,24 @@ def train(version_number: str, model_id: int) -> dict:
         verbose=1,
     )
 
-    accuracy = max(history.history["val_accuracy"])
-    print(f"Motion model best val accuracy: {accuracy:.4f}")
+    # `max(val_accuracy)` is the best epoch on the SAME split EarlyStopping used to
+    # select the weights (restore_best_weights=True) — an optimistic maximum by
+    # construction, not a measure of generalization. Report the restored model's
+    # actual score on that split instead, and label it for what it is.
+    #
+    # For a trustworthy number run tools/cross_validate.py, which trains K folds and
+    # scores every sample while held out. Nothing in this function can produce an
+    # unbiased estimate: the split it evaluates is the split it selected on.
+    selection_best = max(history.history["val_accuracy"])
+    if len(X_val):
+        _, accuracy = model.evaluate(X_val, y_val, verbose=0)
+    else:
+        accuracy = selection_best
+
+    print(f"Motion model val accuracy (restored weights): {accuracy:.4f}")
+    print(f"  best epoch during training (optimistic, selection metric): {selection_best:.4f}")
+    print(f"  NOTE: both are measured on the model-selection split. For a")
+    print(f"        generalization estimate run: python tools/cross_validate.py")
 
     # ── Step 3: Save + convert + upload ───────────────────────
     h5_path = os.path.join(version_dir, "sign_model_motion.h5")
@@ -180,7 +196,12 @@ def train(version_number: str, model_id: int) -> dict:
         "version_number":     version_number,
         "model_id":           model_id,
         "total_classes":      total_classes,
+        # Restored-weights score on the model-selection split. Still optimistic
+        # (it is the split that selected the weights) but no longer the max over
+        # 200 epochs. tools/cross_validate.py is the trustworthy number.
         "accuracy":           round(float(accuracy), 4),
+        "selection_best_accuracy": round(float(selection_best), 4),
+        "accuracy_note":      "measured on the model-selection split; run cross_validate.py for a generalization estimate",
         "tflite_url":         motion_tflite_url,
         "h5_url":             motion_h5_url,
     }

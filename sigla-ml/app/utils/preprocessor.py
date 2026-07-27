@@ -2,7 +2,7 @@ import os
 import json
 import numpy as np
 import httpx
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -301,7 +301,8 @@ def _load_real_sequences(dataset: dict) -> dict:
     return real
 
 
-def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: int = 42):
+def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: int = 42,
+                           fold: int | None = None, n_splits: int = 5):
     """
     Prepare a motion dataset split BEFORE augmentation, so the evaluation split is
     always pure real (unaugmented) data. Augmenting first and splitting after (the
@@ -310,8 +311,21 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
     drives EarlyStopping/ReduceLROnPlateau) and test.py's reported accuracy, since
     neither was evaluating against genuinely unseen data.
 
-    Returns (X_train, y_train, X_val, y_val, label_map). label_map (index -> label) is
-    identical for both splits — computed once from every label present.
+    Two modes:
+
+    * fold=None (default) — single stratified holdout of `test_size`. This is the
+      path /train uses, unchanged.
+    * fold=k, 0 <= k < n_splits — the k-th fold of a stratified K-fold split, for
+      cross-validation via tools/cross_validate.py. Preferred at the current data
+      scale: a 3-way train/val/test split would cost ~4 real training sequences per
+      class (16.8 -> 12.6 at 206 samples / 10 classes), and training data is the
+      binding constraint on accuracy. K-fold keeps every sample in training for most
+      folds while still predicting each one exactly once while held out, and the
+      spread across folds says whether a change is real or noise.
+
+    Returns (X_train, y_train, X_val, y_val, label_map). label_map (index -> label)
+    is identical for both splits — computed once from every label present, so the
+    model's output contract does not shift between folds.
     """
     real   = _load_real_sequences(dataset)
     labels = sorted(real.keys())
@@ -334,14 +348,23 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
         sequences = real[label]
         idx = label_idx[label]
 
-        if len(sequences) >= 2:
+        if len(sequences) < 2:
+            # Too few real samples to hold any out — everything goes to training;
+            # this class just won't have a data point in the evaluation split.
+            train_seqs, val_seqs = sequences, []
+        elif fold is None:
             train_seqs, val_seqs = train_test_split(
                 sequences, test_size=test_size, random_state=random_state
             )
         else:
-            # Too few real samples to hold any out — everything goes to training;
-            # this class just won't have a data point in the evaluation split.
-            train_seqs, val_seqs = sequences, []
+            # Per-class K-fold. Splitting within each label keeps every fold
+            # stratified by construction, including for classes with too few
+            # samples to appear in every fold of a global split.
+            k = min(n_splits, len(sequences))
+            kf = KFold(n_splits=k, shuffle=True, random_state=random_state)
+            tr_idx, va_idx = list(kf.split(sequences))[fold % k]
+            train_seqs = [sequences[i] for i in tr_idx]
+            val_seqs   = [sequences[i] for i in va_idx]
 
         # Mirror-augment the TRAIN portion only (doubles it with flipped copies) —
         # same train-only rule as the noise/speed/dropout augmentation below, so the
