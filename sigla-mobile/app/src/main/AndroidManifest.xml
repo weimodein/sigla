@@ -42,7 +42,6 @@
         </activity>
 
 
-        <activity android:name=".CollectionActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".TranslationHistoryActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
         <activity android:name=".WordBankActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
         <activity android:name=".CategoryWordListActivity" android:exported="false" android:screenOrientation="portrait" />

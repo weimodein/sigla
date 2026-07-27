@@ -50,11 +50,21 @@ object ModelUpdateManager {
 
     // The motion model is the only model. hasLocalModel and hasLocalMotionModel
     // are kept as aliases so existing callers compile unchanged.
-    // The model file is the minimum requirement. Labels are optional because the
-    // app can fall back to the backend word-bank endpoint at runtime.
+    //
+    // NOTE: this checks the .tflite ONLY. Labels are NOT optional — the word-bank
+    // fallback this comment used to describe was deleted, and PredictionService now
+    // refuses to load a model without labels_motion.json. Callers that need to know
+    // the model is actually usable must check hasLocalLabels() too.
     fun hasLocalModel(context: Context): Boolean {
         return File(context.filesDir, "sign_model_motion.tflite").exists()
     }
+
+    /**
+     * The model is unusable without its label map — the .tflite emits class
+     * indices and only labels_motion.json says what those indices mean.
+     */
+    private fun hasLocalLabels(context: Context): Boolean =
+        File(context.filesDir, "labels_motion.json").exists()
 
     fun hasLocalMotionModel(context: Context): Boolean = hasLocalModel(context)
 
@@ -77,9 +87,17 @@ object ModelUpdateManager {
 
                 // model.tflite_url is the (motion) LSTM model — the only model.
                 val remoteModelUrl = model.tflite_url
-                if (remoteVersion == cachedVersion && remoteModelUrl == getCachedStaticUrl(context)) {
+                // A matching version is only "up to date" if BOTH files are present.
+                // Without the labels check, a device missing labels_motion.json (the
+                // labels download used to be optional) would report itself current
+                // forever and never recover.
+                if (remoteVersion == cachedVersion &&
+                    remoteModelUrl == getCachedStaticUrl(context) &&
+                    hasLocalModel(context) &&
+                    hasLocalLabels(context)
+                ) {
                     Log.i(TAG, "Model up-to-date (v$remoteVersion)")
-                    return@withContext hasLocalModel(context)
+                    return@withContext true
                 }
 
                 Log.i(TAG, "New model version detected: $remoteVersion (cached: $cachedVersion) — downloading")
@@ -89,37 +107,67 @@ object ModelUpdateManager {
                     Log.e(TAG, "Backend returned no model URL — check SUPABASE_URL on server")
                     return@withContext hasLocalModel(context)
                 }
-                // ── Download to a staging file, verify checksum, THEN swap in ──
-                // Never overwrite/delete the live model before we have verified
-                // replacement bytes. If verification fails we keep the last-good
-                // model, so a bad deploy or a stale CDN copy can't brick the app.
-                val modelDest = File(context.filesDir, "sign_model_motion.tflite")
-                val expectedChecksum = model.checksum
-                val verifiedModel = downloadAndVerify(remoteModelUrl, modelDest, expectedChecksum)
-                if (!verifiedModel) {
-                    Log.e(TAG, "Motion model download/verify failed — keeping existing model if any")
-                    return@withContext hasLocalModel(context)
-                }
-
-                Log.i(TAG, "Motion TFLite downloaded")
-
-                // ── Motion labels (optional for the current flow) ─────────────
-                // The app can still initialize the model and fetch labels from the
-                // backend word-bank endpoint, so a missing labels URL should not
-                // block the model download flow.
+                // ── Motion labels URL must exist before we download anything ──
+                // This file is the class-index → word map the model was trained
+                // with. There is no fallback: PredictionService refuses to load a
+                // model without it, because guessing the mapping from another
+                // source reports real predictions under the wrong words.
                 val labelsMotionUrl = model.labels_motion_url
                 if (labelsMotionUrl.isNullOrBlank()) {
-                    Log.w(TAG, "Backend returned no motion labels URL — continuing without downloading labels.json")
-                } else {
-                    val labelsMotionOk = downloadToFile(labelsMotionUrl, File(context.filesDir, "labels_motion.json"))
-                    if (!labelsMotionOk) {
-                        Log.w(TAG, "Motion labels download failed — the app will fall back to backend labels")
-                    } else {
-                        Log.i(TAG, "Motion labels downloaded")
-                    }
+                    Log.e(TAG, "Backend returned no motion labels URL — cannot use this model version")
+                    return@withContext hasLocalModel(context) && hasLocalLabels(context)
                 }
 
+                // ── Stage BOTH files, verify BOTH, then swap BOTH in ─────────
+                // The model and its labels are a matched pair: index N only means
+                // the right word if both came from the same training run. This used
+                // to swap the model into place first and download labels after, so a
+                // failed labels download left a NEW model live against OLD labels —
+                // every prediction confidently mislabelled. PredictionService's count
+                // check only catches that when the class count also changed, which is
+                // exactly the case a word-swap retrain does not produce.
+                val modelDest  = File(context.filesDir, "sign_model_motion.tflite")
+                val labelsDest = File(context.filesDir, "labels_motion.json")
+                val modelStaging  = File(context.filesDir, "sign_model_motion.tflite.staging")
+                val labelsStaging = File(context.filesDir, "labels_motion.json.staging")
+
+                val expectedChecksum = model.checksum
+                if (!downloadAndVerifyToStaging(remoteModelUrl, modelStaging, expectedChecksum)) {
+                    Log.e(TAG, "Motion model download/verify failed — keeping existing model if any")
+                    modelStaging.delete()
+                    return@withContext hasLocalModel(context)
+                }
+                Log.i(TAG, "Motion TFLite downloaded + verified (staged)")
+
+                if (!downloadToFile(labelsMotionUrl, labelsStaging)) {
+                    Log.e(TAG, "Motion labels download failed — keeping the previous model/labels pair")
+                    modelStaging.delete()
+                    labelsStaging.delete()
+                    return@withContext hasLocalModel(context) && hasLocalLabels(context)
+                }
+                Log.i(TAG, "Motion labels downloaded (staged)")
+
+                // Both verified — commit them together.
+                if (!swapIntoPlace(modelStaging, modelDest)) {
+                    Log.e(TAG, "Failed to install staged model — keeping existing pair")
+                    modelStaging.delete()
+                    labelsStaging.delete()
+                    return@withContext hasLocalModel(context) && hasLocalLabels(context)
+                }
+                if (!swapIntoPlace(labelsStaging, labelsDest)) {
+                    // The model is already live and now outranks its labels. Delete the
+                    // labels so PredictionService refuses to load rather than pairing the
+                    // new model with the old map, and so the next check re-downloads both.
+                    Log.e(TAG, "Failed to install staged labels — removing labels to force a clean retry")
+                    labelsDest.delete()
+                    labelsStaging.delete()
+                    return@withContext false
+                }
+                Log.i(TAG, "Model + labels installed together")
+
                 // ── Save version + URL only after all required files succeeded ──
+                // Recorded last, and skipped entirely on any failure above, so a
+                // half-updated device retries instead of believing it is current.
                 prefs(context).edit()
                     .putString(KEY_VERSION, remoteVersion)
                     .putString(KEY_STATIC_URL, remoteModelUrl)
@@ -134,19 +182,20 @@ object ModelUpdateManager {
     }
 
     /**
-     * Download [url] to a staging file, verify its SHA-256 against [expectedChecksum],
-     * and only then atomically replace [dest] with the verified bytes. The live
-     * [dest] is never touched unless verification succeeds, so a bad/stale download
-     * cannot destroy the last-good model.
+     * Download [url] into [staging] and verify its SHA-256 against [expectedChecksum].
+     *
+     * Leaves the verified bytes in [staging] WITHOUT installing them — the caller
+     * commits it with [swapIntoPlace] only once every file in the update has been
+     * verified, so the model and its labels always land together. No live file is
+     * touched here, so a bad or stale download cannot destroy the last-good model.
      *
      * On checksum mismatch it retries ONCE with a cache-busting query param, which
      * defeats a stale Supabase CDN copy served at the fixed deployed/ path.
      *
-     * Returns true only when [dest] now holds verified bytes. If [expectedChecksum]
-     * is blank, integrity checking is skipped (the download still goes tmp→swap).
+     * Returns true only when [staging] holds verified bytes. If [expectedChecksum]
+     * is blank, integrity checking is skipped but the download still lands in staging.
      */
-    private fun downloadAndVerify(url: String, dest: File, expectedChecksum: String?): Boolean {
-        val staging = File(dest.parent, dest.name + ".staging")
+    private fun downloadAndVerifyToStaging(url: String, staging: File, expectedChecksum: String?): Boolean {
         // Try the plain URL first, then a cache-busted URL if the checksum fails.
         val attempts = listOf(url, appendCacheBuster(url))
         for ((index, attemptUrl) in attempts.withIndex()) {
@@ -156,12 +205,12 @@ object ModelUpdateManager {
             }
             if (expectedChecksum.isNullOrBlank()) {
                 Log.w(TAG, "No checksum provided by server — skipping integrity check")
-                return swapIntoPlace(staging, dest)
+                return true
             }
             val actual = computeSha256(staging)
             if (actual == expectedChecksum) {
                 Log.i(TAG, "Checksum verified OK")
-                return swapIntoPlace(staging, dest)
+                return true
             }
             Log.e(
                 TAG,
@@ -200,7 +249,7 @@ object ModelUpdateManager {
     /**
      * Download [url] to [dest], retrying ONCE with a cache-buster on failure. The retry
      * rides out a transient network blip and also defeats a stale CDN copy, mirroring the
-     * attempt list in [downloadAndVerify].
+     * attempt list in [downloadAndVerifyToStaging].
      *
      * [onCall] receives each attempt's [Call] so a caller can abort an in-flight download.
      * [shouldRetry] gates the second attempt: the bulk path uses it to avoid firing a fresh

@@ -56,8 +56,7 @@ data class LandmarkResult(
  * (`hand_landmarker.task` 7.8 MB + `pose_landmarker_lite.task` 5.8 MB) and
  * uploads them to the GPU delegate — and retries on CPU if the GPU delegate
  * throws. On the UI thread that is a visible freeze; MainActivity builds it on
- * Dispatchers.IO for exactly this reason. (CollectionActivity still constructs
- * it in onCreate and will stutter on entry.)
+ * Dispatchers.IO for exactly this reason.
  */
 class HandLandmarkHelper(
     private val context: Context,
@@ -161,7 +160,10 @@ class HandLandmarkHelper(
         }
     }
 
-    // Synchronous — use only in IMAGE mode (CollectionActivity)
+    // Synchronous — use only in IMAGE mode. Unlike detectAsync(), this pairs pose with
+    // the SAME frame as the hands, matching sigla-ml extract.py's offline path exactly.
+    // Currently has no production caller (the on-device collection screen was removed);
+    // kept as the reference same-frame path for parity work against extract.py.
     fun detect(bitmap: Bitmap): LandmarkResult {
         val lmk = landmarker ?: return empty()
         return try {
