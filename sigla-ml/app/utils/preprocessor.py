@@ -20,15 +20,47 @@ MIRROR_AUGMENTATION_ENABLED = os.getenv("MIRROR_AUGMENTATION_ENABLED", "false").
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
 ML_API_KEY  = os.getenv("ML_API_KEY")  # Must be set in .env
 
-# Key landmark x,y indices for velocity (wrist + fingertips) — matches PredictionService KEY_XY
-_KEY_LANDMARKS = [0, 4, 8, 12, 16, 20]
-_KEY_XY = [idx for i in _KEY_LANDMARKS for idx in (i * 3, i * 3 + 1)]
-
 # Pose block layout — MUST match HandLandmarkHelper.kt (POSE_BASE / POSE_KEYPOINTS /
 # POSE_LSHOULDER / POSE_RSHOULDER). [126..146] = 7 pose keypoints x (x,y,z).
 _POSE_BASE      = 126
 _POSE_LSHOULDER = 1  # local pose-block index (mediapipe landmark 11)
 _POSE_RSHOULDER = 2  # local pose-block index (mediapipe landmark 12)
+_POSE_LWRIST    = 5  # local pose-block index (mediapipe landmark 15)
+_POSE_RWRIST    = 6  # local pose-block index (mediapipe landmark 16)
+
+# ── Velocity signal for temporal window selection ────────────────────────────
+#
+# Measured on the POSE WRIST keypoints, NOT the hand blocks.
+#
+# normalize_frame wrist-centers each hand block (landmark 0 becomes exactly
+# (0,0,0)) and divides by hand size. That deliberately removes ALL whole-hand
+# translation, leaving only finger articulation — but for most signs the
+# discriminative motion IS the hand's trajectory through space. The previous
+# signal also read only hand slot 0 and included landmark 0, so it summed a term
+# that is identically zero and went completely blind on left-hand-only sequences
+# (all data in slot 1), falling back to peak_idx = n // 2 every time.
+#
+# The pose block is normalized SHOULDER-relative (centered on the shoulder
+# midpoint, scaled by shoulder width), so pose wrists retain full arm translation
+# in a signer-scale-invariant frame — and they are anatomically left/right rather
+# than detection-slot-ordered, so slot assignment cannot blind them.
+#
+# MUST stay byte-identical to PredictionService.kt POSE_WRIST_XY / frameVelocity.
+_POSE_WRIST_XY = [
+    _POSE_BASE + _POSE_LWRIST * 3, _POSE_BASE + _POSE_LWRIST * 3 + 1,
+    _POSE_BASE + _POSE_RWRIST * 3, _POSE_BASE + _POSE_RWRIST * 3 + 1,
+]
+
+# Fallback when either frame has the 21-zero absent-pose sentinel: fingertip x,y
+# of BOTH hand slots. Landmark 0 is excluded on purpose — post-normalization it
+# is exactly 0 and contributes nothing.
+_FALLBACK_LANDMARKS = [4, 8, 12, 16, 20]
+_FALLBACK_XY = [
+    hand * 63 + idx
+    for hand in range(2)
+    for i in _FALLBACK_LANDMARKS
+    for idx in (i * 3, i * 3 + 1)
+]
 
 
 def fetch_approved_samples() -> dict:
@@ -111,6 +143,29 @@ def normalize_sequence(seq: np.ndarray) -> np.ndarray:
     return np.array([normalize_frame(f) for f in seq], dtype=np.float32)
 
 
+def _pose_present(frame: np.ndarray) -> bool:
+    """True when the frame carries a pose block (not the 21-zero sentinel)."""
+    return bool(np.any(frame[_POSE_BASE:_POSE_BASE + 21]))
+
+
+def frame_velocity(prev: np.ndarray, cur: np.ndarray) -> float:
+    """
+    L2 velocity between two consecutive NORMALIZED frames.
+
+    Uses the pose wrists when both frames have a pose block, else falls back to
+    both hands' fingertips. See the _POSE_WRIST_XY comment above for why the hand
+    blocks alone are a near-dead signal.
+
+    MUST match Kotlin frameVelocity byte-for-byte.
+    """
+    idxs = _POSE_WRIST_XY if (_pose_present(prev) and _pose_present(cur)) else _FALLBACK_XY
+    total = 0.0
+    for j in idxs:
+        d = float(cur[j]) - float(prev[j])
+        total += d * d
+    return float(np.sqrt(total))
+
+
 def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     """
     Center a motion sequence on its peak-velocity frame.
@@ -125,8 +180,7 @@ def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     peak_idx = n // 2
     peak_vel = 0.0
     for i in range(1, n):
-        diff = sequence[i][_KEY_XY] - sequence[i - 1][_KEY_XY]
-        v = float(np.sqrt(np.sum(diff ** 2)))
+        v = frame_velocity(sequence[i - 1], sequence[i])
         if v > peak_vel:
             peak_vel = v
             peak_idx = i
@@ -200,11 +254,15 @@ def _load_real_sequences(dataset: dict) -> dict:
     real = {}
     for label, samples in dataset.items():
         sequences = []
+        skipped_empty = 0
+        skipped_shape = 0
         for sample in samples:
             sequence = sample.get("sequence", [])
             if not sequence:
+                skipped_empty += 1
                 continue
             if len(sequence[0]) != FEATURE_SIZE:
+                skipped_shape += 1
                 continue
 
             seq = np.array(sequence, dtype=np.float32)
@@ -225,8 +283,21 @@ def _load_real_sequences(dataset: dict) -> dict:
             # exactly the bug that sank the FIRST attempt at this feature.
 
             sequences.append(seq)
+
+        if skipped_empty or skipped_shape:
+            print(f"[preprocessor] '{label}': skipped {skipped_empty} empty and "
+                  f"{skipped_shape} wrong-width sample(s) "
+                  f"(expected {FEATURE_SIZE} features/frame)")
+
         if sequences:
             real[label] = sequences
+        else:
+            # A dropped label is NOT a class in the trained model, but it may
+            # still exist in the word bank — and every class index at or after
+            # it shifts by one. That silently remaps predictions to neighbouring
+            # words, so it must be loud.
+            print(f"[preprocessor] WARNING: '{label}' has NO usable samples and is "
+                  f"excluded from the model's classes. Every later class index shifts.")
     return real
 
 
@@ -247,6 +318,14 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
 
     label_map = { i: label for i, label in enumerate(labels) }
     label_idx = { label: i for i, label in enumerate(labels) }
+
+    # This mapping IS the model's output contract — index i means labels[i] and
+    # nothing else. It ships as labels_motion.json and the app refuses to run a
+    # model whose class count disagrees with it. Printed so a retrain's mapping
+    # can be diffed against what a device actually has.
+    print(f"[preprocessor] {len(labels)} classes (index -> label):")
+    for i, label in label_map.items():
+        print(f"[preprocessor]   {i:>3} -> {label}  ({len(real[label])} sample(s))")
 
     X_train, y_train = [], []
     X_val,   y_val   = [], []

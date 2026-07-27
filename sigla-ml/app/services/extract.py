@@ -9,9 +9,6 @@ from mediapipe.tasks.python import vision
 
 from app.utils.preprocessor import center_on_peak_velocity, normalize_sequence, FEATURE_SIZE, SEQUENCE_LENGTH
 
-_KEY_LANDMARKS = [0, 4, 8, 12, 16, 20]
-_KEY_XY = [idx for i in _KEY_LANDMARKS for idx in (i * 3, i * 3 + 1)]
-
 # Feature layout — MUST match sigla-mobile (HandLandmarkHelper.kt):
 # [0..125]   2 hands x 21 landmarks x (x,y,z), normalized per hand block.
 # [126..146] 7 upper-body pose keypoints x (x,y,z), normalized as one block.

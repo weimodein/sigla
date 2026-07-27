@@ -243,7 +243,10 @@ def report(title: str, r: dict) -> None:
     print(f"  mean fire frame  : {r['mean_fire_frame']:.1f} / {SEQUENCE_LENGTH}")
     if r["confusions"]:
         print("  top confusions (true -> predicted):")
-        for (t, p), n in sorted(r["confusions"].items(), key=lambda kv: -kv[1])[:10]:
+        # Sort by count desc, then by label so ties are deterministic. Sorting on
+        # count alone let dict insertion order break ties differently between the
+        # legacy and fixed runs, which made identical confusion sets look different.
+        for (t, p), n in sorted(r["confusions"].items(), key=lambda kv: (-kv[1], kv[0]))[:10]:
             print(f"    {n:>3}x  {t} -> {p}")
 
 

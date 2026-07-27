@@ -18,14 +18,17 @@ private const val TAG = "HandLandmarkHelper"
 // Feature layout — MUST match sigla-ml (preprocessor.py / extract.py):
 // [0..125]   2 hands × 21 landmarks × (x,y,z), normalized per hand block.
 // [126..146] 7 upper-body pose keypoints × (x,y,z), normalized as one block.
-private const val FEATURE_SIZE = 147
-private const val POSE_BASE    = 126
+// `internal` rather than `private` so FeatureParityTest can assert these against
+// their sigla-ml counterparts — a constant edited on one side only is otherwise
+// invisible until it corrupts features at runtime.
+internal const val FEATURE_SIZE = 147
+internal const val POSE_BASE    = 126
 // MediaPipe Pose indices kept, in order: nose, Lshoulder, Rshoulder, Lelbow,
 // Relbow, Lwrist, Rwrist. MUST equal extract.py _POSE_KEYPOINTS.
-private val POSE_KEYPOINTS = intArrayOf(0, 11, 12, 13, 14, 15, 16)
+internal val POSE_KEYPOINTS = intArrayOf(0, 11, 12, 13, 14, 15, 16)
 // Local pose-block indices of the shoulders (for normalization) — match preprocessor.py.
-private const val POSE_LSHOULDER = 1
-private const val POSE_RSHOULDER = 2
+internal const val POSE_LSHOULDER = 1
+internal const val POSE_RSHOULDER = 2
 
 // Pose is detected only every Nth camera frame (hands run on every frame) and the
 // most recent pose result is merged into each hand frame. This trades ≤N frames
@@ -215,11 +218,6 @@ class HandLandmarkHelper(
                 pts[j * 2]     = lm.x()
                 pts[j * 2 + 1] = lm.y()
             }
-            // Position/scale-invariant normalization of this hand's block — MUST match
-            // sigla-ml preprocessor.normalize_frame exactly (wrist-center on landmark 0,
-            // scale by 2D wrist→landmark-9 distance, epsilon 1e-6). Only the model's
-            // `features` are normalized; drawData stays in raw frame coords for drawing.
-            normalizeHandBlock(features, base)
             drawData.add(pts)
 
             // Handedness for this slot ("Left"/"Right"), same index as the feature block.
@@ -242,8 +240,16 @@ class HandLandmarkHelper(
                     features[POSE_BASE + k * 3 + 2] = lm.z()
                 }
             }
-            normalizePoseBlock(features)
         }
+
+        // Position/scale-invariant normalization of the WHOLE frame — every present
+        // hand block plus the pose block — in one call, so the per-hand presence rule
+        // has a single definition shared with FeatureParityTest. MUST match sigla-ml
+        // preprocessor.normalize_frame exactly (wrist-center on landmark 0, scale by
+        // 2D wrist→landmark-9 distance; pose on shoulder midpoint / shoulder width;
+        // epsilon 1e-6). Only the model's `features` are normalized — drawData stays
+        // in raw frame coords for drawing.
+        normalizeFrame(features)
         return LandmarkResult(numHands, features, drawData, handLabels, handScores)
     }
 
@@ -261,6 +267,27 @@ class HandLandmarkHelper(
         poseLandmarker = null
         lastPoseResult = null
     }
+}
+
+/**
+ * Normalize a full 147-float frame in place: every PRESENT hand block, then the
+ * pose block. Absent (all-zero) blocks are left untouched as the sentinel.
+ *
+ * MUST match sigla-ml preprocessor.normalize_frame exactly. This is the single
+ * definition of the per-hand presence rule — parseResult() and FeatureParityTest
+ * both go through it, so the test exercises the real production path rather than
+ * a parallel reimplementation that could drift.
+ */
+internal fun normalizeFrame(features: FloatArray) {
+    for (hand in 0..1) {
+        val base = hand * 63
+        var present = false
+        for (k in base until base + 63) {
+            if (features[k] != 0f) { present = true; break }
+        }
+        if (present) normalizeHandBlock(features, base)
+    }
+    normalizePoseBlock(features)
 }
 
 // Normalize one hand's 63-float block in place: wrist-center (landmark 0) + scale

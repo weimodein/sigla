@@ -16,7 +16,8 @@ import kotlinx.coroutines.withContext
 // sliding 30-frame window. There is no static model or static/motion race.
 private const val TAG                    = "PredictionService"
 private const val SEQUENCE_LENGTH        = 30    // LSTM input length
-private const val FEATURE_SIZE           = 147   // 2 hands × 21 × 3 + 7 pose keypoints × 3
+// FEATURE_SIZE (147) comes from HandLandmarkHelper.kt — the file that actually
+// builds the vector. Declaring a second copy here would let the two drift apart.
 private const val MIN_MOTION_FRAMES      = 8      // begin inference once this many frames buffered
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
 private const val MOTION_THRESHOLD       = 0.60f  // min confidence to accept a prediction
@@ -39,9 +40,59 @@ private const val NO_HAND_TIMEOUT        = 6      // frames with no hands before
 private const val BUFFER_FILL_MS         = 1500L  // run inference on the full window after this long
 private const val DETECTION_COOLDOWN_MS  = 2000L  // wait before accepting the next gesture
 
-// Key landmark indices for velocity (wrist + fingertips)
-private val KEY_LANDMARKS = listOf(0, 4, 8, 12, 16, 20)
-private val KEY_XY: List<Int> = KEY_LANDMARKS.flatMap { i -> listOf(i * 3, i * 3 + 1) }
+// ── Velocity signal for temporal window selection ────────────────────────────
+//
+// Measured on the POSE WRIST keypoints, NOT the hand blocks.
+//
+// HandLandmarkHelper.normalizeHandBlock wrist-centers each hand (landmark 0
+// becomes exactly (0,0,0)) and divides by hand size, which removes ALL whole-hand
+// translation and leaves only finger articulation — while for most signs the
+// discriminative motion IS the hand's trajectory. The old signal also read only
+// hand slot 0 and included landmark 0, so it summed an identically-zero term and
+// went blind on left-hand-only sequences (data in slot 1).
+//
+// normalizePoseBlock centers on the SHOULDER MIDPOINT and scales by shoulder
+// width, so pose wrists keep full arm translation, scale-invariant, and are
+// anatomically left/right rather than detection-slot-ordered.
+//
+// MUST stay byte-identical to sigla-ml preprocessor._POSE_WRIST_XY / frame_velocity.
+// POSE_BASE/FEATURE_SIZE come from HandLandmarkHelper.kt (single source of truth).
+private const val POSE_LWRIST = 5   // local pose-block index (mediapipe landmark 15)
+private const val POSE_RWRIST = 6   // local pose-block index (mediapipe landmark 16)
+private val POSE_WRIST_XY = intArrayOf(
+    POSE_BASE + POSE_LWRIST * 3, POSE_BASE + POSE_LWRIST * 3 + 1,
+    POSE_BASE + POSE_RWRIST * 3, POSE_BASE + POSE_RWRIST * 3 + 1,
+)
+
+// Fallback when either frame has the 21-zero absent-pose sentinel: fingertip x,y
+// of BOTH hand slots. Landmark 0 is excluded — post-normalization it is exactly 0.
+private val FALLBACK_LANDMARKS = intArrayOf(4, 8, 12, 16, 20)
+private val FALLBACK_XY: IntArray = (0..1).flatMap { hand ->
+    FALLBACK_LANDMARKS.flatMap { i -> listOf(hand * 63 + i * 3, hand * 63 + i * 3 + 1) }
+}.toIntArray()
+
+private fun posePresent(frame: FloatArray): Boolean {
+    for (k in POSE_BASE until FEATURE_SIZE) if (frame[k] != 0f) return true
+    return false
+}
+
+/** L2 velocity between two consecutive NORMALIZED frames.
+ *  MUST match sigla-ml preprocessor.frame_velocity byte-for-byte. */
+internal fun frameVelocity(prev: FloatArray, cur: FloatArray): Float {
+    val idxs = if (posePresent(prev) && posePresent(cur)) POSE_WRIST_XY else FALLBACK_XY
+    var total = 0f
+    for (j in idxs) {
+        val d = cur[j] - prev[j]
+        total += d * d
+    }
+    return sqrt(total)
+}
+
+// Key landmark indices for the COLLECTING PROGRESS UI only — deliberately kept
+// separate from the model's window-selection signal above so a change to one
+// cannot silently alter the other.
+private val UI_KEY_LANDMARKS = listOf(0, 4, 8, 12, 16, 20)
+private val UI_KEY_XY: List<Int> = UI_KEY_LANDMARKS.flatMap { i -> listOf(i * 3, i * 3 + 1) }
 
 // ── Data classes ──────────────────────────────────────────────────────────────
 // isMotion is retained (always true) so existing callers compile unchanged.
@@ -431,12 +482,7 @@ class PredictionService(private val context: Context) {
         var peakIdx = frames.size / 2
         var peakVel = 0f
         for (i in 1 until frames.size) {
-            var sum = 0f
-            for (j in KEY_XY) {
-                val d = frames[i][j] - frames[i - 1][j]
-                sum += d * d
-            }
-            val v = sqrt(sum)
+            val v = frameVelocity(frames[i - 1], frames[i])
             if (v > peakVel) { peakVel = v; peakIdx = i }
         }
 
@@ -453,7 +499,7 @@ class PredictionService(private val context: Context) {
     // ── Velocity (for the collecting UI) ──────────────────────────────────────
 
     private fun computeVelocity(features: FloatArray): Float {
-        val keyXY    = KEY_XY.map { features[it] }.toFloatArray()
+        val keyXY    = UI_KEY_XY.map { features[it] }.toFloatArray()
         val prev     = lastKeyXY
         lastKeyXY    = keyXY
         val instantV = if (prev != null) euclideanDist(keyXY, prev) else 0f
