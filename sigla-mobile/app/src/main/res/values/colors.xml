@@ -9,6 +9,7 @@
     <color name="colorSurfaceVariant">#F5F5F5</color>
     <color name="colorDivider">#E8E8EE</color>
     <color name="colorError">#D32F2F</color>
+    <color name="colorErrorSoft">#E57373</color>
     <color name="colorSuccess">#4CAF50</color>
     <color name="colorWarning">#FF9800</color>
     <color name="colorSidebarBg">#E3F2FD</color>

@@ -47,6 +47,12 @@ async function syncModelFilesToDeployed(model) {
   const files = [
     { url: model.tflite_url, name: "sign_model_motion.tflite", required: true },
     { url: `${baseUrl}/labels_motion.json`, name: "labels_motion.json", required: true },
+    // Static (MLP) model — not tracked in the DB (no schema changes), so we just
+    // always try the same versioned-folder convention every other file uses and
+    // skip it harmlessly if this version never produced one (no static-routed
+    // word classes existed at train time — see sigla-ml train.py).
+    { url: `${baseUrl}/sign_model_static.tflite`, name: "sign_model_static.tflite", required: false },
+    { url: `${baseUrl}/labels_static.json`, name: "labels_static.json", required: false },
   ];
 
   for (const file of files) {
@@ -56,7 +62,15 @@ async function syncModelFilesToDeployed(model) {
       continue;
     }
 
-    const response = await axios.get(file.url, { responseType: "arraybuffer", timeout: 30000 });
+    let response;
+    try {
+      response = await axios.get(file.url, { responseType: "arraybuffer", timeout: 30000 });
+    } catch (err) {
+      if (file.required) throw err;
+      console.warn(`Skipping optional file ${file.name} – not found: ${err.message}`);
+      continue;
+    }
+
     const buffer = Buffer.from(response.data);
     const contentType =
       response.headers["content-type"] ||
@@ -141,7 +155,6 @@ const getLatestModel = async (req, res) => {
 
     // All file URLs point to the fixed deployed/ folder in Supabase
     // so the mobile always fetches from a stable path regardless of version.
-    // Every model is a motion (LSTM) model.
     const base = SUPABASE_URL
       ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
       : null;
@@ -151,6 +164,13 @@ const getLatestModel = async (req, res) => {
         ...model.toJSON(),
         tflite_url: base ? `${base}/sign_model_motion.tflite` : model.tflite_url,
         labels_motion_url: base ? `${base}/labels_motion.json` : null,
+        // Static (MLP) model — not tracked in the DB (no schema changes), so we
+        // always advertise the fixed path the same way as motion. If this
+        // deployed version never produced one, the mobile app's download
+        // attempt 404s harmlessly and static recognition just stays
+        // unavailable (see ModelUpdateManager.checkAndUpdate).
+        static_tflite_url: base ? `${base}/sign_model_static.tflite` : null,
+        labels_static_url: base ? `${base}/labels_static.json` : null,
       },
     });
   } catch (err) {
@@ -236,6 +256,9 @@ const trainModel = async (req, res) => {
           { timeout: 20 * 60 * 1000, headers: { "ngrok-skip-browser-warning": "1" } },
         );
         const r = response.data;
+        // r may also carry static_accuracy/static_classes/static_tflite_url/
+        // static_h5_url — not persisted (no DB columns for them), but still
+        // available to the admin UI from the live /test response later.
         await modelRecord.update({
           status:            "trained",
           accuracy:          r.accuracy           || null,
@@ -323,7 +346,9 @@ const testModel = async (req, res) => {
       });
     }
 
-    // Update model stats with test results
+    // Update model stats with test results. testResult.static_accuracy isn't
+    // persisted (no DB column) but stays available to the frontend via
+    // test_result in the response below, for this immediate view.
     await model.update({
       accuracy: testResult.accuracy || model.accuracy,
     });

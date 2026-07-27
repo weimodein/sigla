@@ -88,9 +88,6 @@ class MainActivity : AppCompatActivity() {
     private var isFrontCamera = false
     private var cameraProvider: ProcessCameraProvider? = null
 
-    // Add this variable at the top of MainActivity
-    private var frameCounter = 0
-
     // ── Handedness latch (stabilizes left-handed mirroring across a gesture) ────
     // MediaPipe's Left/Right label flickers mid-gesture; we vote over the first few
     // frames after hands appear, latch the decision, and hold it until hands leave.
@@ -111,10 +108,28 @@ class MainActivity : AppCompatActivity() {
     // ── TEMP: diagnose NO/BREAD misrecognition — remove once resolved ───────────
     private var maxHandsSeenThisGesture = 0
 
+    // ── TEMP: per-frame analyzer performance diagnostic — remove once lag investigation
+    // is resolved ────────────────────────────────────────────────────────────────
+    private var perfFrameCount = 0
+    private var perfTotalMs = 0L
+    private var perfWindowStart = SystemClock.elapsedRealtime()
+
+    // ── TEMP: per-frame RESULT-callback timing (2026-07-24) — PERF_TEST above only
+    // covers bitmap prep + detectAsync dispatch on the camera analyzer thread. It does
+    // NOT cover canonicalizeSlots/canonicalizeHandedness/processFrame — which includes
+    // the actual TFLite LSTM inference — run synchronously on MediaPipe's OWN result
+    // callback thread every time a hand result arrives. That path has never been
+    // measured. Remove once the lag investigation is resolved.
+    private var cbFrameCount = 0
+    private var cbTotalMs = 0L
+    private var cbMaxMs = 0L
+    private var cbWindowStart = SystemClock.elapsedRealtime()
+
     // ── UI state ──────────────────────────────────────────────────────────────
     private var showFilipino       = true
     private var emergencyHoldStart = 0L
     private var frameSkipCounter   = 0
+    private var overlayFrameCounter = 0
 
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
@@ -154,6 +169,8 @@ class MainActivity : AppCompatActivity() {
 
         predictor  = PredictionService(this)
         landmarker = HandLandmarkHelper(this) { result ->
+            val cbStart = SystemClock.elapsedRealtime()
+
             // TEMP: track whether this gesture ever showed 2 hands (diagnosing whether
             // NO/BREAD are being signed/trained as one- or two-handed).
             if (result.handsDetected > maxHandsSeenThisGesture) maxHandsSeenThisGesture = result.handsDetected
@@ -164,18 +181,43 @@ class MainActivity : AppCompatActivity() {
                 ordered, result.handedness, result.handednessScore, result.handsDetected
             )
             predictor.processFrame(features, result.handsDetected)
-            
-            runOnUiThread {
-                val width = binding.cameraPreview.width.toFloat()
-                val height = binding.cameraPreview.height.toFloat()
-                
-                // result.landmarks is already List<FloatArray> - no conversion needed!
-                binding.overlayView.setLandmarks(
-                    result.landmarks,  // This is already the right format
-                    width,
-                    height,
-                    isFrontCamera  // ← Just pass the mirror flag
-                )
+
+            val cbMs = SystemClock.elapsedRealtime() - cbStart
+            cbFrameCount++
+            cbTotalMs += cbMs
+            if (cbMs > cbMaxMs) cbMaxMs = cbMs
+            if (cbFrameCount >= 60) {
+                val avgMs = cbTotalMs.toFloat() / cbFrameCount
+                val elapsedSec = (SystemClock.elapsedRealtime() - cbWindowStart) / 1000f
+                val rate = if (elapsedSec > 0) cbFrameCount / elapsedSec else 0f
+                Log.d(TAG, "CB_PERF_TEST avgCallbackMs=${"%.1f".format(avgMs)} maxCallbackMs=$cbMaxMs resultRateHz=${"%.1f".format(rate)}")
+                cbFrameCount = 0
+                cbTotalMs = 0L
+                cbMaxMs = 0L
+                cbWindowStart = SystemClock.elapsedRealtime()
+            }
+
+            // Throttle the skeleton overlay redraw only — purely visual feedback, not
+            // fed to the model (processFrame above already ran on every single frame,
+            // so recognition timing/accuracy is unaffected). Posting a new UI-thread
+            // Runnable on every analyzed frame — now every camera frame, since the
+            // frame-skip that used to halve this was removed to stop quick signs from
+            // being under-sampled — was adding UI-thread pressure that contributed to
+            // the reported lag without the extra redraws being perceptible.
+            overlayFrameCounter++
+            if (overlayFrameCounter % 2 == 0) {
+                runOnUiThread {
+                    val width = binding.cameraPreview.width.toFloat()
+                    val height = binding.cameraPreview.height.toFloat()
+
+                    // result.landmarks is already List<FloatArray> - no conversion needed!
+                    binding.overlayView.setLandmarks(
+                        result.landmarks,  // This is already the right format
+                        width,
+                        height,
+                        isFrontCamera  // ← Just pass the mirror flag
+                    )
+                }
             }
         }
 
@@ -199,7 +241,7 @@ class MainActivity : AppCompatActivity() {
                 if (!hasModel) {
                     withContext(Dispatchers.Main) {
                         binding.tvStatus.text = "⚠ Failed to download model"
-                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorErrorSoft))
                     }
                     return@launch
                 }
@@ -220,13 +262,13 @@ class MainActivity : AppCompatActivity() {
                         Log.d("MainActivity", "Model ready with ${predictor.getLabelCount()} classes")
                     } else {
                         binding.tvStatus.text = "Failed to load words from database"
-                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorErrorSoft))
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     binding.tvStatus.text = "⚠ Error: ${e.message}"
-                    binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                    binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorErrorSoft))
                     Log.e("MainActivity", "Model error: ${e.message}", e)
                 }
             }
@@ -265,7 +307,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun speak(text: String) {
         if (!isTtsReady) return
-        applyTtsVoice()
+        // Voice is applied once at TTS init (and freshly again on next launch if the
+        // setting changes, since navigating to Settings and back recreates this
+        // Activity). Re-resolving it here on every single recognition — filtering and
+        // sorting the engine's full voice list, a call that can round-trip to the TTS
+        // engine's own process — was repeated, avoidable work sitting on the path
+        // between a gesture firing and the result becoming audible/visible.
         val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
         val params = Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
@@ -354,7 +401,8 @@ class MainActivity : AppCompatActivity() {
             // TEMP: diagnose NO/BREAD misrecognition on front camera.
             Log.d(TAG, "NOBREAD_TEST cam=${if (isFrontCamera) "front" else "back"} " +
                 "label=${result.label} conf=${result.confidence} maxHands=$maxHandsSeenThisGesture " +
-                "latchedSlot0=$latchedMirrorSlot0 latchedSlot1=$latchedMirrorSlot1")
+                "latchedSlot0=$latchedMirrorSlot0 latchedSlot1=$latchedMirrorSlot1 " +
+                "voteMirror0=$handVoteMirror0 voteMirror1=$handVoteMirror1")
             maxHandsSeenThisGesture = 0
             runOnUiThread {
                 // Confidence is no longer shown to the user, but it is still recorded
@@ -370,8 +418,15 @@ class MainActivity : AppCompatActivity() {
                 // Text-to-speech
                 speak(result.label)
 
-                // Save to history
-                historyManager.add(result.label, pct, if (result.isMotion) "motion" else "static")
+                // Save to history off the UI thread — Gson (de)serializing the growing
+                // history list here was blocking the just-set result text from actually
+                // reaching the screen: Android doesn't flush a redraw until this whole
+                // runOnUiThread Runnable returns, so a slow tail operation delays
+                // everything set earlier in the same block, not just itself.
+                val isMotionResult = result.isMotion
+                lifecycleScope.launch(Dispatchers.IO) {
+                    historyManager.add(result.label, pct, if (isMotionResult) "motion" else "static")
+                }
 
                 // Filipino translation
                 val filipino = getFilipinoTranslation(result.label)
@@ -635,27 +690,55 @@ private fun setActiveNavItem(activeId: Int) {
 
         val analysis = ImageAnalysis.Builder()
             .setTargetRotation(binding.cameraPreview.display?.rotation ?: android.view.Surface.ROTATION_0)
+            // Reverted from 640x480 back to 240x180 on 2026-07-23: PERF_TEST logs showed
+            // avgAnalyzerMs climbing from ~21ms to ~37ms over a single ~6min session at
+            // 640x480 (GPU delegate thermal throttling under the 7x pixel load), which
+            // reads as worsening lag the longer the app runs. It also did not fix the
+            // GOOD MORNING/GOOD EVENING confusion — TOP3_TEST logs from that same session
+            // show them still losing, just to a different word (NO / SLOW instead of
+            // DON'T KNOW). Cost confirmed, benefit not, so back to 240x180 until a more
+            // targeted diagnostic (comparing live vs. training-time extracted feature
+            // vectors directly) points at resolution specifically.
             .setTargetResolution(android.util.Size(240, 180))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
 
         analysis.setAnalyzer(executor) { imageProxy ->
-            frameCounter++
-            // Skip every 2nd frame to reduce processing
-            if (frameCounter % 2 == 0) {
-                imageProxy.close()
-                return@setAnalyzer
-            }
             // Process every frame so quick signs keep up. STRATEGY_KEEP_ONLY_LATEST means
             // CameraX drops stale frames if MediaPipe falls behind, so this self-limits to
-            // what the device can sustain. (If quick-sign lag returns under sustained load,
-            // reinstate a light skip, e.g. `if (frameSkipCounter++ % 3 != 0)`.)
+            // what the device can sustain. A blanket every-2nd-frame skip here previously
+            // halved the effective analyzed frame rate for every gesture, not just under
+            // real load — combined with MIN_MOTION_FRAMES(8)/MOTION_EARLY_STREAK(18), a
+            // naturally brief sign (e.g. FAST, or a short greeting) could complete and the
+            // hand leave frame before enough analyzed frames ever accumulated to recognize
+            // it at all, independent of which hand was used. (If quick-sign lag returns
+            // under sustained load, reinstate a light skip, e.g.
+            // `if (frameSkipCounter++ % 3 != 0)`, and re-verify against real device logs
+            // before assuming it's needed.)
+            val frameStart      = SystemClock.elapsedRealtime()
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
             landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
             imageProxy.close()
+
+            // TEMP diagnostic (2026-07-23): measure actual per-frame analyzer cost and
+            // effective throughput — real numbers instead of guessing whether the
+            // 640x480 resolution increase (for accuracy) meaningfully worsens lag versus
+            // the prepareBitmap dead-fast-path fix improving it. Logged every 60 frames
+            // to avoid flooding logcat. Remove once the lag investigation is resolved.
+            perfFrameCount++
+            perfTotalMs += (SystemClock.elapsedRealtime() - frameStart)
+            if (perfFrameCount >= 60) {
+                val avgMs = perfTotalMs.toFloat() / perfFrameCount
+                val elapsedSec = (SystemClock.elapsedRealtime() - perfWindowStart) / 1000f
+                val fps = if (elapsedSec > 0) perfFrameCount / elapsedSec else 0f
+                Log.d(TAG, "PERF_TEST avgAnalyzerMs=${"%.1f".format(avgMs)} effectiveFps=${"%.1f".format(fps)}")
+                perfFrameCount = 0
+                perfTotalMs = 0L
+                perfWindowStart = SystemClock.elapsedRealtime()
+            }
         }
 
         val selector = if (isFrontCamera)
@@ -763,7 +846,22 @@ private fun setActiveNavItem(activeId: Int) {
         // the same hand always gets the same mirror decision regardless of camera.
         val mirrorLabel = if (MEDIAPIPE_LABELS_INVERTED) "Right" else "Left"
 
+        // Count present hands in THIS frame up front. Training (preprocessor.mirror_sequence)
+        // only ever produces two shapes for a two-handed frame: the real, fully-unmirrored
+        // pair, or a fully-mirrored copy (both hands + pose flipped together as one whole-frame
+        // augmentation). Mirroring just ONE hand's slot independently — which the per-slot vote
+        // below would otherwise do — creates a third combination the model never trained on.
+        // So the actual mirror transform below is gated to one-handed frames only; two-handed
+        // frames are left completely untouched, matching whichever of the two trained-on shapes
+        // (real or mirror_sequence's flipped copy) the signer's true handedness lines up with.
         var presentCount = 0
+        for (slot in 0..1) {
+            val base = slot * 63
+            for (k in base until base + 63) {
+                if (out[k] != 0f) { presentCount++; break }
+            }
+        }
+
         var lastDecidedSlotMirrored = false
 
         for (slot in 0..1) {
@@ -773,8 +871,10 @@ private fun setActiveNavItem(activeId: Int) {
                 if (out[k] != 0f) { present = true; break }
             }
             if (!present) continue
-            presentCount++
 
+            // Vote/latch tracking runs every frame regardless of hand count, so a gesture
+            // that starts one-handed and becomes two-handed (or vice versa) still latches a
+            // stable per-slot decision from whichever frames were one-handed.
             val latched = if (slot == 0) latchedMirrorSlot0 else latchedMirrorSlot1
             if (latched == null) {
                 val label = handedness.getOrNull(slot)
@@ -790,6 +890,8 @@ private fun setActiveNavItem(activeId: Int) {
                 }
             }
 
+            if (presentCount != 1) continue
+
             val decided = (if (slot == 0) latchedMirrorSlot0 else latchedMirrorSlot1)
                 ?: ((if (slot == 0) handVoteMirror0 else handVoteMirror1) > 0)
             if (decided) {
@@ -799,13 +901,8 @@ private fun setActiveNavItem(activeId: Int) {
         }
 
         // Pose block (nose/shoulders/elbows/wrists) describes the WHOLE body, not a single
-        // hand slot, so mirroring only the hand landmarks leaves an inconsistent frame: a
-        // "right-hand-shaped" hand paired with the TRUE, unmirrored arm/shoulder position —
-        // a combination the model never saw in training (real right-handed samples pair a
-        // right hand with a right-arm-raised pose). Only safe to resolve automatically for
-        // one-handed frames; with two hands present and potentially conflicting mirror
-        // decisions, there's no single correct pose mirror, so we leave it alone (same
-        // known limitation as the two-handed slot-swap case above).
+        // hand slot. Only mirrored alongside a one-handed mirror decision — matching real
+        // one-handed training samples, which pair a right hand with a right-arm-raised pose.
         if (presentCount == 1 && lastDecidedSlotMirrored) {
             mirrorPoseBlock(out)
         }
@@ -866,12 +963,17 @@ private fun setActiveNavItem(activeId: Int) {
     private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
         val maxDim = 640
         val scale = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
-        
-        // Fast path: no transform needed
-        if (scale >= 1f && rotationDegrees == 0 && !frontCamera) {
+
+        // Fast path: no transform needed. frontCamera is NOT a reason to take the slow
+        // path by itself — the model never gets a mirrored bitmap regardless of camera
+        // (see below), that mirroring call was removed already. The old `!frontCamera`
+        // condition here was never updated to match, so every single frame from the
+        // front camera — i.e. every frame in normal use — paid for a full bitmap
+        // reallocation + copy through an identity Matrix transform for no reason.
+        if (scale >= 1f && rotationDegrees == 0) {
             return bitmap
         }
-        
+
         val matrix = Matrix().apply {
             if (scale < 1f) postScale(scale, scale)
             if (rotationDegrees != 0) postRotate(rotationDegrees.toFloat())

@@ -4,8 +4,11 @@ const { Op } = require("sequelize");
 /**
  * GET /api/ml/dataset
  * Returns all approved gesture samples grouped by word label.
- * Format: { "LABEL": [ { "features": [...] }, ... ] } for static gestures,
- *         { "LABEL": [ { "sequence": [[...], ...] }, ... ] } for motion gestures.
+ * Format: { "LABEL": [ { "sequence": [[...], ...] }, ... ] } for every sample —
+ * static gestures are a length-1 sequence (one held-pose frame), motion the
+ * full extracted window. No separate static/motion field: sigla-ml re-derives
+ * which one each sample is from the sequence's own content (see
+ * preprocessor.classify_motion_or_static / partition_dataset_by_word_type).
  */
 const getApprovedDataset = async (req, res) => {
   try {
@@ -38,7 +41,7 @@ const getApprovedDataset = async (req, res) => {
       return res.status(404).json({ message: "No approved samples found" });
     }
 
-    // Group samples by word label. Every sample is a motion sequence (30×126).
+    // Group samples by word label.
     const dataset = {};
 
     for (const sample of samples) {

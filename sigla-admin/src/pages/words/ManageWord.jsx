@@ -226,7 +226,10 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
   return (
     <AppModal title={`Upload Files — ${word?.label}`} onClose={onClose}>
       <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
-        Upload video clips (.MOV, .MP4). Landmarks are extracted automatically with MediaPipe.
+        Upload video clips or images. Landmarks are extracted automatically with
+        MediaPipe, and each sample is auto-classified as a static held pose or a
+        motion gesture from its own content — images are always static; a video
+        can be either, depending on whether it actually shows movement.
       </p>
 
       <div
@@ -238,13 +241,13 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
       >
         <Upload size={28} style={{ color: C.muted, margin: "0 auto 8px" }} />
         <p style={{ fontSize: "0.875rem", color: "#374151" }}>
-          Click to select video files (.MOV, .MP4)
+          Click to select video or image files (.MOV, .MP4, .JPG, .PNG)
         </p>
         <p style={{ fontSize: "0.75rem", color: C.muted }}>Up to 50 files at once</p>
         <input
           ref={fileRef}
           type="file"
-          accept="video/*,.mov"
+          accept="video/*,.mov,image/*"
           multiple
           style={{ display: "none" }}
           onChange={handleFiles}
@@ -646,7 +649,7 @@ const ManageWord = () => {
                   </td>
                   <td className="px-5 py-3">
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <button title="Upload dataset clips for training" onClick={() => setUploadWord(word)}
+                      <button title="Upload dataset clips or images for training" onClick={() => setUploadWord(word)}
                         style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.8rem", color: "#374151" }}>
                         <Upload size={14} /> Dataset Clips
                       </button>

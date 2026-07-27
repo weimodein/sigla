@@ -114,6 +114,32 @@ object ModelUpdateManager {
                     }
                 }
 
+                // ── Static model (optional) ────────────────────────────────
+                // Not every deployed version trains one — a dataset with < 2
+                // static-routed word classes simply never produces it. Absence
+                // is non-fatal: static gesture recognition is just unavailable
+                // this session, motion recognition is unaffected.
+                val staticModelUrl = model.static_tflite_url
+                if (!staticModelUrl.isNullOrBlank()) {
+                    val staticDest = File(context.filesDir, "sign_model_static.tflite")
+                    // No dedicated checksum field for the static model today —
+                    // downloadAndVerify skips integrity checking when null, same
+                    // as it already does for a server that omits any checksum.
+                    if (downloadAndVerify(staticModelUrl, staticDest, expectedChecksum = null)) {
+                        Log.i(TAG, "Static TFLite downloaded")
+                        val labelsStaticUrl = model.labels_static_url
+                        if (!labelsStaticUrl.isNullOrBlank()) {
+                            val labelsStaticOk = downloadToFile(labelsStaticUrl, File(context.filesDir, "labels_static.json"))
+                            if (labelsStaticOk) Log.i(TAG, "Static labels downloaded")
+                            else Log.w(TAG, "Static labels download failed — static gesture recognition may be unavailable")
+                        }
+                    } else {
+                        Log.w(TAG, "Static model download failed (non-fatal) — static gesture recognition unavailable this session")
+                    }
+                } else {
+                    Log.i(TAG, "No static model for this version — static gesture recognition unavailable")
+                }
+
                 // ── Save version + URL only after all required files succeeded ──
                 prefs(context).edit()
                     .putString(KEY_VERSION, remoteVersion)

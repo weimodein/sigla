@@ -10,7 +10,6 @@ const {
   getWordStats,
   getWordById,
   adminAddWord,
-  adminUploadSamples,
   approveWord,
   rejectWord,
   updateWord,
@@ -83,10 +82,8 @@ router.post("/admin-add", roleMiddleware("admin"), adminAddWord);
 router.get("/", roleMiddleware("admin"), getAllWords);
 router.get("/:id", roleMiddleware("admin"), getWordById);
 
-// ── Admin sample upload (auto-approved, bypasses user cap) ────
-router.post("/:id/admin-samples", roleMiddleware("admin"), adminUploadSamples);
-
-// ── Admin video upload → ML landmark extraction ───────────────
+// ── Admin video/image upload → ML landmark extraction ──────────
+// Auto-classified static vs. motion server-side — see extractAndStoreSample.
 router.post("/:id/upload-videos", roleMiddleware("admin"), videoUpload.array("videos", 50), uploadVideos);
 
 // ── Samples ───────────────────────────────────────────────────

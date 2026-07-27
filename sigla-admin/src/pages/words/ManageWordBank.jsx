@@ -17,7 +17,7 @@ import {
   approveSubmission,
   rejectSubmission,
   adminAddWord,
-  adminUploadSamples,
+  uploadVideos,
   setWordThumbnail,
   setWordVideo,
   getMotionSequences,
@@ -434,14 +434,10 @@ const ManageWordBank = () => {
     if (!uploadForm.files.length) { showError("Please select at least one image"); return; }
     setActionLoading(true);
     try {
-      const toBase64 = (file) => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const images = await Promise.all(uploadForm.files.map(toBase64));
-      const res = await adminUploadSamples(uploadModal.id, { images });
+      // Images are auto-classified as static gesture samples by the ML service
+      // (see sigla-ml extract_static_landmarks) — same unified upload endpoint
+      // ManageWord's video upload uses, just fed image files instead.
+      const res = await uploadVideos(uploadModal.id, uploadForm.files);
       showSuccess(res.message || `${uploadForm.files.length} sample(s) uploaded successfully`);
       closeModal();
       fetchStats();

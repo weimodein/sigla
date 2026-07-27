@@ -74,7 +74,12 @@ data class ModelInfo(
     val word_bank_url: String? = null,
     val accuracy: Double? = null,
     val checksum: String? = null,
-    val deployed_at: String? = null
+    val deployed_at: String? = null,
+    // Static (MLP) model — not tracked in the backend DB (no schema changes);
+    // the backend always advertises this fixed path, and it 404s harmlessly if
+    // this deployed version never produced one (see ModelUpdateManager).
+    val static_tflite_url: String? = null,
+    val labels_static_url: String? = null
 )
 
 data class ModelResponse(val model: ModelInfo)

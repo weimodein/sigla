@@ -84,11 +84,6 @@ export const adminAddWord = async (data) => {
   return response.data;
 };
 
-export const adminUploadSamples = async (wordId, data) => {
-  const response = await api.post(`/words/${wordId}/admin-samples`, data);
-  return response.data;
-};
-
 export const activateWord = (id) =>
   api.patch(`/words/${id}/activate`).then((r) => r.data);
 

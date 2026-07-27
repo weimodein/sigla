@@ -123,81 +123,50 @@ const extractAndStoreSample = async (
   fileUrl = null,
 ) => {
   const isVideo = VIDEO_RX.test(filename) || (mimetype || "").startsWith("video/");
+  const isImage = IMAGE_RX.test(filename) || (mimetype || "").startsWith("image/");
 
-  // Every gesture is motion — only video files produce a valid sequence.
-  if (!isVideo) {
-    return { file: filename, status: "skipped", type: "unknown", reason: "Only video files are supported" };
+  if (!isVideo && !isImage) {
+    return { file: filename, status: "skipped", type: "unknown", reason: "Only video or image files are supported" };
   }
 
   const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
   const FormData = require("form-data");
+  const fileTypeLabel = isVideo ? "video" : "image";
+  const endpoint = isVideo ? "/extract-landmarks" : "/extract-landmarks-static";
 
   try {
     const form = new FormData();
     form.append("file", fileBuffer, { filename, contentType: mimetype });
 
-    const mlRes = await axios.post(`${ML_SERVICE_URL}/extract-landmarks`, form, {
+    const mlRes = await axios.post(`${ML_SERVICE_URL}${endpoint}`, form, {
       headers: form.getHeaders(),
       timeout: 60000,
       maxBodyLength: Infinity,
     });
 
+    // The ML service classifies the CONTENT (static held pose vs. real motion)
+    // independent of whether the upload was a video or an image — a video of a
+    // static handshape comes back as a length-1 sequence (one held-pose frame),
+    // not forced into a 30-frame window. Stored in the existing `sequence`
+    // column either way — no separate static/motion column; which one a sample
+    // is gets re-derived from the array's own length/velocity at train time
+    // (see sigla-ml extract.py / preprocessor.classify_motion_or_static).
     const { sequence } = mlRes.data;
 
     const sample = await GestureSample.create({
       word_id: word.id,
       submitted_by: userId,
-      file_url: fileUrl || `video_upload_${Date.now()}`,
+      file_url: fileUrl || `${fileTypeLabel}_upload_${Date.now()}`,
       sample_count: 1,
       status: "approved",
       is_validated: true,
-      sequence: sequence,
+      sequence: sequence || null,
     });
 
-    return { file: filename, status: "ok", type: "video", sample_id: sample.id };
+    return { file: filename, status: "ok", type: fileTypeLabel, sample_id: sample.id };
   } catch (err) {
     const detail = err.response?.data?.detail || err.message;
-    return { file: filename, status: "failed", type: "video", error: detail };
-  }
-};
-
-// ── Helper: upload a base64 image to Supabase Storage, return its public URL
-// Falls back to local disk when Supabase env vars are not set (local dev).
-const saveImage = async (base64, index, folder = "static") => {
-  const filename = `sample_${Date.now()}_${Math.random().toString(36).slice(2, 10)}_${index}.jpg`;
-  const buffer   = Buffer.from(base64, "base64");
-
-  if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-    try {
-      const storagePath = `${folder}/${filename}`;
-      const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${storagePath}`;
-      const res = await axios.post(url, buffer, {
-        headers: {
-          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-          "Content-Type": "image/jpeg",
-          "x-upsert": "true",
-        },
-        maxBodyLength: Infinity,
-        validateStatus: null, // don't throw on non-2xx, log it instead
-      });
-      if (res.status >= 200 && res.status < 300) {
-        return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${storagePath}`;
-      }
-      console.error(`Supabase upload failed [${res.status}]:`, JSON.stringify(res.data));
-      throw new Error(`Supabase ${res.status}: ${JSON.stringify(res.data)}`);
-    } catch (e) {
-      console.error("Supabase upload error:", e.message);
-      throw e; // propagate so the whole sample upload fails visibly instead of saving broken local paths
-    }
-  }
-
-  // Local fallback
-  try {
-    const filepath = path.join(UPLOADS_DIR, filename);
-    fs.writeFileSync(filepath, buffer);
-    return `/uploads/samples/${folder}/${filename}`;
-  } catch (e) {
-    return `landmark_direct_${Date.now()}_${index}`;
+    return { file: filename, status: "failed", type: fileTypeLabel, error: detail };
   }
 };
 
@@ -496,67 +465,6 @@ const adminAddWord = async (req, res) => {
     });
   } catch (err) {
     console.error("Admin add word error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ── POST /api/words/:id/admin-samples ─────────────────────────
-// Admin uploads gesture samples for any word — auto-approved
-// Accepts { images: [base64, ...] } JSON — each image becomes one GestureSample
-// Bypasses user sample cap — admin can upload as many as needed
-// Triggers word activation if threshold is met
-const adminUploadSamples = async (req, res) => {
-  try {
-    const word = await Word.findOne({ where: { id: req.params.id } });
-    if (!word) {
-      return res.status(404).json({ message: "Word not found" });
-    }
-
-    const { images } = req.body;
-
-    if (!images || !Array.isArray(images) || images.length === 0) {
-      return res.status(400).json({ message: "At least one image is required" });
-    }
-
-    // Upload each base64 image to Supabase and create one GestureSample per image
-    const samples = [];
-    for (let i = 0; i < images.length; i++) {
-      const url = await saveImage(images[i], i, "static");
-      const sample = await GestureSample.create({
-        word_id: word.id,
-        submitted_by: req.user.id,
-        file_url: url,
-        sample_count: 1,
-        status: "approved",
-        is_validated: true,
-      });
-      samples.push(sample);
-    }
-
-    const newCount = samples.length;
-
-    // Update word counters
-    await word.update({
-      total_samples: (word.total_samples || 0) + newCount,
-      approved_sample_count: (word.approved_sample_count || 0) + newCount,
-    });
-
-    // Re-fetch word with updated counts before activation check
-    await word.reload();
-    const activated = await checkAndActivateWord(word, req.user.id);
-
-    const remaining = getActivationThreshold() - word.approved_sample_count;
-
-    return res.status(201).json({
-      message: activated
-        ? `${newCount} sample(s) uploaded and word "${word.label}" is now active`
-        : `${newCount} sample(s) uploaded. ${Math.max(0, remaining)} more approved sample(s) needed to activate this word.`,
-      count: newCount,
-      activated,
-      approved_sample_count: word.approved_sample_count,
-    });
-  } catch (err) {
-    console.error("Admin upload samples error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -1584,7 +1492,6 @@ module.exports = {
   checkWordExists,
   submitWord,
   adminAddWord,
-  adminUploadSamples,
   approveWord,
   rejectWord,
   updateWord,

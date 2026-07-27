@@ -16,6 +16,16 @@ SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 # recall across the full vocabulary, not just the words currently of interest.
 MIRROR_AUGMENTATION_ENABLED = os.getenv("MIRROR_AUGMENTATION_ENABLED", "false").lower() == "true"
 
+# Whole-clip static/motion classification threshold, in the same normalized
+# (wrist-relative, hand-size-scaled) velocity units as center_on_peak_velocity's
+# per-frame velocity. A clip whose peak inter-frame velocity never rises above
+# this is a held pose (STATIC) rather than a MOTION gesture — see
+# classify_motion_or_static() below. Provisional: chosen from the same order of
+# magnitude as PredictionService's retired MOTION_SCORE_LOW (~0.002-0.012);
+# validate against real static vs. motion clips and retune if words are
+# misrouted before relying on it in production.
+STATIC_MOTION_VELOCITY_THRESHOLD = float(os.getenv("STATIC_MOTION_VELOCITY_THRESHOLD", 0.006))
+
 # Backend API configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
 ML_API_KEY  = os.getenv("ML_API_KEY")  # Must be set in .env
@@ -144,6 +154,101 @@ def center_on_peak_velocity(sequence: np.ndarray) -> np.ndarray:
     return np.array(window[:SEQUENCE_LENGTH], dtype=np.float32)
 
 
+def _clip_velocities(seq: np.ndarray) -> np.ndarray:
+    """
+    Per-frame velocity across a normalized sequence of any length, using the same
+    key-landmark set as center_on_peak_velocity (wrist + fingertips, x/y only).
+    velocities[0] is always 0 (no previous frame to compare against).
+    """
+    velocities = np.zeros(len(seq), dtype=np.float32)
+    for i in range(1, len(seq)):
+        diff = seq[i][_KEY_XY] - seq[i - 1][_KEY_XY]
+        velocities[i] = float(np.sqrt(np.sum(diff ** 2)))
+    return velocities
+
+
+def classify_motion_or_static(seq: np.ndarray) -> str:
+    """
+    Classify a normalized (not yet windowed) landmark sequence as "static" or
+    "motion" from its own whole-clip velocity profile — no upload-type flag, no
+    per-word admin setting, just what the extracted data actually shows. A clip
+    whose peak inter-frame velocity never rises above
+    STATIC_MOTION_VELOCITY_THRESHOLD is a held pose; otherwise it's a motion
+    gesture. A single frame (e.g. from an image) is always "static" — there's no
+    velocity to measure.
+    """
+    if len(seq) < 2:
+        return "static"
+    peak_velocity = float(np.max(_clip_velocities(seq)))
+    return "static" if peak_velocity < STATIC_MOTION_VELOCITY_THRESHOLD else "motion"
+
+
+def most_stable_frame(seq: np.ndarray) -> np.ndarray:
+    """
+    Pick the single most representative frame from a clip classified "static": the
+    lowest-velocity frame, which is the least likely to be caught mid-way as the
+    signer's hand settles into or leaves the held pose.
+    """
+    if len(seq) == 1:
+        return seq[0]
+    velocities = _clip_velocities(seq)
+    velocities[0] = np.inf  # frame 0 has no predecessor — never pick it as "stable"
+    return seq[int(np.argmin(velocities))]
+
+
+def partition_dataset_by_word_type(dataset: dict) -> tuple:
+    """
+    Decide each WORD's type (not each individual sample's) from the majority of
+    its own approved samples, then route ALL of that word's matching-type samples
+    into exactly one of the two returned dicts. This keeps the static and motion
+    label sets disjoint — a word is trained by exactly one model — even if a
+    handful of its samples were classified differently at extraction time (e.g.
+    the signer moved slightly during an otherwise-static recording); those
+    minority-type samples are simply not used, rather than corrupting either
+    dataset. Ties favor motion, the richer signal of the two.
+
+    Every sample is stored the same way — a "sequence" of 1+ frames in the
+    existing gesture_samples.sequence column (no schema change, no separate
+    static/motion column). Static gestures collapse to a length-1 sequence at
+    extraction time (see extract.py); motion gestures keep the full extracted
+    sequence. Which one each sample IS gets re-derived here from the sequence's
+    own content via classify_motion_or_static, exactly the same classifier
+    extract.py already used at ingestion — not trusted from a stored flag, so
+    retuning STATIC_MOTION_VELOCITY_THRESHOLD doesn't require re-uploading data.
+
+    dataset: { label: [ {"sequence": [...]}, ... ] } as returned by
+    fetch_approved_samples.
+    Returns (static_dataset, motion_dataset), each shaped the same way, ready for
+    prepare_static_dataset / prepare_motion_dataset.
+    """
+    static_dataset: dict = {}
+    motion_dataset: dict = {}
+
+    for label, samples in dataset.items():
+        static_samples = []
+        motion_samples = []
+        for s in samples:
+            seq = s.get("sequence")
+            if not seq:
+                continue
+            arr = np.array(seq, dtype=np.float32)
+            if classify_motion_or_static(arr) == "static":
+                static_samples.append(s)
+            else:
+                motion_samples.append(s)
+        if not static_samples and not motion_samples:
+            continue
+
+        if len(static_samples) > len(motion_samples):
+            static_dataset[label] = static_samples
+        elif motion_samples:
+            motion_dataset[label] = motion_samples
+        else:
+            static_dataset[label] = static_samples
+
+    return static_dataset, motion_dataset
+
+
 # Sign convention: cross_z < 0 => RIGHT. MUST equal Kotlin CHIRALITY_RIGHT_IS_NEGATIVE_CROSS.
 _CHIRALITY_RIGHT_IS_NEGATIVE_CROSS = True
 
@@ -191,6 +296,20 @@ def canonicalize_slots(seq: np.ndarray) -> np.ndarray:
     return out
 
 
+# A correctly-tracked hand, once normalized, never produces coordinates or
+# per-frame velocity this large — the full approved dataset's 99th-percentile
+# peak velocity is ~49 and every visually-sane sample stays under ~50, while a
+# MediaPipe tracking glitch (a landmark briefly jumping to a spurious position,
+# or the wrist-to-middle-MCP normalization denominator collapsing near zero)
+# jumps to 70-875+. Left in training data, a single such outlier can distort
+# that class's (and nearby classes') decision boundary without necessarily
+# showing up in aggregate offline accuracy — exactly the kind of bug that
+# produces good validation numbers but poor live recognition. Empirically
+# calibrated 2026-07-23 against the full approved dataset; revisit if
+# legitimately fast signs start getting rejected.
+_TRACKING_GLITCH_BOUND = 50.0
+
+
 def _load_real_sequences(dataset: dict) -> dict:
     """
     Normalize + peak-center every stored real sequence, grouped by label. No
@@ -198,6 +317,7 @@ def _load_real_sequences(dataset: dict) -> dict:
     augmented training set and the untouched evaluation set below.
     """
     real = {}
+    skipped_corrupt = 0
     for label, samples in dataset.items():
         sequences = []
         for sample in samples:
@@ -214,6 +334,14 @@ def _load_real_sequences(dataset: dict) -> dict:
             # time — no re-upload. MUST match mobile HandLandmarkHelper.parseResult.
             seq = normalize_sequence(seq)
 
+            # Reject samples with an implausible MediaPipe tracking jump — see
+            # _TRACKING_GLITCH_BOUND above.
+            peak_vel = float(np.max(_clip_velocities(seq))) if len(seq) > 1 else 0.0
+            if peak_vel > _TRACKING_GLITCH_BOUND or float(np.max(np.abs(seq))) > _TRACKING_GLITCH_BOUND:
+                skipped_corrupt += 1
+                print(f"WARNING: skipping likely-corrupted sample for '{label}' (implausible tracking jump)")
+                continue
+
             # Center on peak-velocity frame — mirrors PredictionService.extractMotionWindow()
             seq = center_on_peak_velocity(seq)
 
@@ -227,6 +355,8 @@ def _load_real_sequences(dataset: dict) -> dict:
             sequences.append(seq)
         if sequences:
             real[label] = sequences
+    if skipped_corrupt:
+        print(f"Skipped {skipped_corrupt} likely-corrupted sample(s) with implausible tracking jumps")
     return real
 
 
@@ -289,6 +419,64 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
     y_val   = np.array(y_val,   dtype=np.int32)
 
     print(f"Motion dataset — train: {X_train.shape}, val (real, unaugmented): {X_val.shape}, classes: {len(labels)}")
+    return X_train, y_train, X_val, y_val, label_map
+
+
+def prepare_static_dataset(static_dataset: dict, test_size: float = 0.2, random_state: int = 42):
+    """
+    Prepare a static-gesture dataset (single-frame FEATURE_SIZE vectors) with the
+    same honest split-before-augment structure as prepare_motion_dataset: split
+    real samples train/val BEFORE augmenting, so the validation split stays 100%
+    real, unaugmented data.
+
+    static_dataset: { label: [ {"sequence": [...]}, ... ] } — pass the static half
+    of partition_dataset_by_word_type's output. Each sample's sequence is usually
+    already a single frame (extract.py collapses static clips at ingestion time),
+    but most_stable_frame() is used rather than assuming index 0, so this stays
+    correct even if a stored sequence has more than one frame.
+    Returns (X_train, y_train, X_val, y_val, label_map).
+    """
+    labels = sorted(static_dataset.keys())
+    label_map = { i: label for i, label in enumerate(labels) }
+    label_idx = { label: i for i, label in enumerate(labels) }
+
+    X_train, y_train = [], []
+    X_val,   y_val   = [], []
+
+    for label in labels:
+        real = []
+        for s in static_dataset[label]:
+            seq = s.get("sequence", [])
+            if not seq or len(seq[0]) != FEATURE_SIZE:
+                continue
+            real.append(most_stable_frame(np.array(seq, dtype=np.float32)))
+        idx = label_idx[label]
+
+        if len(real) >= 2:
+            train_feats, val_feats = train_test_split(
+                real, test_size=test_size, random_state=random_state
+            )
+        else:
+            train_feats, val_feats = real, []
+
+        # Augment the TRAIN portion only — evaluation stays 100% real.
+        target = max(len(train_feats) * 6, 150)
+        augmented = augment_static_samples(
+            [f.tolist() for f in train_feats], target_count=target
+        )
+        train_feats_all = train_feats + [np.array(a, dtype=np.float32) for a in augmented]
+
+        X_train.extend(train_feats_all)
+        y_train.extend([idx] * len(train_feats_all))
+        X_val.extend(val_feats)
+        y_val.extend([idx] * len(val_feats))
+
+    X_train = np.array(X_train, dtype=np.float32)
+    y_train = np.array(y_train, dtype=np.int32)
+    X_val   = np.array(X_val,   dtype=np.float32)
+    y_val   = np.array(y_val,   dtype=np.int32)
+
+    print(f"Static dataset — train: {X_train.shape}, val (real, unaugmented): {X_val.shape}, classes: {len(labels)}")
     return X_train, y_train, X_val, y_val, label_map
 
 
@@ -366,5 +554,26 @@ def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:
                 result[idx] = result[idx + 1]
 
         augmented.append(result.tolist())
+
+    return augmented
+
+
+def augment_static_samples(samples: list, target_count: int = 100) -> list:
+    """
+    Augment static (single-frame) samples with Gaussian noise only — a held pose
+    has no time axis, so the speed-variation and frame-dropout augmentations
+    augment_motion_sequences uses don't apply here.
+    """
+    augmented = []
+    if not samples:
+        return augmented
+
+    rng = np.random.default_rng(42)
+    needed = target_count - len(samples)
+
+    while len(augmented) < needed:
+        base  = np.array(samples[rng.integers(len(samples))], dtype=np.float32)
+        noise = rng.normal(0, 0.010, base.shape)
+        augmented.append((base + noise).tolist())
 
     return augmented

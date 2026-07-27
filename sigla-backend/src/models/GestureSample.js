@@ -42,13 +42,17 @@ const GestureSample = sequelize.define(
         isIn: [["pending", "approved", "rejected"]],
       },
     },
-    // Every gesture is motion: array of frames, each frame array of landmark coords
-
+    // Array of frames, each frame an array of FEATURE_SIZE landmark coordinates.
+    // Static gestures (from an image, or a video clip classified as a held pose —
+    // see sigla-ml classify_motion_or_static) are stored as a length-1 array (a
+    // single frame); motion gestures as the full extracted sequence. No separate
+    // static/motion column — which one a sample is gets re-derived from this
+    // array's own length/velocity at train time, not stored as a flag.
     sequence: {
       type: DataTypes.JSON,
       allowNull: true,
       comment:
-        "Array of frames, each frame containing 126 landmark coordinates for motion gestures",
+        "Array of frames, each frame containing FEATURE_SIZE landmark coordinates. Length 1 = static (held pose), length >1 = motion.",
     },
   },
   {

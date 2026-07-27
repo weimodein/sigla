@@ -8,7 +8,7 @@ from app.services.train   import train
 from app.services.test    import test
 from app.services.deploy  import deploy
 from app.services.video   import generate_word_video
-from app.services.extract import extract_motion_landmarks
+from app.services.extract import extract_motion_landmarks, extract_static_landmarks
 
 router = APIRouter(prefix="", tags=["Model"])
 
@@ -69,6 +69,10 @@ async def train_model(request: TrainRequest):
             "total_classes":     result.get("total_classes"),
             "tflite_url":        result.get("tflite_url"),
             "h5_url":            result.get("h5_url"),
+            "static_accuracy":   result.get("static_accuracy"),
+            "static_classes":    result.get("static_classes"),
+            "static_tflite_url": result.get("static_tflite_url"),
+            "static_h5_url":     result.get("static_h5_url"),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -87,14 +91,20 @@ async def test_model(request: TestRequest):
             version_number=request.version_number,
             model_id=request.model_id,
         )
-        m = result["motion_model"]
+        motion = result.get("motion_model")
+        static = result.get("static_model")
+        # Flat top-level fields mirror whichever model was evaluated — motion
+        # takes priority for backward compatibility with existing consumers that
+        # only ever read these unprefixed fields.
+        primary = motion or static
         return {
-            "message":    "Model evaluated successfully",
-            "result":     result,
-            "accuracy":   m["accuracy"],
-            "precision":  m["precision"],
-            "recall":     m["recall"],
-            "f1_score":   m["f1_score"],
+            "message":         "Model evaluated successfully",
+            "result":          result,
+            "accuracy":        primary["accuracy"]  if primary else None,
+            "precision":       primary["precision"] if primary else None,
+            "recall":          primary["recall"]    if primary else None,
+            "f1_score":        primary["f1_score"]  if primary else None,
+            "static_accuracy": static["accuracy"]    if static  else None,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -203,16 +213,41 @@ async def generate_video(request: VideoRequest):
 @router.post("/extract-landmarks")
 async def extract_landmarks(file: UploadFile = File(...)):
     """
-    Extract a MediaPipe hand-landmark motion sequence (30×126) from an uploaded
-    video. Every gesture is treated as motion. Called by the Node.js backend for
-    each video file uploaded by an admin.
+    Extract MediaPipe hand+pose landmarks from an uploaded video clip and
+    auto-classify the clip's own content as static or motion (see
+    extract_motion_landmarks / preprocessor.classify_motion_or_static) — a video
+    is not assumed to be a motion gesture just because it's a video. Called by
+    the Node.js backend for each video file uploaded by an admin. Returns
+    {"type": "static"|"motion", "sequence": [...]} — static is a length-1 array
+    (one held-pose frame), motion the full extracted window.
     """
     try:
         video_bytes = await file.read()
-        sequence = extract_motion_landmarks(video_bytes, file.filename)
-        if sequence is None:
+        result = extract_motion_landmarks(video_bytes, file.filename)
+        if result is None:
             raise HTTPException(status_code=422, detail="No hands detected in video")
-        return {"type": "motion", "sequence": sequence}
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Landmark extraction failed: {str(e)}")
+
+
+@router.post("/extract-landmarks-static")
+async def extract_landmarks_static(file: UploadFile = File(...)):
+    """
+    Extract a single-frame MediaPipe hand+pose landmark vector from an uploaded
+    still image — always "static". Called by the Node.js backend for each image
+    file uploaded by an admin. Wrapped as a length-1 "sequence" (not a separate
+    field) so gesture_samples needs no schema change — same shape extract.py
+    stores for a video clip classified as a held pose.
+    """
+    try:
+        image_bytes = await file.read()
+        features = extract_static_landmarks(image_bytes)
+        if features is None:
+            raise HTTPException(status_code=422, detail="No hands detected in image")
+        return {"type": "static", "sequence": [features]}
     except HTTPException:
         raise
     except Exception as e:

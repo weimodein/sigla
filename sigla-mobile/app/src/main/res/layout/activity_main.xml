@@ -53,7 +53,7 @@
                     android:text="Ready"
                     android:textColor="#4CAF50"
                     android:textSize="14sp"
-                    android:textStyle="bold"
+                    android:fontFamily="@font/poppins_bold"
                     android:background="#CC000000"
                     android:padding="4dp"
                     android:paddingStart="8dp"
@@ -93,10 +93,10 @@
                             android:layout_height="wrap_content"
                             android:text="HELLO"
                             android:textColor="#FFFFFF"
-                            android:textSize="52sp"
-                            android:textStyle="bold"
+                            android:textSize="34sp"
                             android:letterSpacing="0.05"
-                            android:fontFamily="sans-serif-black"
+                            android:fontFamily="@font/poppins_bold"
+                            android:gravity="center"
                             android:includeFontPadding="false" />
 
                         <!-- Filipino translation -->
@@ -106,12 +106,42 @@
                             android:layout_height="wrap_content"
                             android:text=""
                             android:textColor="#6AB0FF"
-                            android:textSize="22sp"
+                            android:textSize="16sp"
                             android:textStyle="italic"
                             android:layout_marginTop="4dp"
                             android:visibility="gone"
-                            android:fontFamily="sans-serif" />
+                            android:gravity="center"
+                            android:fontFamily="@font/poppins_regular" />
 
+<<<<<<< Updated upstream
+=======
+                        <!-- Confidence + gesture type badge -->
+                        <TextView
+                            android:id="@+id/tvConfidence"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="98%  [STATIC]"
+                            android:textColor="#B0D4FF"
+                            android:textSize="12sp"
+                            android:layout_marginTop="8dp"
+                            android:fontFamily="@font/poppins_regular" />
+
+                        <!-- Filipino toggle button -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnToggleFilipino"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="Show Filipino"
+                            android:textColor="#6AB0FF"
+                            android:textSize="11sp"
+                            android:layout_marginTop="10dp"
+                            app:strokeColor="#6AB0FF"
+                            app:cornerRadius="16dp" />
+
+>>>>>>> Stashed changes
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -174,12 +204,11 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="SIGLA"
+                        android:text="S i g L a"
                         android:textColor="#FFFFFF"
                         android:textSize="18sp"
-                        android:textStyle="bold"
                         android:letterSpacing="0.1"
-                        android:fontFamily="sans-serif-medium" />
+                        android:fontFamily="@font/poppins_bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -188,7 +217,7 @@
                         android:textColor="#80B0D4FF"
                         android:textSize="10sp"
                         android:letterSpacing="0.03"
-                        android:fontFamily="sans-serif" />
+                        android:fontFamily="@font/poppins_regular" />
 
                 </LinearLayout>
 
@@ -224,6 +253,7 @@
             android:text="More than 2 hands detected"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
+            android:fontFamily="@font/poppins_regular"
             android:background="#CC000000"
             android:padding="8dp"
             android:paddingStart="16dp"
@@ -242,7 +272,7 @@
             android:text="✋ No Hands Detected"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
-            android:textStyle="bold"
+            android:fontFamily="@font/poppins_bold"
             android:background="#CCD32F2F"
             android:padding="8dp"
             android:paddingStart="16dp"
@@ -320,7 +350,7 @@
                                     android:text="Detecting…"
                                     android:textColor="#B0D4FF"
                                     android:textSize="14sp"
-                                    android:textStyle="bold" />
+                                    android:fontFamily="@font/poppins_bold" />
 
                             </LinearLayout>
 
@@ -343,7 +373,8 @@
                                     android:layout_height="wrap_content"
                                     android:text="Hand tracking is active"
                                     android:textColor="#B0D4FF"
-                                    android:textSize="11sp" />
+                                    android:textSize="11sp"
+                                    android:fontFamily="@font/poppins_regular" />
 
                             </LinearLayout>
 
@@ -360,7 +391,7 @@
                             android:text="Ready"
                             android:textColor="#4CAF50"
                             android:textSize="12sp"
-                            android:textStyle="bold" />
+                            android:fontFamily="@font/poppins_bold" />
 
                     </LinearLayout>
 
@@ -393,7 +424,8 @@
                     android:layout_marginBottom="6dp"
                     android:text="Detection loading"
                     android:textColor="#B0D4FF"
-                    android:textSize="11sp" />
+                    android:textSize="11sp"
+                    android:fontFamily="@font/poppins_regular" />
 
                 <ProgressBar
                     android:id="@+id/progressBuffer"
@@ -421,7 +453,8 @@
                         android:layout_weight="1"
                         android:text="FPS: 0"
                         android:textColor="#B0D4FF"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:fontFamily="@font/poppins_regular" />
 
                     <TextView
                         android:id="@+id/tvBufferPercent"
@@ -431,7 +464,8 @@
                         android:gravity="center"
                         android:text="0%"
                         android:textColor="#B0D4FF"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:fontFamily="@font/poppins_regular" />
 
                     <TextView
                         android:id="@+id/tvVelocity"
@@ -441,7 +475,8 @@
                         android:gravity="center"
                         android:text="motion"
                         android:textColor="#B0D4FF"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:fontFamily="@font/poppins_regular" />
 
                     <TextView
                         android:id="@+id/tvStreak"
@@ -452,6 +487,7 @@
                         android:text=""
                         android:textColor="#FFB74D"
                         android:textSize="12sp"
+                        android:fontFamily="@font/poppins_regular"
                         android:visibility="gone" />
 
                 </LinearLayout>
@@ -508,6 +544,7 @@
                     android:text="Hold 2 seconds\nfor emergency"
                     android:textColor="#FFFFFF"
                     android:textSize="10sp"
+                    android:fontFamily="@font/poppins_regular"
                     android:gravity="center"
                     android:layout_marginTop="2dp"
                     android:background="#66000000"

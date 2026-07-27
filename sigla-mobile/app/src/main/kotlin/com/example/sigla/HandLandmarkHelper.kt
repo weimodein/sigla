@@ -28,12 +28,24 @@ private const val POSE_LSHOULDER = 1
 private const val POSE_RSHOULDER = 2
 
 // Pose is detected only every Nth camera frame (hands run on every frame) and the
-// most recent pose result is merged into each hand frame. This trades ≤N frames
-// (~100 ms) of pose staleness for ~1/N of the pose compute — pose anchors
-// (shoulders/nose) are near-static, so the normalized block barely changes between
-// consecutive frames. Training uses same-frame pose; raise/lower this only with an
-// on-device accuracy check.
-private const val POSE_DETECT_INTERVAL = 3
+// most recent pose result is merged into each hand frame. This trades ≤N frames of
+// pose staleness for ~1/N of the pose compute — pose anchors (shoulders/nose) are
+// near-static, so the normalized block barely changes between consecutive frames.
+// Training uses same-frame pose; raise/lower this only with an on-device accuracy
+// check.
+// Raised 3 -> 8 (2026-07-25): CB_PERF_TEST/PERF_TEST logs showed the camera
+// dispatching to MediaPipe at ~20-24fps but results only arriving at ~9-13Hz —
+// MediaPipe's own internal hand+pose detection is dropping roughly every other
+// dispatched frame before producing a result, well before it ever reaches this
+// app's code. Hand detection can't be reduced (it's the actual signal), but a
+// direct hand-only-vs-full-feature-vector separability check (2026-07-24, on real
+// stored training data) showed pose contributes negligible discriminative value
+// for the words currently misfiring — so cutting its update frequency further is
+// a low-risk way to reduce contention on MediaPipe's shared internal pipeline
+// without touching any of the already-tuned confidence/streak thresholds that
+// protect accuracy. Verify the real delivery rate (CB_PERF_TEST resultRateHz)
+// improves after this change; revert toward 3 if it doesn't.
+private const val POSE_DETECT_INTERVAL = 8
 
 data class LandmarkResult(
     val handsDetected: Int,

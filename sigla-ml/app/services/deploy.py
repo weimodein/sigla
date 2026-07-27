@@ -16,16 +16,23 @@ MODELS_DIR = "models"
 def download_model_files(version_number: str) -> dict:
     """
     Download all model files for a version from Supabase Storage.
-    Returns dict of local file paths.
+    Returns dict of local file paths. The motion (LSTM) files are required —
+    every deployable version must have trained motion classes. The static (MLP)
+    files are optional: a version trained from a dataset with < 2 static classes
+    simply never produced them.
     """
     local_dir = os.path.join(MODELS_DIR, version_number)
     os.makedirs(local_dir, exist_ok=True)
 
-    # Every model is a motion (LSTM) model.
     motion_files = [
         "sign_model_motion.tflite",
         "sign_model_motion.h5",
         "labels_motion.json",
+    ]
+    static_files = [
+        "sign_model_static.tflite",
+        "sign_model_static.h5",
+        "labels_static.json",
     ]
 
     local_paths = {}
@@ -46,6 +53,23 @@ def download_model_files(version_number: str) -> dict:
         except Exception as e:
             raise ValueError(f"Required file {filename} not found in Supabase: {e}")
 
+    for filename in static_files:
+        storage_path = f"{version_number}/{filename}"
+        local_path   = os.path.join(local_dir, filename)
+
+        if os.path.exists(local_path):
+            local_paths[filename] = local_path
+            continue
+
+        try:
+            file_bytes = download_file(BUCKET_MODELS, storage_path)
+            with open(local_path, "wb") as f:
+                f.write(file_bytes)
+            local_paths[filename] = local_path
+            print(f"Downloaded: {filename}")
+        except Exception as e:
+            print(f"No static model file {filename} for this version (ok if it has no static classes): {e}")
+
     return local_paths
 
 
@@ -59,6 +83,9 @@ def get_model_urls(version_number: str) -> dict:
         ("tflite_url",        "sign_model_motion.tflite"),
         ("h5_url",            "sign_model_motion.h5"),
         ("labels_motion_url", "labels_motion.json"),
+        ("static_tflite_url", "sign_model_static.tflite"),
+        ("static_h5_url",     "sign_model_static.h5"),
+        ("labels_static_url", "labels_static.json"),
     ]
 
     for key, filename in files:
@@ -80,6 +107,8 @@ def copy_to_deployed_folder(version_number: str) -> dict:
     files_to_copy = [
         "sign_model_motion.tflite",
         "labels_motion.json",
+        "sign_model_static.tflite",
+        "labels_static.json",
     ]
 
     deployed_urls = {}

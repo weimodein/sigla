@@ -7,7 +7,15 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
-from app.utils.preprocessor import center_on_peak_velocity, normalize_sequence, FEATURE_SIZE, SEQUENCE_LENGTH
+from app.utils.preprocessor import (
+    center_on_peak_velocity,
+    normalize_sequence,
+    normalize_frame,
+    classify_motion_or_static,
+    most_stable_frame,
+    FEATURE_SIZE,
+    SEQUENCE_LENGTH,
+)
 
 _KEY_LANDMARKS = [0, 4, 8, 12, 16, 20]
 _KEY_XY = [idx for i in _KEY_LANDMARKS for idx in (i * 3, i * 3 + 1)]
@@ -121,11 +129,15 @@ def _build_feature_vector(hand_landmarks_list, pose_landmarks=None) -> list[floa
     return features
 
 
-def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) -> list[list[float]] | None:
+def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) -> dict | None:
     """
-    Extract a 30-frame motion sequence from a video.
-    Samples up to SEQUENCE_LENGTH evenly-spaced frames, then centers on peak velocity.
-    Returns None if no hands detected.
+    Extract landmarks from a video clip and auto-classify the clip's own content
+    as "static" or "motion" (see preprocessor.classify_motion_or_static) — a clip
+    is not assumed to be motion just because it's a video. Returns None if no
+    hands detected, otherwise one of:
+      {"type": "static", "features": [FEATURE_SIZE floats]}      — a held pose
+      {"type": "motion", "sequence": [[FEATURE_SIZE floats], ...]} — SEQUENCE_LENGTH frames
+    Samples up to SEQUENCE_LENGTH*2 evenly-spaced frames from the source video.
     """
     # Preserve the real extension — on Windows, OpenCV's backend picks its
     # decoder based on the file suffix, so forcing an unrelated one (e.g. a
@@ -180,11 +192,43 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
         # articulation, so it can select a different moment of the gesture than what
         # live inference's extractMotionWindow() would pick for the same clip.
         seq_np = normalize_sequence(seq_np)
+
+        # Classify on the full normalized clip BEFORE windowing — windowing to
+        # SEQUENCE_LENGTH first would measure only a slice's velocity, not
+        # whether the clip as a whole ever really moves. Stored as a length-1
+        # "sequence" (not a separate field) so gesture_samples needs no schema
+        # change — static vs motion is re-derived from this array's own
+        # length/velocity at train time, see preprocessor.classify_motion_or_static.
+        if classify_motion_or_static(seq_np) == "static":
+            return {"type": "static", "sequence": [most_stable_frame(seq_np).tolist()]}
+
         seq_np = center_on_peak_velocity(seq_np)
-        return seq_np.tolist()
+        return {"type": "motion", "sequence": seq_np.tolist()}
     finally:
         # Release the capture BEFORE unlinking — on Windows the file stays
         # locked until this happens, otherwise os.unlink raises WinError 32
         # and masks whatever actually went wrong above.
         cap.release()
         os.unlink(tmp_path)
+
+
+def extract_static_landmarks(image_bytes: bytes) -> list[float] | None:
+    """
+    Extract a single-frame FEATURE_SIZE landmark vector from a still image —
+    always "static" by definition (a single frame has no velocity to measure).
+    Returns None if no hands detected.
+    """
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if frame is None:
+        return None
+
+    with _make_landmarker() as landmarker, _make_pose_landmarker() as pose_landmarker:
+        result = _detect(landmarker, frame)
+        if not result.hand_landmarks:
+            return None
+        pose_result = _detect_pose(pose_landmarker, frame)
+        pose_landmarks = pose_result.pose_landmarks[0] if pose_result.pose_landmarks else None
+        features = _build_feature_vector(result.hand_landmarks, pose_landmarks)
+
+    return normalize_frame(np.array(features, dtype=np.float32)).tolist()

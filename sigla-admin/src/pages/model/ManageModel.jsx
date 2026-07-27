@@ -810,6 +810,9 @@ const ManageModel = () => {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <td colSpan={4} className="px-4 py-4">
+                            {/* Static-model classes/accuracy aren't persisted (no DB
+                                columns for them), so they aren't shown here — only in
+                                the Test Results modal, right after running a test. */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                               <MetricBox
                                 label="Total Classes"
@@ -1077,6 +1080,20 @@ const ManageModel = () => {
                 Total classes trained:{" "}
                 <strong>{resultModal.data.result.total_classes}</strong>
               </p>
+            )}
+            {/* Static model accuracy isn't persisted (no DB column for it), so it
+                can only be shown here right after a Test run — the live response
+                from sigla-ml, not stored data. Not available for Train results
+                (those come back through a DB-backed status poll). */}
+            {resultModal.data?.test_result?.static_accuracy != null && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Static Model Accuracy</p>
+                  <p className="font-bold text-lg text-blue-900">
+                    {fmt(resultModal.data.test_result.static_accuracy)}
+                  </p>
+                </div>
+              </div>
             )}
             <button
               onClick={() => setResultModal(null)}

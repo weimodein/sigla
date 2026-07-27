@@ -11,6 +11,8 @@ from sklearn.metrics import (
 )
 from app.utils.preprocessor import (
     fetch_approved_samples,
+    partition_dataset_by_word_type,
+    prepare_static_dataset,
     prepare_motion_dataset,
 )
 from app.utils.supabase_client import download_file, BUCKET_MODELS
@@ -55,39 +57,12 @@ def download_model_from_supabase(version_number: str, filename: str) -> str:
     return local_path
 
 
-def test(version_number: str, model_id: int) -> dict:
-    print(f"\n{'='*50}")
-    print(f"Starting evaluation for version: {version_number}")
-    print(f"{'='*50}\n")
-
-    # ── Step 1: Fetch approved samples (all motion sequences) ──
-    dataset = fetch_approved_samples()
-
-    motion_dataset = {
-        k: [s for s in v if "sequence" in s]
-        for k, v in dataset.items()
-    }
-    motion_dataset = { k: v for k, v in motion_dataset.items() if v }
-
-    if len(motion_dataset) < 2:
-        raise ValueError("At least 2 gesture classes with sequence data are required for evaluation.")
-
-    # ── Step 2: Download the Keras (.h5) motion model ─────────
-    # We evaluate the .h5 rather than the .tflite: the LSTM's TFLite build needs
-    # Select-TF (Flex) ops that the Python tf.lite.Interpreter can't load. The
-    # .h5 has identical weights and runs the LSTM natively in Keras.
-    h5_path = download_model_from_supabase(version_number, "sign_model_motion.h5")
-
-    # ── Step 3: Prepare + split ───────────────────────────────
-    # Same split logic (and random_state) as train.py, so X_test/y_test here is the
-    # identical real, unaugmented holdout the model's val_accuracy was measured
-    # against during training — a genuine evaluation, not data it trained on.
-    _, _, X_test, y_test, motion_label_map = prepare_motion_dataset(motion_dataset)
-
-    # ── Step 4: Evaluate ──────────────────────────────────────
-    print("Evaluating motion model...")
-    from tensorflow import keras
-    model = keras.models.load_model(h5_path)
+def _evaluate_model(model, X_test, y_test, label_map: dict, model_name: str) -> dict:
+    """
+    Shared evaluation: accuracy/precision/recall/f1, classification report, and
+    top confusions. Used for both the static and motion models — identical
+    metric computation, only the model/data preparation differs upstream.
+    """
     preds = predict_keras(model, X_test)
 
     accuracy  = accuracy_score(y_test,  preds)
@@ -97,15 +72,15 @@ def test(version_number: str, model_id: int) -> dict:
 
     report = classification_report(
         y_test, preds,
-        target_names=[motion_label_map[i] for i in range(len(motion_label_map))],
+        target_names=[label_map[i] for i in range(len(label_map))],
         zero_division=0
     )
 
     # Per-class precision/recall shows a class is weak but not WHICH other class it's
     # being confused with. Surface the top confusions explicitly (e.g. "NO -> YES: 3")
     # so a weak class's likely culprit is visible without manually reading a full matrix.
-    labels_sorted = [motion_label_map[i] for i in range(len(motion_label_map))]
-    cm = confusion_matrix(y_test, preds, labels=list(range(len(motion_label_map))))
+    labels_sorted = [label_map[i] for i in range(len(label_map))]
+    cm = confusion_matrix(y_test, preds, labels=list(range(len(label_map))))
     confusions = []
     for true_idx, row in enumerate(cm):
         for pred_idx, count in enumerate(row):
@@ -120,7 +95,7 @@ def test(version_number: str, model_id: int) -> dict:
         for count, true_label, pred_label in confusions
     ) or "  (none - every class classified correctly)"
 
-    print(f"Motion Model Results:")
+    print(f"{model_name} Model Results:")
     print(f"  Accuracy:  {accuracy:.4f}")
     print(f"  Precision: {precision:.4f}")
     print(f"  Recall:    {recall:.4f}")
@@ -128,11 +103,7 @@ def test(version_number: str, model_id: int) -> dict:
     print(f"\nClassification Report:\n{report}")
     print(f"Top confusions (true -> predicted):\n{confusion_lines}")
 
-    print(f"\n{'='*50}")
-    print(f"Evaluation complete for version: {version_number}")
-    print(f"{'='*50}\n")
-
-    metrics = {
+    return {
         "accuracy":              round(float(accuracy),  4),
         "precision":             round(float(precision), 4),
         "recall":                round(float(recall),    4),
@@ -141,8 +112,55 @@ def test(version_number: str, model_id: int) -> dict:
         "top_confusions":        confusion_lines,
     }
 
-    return {
-        "version_number": version_number,
-        "model_id":       model_id,
-        "motion_model":   metrics,
-    }
+
+def test(version_number: str, model_id: int) -> dict:
+    print(f"\n{'='*50}")
+    print(f"Starting evaluation for version: {version_number}")
+    print(f"{'='*50}\n")
+
+    # ── Step 1: Fetch approved samples, route each WORD to exactly one model ──
+    # Same routing as train.py — see partition_dataset_by_word_type.
+    dataset = fetch_approved_samples()
+    static_dataset, motion_dataset = partition_dataset_by_word_type(dataset)
+
+    if len(static_dataset) < 2 and len(motion_dataset) < 2:
+        raise ValueError(
+            "At least 2 gesture classes routed to the same model (static or "
+            "motion) are required for evaluation."
+        )
+
+    from tensorflow import keras
+    result = {"version_number": version_number, "model_id": model_id}
+
+    # ── Static model (if this version trained one and static data still exists) ──
+    if len(static_dataset) >= 2:
+        try:
+            static_h5_path = download_model_from_supabase(version_number, "sign_model_static.h5")
+            # Same split logic (and random_state) as train.py, so X_test/y_test here
+            # is the identical real, unaugmented holdout val_accuracy was measured
+            # against during training.
+            _, _, X_test_s, y_test_s, static_label_map = prepare_static_dataset(static_dataset)
+            static_model = keras.models.load_model(static_h5_path)
+            print("Evaluating static model...")
+            result["static_model"] = _evaluate_model(
+                static_model, X_test_s, y_test_s, static_label_map, "Static"
+            )
+        except Exception as e:
+            print(f"Skipping static model evaluation (no static model for this version?): {e}")
+
+    # ── Motion model ──────────────────────────────────────────
+    # We evaluate the .h5 rather than the .tflite: the LSTM's TFLite build needs
+    # Select-TF (Flex) ops that the Python tf.lite.Interpreter can't load. The
+    # .h5 has identical weights and runs the LSTM natively in Keras.
+    if len(motion_dataset) >= 2:
+        h5_path = download_model_from_supabase(version_number, "sign_model_motion.h5")
+        _, _, X_test, y_test, motion_label_map = prepare_motion_dataset(motion_dataset)
+        model = keras.models.load_model(h5_path)
+        print("Evaluating motion model...")
+        result["motion_model"] = _evaluate_model(model, X_test, y_test, motion_label_map, "Motion")
+
+    print(f"\n{'='*50}")
+    print(f"Evaluation complete for version: {version_number}")
+    print(f"{'='*50}\n")
+
+    return result
