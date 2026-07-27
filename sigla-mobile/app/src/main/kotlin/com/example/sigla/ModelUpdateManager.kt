@@ -34,6 +34,11 @@ object ModelUpdateManager {
 
     private val gson = Gson()
 
+    // Hoisted out of the load functions: an anonymous TypeToken was being
+    // allocated on every cache read.
+    private val WORD_BANK_TYPE  = object : TypeToken<List<WordBankWord>>() {}.type
+    private val CATEGORIES_TYPE = object : TypeToken<List<CategoryItem>>() {}.type
+
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -448,17 +453,20 @@ object ModelUpdateManager {
         }
     }
 
-    fun loadCachedWordBank(context: Context): List<WordBankWord>? {
-        val file = File(context.filesDir, WORD_BANK_CACHE_FILE)
-        if (!file.exists()) return null
-        return try {
-            val type = object : TypeToken<List<WordBankWord>>() {}.type
-            gson.fromJson<List<WordBankWord>>(file.readText(), type)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load cached word bank: ${e.message}")
-            null
+    // Suspend + IO: this reads and Gson-parses the entire word bank, and was
+    // being called from lifecycleScope.launch (the Main dispatcher) during
+    // WordBankActivity.onCreate — blocking the first frame.
+    suspend fun loadCachedWordBank(context: Context): List<WordBankWord>? =
+        withContext(Dispatchers.IO) {
+            val file = File(context.filesDir, WORD_BANK_CACHE_FILE)
+            if (!file.exists()) return@withContext null
+            try {
+                gson.fromJson<List<WordBankWord>>(file.readText(), WORD_BANK_TYPE)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load cached word bank: ${e.message}")
+                null
+            }
         }
-    }
 
     suspend fun cacheWordBank(context: Context, words: List<WordBankWord>) {
         withContext(Dispatchers.IO) {
@@ -472,17 +480,17 @@ object ModelUpdateManager {
         }
     }
 
-    fun loadCachedCategories(context: Context): List<CategoryItem>? {
-        val file = File(context.filesDir, CATEGORIES_CACHE_FILE)
-        if (!file.exists()) return null
-        return try {
-            val type = object : TypeToken<List<CategoryItem>>() {}.type
-            gson.fromJson<List<CategoryItem>>(file.readText(), type)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load cached categories: ${e.message}")
-            null
+    suspend fun loadCachedCategories(context: Context): List<CategoryItem>? =
+        withContext(Dispatchers.IO) {
+            val file = File(context.filesDir, CATEGORIES_CACHE_FILE)
+            if (!file.exists()) return@withContext null
+            try {
+                gson.fromJson<List<CategoryItem>>(file.readText(), CATEGORIES_TYPE)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load cached categories: ${e.message}")
+                null
+            }
         }
-    }
 
     suspend fun cacheCategories(context: Context, categories: List<CategoryItem>) {
         withContext(Dispatchers.IO) {

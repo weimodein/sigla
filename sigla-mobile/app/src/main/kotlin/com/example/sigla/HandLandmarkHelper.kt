@@ -48,6 +48,17 @@ data class LandmarkResult(
     val handednessScore: List<Float> = emptyList()
 )
 
+/**
+ * Wraps the MediaPipe hand + pose landmarkers.
+ *
+ * **Construct this off the main thread.** The init block below builds both
+ * graphs eagerly, which parses ~14 MB of bundled assets
+ * (`hand_landmarker.task` 7.8 MB + `pose_landmarker_lite.task` 5.8 MB) and
+ * uploads them to the GPU delegate — and retries on CPU if the GPU delegate
+ * throws. On the UI thread that is a visible freeze; MainActivity builds it on
+ * Dispatchers.IO for exactly this reason. (CollectionActivity still constructs
+ * it in onCreate and will stutter on entry.)
+ */
 class HandLandmarkHelper(
     private val context: Context,
     // Callback invoked on the MediaPipe internal thread — caller must marshal to UI thread if needed
@@ -236,9 +247,16 @@ class HandLandmarkHelper(
 
     private fun empty() = LandmarkResult(0, FloatArray(FEATURE_SIZE), emptyList())
 
+    /**
+     * Releases both MediaPipe graphs. Idempotent — MainActivity closes in
+     * onStop() and again defensively in onDestroy(), and double-closing a
+     * MediaPipe task would otherwise crash.
+     */
     fun close() {
         landmarker?.close()
+        landmarker = null
         poseLandmarker?.close()
+        poseLandmarker = null
         lastPoseResult = null
     }
 }

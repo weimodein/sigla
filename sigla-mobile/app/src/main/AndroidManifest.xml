@@ -27,10 +27,13 @@
         tools:replace="android:allowBackup,android:icon,android:label,android:theme"
 >
 
-        <!-- Only MainActivity for now -->
+        <!-- launchMode="singleTop" on the sidebar-reachable screens: re-tapping
+             the current screen in the drawer reuses the existing instance
+             instead of stacking (and rebuilding) a second copy of it. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -38,15 +41,15 @@
             </intent-filter>
         </activity>
 
-        
+
         <activity android:name=".CollectionActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".TranslationHistoryActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".WordBankActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".TranslationHistoryActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
+        <activity android:name=".WordBankActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
         <activity android:name=".CategoryWordListActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".WordDetailActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".NotificationsActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".ProfileActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".SettingsActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".NotificationsActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
+        <activity android:name=".ProfileActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
+        <activity android:name=".SettingsActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
         <activity android:name=".TermsActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".AuthActivity" android:exported="false" android:screenOrientation="portrait" />

@@ -220,10 +220,14 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnVoiceMale)?.setOnClickListener {
             applyVoiceSelection("MALE")
             appSettings.voiceType = AppSettings.VOICE_MALE
+            // The chosen Voice is cached against the preference, so changing it
+            // has to drop the cache or playback would keep the old voice.
+            TtsVoiceHelper.invalidate()
         }
         findViewById<View>(R.id.btnVoiceFemale)?.setOnClickListener {
             applyVoiceSelection("FEMALE")
             appSettings.voiceType = AppSettings.VOICE_FEMALE
+            TtsVoiceHelper.invalidate()
         }
     }
 
@@ -283,6 +287,7 @@ class SettingsActivity : AppCompatActivity() {
             view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
             view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
                 appSettings.resetToDefault()
+                TtsVoiceHelper.invalidate()   // resets voiceType as well
                 loadPreferences()
 
                 AppCompatDelegate.setDefaultNightMode(

@@ -129,6 +129,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
             onDelete = { flatIndex -> deleteEntry(flatIndex) }
         )
         rvHistory.layoutManager = LinearLayoutManager(this)
+        rvHistory.setHasFixedSize(true)
         rvHistory.adapter       = adapter
     }
 
@@ -163,7 +164,9 @@ class TranslationHistoryActivity : AppCompatActivity() {
     // ── Data ──────────────────────────────────────────────────────────────────
 
     private fun refreshList() {
-        android.util.Log.d("HistoryDebug", "Total saved entries: ${historyManager.getAll().size}")
+        // getGrouped() already reads and parses the whole history; the debug log
+        // that used to sit here called getAll() again, doubling the work on
+        // every refresh (including every swipe-to-delete).
         val grouped = historyManager.getGrouped()
         val items = mutableListOf<HistoryItem>()
         var flatIndex = 0

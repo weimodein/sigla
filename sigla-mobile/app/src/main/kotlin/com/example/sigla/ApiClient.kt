@@ -18,30 +18,68 @@ object ApiClient {
         return if (path.startsWith("http")) path else SERVER_URL.trimEnd('/') + path
     }
 
-    private fun buildClient(token: String? = null): OkHttpClient {
+    /**
+     * Auth token for outgoing requests.
+     *
+     * The token used to be baked into a per-call OkHttpClient, which is why a
+     * whole HTTP stack was rebuilt for every request. Holding it here instead
+     * lets a single client serve every caller: the interceptor below reads it
+     * at request time. Volatile because requests are issued from several
+     * threads (IO dispatchers, CameraX executor).
+     */
+    @Volatile
+    private var authToken: String? = null
+
+    /**
+     * One client for the whole process. Building an OkHttpClient allocates a
+     * connection pool, a dispatcher and a thread pool, so a per-call instance
+     * meant connections were never reused and every request paid a fresh
+     * TCP+TLS handshake.
+     */
+    private val client: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
-                    else HttpLoggingInterceptor.Level.NONE
+            // BODY stringifies entire word-bank responses into logcat. Useful
+            // when actively debugging the API, far too expensive by default.
+            level = HttpLoggingInterceptor.Level.NONE
         }
-        return OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
+        OkHttpClient.Builder()
+            // A shorter connect timeout keeps an unreachable server (BASE_URL is
+            // a LAN address) from stalling a screen for half a minute.
+            .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .addInterceptor(logging)
             .addInterceptor { chain ->
                 val request = chain.request().newBuilder().apply {
-                    token?.let { addHeader("Authorization", "Bearer $it") }
+                    authToken?.let { addHeader("Authorization", "Bearer $it") }
                 }.build()
                 chain.proceed(request)
             }
             .build()
     }
 
-    fun get(token: String? = null): ApiService =
+    /** Retrofit and its generated proxy are also built once, not per call. */
+    private val service: ApiService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
-            .client(buildClient(token))
+            .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiService::class.java)
+    }
+
+    /**
+     * Returns the shared service, updating the token used for subsequent
+     * requests. Signature is unchanged from the per-call-client version so
+     * existing callers keep working.
+     */
+    fun get(token: String? = null): ApiService {
+        if (token != null) authToken = token
+        return service
+    }
+
+    /** Drop the cached token on sign-out so later requests go out unauthenticated. */
+    fun clearToken() {
+        authToken = null
+    }
 }

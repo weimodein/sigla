@@ -8,9 +8,14 @@ import java.io.FileInputStream
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import kotlin.math.sqrt
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 // Every sign is a motion gesture recognised by a single LSTM model over a
@@ -99,16 +104,31 @@ class PredictionService(private val context: Context) {
     // Pre-allocated output array (resized once labels are known)
     private var motionOutputArr: Array<FloatArray> = arrayOf(FloatArray(1))
 
+    // Label fetching used to run on GlobalScope, so a request outlived the
+    // activity and its callback could resurrect a closed predictor (and retain
+    // MainActivity, which holds the camera and MediaPipe). This scope is
+    // cancelled in close().
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     // ── Init ──────────────────────────────────────────────────────────────────
     fun getLabelCount(): Int = motionLabels.size
 
-    fun init() {
+    /**
+     * Loads the interpreter and waits for labels to arrive.
+     *
+     * Suspends until initialization actually finishes. The caller used to fire
+     * this and then `delay(2000)` hoping labels had landed, which made every
+     * entry to the camera screen sit idle for two seconds.
+     */
+    suspend fun init() {
         try {
             Log.d(TAG, "=== INIT START ===")
             val options = Interpreter.Options().apply { numThreads = 2 }
 
             // Load the model from assets or internal storage
-            val motionBuf = loadModelOrNull("sign_model_motion.tflite")
+            val motionBuf = withContext(Dispatchers.IO) {
+                loadModelOrNull("sign_model_motion.tflite")
+            }
             if (motionBuf == null) {
                 Log.e(TAG, "Motion model not found")
                 return
@@ -117,17 +137,21 @@ class PredictionService(private val context: Context) {
             Log.d(TAG, "Interpreter created")
 
             // Fetch labels from the backend
-            fetchLabelsFromBackend { labels ->
-                if (labels != null && labels.isNotEmpty()) {
-                    motionLabels = labels
-                    motionOutputArr = arrayOf(FloatArray(motionLabels.size))
-                    isReady = true
-                    Log.i(TAG, "✅ Motion model loaded — ${motionLabels.size} classes")
-                } else {
-                    Log.e(TAG, "Failed to fetch labels from backend")
-                    motionInterp?.close()
-                    motionInterp = null
+            val labels = suspendCancellableCoroutine<List<String>?> { cont ->
+                fetchLabelsFromBackend { result ->
+                    if (cont.isActive) cont.resume(result)
                 }
+            }
+
+            if (labels != null && labels.isNotEmpty()) {
+                motionLabels = labels
+                motionOutputArr = arrayOf(FloatArray(motionLabels.size))
+                isReady = true
+                Log.i(TAG, "✅ Motion model loaded — ${motionLabels.size} classes")
+            } else {
+                Log.e(TAG, "Failed to fetch labels from backend")
+                motionInterp?.close()
+                motionInterp = null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load motion model: ${e.message}", e)
@@ -367,8 +391,18 @@ class PredictionService(private val context: Context) {
         noHandFrames = 0
     }
 
+    /**
+     * Releases the interpreter and cancels any in-flight label fetch.
+     *
+     * Safe to call more than once — the activity now tears down in onStop() and
+     * again defensively in onDestroy().
+     */
     fun close() {
+        scope.coroutineContext.cancelChildren()
         motionInterp?.close()
+        motionInterp = null
+        isReady      = false
+        resetBuffers()
     }
 
     private fun fetchLabelsFromBackend(callback: (List<String>?) -> Unit) {
@@ -385,8 +419,8 @@ class PredictionService(private val context: Context) {
             Log.d(TAG, "Fetching labels from backend...")
             val token = SessionManager.getInstance(context).token ?: ""
 
-            // Use coroutines for async call
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            // Scoped to this service, so close() cancels an in-flight fetch.
+            scope.launch {
                 try {
                     val response = ApiClient.get(token).getWordBank()
                     if (response.isSuccessful) {
@@ -399,24 +433,24 @@ class PredictionService(private val context: Context) {
                             // Cache the labels for offline use
                             cacheLabels(labels)
 
-                            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                            withContext(Dispatchers.Main) {
                                 callback(labels)
                             }
                         } else {
                             Log.e(TAG, "No words found in backend")
-                            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                            withContext(Dispatchers.Main) {
                                 callback(null)
                             }
                         }
                     } else {
                         Log.e(TAG, "Failed to fetch words: ${response.code()}")
-                        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             callback(null)
                         }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error fetching labels: ${e.message}", e)
-                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         callback(null)
                     }
                 }

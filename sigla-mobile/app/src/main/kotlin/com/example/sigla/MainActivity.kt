@@ -23,11 +23,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
-import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.example.sigla.databinding.ActivityMainBinding
-import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -74,8 +73,12 @@ private const val CHIRALITY_RIGHT_IS_NEGATIVE_CROSS = true
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding   : ActivityMainBinding
-    private lateinit var predictor : PredictionService
-    private lateinit var landmarker: HandLandmarkHelper
+    // Nullable rather than lateinit: both are now built on a background thread,
+    // so there is a window where the camera is live but they don't exist yet.
+    // The camera analyzer dereferences landmarker from its own thread, which
+    // would be an UninitializedPropertyAccessException with lateinit.
+    private var predictor : PredictionService? = null
+    private var landmarker: HandLandmarkHelper? = null
 
     // Backend-related managers
     private lateinit var session: SessionManager
@@ -87,6 +90,18 @@ class MainActivity : AppCompatActivity() {
     private val executor      = Executors.newSingleThreadExecutor()
     private var isFrontCamera = false
     private var cameraProvider: ProcessCameraProvider? = null
+
+    // Guards startVision()/stopVision() so a cold onCreate → onStart doesn't
+    // initialize the pipeline twice, and a double teardown is a no-op.
+    private var visionActive = false
+    // False when onCreate bailed out early (onboarding), so onStart knows not to
+    // bring up a camera for a screen that is on its way out.
+    private var setupComplete = false
+    // Held so teardown can cancel an in-flight model load rather than letting it
+    // complete against a predictor that has already been closed.
+    private var modelInitJob: Job? = null
+    // Reused per frame instead of allocating a Matrix for every camera frame.
+    private val frameMatrix = Matrix()
 
     // Add this variable at the top of MainActivity
     private var frameCounter = 0
@@ -149,43 +164,115 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Everything below ran; onStart() may now bring the camera up. Without
+        // this the onboarding early-return above would still fall through to
+        // onStart and load the models for a screen the user never sees.
+        setupComplete = true
+
         // Initialize TTS
         initTts()
 
-        predictor  = PredictionService(this)
-        landmarker = HandLandmarkHelper(this) { result ->
-            // TEMP: track whether this gesture ever showed 2 hands (diagnosing whether
-            // NO/BREAD are being signed/trained as one- or two-handed).
-            if (result.handsDetected > maxHandsSeenThisGesture) maxHandsSeenThisGesture = result.handsDetected
+        startVision()
 
-            // Canonical slot order FIRST (RIGHT→slot0, LEFT→slot1)
-            val ordered = canonicalizeSlots(result.features, result.handedness, result.handsDetected)
-            val features = canonicalizeHandedness(
-                ordered, result.handedness, result.handednessScore, result.handsDetected
-            )
-            predictor.processFrame(features, result.handsDetected)
-            
-            runOnUiThread {
-                val width = binding.cameraPreview.width.toFloat()
-                val height = binding.cameraPreview.height.toFloat()
-                
-                // result.landmarks is already List<FloatArray> - no conversion needed!
-                binding.overlayView.setLandmarks(
-                    result.landmarks,  // This is already the right format
-                    width,
-                    height,
-                    isFrontCamera  // ← Just pass the mirror flag
-                )
-            }
-        }
+        // Load Filipino translations from backend/cache
+        loadFilipinoTranslations()
 
-        lifecycleScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) { 
-                binding.tvStatus.text = "Loading model..."
+        // setupCallbacks() is wired inside startVision(), which rebinds them to
+        // each newly created predictor.
+        setupButtons()
+        setupSidebar()
+        updateFilipinoToggleLabel()
+
+        // Check if user is already signed in
+        checkAuthState()
+    }
+
+    /**
+     * Acquires the vision pipeline: MediaPipe landmarkers, the TFLite predictor,
+     * and the camera.
+     *
+     * Split out of onCreate so onStop() can release these and onStart() can take
+     * them again. Previously they were held until onDestroy(), which Android runs
+     * *after* the next activity's onCreate — so navigating away left two MediaPipe
+     * GPU contexts and two TFLite interpreters alive simultaneously, which is what
+     * made switching screens stall.
+     */
+    private fun startVision() {
+        if (visionActive || !setupComplete) return
+        visionActive = true
+
+        // The camera is bound immediately; the landmarker and predictor are built
+        // on the IO dispatcher below. Building HandLandmarkHelper parses ~14 MB of
+        // MediaPipe assets (7.8 MB hand + 5.8 MB pose) and uploads them to the GPU
+        // — doing that on the main thread is what made entering this screen hang.
+        if (hasCameraPermission()) startCamera()
+        else requestCameraPermission()
+
+        modelInitJob = lifecycleScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                binding.tvStatus.text = "Starting camera..."
                 binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_orange_light))
             }
 
             try {
+                withContext(Dispatchers.Main) {
+                    binding.tvStatus.text = "Loading hand tracking..."
+                }
+
+                // Built first, before any network work. MediaPipe comes from
+                // bundled assets and owes nothing to the backend, so making it
+                // wait on checkAndUpdate() would leave the user staring at a
+                // preview with no hand tracking whenever the network is slow.
+                //
+                // The expensive part: parses both MediaPipe .task assets and
+                // uploads them to the GPU delegate. applicationContext, not the
+                // Activity — a late-finishing build must not retain a destroyed
+                // Activity.
+                val helper = HandLandmarkHelper(applicationContext) { result ->
+                    // TEMP: track whether this gesture ever showed 2 hands (diagnosing whether
+                    // NO/BREAD are being signed/trained as one- or two-handed).
+                    if (result.handsDetected > maxHandsSeenThisGesture) maxHandsSeenThisGesture = result.handsDetected
+
+                    // Canonical slot order FIRST (RIGHT→slot0, LEFT→slot1)
+                    val ordered = canonicalizeSlots(result.features, result.handedness, result.handsDetected)
+                    val features = canonicalizeHandedness(
+                        ordered, result.handedness, result.handednessScore, result.handsDetected
+                    )
+                    predictor?.processFrame(features, result.handsDetected)
+
+                    runOnUiThread {
+                        val width = binding.cameraPreview.width.toFloat()
+                        val height = binding.cameraPreview.height.toFloat()
+
+                        // result.landmarks is already List<FloatArray> - no conversion needed!
+                        binding.overlayView.setLandmarks(
+                            result.landmarks,  // This is already the right format
+                            width,
+                            height,
+                            isFrontCamera  // ← Just pass the mirror flag
+                        )
+                    }
+                }
+
+                val service = PredictionService(applicationContext)
+
+                // Publish both only if the screen is still active. Navigating away
+                // mid-load cancels this job, and an orphaned helper would leak its
+                // GPU context if we just dropped the reference.
+                val published = withContext(Dispatchers.Main) {
+                    if (!visionActive) {
+                        helper.close()
+                        service.close()
+                        false
+                    } else {
+                        landmarker = helper
+                        predictor  = service
+                        setupCallbacks()   // binds onResult/onCollecting/onNoHands
+                        true
+                    }
+                }
+                if (!published) return@launch
+
                 // Check for a newer deployed model on every launch — not just when no
                 // local model exists. checkAndUpdate() compares version_number/tflite_url
                 // against what's cached, only downloads+verifies when different, and keeps
@@ -204,20 +291,20 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                // Initialize predictor (it will fetch labels from backend)
-                withContext(Dispatchers.Main) { 
+                // Initialize predictor (it will fetch labels from backend).
+                // init() now suspends until labels actually arrive, so the old
+                // blanket delay(2000) — which stalled every entry to this screen
+                // whether or not it was needed — is gone.
+                withContext(Dispatchers.Main) {
                     binding.tvStatus.text = "Fetching words from database..."
                 }
-                predictor.init()
-                
-                // Wait a bit for labels to load
-                delay(2000)
-                
+                service.init()
+
                 withContext(Dispatchers.Main) {
-                    if (predictor.isReady) {
+                    if (service.isReady) {
                         binding.tvStatus.text = "Models loaded"
                         binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
-                        Log.d("MainActivity", "Model ready with ${predictor.getLabelCount()} classes")
+                        Log.d(TAG, "Model ready with ${service.getLabelCount()} classes")
                     } else {
                         binding.tvStatus.text = "Failed to load words from database"
                         binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
@@ -227,37 +314,44 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     binding.tvStatus.text = "⚠ Error: ${e.message}"
                     binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
-                    Log.e("MainActivity", "Model error: ${e.message}", e)
+                    Log.e(TAG, "Model error: ${e.message}", e)
                 }
             }
         }
+    }
 
-        // Load Filipino translations from backend/cache
-        loadFilipinoTranslations()
+    /**
+     * Releases everything startVision() acquired. Called from onStop() so the
+     * models are gone before the next screen builds, and defensively again from
+     * onDestroy(). Both close() implementations are idempotent.
+     */
+    private fun stopVision() {
+        if (!visionActive) return
+        visionActive = false
 
-        setupCallbacks()
-        setupButtons()
-        setupSidebar()
-        updateFilipinoToggleLabel()
-
-        if (hasCameraPermission()) startCamera()
-        else requestCameraPermission()
-
-        // Check if user is already signed in
-        checkAuthState()
+        modelInitJob?.cancel()
+        modelInitJob = null
+        cameraProvider?.unbindAll()
+        cameraProvider = null
+        predictor?.close()
+        predictor = null
+        landmarker?.close()
+        landmarker = null
     }
 
     // ── Backend Initialization ────────────────────────────────────────────────
-
-    private fun applyTtsVoice() {
-        TtsVoiceHelper.applyPreferredVoice(tts, appSettings)
-    }
 
     private fun initTts() {
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.ENGLISH
-                applyTtsVoice()
+                // This callback lands on the main thread, and resolving the
+                // voice blocks on a binder call into the TTS engine process.
+                // Do it off-thread; TtsVoiceHelper caches the result so it
+                // only ever costs this once per preference.
+                lifecycleScope.launch(Dispatchers.IO) {
+                    TtsVoiceHelper.applyPreferredVoice(tts, appSettings)
+                }
                 isTtsReady = true
             }
         }
@@ -265,7 +359,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun speak(text: String) {
         if (!isTtsReady) return
-        applyTtsVoice()
+        // The voice is already set on the engine at init and whenever the
+        // preference changes — re-resolving it here cost a blocking engine
+        // query on every single recognition.
         val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
         val params = Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
@@ -322,27 +418,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkAuthState() {
-        // Check if user has a valid token
-        val token = session.token
-        if (!token.isNullOrEmpty()) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    val response = ApiClient.get(token).getMe()
-                    if (response.isSuccessful) {
-                        val user = response.body()?.user
-                        if (user != null) {
-                            isSignedIn = true
-                            currentUsername = user.username
-                            currentEmail = user.email
-                            withContext(Dispatchers.Main) {
-                                refreshSidebarAuthState()
-                            }
-                        }
+        // The token read is an AES decrypt (SessionManager is backed by
+        // EncryptedSharedPreferences), so it happens inside the coroutine
+        // rather than on the main thread during onCreate.
+        lifecycleScope.launch(Dispatchers.IO) {
+            val token = session.token
+            if (token.isNullOrEmpty()) return@launch
+            try {
+                val response = ApiClient.get(token).getMe()
+                if (response.isSuccessful) {
+                    val user = response.body()?.user
+                    if (user != null) {
+                        isSignedIn = true
+                        currentUsername = user.username
+                        currentEmail = user.email
                     }
-                } catch (e: Exception) {
-                    // Token might be expired
-                    session.clearSession()
                 }
+            } catch (e: Exception) {
+                // Token might be expired
+                session.clearSession()
             }
         }
     }
@@ -350,11 +444,11 @@ class MainActivity : AppCompatActivity() {
     // ── Predictor callbacks ───────────────────────────────────────────────────
 
     private fun setupCallbacks() {
+        // Called right after predictor is assigned in startVision(); bind once to
+        // a local so the three registrations can't race a concurrent teardown.
+        val predictor = this.predictor ?: return
+
         predictor.onResult = { result ->
-            // TEMP: diagnose NO/BREAD misrecognition on front camera.
-            Log.d(TAG, "NOBREAD_TEST cam=${if (isFrontCamera) "front" else "back"} " +
-                "label=${result.label} conf=${result.confidence} maxHands=$maxHandsSeenThisGesture " +
-                "latchedSlot0=$latchedMirrorSlot0 latchedSlot1=$latchedMirrorSlot1")
             maxHandsSeenThisGesture = 0
             runOnUiThread {
                 // Confidence is no longer shown to the user, but it is still recorded
@@ -439,7 +533,8 @@ class MainActivity : AppCompatActivity() {
         // Flip camera
         binding.btnFlipCamera.setOnClickListener {
             isFrontCamera = !isFrontCamera
-            predictor.reset()
+            // No-op if the models are still loading — flipping is still valid.
+            predictor?.reset()
             resetHandednessLatch()
             bindCamera()
         }
@@ -525,38 +620,20 @@ private fun setupSidebar() {
         finish()
     }
 
-    findViewById<View>(R.id.navProfile)?.setOnClickListener {
-        drawer.closeDrawer(GravityCompat.START)
-        if (isSignedIn) {
-            startActivity(Intent(this, ProfileActivity::class.java))
-            finish()
-        } else {
-            openAuthDialog()
-        }
-    }
-
-    findViewById<View>(R.id.navNotifications)?.setOnClickListener {
-        drawer.closeDrawer(GravityCompat.START)
-        if (isSignedIn) {
-            startActivity(Intent(this, NotificationsActivity::class.java))
-            finish()
-        } else {
-            openAuthDialog()
-        }
-    }
-
-    findViewById<View?>(R.id.btnSidebarSignIn)?.setOnClickListener {
-        drawer.closeDrawer(GravityCompat.START)
-        openAuthDialog()
-    }
-
-    refreshSidebarAuthState()
+    // navProfile / navNotifications / btnSidebarSignIn are deliberately absent:
+    // those ids exist only in the orphaned drawer_sidebar.xml, which nothing
+    // inflates, so the lookups always missed — and a *failed* findViewById walks
+    // the entire ~85-view hierarchy before returning null. Profile and
+    // Notifications are unreachable from this screen either way; restoring them
+    // means adding the rows to nav_sidebar.xml.
 }
 
 private fun setActiveNavItem(activeId: Int) {
+    // Only the ids nav_sidebar.xml actually defines — navNotifications and
+    // navProfile were full-hierarchy misses on every call.
     val navIds = listOf(
         R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
-        R.id.navNotifications, R.id.navProfile, R.id.navSettings
+        R.id.navSettings
     )
     navIds.forEach { id ->
         val view = findViewById<LinearLayout>(id)
@@ -579,37 +656,22 @@ private fun setActiveNavItem(activeId: Int) {
         }
     }
 }
-    private fun openAuthDialog() {
-        val dialog = AuthDialogFragment()
-        dialog.onSignedIn = {
-            checkAuthState()
-            refreshSidebarAuthState()
-            loadFilipinoTranslations()
-        }
-        dialog.show(supportFragmentManager, "auth")
-    }
-
-    private fun refreshSidebarAuthState() {
-        val tvUsername = findViewById<TextView?>(R.id.tvSidebarUsername)
-        val tvEmail    = findViewById<TextView?>(R.id.tvSidebarEmail)
-        val btnSignIn  = findViewById<MaterialButton?>(R.id.btnSidebarSignIn)
-
-        if (isSignedIn) {
-            tvUsername?.text      = currentUsername.ifBlank { "User" }
-            tvEmail?.text         = currentEmail
-            btnSignIn?.isVisible  = false
-        } else {
-            tvUsername?.text      = "Guest User"
-            tvEmail?.text         = "Not signed in"
-            btnSignIn?.isVisible  = true
-        }
-    }
+    // refreshSidebarAuthState() and openAuthDialog() removed: the former wrote to
+    // tvSidebarUsername / tvSidebarEmail / btnSidebarSignIn, none of which exist
+    // in nav_sidebar.xml, so all three lookups were full-hierarchy misses — paid
+    // on both onCreate and onResume. The latter was only reachable from the dead
+    // sidebar handlers. Sign-in from this screen needs those views added to
+    // nav_sidebar.xml first.
 
     // ── Camera ────────────────────────────────────────────────────────────────
 
     private fun startCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
+            // The provider resolves asynchronously, so the activity may already
+            // have been stopped (and the pipeline torn down) by the time this
+            // runs — binding here would resurrect a camera we just released.
+            if (!visionActive) return@addListener
             cameraProvider = future.get()
             bindCamera()
         }, ContextCompat.getMainExecutor(this))
@@ -641,6 +703,14 @@ private fun setActiveNavItem(activeId: Int) {
             .build()
 
         analysis.setAnalyzer(executor) { imageProxy ->
+            // The camera is bound before the landmarker finishes building, so
+            // early frames have nowhere to go. Bail before the bitmap work
+            // rather than after it.
+            val lm = landmarker
+            if (lm == null) {
+                imageProxy.close()
+                return@setAnalyzer
+            }
             frameCounter++
             // Skip every 2nd frame to reduce processing
             if (frameCounter % 2 == 0) {
@@ -654,7 +724,7 @@ private fun setActiveNavItem(activeId: Int) {
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
-            landmarker.detectAsync(prepared, SystemClock.elapsedRealtime())
+            lm.detectAsync(prepared, SystemClock.elapsedRealtime())
             imageProxy.close()
         }
 
@@ -872,12 +942,14 @@ private fun setActiveNavItem(activeId: Int) {
             return bitmap
         }
         
-        val matrix = Matrix().apply {
+        // Reused rather than allocated: this runs on every camera frame, and in
+        // portrait rotationDegrees is never 0, so the fast path above never hits.
+        val matrix = frameMatrix.apply {
+            reset()
             if (scale < 1f) postScale(scale, scale)
             if (rotationDegrees != 0) postRotate(rotationDegrees.toFloat())
             // For front camera: DON'T mirror the image going to the model
             // The preview (PreviewView) handles the display mirroring separately
-            // if (frontCamera) postScale(-1f, 1f, bitmap.width * scale / 2f, 0f)  // ← REMOVE THIS
         }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
@@ -907,29 +979,11 @@ private fun setActiveNavItem(activeId: Int) {
 
     override fun onResume() {
         super.onResume()
-        refreshSidebarAuthState()
-        refreshNotifBadge()
+        // refreshNotifBadge() removed: it fired a network request on every
+        // resume — plus an encrypted-prefs read and a failed view lookup — to
+        // populate tvNotifBadge, which exists in no inflated layout.
         // Picks up translations edited in the admin panel without needing a restart.
         loadFilipinoTranslations()
-    }
-
-    private fun refreshNotifBadge() {
-        if (!session.isLoggedIn) return
-        lifecycleScope.launch {
-            try {
-                val response = ApiClient.get(session.token).getUnreadCount()
-                if (response.isSuccessful) {
-                    val count = response.body()?.unread ?: 0
-                    val badge = findViewById<TextView?>(R.id.tvNotifBadge)
-                    if (count > 0) {
-                        badge?.text = if (count > 99) "99+" else count.toString()
-                        badge?.visibility = View.VISIBLE
-                    } else {
-                        badge?.visibility = View.GONE
-                    }
-                }
-            } catch (_: Exception) { }
-        }
     }
 
     @Deprecated("Use OnBackPressedDispatcher instead")
@@ -942,10 +996,28 @@ private fun setActiveNavItem(activeId: Int) {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Re-acquire after a previous onStop() released the pipeline. No-op on
+        // the cold path, where onCreate has already called this.
+        startVision()
+    }
+
+    /**
+     * Release the camera and both models here rather than in onDestroy().
+     *
+     * onDestroy() for this activity runs *after* the next activity's onCreate(),
+     * so holding MediaPipe and TFLite until then meant two sets of models were
+     * live at the moment of navigation — the stall when switching screens.
+     */
+    override fun onStop() {
+        stopVision()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         executor.shutdown()
-        predictor.close()
-        landmarker.close()
+        stopVision()          // defensive: onStop normally got here first
         tts?.shutdown()
         super.onDestroy()
     }
