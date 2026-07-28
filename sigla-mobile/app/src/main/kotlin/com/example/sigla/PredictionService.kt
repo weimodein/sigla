@@ -88,6 +88,87 @@ internal fun frameVelocity(prev: FloatArray, cur: FloatArray): Float {
     return sqrt(total)
 }
 
+// Temporal window search parameters. MUST match sigla-ml preprocessor.py
+// (VELOCITY_SMOOTH_WINDOW / VELOCITY_EDGE_MARGIN).
+//
+// Training clips are "raise, sign, lower": the ENTRY movement is a bigger velocity
+// spike than the sign itself. Measured on a real stored clip, the hand-raise hit
+// 0.4844 at frame 2 while the actual gesture peaked at 0.2098 (f16) and 0.1861
+// (f22) — ~2.3x smaller. A plain argmax therefore centres on the hand-raise and
+// cuts off the sign, which is what made GOOD MORNING / GOOD AFTERNOON / I'M FINE
+// mutually confusable: each one just looks like "hands coming up".
+//
+// Smoothing alone is not enough (the entry spike is broad as well as tall — a
+// smoothed argmax still picked frame 3); the edge margin is what moves the pick
+// onto the real sign. Margins from 0.15 to 0.30 converge on the same frame.
+//
+// Verified safe for live inference: the delivered window shifts while the buffer
+// is small but stabilises by ~35 frames, and the earliest possible fire is
+// MIN_MOTION_FRAMES + MOTION_EARLY_STREAK * MOTION_SLIDE_INTERVAL = 8 + 20 = 28
+// frames, with the buffer still growing through the streak. So the margin does
+// not delay firing.
+private const val VELOCITY_SMOOTH_WINDOW = 5
+private const val VELOCITY_EDGE_MARGIN   = 0.20
+
+// Two smoothed velocities within this are treated as tied. Sized well above
+// float32-vs-float64 rounding but far below any real difference in movement.
+private const val VELOCITY_TIE_EPS = 1e-5f
+
+/** Index of the frame that best represents the gesture's motion.
+ *  MUST stay byte-identical to sigla-ml preprocessor.peak_velocity_index. */
+internal fun peakVelocityIndex(frames: List<FloatArray>): Int {
+    val n = frames.size
+    if (n < 2) return 0
+
+    val vel = FloatArray(n - 1) { i -> frameVelocity(frames[i], frames[i + 1]) }
+
+    // Moving average, centred — mirrors numpy convolve(mode="same"). The shorter
+    // effective window at the ends is harmless because the ends are excluded below.
+    val smoothed: FloatArray
+    if (vel.size >= VELOCITY_SMOOTH_WINDOW) {
+        smoothed = FloatArray(vel.size)
+        val half = VELOCITY_SMOOTH_WINDOW / 2
+        for (i in vel.indices) {
+            var sum = 0f
+            for (k in -half..half) {
+                val j = i + k
+                if (j in vel.indices) sum += vel[j]
+            }
+            smoothed[i] = sum / VELOCITY_SMOOTH_WINDOW
+        }
+    } else {
+        smoothed = vel
+    }
+
+    var lo = (vel.size * VELOCITY_EDGE_MARGIN).toInt()
+    var hi = vel.size - lo
+    if (hi <= lo) {
+        // Too short to trim — search everything rather than return nothing.
+        lo = 0
+        hi = vel.size
+    }
+
+    // Ties are the normal case, not an edge case: smoothing a single sharp spike
+    // over VELOCITY_SMOOTH_WINDOW frames produces a flat plateau where several
+    // frames share the maximum. Kotlin accumulates in float32 and Python in
+    // float64, so "pick whichever compares greater" resolves those plateaus
+    // differently on the two sides and the windows silently diverge — this was
+    // caught by FeatureParityTest as a 1-frame disagreement.
+    //
+    // Break ties on distance from the sequence centre, which is deterministic
+    // across languages and the better choice anyway.
+    val centre = vel.size / 2.0
+    var best = lo
+    for (i in lo until hi) {
+        if (smoothed[i] > smoothed[best] + VELOCITY_TIE_EPS) {
+            best = i
+        } else if (kotlin.math.abs(smoothed[i] - smoothed[best]) <= VELOCITY_TIE_EPS) {
+            if (kotlin.math.abs(i - centre) < kotlin.math.abs(best - centre)) best = i
+        }
+    }
+    return best + 1
+}
+
 // Key landmark indices for the COLLECTING PROGRESS UI only — deliberately kept
 // separate from the model's window-selection signal above so a change to one
 // cannot silently alter the other.
@@ -491,12 +572,7 @@ class PredictionService(private val context: Context) {
             return padded.take(SEQUENCE_LENGTH)
         }
 
-        var peakIdx = frames.size / 2
-        var peakVel = 0f
-        for (i in 1 until frames.size) {
-            val v = frameVelocity(frames[i - 1], frames[i])
-            if (v > peakVel) { peakVel = v; peakIdx = i }
-        }
+        val peakIdx = peakVelocityIndex(frames)
 
         val half  = SEQUENCE_LENGTH / 2
         var start = (peakIdx - half).coerceAtLeast(0)

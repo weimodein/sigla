@@ -29,6 +29,7 @@ from app.utils.preprocessor import (  # noqa: E402
     _POSE_BASE,
     center_on_peak_velocity,
     frame_velocity,
+    peak_velocity_index,
 )
 
 SEED = 7
@@ -88,7 +89,8 @@ def build_window_cases(rng):
     }
 
 
-def peak_index(seq):
+def raw_argmax_index(seq):
+    """Plain argmax — kept only to show what the production picker improves on."""
     n = len(seq)
     peak_idx, peak_vel = n // 2, 0.0
     for i in range(1, n):
@@ -96,6 +98,12 @@ def peak_index(seq):
         if v > peak_vel:
             peak_vel, peak_idx = v, i
     return peak_idx
+
+
+def peak_index(seq):
+    """The PRODUCTION picker. Must be what the fixtures pin — generating from a
+    plain argmax would pin values the real code never produces."""
+    return peak_velocity_index(seq)
 
 
 def main():

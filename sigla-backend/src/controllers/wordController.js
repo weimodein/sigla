@@ -156,7 +156,29 @@ const extractAndStoreSample = async (
 
     return { file: filename, status: "ok", type: "video", sample_id: sample.id };
   } catch (err) {
-    const detail = err.response?.data?.detail || err.message;
+    // Log the cause. This used to return silently, so a batch where EVERY clip
+    // failed still came back as HTTP 207 "N processed, M failed" with nothing in
+    // the server log — the failure was invisible from both the terminal and the UI.
+    //
+    // err.message alone is rarely enough: Sequelize puts the real Postgres error in
+    // err.original (type mismatch, constraint, connection) and validation failures in
+    // err.errors, while an ML-service rejection arrives as err.response.data.detail.
+    const detail =
+      err.response?.data?.detail ||
+      err.original?.message ||
+      err.errors?.map((e) => e.message).join("; ") ||
+      err.message;
+
+    console.error(
+      `[extractAndStoreSample] FAILED "${filename}" (word=${word.label}): ${detail}`,
+      {
+        name: err.name,
+        http_status: err.response?.status,
+        pg_code: err.original?.code,
+        validation: err.errors?.map((e) => `${e.path}: ${e.message}`),
+      },
+    );
+
     return { file: filename, status: "failed", type: "video", error: detail };
   }
 };
@@ -1547,6 +1569,18 @@ const uploadVideos = async (req, res) => {
       results.push(result);
       if (result.status === "ok") successCount++;
       else failCount++;
+    }
+
+    // Surface the outcome server-side. The response is HTTP 207 either way, so a
+    // wholly-failed batch is otherwise indistinguishable from a successful one in
+    // the terminal — and the admin UI shows the same "processed" wording.
+    if (failCount > 0) {
+      console.warn(
+        `[uploadVideos] "${word.label}": ${successCount} stored, ${failCount} FAILED ` +
+          `(per-clip reasons logged above)`,
+      );
+    } else {
+      console.log(`[uploadVideos] "${word.label}": ${successCount} stored`);
     }
 
     // Update word counters

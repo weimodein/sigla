@@ -49,10 +49,26 @@ from app.utils.preprocessor import (  # noqa: E402
     frame_velocity,
 )
 
-# A word fails if more than this share of its clips peak at EARLY_FRAME or before.
-# Rationale: with a correctly centred window the peak is near SEQUENCE_LENGTH//2, so
-# a large mass at the leading edge means some other signal chose the window. Some
-# genuinely front-loaded clips are normal, hence a threshold rather than zero.
+# A word fails if more than FAIL_PCT of its clips peak at EARLY_FRAME or before.
+#
+# CALIBRATION HISTORY — read before changing this.
+#
+# The original rule assumed "peak at frame <=2" meant "no window was ever
+# selected". That was WRONG, and it misdiagnosed the same problem three times.
+# Source clips are "raise, sign, lower", and the hand-raise is a LARGER velocity
+# spike than the sign (measured: 0.4844 at f2 vs 0.2098 at f16). So a peak at
+# frame 2 usually meant the window WAS selected and had correctly found the entry
+# movement — a real problem, but a completely different one from "unwindowed",
+# and it sent debugging after a healthy ML service and a healthy DB write path.
+#
+# peak_velocity_index now smooths the velocity and excludes VELOCITY_EDGE_MARGIN
+# at each end, so a correct window can no longer be centred on the entry spike.
+# The check below is therefore now meaningful: after re-extraction, a peak still
+# sitting at the very start means the clip genuinely was not windowed.
+#
+# It remains a HEURISTIC. A clip whose real motion is at the very start (signer
+# already mid-gesture when recording began) legitimately peaks early and cannot be
+# centred. Treat a small failing share as data to inspect, not proof of a bug.
 EARLY_FRAME = 2
 FAIL_PCT = 30.0
 
@@ -83,6 +99,7 @@ def main() -> int:
     print(f"  {'-' * 20} {'-' * 4}  {'-' * 6}  {'-' * 6}")
 
     bad, total_clips, skipped = [], 0, 0
+    sample_ids = []   # so a FAIL can report WHICH rows it measured (stale vs new)
 
     for label in sorted(dataset):
         peaks = []
@@ -91,6 +108,9 @@ def main() -> int:
             if not seq or len(seq[0]) != FEATURE_SIZE:
                 skipped += 1
                 continue
+            sid = sample.get("sample_id")
+            if sid is not None:
+                sample_ids.append(sid)
             peaks.append(peak_frame(np.array(seq, dtype=np.float32)))
 
         if not peaks:
@@ -111,12 +131,24 @@ def main() -> int:
         print(f"skipped {skipped} sample(s) with missing/wrong-width sequences")
 
     if bad:
-        print(f"FAIL - {len(bad)} of {len(dataset)} word(s) still show the old windowing:")
+        print(f"FAIL - {len(bad)} of {len(dataset)} word(s) show unwindowed clips:")
         print(f"       {', '.join(bad)}")
         print()
-        print("The extraction service did not use the current velocity signal.")
-        print("Restart the ML service so it reloads preprocessor.py, then re-upload:")
-        print("    uvicorn app.main:app --reload --port 8000 --host 0.0.0.0")
+        # Report the sample ids rather than asserting a cause. An earlier version of
+        # this message blamed a stale ML service outright, which sent two separate
+        # debugging sessions after a service that was healthy the whole time. The
+        # data cannot distinguish "bad windowing" from "these rows predate the fix" —
+        # so print the ids and let the reader check.
+        if sample_ids:
+            lo, hi = min(sample_ids), max(sample_ids)
+            print(f"Measured sample ids {lo}..{hi} ({len(sample_ids)} rows).")
+        print("FIRST check whether these rows are actually NEW:")
+        print("    SELECT max(id), max(created_at) FROM gesture_samples;")
+        print("  - ids/timestamps unchanged since before the fix -> these are STALE rows.")
+        print("    The upload never wrote anything; look at the backend, not the extractor.")
+        print("    (uploadVideos returns HTTP 207 even when every clip fails.)")
+        print("  - rows ARE new -> extraction genuinely produced bad windows;")
+        print("    confirm the running service predates no source edit, then investigate.")
         print()
         print("Do NOT retrain until this passes - it would bake the bad windows into")
         print("the model, and the mobile app selects windows the new way.")

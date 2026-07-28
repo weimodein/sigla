@@ -166,6 +166,87 @@ def frame_velocity(prev: np.ndarray, cur: np.ndarray) -> float:
     return float(np.sqrt(total))
 
 
+# Temporal window search parameters. MUST match PredictionService.kt.
+#
+# Source clips are "raise, sign, lower": the signer's hands enter the frame, make
+# the sign, then drop. The ENTRY movement is a bigger velocity spike than the sign
+# itself — measured on a real stored clip, the hand-raise hit 0.4844 at frame 2
+# while the actual gesture peaked at 0.2098 (f16) and 0.1861 (f22), ~2.3x smaller.
+# A plain argmax therefore centres the window on the hand-raise and cuts off the
+# sign, which is what made GOOD MORNING / GOOD AFTERNOON / I'M FINE mutually
+# confusable: every one of them looks like "hands coming up".
+#
+# Two guards, both needed:
+#   * smoothing — a 5-frame moving average, so a single sharp frame cannot beat a
+#     sustained gesture movement. NOT sufficient alone: the entry spike is broad
+#     as well as tall, and a smoothed argmax still picked frame 3 on the real clip.
+#   * edge margin — exclude the first and last VELOCITY_EDGE_MARGIN of the
+#     sequence from the search, since that is where entry/exit motion lives. This
+#     is what actually moves the pick to f17 (the real sign). Margins from 0.15 to
+#     0.30 all converge on the same frame, so the exact value is not delicate.
+VELOCITY_SMOOTH_WINDOW = 5
+VELOCITY_EDGE_MARGIN   = 0.20
+
+# Two smoothed velocities within this are treated as tied. Sized well above
+# float32-vs-float64 rounding (~1e-7 at these magnitudes) but far below any real
+# difference in movement. See the tie-breaking comment in peak_velocity_index.
+_VELOCITY_TIE_EPS = 1e-5
+
+
+def peak_velocity_index(sequence: np.ndarray) -> int:
+    """
+    Index of the frame that best represents the gesture's motion.
+
+    Returns an index into `sequence` (1..n-1, matching the velocity transitions).
+    Falls back to the un-margined argmax when the sequence is too short for a
+    margin to leave anything to search.
+
+    MUST stay byte-identical to Kotlin peakVelocityIndex.
+    """
+    n = len(sequence)
+    if n < 2:
+        return 0
+
+    vel = np.array(
+        [frame_velocity(sequence[i - 1], sequence[i]) for i in range(1, n)],
+        dtype=np.float64,
+    )
+
+    # Moving average. 'same' keeps the index alignment of `vel`; the shorter
+    # effective window at the ends is harmless because the ends are excluded below.
+    if len(vel) >= VELOCITY_SMOOTH_WINDOW:
+        kernel = np.ones(VELOCITY_SMOOTH_WINDOW) / VELOCITY_SMOOTH_WINDOW
+        smoothed = np.convolve(vel, kernel, mode="same")
+    else:
+        smoothed = vel
+
+    lo = int(len(vel) * VELOCITY_EDGE_MARGIN)
+    hi = len(vel) - lo
+    if hi <= lo:
+        # Too short to trim — search everything rather than return nothing.
+        lo, hi = 0, len(vel)
+
+    # Ties are the normal case, not an edge case: smoothing a single sharp spike
+    # over VELOCITY_SMOOTH_WINDOW frames produces a flat plateau where several
+    # frames share the maximum. Python accumulates in float64 and Kotlin in
+    # float32, so "pick whichever compares greater" resolves those plateaus
+    # differently on the two sides and the windows silently diverge.
+    #
+    # Break ties on distance from the sequence centre (then on lower index), which
+    # is both deterministic across languages and the better choice anyway — the
+    # centre of a plateau is the middle of the movement.
+    centre = len(vel) / 2.0
+    best = lo
+    for i in range(lo, hi):
+        if smoothed[i] > smoothed[best] + _VELOCITY_TIE_EPS:
+            best = i
+        elif abs(smoothed[i] - smoothed[best]) <= _VELOCITY_TIE_EPS:
+            if abs(i - centre) < abs(best - centre):
+                best = i
+
+    return best + 1
+
+
 def center_on_peak_velocity(sequence: np.ndarray, force: bool = False) -> np.ndarray:
     """
     Center a motion sequence on its peak-velocity frame.
@@ -194,14 +275,9 @@ def center_on_peak_velocity(sequence: np.ndarray, force: bool = False) -> np.nda
     if n == SEQUENCE_LENGTH and not force:
         return sequence
 
-    # Find peak-velocity frame
-    peak_idx = n // 2
-    peak_vel = 0.0
-    for i in range(1, n):
-        v = frame_velocity(sequence[i - 1], sequence[i])
-        if v > peak_vel:
-            peak_vel = v
-            peak_idx = i
+    # Find the frame that best represents the GESTURE — see peak_velocity_index
+    # for why a plain argmax picks the hand-raise instead.
+    peak_idx = peak_velocity_index(sequence)
 
     half  = SEQUENCE_LENGTH // 2
     start = max(peak_idx - half, 0)

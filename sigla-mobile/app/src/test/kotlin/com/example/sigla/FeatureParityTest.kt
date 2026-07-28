@@ -112,16 +112,61 @@ class FeatureParityTest {
         return peakIdx
     }
 
+    /** Two motion spikes: a big one at [entryAt] (the hand-raise) and a smaller,
+     *  real one at [signAt]. Mirrors how the training clips actually look. */
+    private fun makeEntrySpike(n: Int, entryAt: Int, signAt: Int): List<FloatArray> {
+        val seq = ArrayList<FloatArray>(n)
+        for (i in 0 until n) {
+            val f = FloatArray(147)
+            for (k in 0 until 147) f[k] = (((i * 31 + k * 7) % 97) * 0.0001).toFloat()
+            for (k in 63 until 126) f[k] = 0f
+            seq.add(f)
+        }
+        for (j in intArrayOf(126 + 5 * 3, 126 + 5 * 3 + 1, 126 + 6 * 3, 126 + 6 * 3 + 1)) {
+            seq[entryAt][j] = seq[entryAt - 1][j] + 5.0f   // hand-raise: LARGER
+            seq[signAt][j]  = seq[signAt - 1][j]  + 2.0f   // actual sign: smaller
+        }
+        return seq
+    }
+
+    @Test
+    fun peakSearchIgnoresEntrySpike() {
+        // The bug this encodes: source clips are "raise, sign, lower", and the
+        // hand-raise is a bigger velocity spike than the sign itself (measured on a
+        // real clip: 0.4844 at f2 vs 0.2098 at f16). A plain argmax centres the
+        // window on the entry movement and cuts off the gesture, which is what made
+        // GOOD MORNING / GOOD AFTERNOON / I'M FINE mutually confusable.
+        val frames = makeEntrySpike(40, entryAt = 2, signAt = 20)
+
+        // Plain argmax is fooled by the entry spike...
+        assertEquals(3, peakIndex(frames))
+
+        // ...but the production picker (smoothing + edge margin) lands on the sign.
+        // Exact value from tools/gen_parity_fixtures.py.
+        assertEquals(20, peakVelocityIndex(frames))
+    }
+
+    @Test
+    fun peakSearchIgnoresExitSpike() {
+        // "lower" end of raise-sign-lower: a big spike at the tail must not win either.
+        val frames = makeEntrySpike(40, entryAt = 37, signAt = 18)
+        assertEquals(20, peakVelocityIndex(frames))
+    }
+
     @Test
     fun windowSelectionParity() {
-        // name, n, peakAt, pose, slot, expectedPeak (from gen_parity_fixtures.py)
-        assertEquals(31, peakIndex(makeSequence(45, 30, true,  0)))
-        assertEquals(12, peakIndex(makeSequence(45, 12, false, 0)))
-        // Left-hand-only: all data in slot 1. The OLD signal read hand slot 0 only,
-        // so it saw zero velocity everywhere and defaulted to n/2 = 20. Pinning 26
-        // is what keeps that regression from coming back.
-        assertEquals(26, peakIndex(makeSequence(40, 25, false, 1)))
-        assertEquals(10, peakIndex(makeSequence(17, 9,  true,  0)))
+        // Expected values from `python tools/gen_parity_fixtures.py`, which now
+        // generates from the PRODUCTION picker (peak_velocity_index) rather than a
+        // plain argmax — pinning argmax values would pin numbers the real code
+        // never produces. They differ by a frame or two from the raw argmax because
+        // of the 5-frame smoothing.
+        assertEquals(29, peakVelocityIndex(makeSequence(45, 30, true,  0)))
+        assertEquals(13, peakVelocityIndex(makeSequence(45, 12, false, 0)))
+        // Left-hand-only: all data in slot 1. The OLD velocity signal read hand
+        // slot 0 only, so it saw zero velocity everywhere and defaulted to n/2 = 20.
+        // Pinning 24 keeps that blindness from returning.
+        assertEquals(24, peakVelocityIndex(makeSequence(40, 25, false, 1)))
+        assertEquals(10, peakVelocityIndex(makeSequence(17, 9,  true,  0)))
     }
 
     @Test
