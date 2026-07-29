@@ -331,17 +331,78 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
 };
 
 // ── Demo Video Modal (single demonstration clip for the mobile app) ──
+// This endpoint sends the file as base64 inside a JSON body, so the binding
+// limit is express.json({ limit: "50mb" }) in server.js — NOT multer's 100 MB,
+// which only applies to the multipart sample-upload route. Base64 inflates by
+// ~4/3, so a 50 MB body caps the source file at ~37 MB. Checked here with a
+// margin so an oversized file fails instantly and legibly, instead of after a
+// long encode + upload that ends in an opaque 413.
+const MAX_VIDEO_BYTES = 35 * 1024 * 1024;
+const ACCEPTED_VIDEO_EXTS = ["mp4", "mov", "webm"];
+
+const formatBytes = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
   const { success, error: errorToast } = useToast();
   const fileRef = useRef();
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [fileError, setFileError] = useState(null);
+  // Object URL for the chosen file, so the admin can watch what they are about
+  // to upload before replacing a live video.
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   const currentUrl = word?.video_url
     ? word.video_url.startsWith("/")
       ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${word.video_url}`
       : word.video_url
     : null;
+
+  // Revoke the previous object URL whenever the selection changes, and on close
+  // — otherwise each pick leaks a blob for the lifetime of the page.
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  // Reset per-open so a previous selection or error never leaks into the next
+  // word's modal.
+  useEffect(() => {
+    if (!open) {
+      setFile(null);
+      setFileError(null);
+      setDragOver(false);
+    }
+  }, [open]);
+
+  const acceptFile = (picked) => {
+    if (!picked) return;
+    const ext = picked.name.split(".").pop()?.toLowerCase();
+    if (!ACCEPTED_VIDEO_EXTS.includes(ext)) {
+      setFile(null);
+      setFileError(`"${ext ?? "unknown"}" is not a supported video format.`);
+      return;
+    }
+    if (picked.size > MAX_VIDEO_BYTES) {
+      setFile(null);
+      setFileError(
+        `That file is ${formatBytes(picked.size)}. The limit is ${formatBytes(MAX_VIDEO_BYTES)}.`,
+      );
+      return;
+    }
+    setFileError(null);
+    setFile(picked);
+  };
 
   const handleUpload = async () => {
     if (!file) return;
@@ -367,56 +428,170 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
 
   if (!open) return null;
 
+  const selectedExt = file?.name.split(".").pop()?.toLowerCase();
+
   return (
     <AppModal title={`Demo Video — ${word?.label}`} onClose={onClose}>
-      <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
-        This is the single demonstration video shown to learners in the mobile app.
-        Uploading replaces any existing demo video. (This does not add training samples.)
-      </p>
-
+      {/* Current clip. Plays inline — this used to be a link to the storage URL,
+          which the browser downloaded instead of playing. */}
       {currentUrl && (
-        <p style={{ fontSize: "0.8rem", marginBottom: "16px" }}>
-          <a href={currentUrl} target="_blank" rel="noreferrer" style={{ color: C.secondary, textDecoration: "underline" }}>
-            View current demo video ↗
-          </a>
+        <div style={{ marginBottom: "18px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "6px" }}>
+            <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>
+              Current video
+            </p>
+            <a
+              href={currentUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: "0.75rem", color: C.secondary, textDecoration: "underline" }}
+            >
+              Open in new tab ↗
+            </a>
+          </div>
+          <video
+            key={currentUrl}
+            src={currentUrl}
+            controls
+            preload="metadata"
+            playsInline
+            style={{
+              width: "100%", maxHeight: "220px", borderRadius: "10px",
+              background: "#000", display: "block",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Drop zone — hidden once a file is chosen, so the preview below takes its
+          place rather than stacking two large blocks in one modal. */}
+      {!file && (
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            acceptFile(e.dataTransfer.files?.[0]);
+          }}
+          style={{
+            border: `2px dashed ${dragOver ? C.secondary : fileError ? C.red : C.border}`,
+            borderRadius: "10px", padding: "28px 20px", textAlign: "center",
+            cursor: "pointer", marginBottom: "12px",
+            background: dragOver ? "#eff6ff" : "#f9fafb",
+            transition: "border-color .15s, background .15s",
+          }}
+        >
+          <Film size={26} style={{ color: dragOver ? C.secondary : C.muted, margin: "0 auto 8px" }} />
+          <p style={{ fontSize: "0.875rem", color: "#374151", fontWeight: 500 }}>
+            {dragOver ? "Drop to select this video" : "Drag a video here, or click to browse"}
+          </p>
+          <p style={{ fontSize: "0.75rem", color: C.muted, marginTop: "4px" }}>
+            MP4, MOV or WEBM · up to {formatBytes(MAX_VIDEO_BYTES)}
+          </p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
+            style={{ display: "none" }}
+            onChange={(e) => acceptFile(e.target.files?.[0] || null)}
+          />
+        </div>
+      )}
+
+      {fileError && (
+        <p
+          style={{
+            fontSize: "0.8rem", color: "#b91c1c", background: "#fef2f2",
+            border: "1px solid #fecaca", borderRadius: "8px",
+            padding: "8px 12px", marginBottom: "12px",
+          }}
+        >
+          {fileError}
         </p>
       )}
 
-      <div
-        onClick={() => fileRef.current?.click()}
-        style={{
-          border: `2px dashed ${C.border}`, borderRadius: "10px", padding: "32px", textAlign: "center",
-          cursor: "pointer", marginBottom: "16px", background: "#f9fafb",
-        }}
-      >
-        <Film size={28} style={{ color: C.muted, margin: "0 auto 8px" }} />
-        <p style={{ fontSize: "0.875rem", color: "#374151" }}>
-          Click to select one demo video (.MOV, .MP4)
-        </p>
-        <p style={{ fontSize: "0.75rem", color: C.muted }}>A single file — replaces the current demo video</p>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="video/*,.mov"
-          style={{ display: "none" }}
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-        />
-      </div>
-
+      {/* Chosen file: preview it before overwriting a live video. */}
       {file && (
-        <p style={{ fontSize: "0.875rem", color: "#374151", marginBottom: "12px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          Selected: {file.name}
-        </p>
+        <div
+          style={{
+            border: `1px solid ${C.border}`, borderRadius: "10px",
+            padding: "12px", marginBottom: "12px", background: "#f9fafb",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+            <Film size={16} style={{ color: C.secondary, flexShrink: 0 }} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p
+                style={{
+                  fontSize: "0.85rem", fontWeight: 600, color: "#374151",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+                title={file.name}
+              >
+                {file.name}
+              </p>
+              <p style={{ fontSize: "0.75rem", color: C.muted }}>
+                {formatBytes(file.size)} · replaces the current video
+              </p>
+            </div>
+            <button
+              onClick={() => { setFile(null); setFileError(null); }}
+              disabled={uploading}
+              style={{
+                background: "none", border: "none", cursor: uploading ? "not-allowed" : "pointer",
+                color: C.muted, fontSize: "0.75rem", textDecoration: "underline", flexShrink: 0,
+              }}
+            >
+              Remove
+            </button>
+          </div>
+
+          {previewUrl && (
+            <video
+              key={previewUrl}
+              src={previewUrl}
+              controls
+              preload="metadata"
+              playsInline
+              style={{
+                width: "100%", maxHeight: "200px", borderRadius: "8px",
+                background: "#000", display: "block",
+              }}
+            />
+          )}
+
+          {/* Chrome and Firefox cannot play QuickTime inline. Say so here rather
+              than letting a blank player read as a broken upload. */}
+          {selectedExt === "mov" && (
+            <p style={{ fontSize: "0.72rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "6px 8px", marginTop: "8px" }}>
+              MOV files may not preview in this browser. The upload still works.
+            </p>
+          )}
+        </div>
       )}
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>
+        <button
+          onClick={onClose}
+          disabled={uploading}
+          style={{
+            padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`,
+            background: "white", cursor: uploading ? "not-allowed" : "pointer",
+            fontSize: "0.875rem", opacity: uploading ? 0.6 : 1,
+          }}
+        >
           Cancel
         </button>
         <button onClick={handleUpload} disabled={!file || uploading}
           style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: !file || uploading ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: !file || uploading ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
           {uploading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-          {word?.video_url ? "Replace Video" : "Upload Video"}
+          {uploading
+            ? "Uploading…"
+            : word?.video_url
+              ? "Replace Video"
+              : "Upload Video"}
         </button>
       </div>
     </AppModal>

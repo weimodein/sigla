@@ -857,19 +857,35 @@ const ManageWordBank = () => {
               <div className="border border-indigo-200 rounded-lg p-4 bg-indigo-50 space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-indigo-800">Gesture Video</span>
-                  {galleryModal.video_url && (
-                    <a
-                      href={galleryModal.video_url.startsWith("/")
-                        ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${galleryModal.video_url}`
-                        : galleryModal.video_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-indigo-600 underline"
-                    >
-                      View current video ↗
-                    </a>
-                  )}
                 </div>
+                {/* Inline player: linking straight to the storage URL made the
+                    browser download the clip instead of playing it. */}
+                {galleryModal.video_url && (() => {
+                  const url = galleryModal.video_url.startsWith("/")
+                    ? `${(import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace("/api", "")}${galleryModal.video_url}`
+                    : galleryModal.video_url;
+                  return (
+                    <div>
+                      <video
+                        key={url}
+                        src={url}
+                        controls
+                        preload="metadata"
+                        playsInline
+                        className="w-full rounded-lg bg-black block"
+                        style={{ maxHeight: "260px" }}
+                      />
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-indigo-600 underline mt-1 inline-block"
+                      >
+                        Open in new tab ↗
+                      </a>
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-2 items-center">
                   <input
                     type="url"
