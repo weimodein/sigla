@@ -7,8 +7,8 @@ import {
   resetPassword,
   resendCode,
 } from "../../api/authApi.js";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { validateEmail } from "../../utils/emailValidation.js";
+import { Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
+import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
 
 const C = {
   text: "#1f2937",
@@ -77,6 +77,9 @@ const ForgotPassword = () => {
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Set when the address is well formed but its domain is unfamiliar — the user
+  // confirms before a code is sent to a possibly mistyped address.
+  const [confirmEmail, setConfirmEmail] = useState(false);
 
   useEffect(() => {
     if (document.getElementById("fp-dynamic-styles")) return;
@@ -128,15 +131,16 @@ const ForgotPassword = () => {
     }, 1000);
   }, []);
 
-  const handleForgot = useCallback(async (e) => {
-    e.preventDefault();
-    // Shape check only — no unfamiliar-domain prompt here, since a recovery
-    // address already belongs to an existing account.
-    const emailError = validateEmail(email);
-    if (emailError) {
-      toast.error(emailError);
-      return;
-    }
+  // Validate the shape, then ask for confirmation when the domain is unfamiliar.
+  //
+  // The prompt matters MORE here than during onboarding. To avoid revealing
+  // which addresses have accounts, the server answers a typo'd address exactly
+  // as it answers a real one — 200, same message, no email sent. The user is
+  // then dropped on the code screen waiting for mail that will never arrive,
+  // with nothing to distinguish "wrong address" from "slow email". A second
+  // look before sending is the only thing that catches it.
+  const sendResetCode = useCallback(async () => {
+    setConfirmEmail(false);
     setLoading(true);
     try {
       await forgotPassword(email);
@@ -147,6 +151,20 @@ const ForgotPassword = () => {
       toast.error(err.response?.data?.message || "Failed to send code");
     } finally { setLoading(false); }
   }, [email, toast, startCooldown]);
+
+  const handleForgot = useCallback((e) => {
+    e.preventDefault();
+    const emailError = validateEmail(email);
+    if (emailError) {
+      toast.error(emailError);
+      return;
+    }
+    if (!isKnownDomain(email)) {
+      setConfirmEmail(true);
+      return;
+    }
+    sendResetCode();
+  }, [email, toast, sendResetCode]);
 
   const handleVerify = useCallback(async (e) => {
     e.preventDefault();
@@ -319,6 +337,79 @@ const ForgotPassword = () => {
           <img src="/logo.png" alt="SIGLA Logo" style={S.logo} />
         </div>
       </div>
+
+      {/* Unfamiliar-domain confirmation. A mistyped address is especially costly
+          here: to avoid revealing which addresses have accounts, the server
+          answers an unknown address exactly as it answers a real one, so a typo
+          silently sends nothing and the next code cannot be requested for a
+          minute. Mirrors the same step in Onboarding. */}
+      {confirmEmail && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 2000,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16, background: "rgba(0,0,0,0.4)",
+          }}
+          onClick={() => setConfirmEmail(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white", borderRadius: 16,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+              width: "100%", maxWidth: 420, padding: 24,
+            }}
+          >
+            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+              <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: C.text, margin: 0 }}>
+                Double-check this email address
+              </h3>
+            </div>
+            <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "0 0 8px" }}>
+              The verification code will be sent to:
+            </p>
+            <p
+              style={{
+                fontSize: "0.95rem", fontWeight: 600, color: C.text,
+                wordBreak: "break-all", background: "#f9fafb",
+                border: "1px solid #e5e7eb", borderRadius: 8,
+                padding: "10px 12px", margin: "0 0 12px",
+              }}
+            >
+              {email}
+            </p>
+            <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 20px" }}>
+              If this is mistyped you will not receive the code, and a new one
+              cannot be sent for 1 minute.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConfirmEmail(false)}
+                style={{
+                  padding: "8px 18px", borderRadius: 8,
+                  border: "1px solid #e5e7eb", background: "white",
+                  color: "#374151", fontSize: "0.875rem", fontWeight: 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Go back and edit
+              </button>
+              <button
+                onClick={sendResetCode}
+                style={{
+                  padding: "8px 18px", borderRadius: 8, border: "none",
+                  background: C.primary, color: "white",
+                  fontSize: "0.875rem", fontWeight: 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Send code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
