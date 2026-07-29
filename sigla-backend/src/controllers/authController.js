@@ -2,7 +2,10 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 const { Administrator, EmailVerification } = require("../models/index.js");
-const { sendVerificationCode } = require("../utils/mailer.js");
+const {
+  sendVerificationCode,
+  sendPasswordChangedNotice,
+} = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
 const { validatePassword } = require("../utils/validators.js");
 require("dotenv").config();
@@ -369,8 +372,42 @@ const resetPassword = async (req, res) => {
         .json({ message: "Reset code not verified. Please verify first." });
     }
 
+    // Load the row rather than bulk-updating by email: the audit entry needs an
+    // administrator_id, and the notice needs a username.
+    const user = await Administrator.findOne({ where: { email } });
+    if (!user) {
+      // A verified reset record exists but the account is gone. Respond exactly
+      // as the success case does — this must not become an enumeration oracle.
+      return res.status(200).json({ message: "Password reset successfully" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    await Administrator.update({ password: hashedPassword }, { where: { email } });
+    await user.update({ password: hashedPassword });
+
+    // This path previously left no trace at all — no email and no log — despite
+    // being the only account change reachable without being signed in.
+    await logActivity({
+      administrator_id: user.id,
+      action: "password_reset_completed",
+      target_type: "administrator",
+      target_id: user.id,
+      details: "Password reset completed via emailed verification code",
+    });
+
+    // Non-fatal: the password is already changed, so a mail outage must not
+    // report the reset as failed.
+    try {
+      await sendPasswordChangedNotice({
+        to: user.email,
+        adminUsername: user.username,
+        actor: "self",
+      });
+    } catch (err) {
+      console.error(
+        `Failed to send password-changed notice to ${user.email}:`,
+        err.message,
+      );
+    }
 
     return res.status(200).json({ message: "Password reset successfully" });
   } catch (err) {

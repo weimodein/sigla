@@ -1,6 +1,9 @@
 const { Op } = require("sequelize");
 const { Administrator, EmailVerification } = require("../models/index.js");
-const { sendVerificationCode } = require("../utils/mailer.js");
+const {
+  sendVerificationCode,
+  sendAccountChangeNotice,
+} = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
 const { validateEmail } = require("../utils/validators.js");
 
@@ -138,6 +141,13 @@ const verifyEmailCode = async (req, res) => {
       return res.status(409).json({ message: "Email already in use" });
     }
 
+    // Read the current address BEFORE the update below overwrites it — once
+    // written, the old address is unrecoverable and can no longer be warned.
+    const account = await Administrator.findByPk(req.user.id, {
+      attributes: ["id", "username", "email"],
+    });
+    const previousEmail = account ? account.email : null;
+
     await record.update({ is_used: true });
     await Administrator.update({ email }, { where: { id: req.user.id } });
 
@@ -146,10 +156,39 @@ const verifyEmailCode = async (req, res) => {
       action: "updated_admin",
       target_type: "administrator",
       target_id: req.user.id,
-      details: "Linked/updated own email address (verified)",
+      details: previousEmail
+        ? `Changed own email address (verified): "${previousEmail}" → "${email}"`
+        : `Linked own email address (verified): "${email}"`,
     });
 
-    return res.status(200).json({ message: "Email verified and linked successfully", email });
+    // Tell BOTH addresses. Without the notice to the old one, someone who
+    // reaches a signed-in session can move the address off the real owner
+    // silently — the classic account-takeover path. A first-time link has no
+    // old address, so only the new one is notified.
+    //
+    // Non-fatal: the address is already changed, so a mail outage must not
+    // report the verification as failed.
+    let notified = true;
+    const targets = [...new Set([previousEmail, email].filter(Boolean))];
+    for (const to of targets) {
+      try {
+        await sendAccountChangeNotice({
+          to,
+          adminUsername: account ? account.username : "administrator",
+          changes: [{ field: "email", from: previousEmail, to: email }],
+          actor: "self",
+        });
+      } catch (err) {
+        notified = false;
+        console.error(`Failed to send email-change notice to ${to}:`, err.message);
+      }
+    }
+
+    return res.status(200).json({
+      message: "Email verified and linked successfully",
+      email,
+      notified,
+    });
   } catch (err) {
     console.error("Verify email code error:", err);
     return res.status(500).json({ message: "Server error" });

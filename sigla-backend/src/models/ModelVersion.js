@@ -30,6 +30,19 @@ const ModelVersion = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    // The word ids this version was actually trained on — the same set that
+    // labels_motion.json names. The mobile word bank is derived from this, so
+    // deploying or reverting changes the visible words without touching Word
+    // rows. NULL means "recorded before this column existed": callers must fall
+    // back to Word.is_active rather than treating it as an empty set.
+    //
+    // Requires a manual migration — this project has no migration tooling and
+    // never calls sequelize.sync():
+    //   ALTER TABLE model_versions ADD COLUMN trained_word_ids JSONB;
+    trained_word_ids: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
     trained_by: {
       type: DataTypes.INTEGER,
       allowNull: true,

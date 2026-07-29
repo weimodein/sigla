@@ -68,8 +68,26 @@ object ModelUpdateManager {
 
     fun hasLocalMotionModel(context: Context): Boolean = hasLocalModel(context)
 
+    /**
+     * Set by [checkAndUpdate] when the deployed version differs from what this
+     * device last cached — including a REVERT to an older version, which changes
+     * the word bank just as much as an upgrade does.
+     *
+     * The word bank is derived server-side from the deployed model, so a version
+     * change invalidates the cached word list. Callers read this immediately
+     * after checkAndUpdate() to force a refetch in the same pass, instead of
+     * showing words the newly-installed model cannot predict until some later
+     * screen visit happens to refresh them.
+     */
+    @Volatile
+    var lastCheckChangedVersion: Boolean = false
+        private set
+
     suspend fun checkAndUpdate(context: Context, token: String?): Boolean {
         return withContext(Dispatchers.IO) {
+            // Reset per call — a failed check must not leave a stale "changed"
+            // flag from a previous launch telling the caller to refetch.
+            lastCheckChangedVersion = false
             try {
                 Log.i(TAG, "Checking for model updates…")
                 val response = ApiClient.get(token).getLatestModel()
@@ -101,6 +119,16 @@ object ModelUpdateManager {
                 }
 
                 Log.i(TAG, "New model version detected: $remoteVersion (cached: $cachedVersion) — downloading")
+
+                // A version change means the server-side word bank changed with
+                // it. Drop the cached list now so no code path can serve words
+                // belonging to the version being replaced; the caller refetches
+                // once the new model is in place. Note this fires on a REVERT
+                // too — remoteVersion simply differs from cachedVersion.
+                if (remoteVersion != cachedVersion) {
+                    lastCheckChangedVersion = true
+                    invalidateWordBankCache(context)
+                }
 
                 // ── Motion model (required) ───────────────────────────────────
                 if (remoteModelUrl.isNullOrBlank()) {
@@ -526,6 +554,23 @@ object ModelUpdateManager {
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to cache word bank: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * Drops the cached word list after the deployed model version changes.
+     *
+     * The server derives the word bank from the deployed version, so a cache
+     * written under the previous version may name words the new model cannot
+     * predict — or omit ones it can. Deleting it means the offline fallback
+     * cannot serve a mismatched list; the next fetch repopulates it.
+     *
+     * Called from checkAndUpdate, which already runs on Dispatchers.IO.
+     */
+    private fun invalidateWordBankCache(context: Context) {
+        val file = File(context.filesDir, WORD_BANK_CACHE_FILE)
+        if (file.exists() && file.delete()) {
+            Log.i(TAG, "Word bank cache invalidated — deployed model version changed")
         }
     }
 

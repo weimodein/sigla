@@ -291,6 +291,18 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
 
+                // The server derives the word bank from the deployed model, so a
+                // version change — including a revert to an older version — means
+                // the word list changed too. Refetch BEFORE the model reports
+                // ready, otherwise the first recognitions of the session resolve
+                // against words belonging to the version just replaced.
+                if (ModelUpdateManager.lastCheckChangedVersion) {
+                    withContext(Dispatchers.Main) {
+                        binding.tvStatus.text = "Updating word bank..."
+                    }
+                    refreshWordBank()
+                }
+
                 // Initialize predictor (it will fetch labels from backend).
                 // init() now suspends until labels actually arrive, so the old
                 // blanket delay(2000) — which stalled every entry to this screen
@@ -371,47 +383,58 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadFilipinoTranslations() {
         lifecycleScope.launch(Dispatchers.IO) {
-            // Network first, cache as the offline fallback. The reverse order meant a
-            // translation edited in the admin panel never reached this screen: once
-            // word_bank_cache.json existed the elvis chain short-circuited and the API
-            // was never called again.
-            val words: List<WordBankWord> = try {
-                val fresh = ApiClient.get(session.token).getWordBank().body()?.words
-                if (!fresh.isNullOrEmpty()) {
-                    ModelUpdateManager.cacheWordBank(this@MainActivity, fresh)
-                    fresh
-                } else {
-                    ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
-                }
-            } catch (e: Exception) {
-                // Offline or server down — whatever was cached is still better than nothing.
-                Log.w(TAG, "Word bank fetch failed, using cache: ${e.message}")
+            refreshWordBank()
+        }
+    }
+
+    /**
+     * Fetches the word bank and rebuilds the Filipino translation map.
+     *
+     * Suspending rather than fire-and-forget so the startup path can AWAIT it
+     * after a model-version change — the word list belongs to the deployed
+     * model, so it has to land before recognition starts.
+     */
+    private suspend fun refreshWordBank() {
+        // Network first, cache as the offline fallback. The reverse order meant a
+        // translation edited in the admin panel never reached this screen: once
+        // word_bank_cache.json existed the elvis chain short-circuited and the API
+        // was never called again.
+        val words: List<WordBankWord> = try {
+            val fresh = ApiClient.get(session.token).getWordBank().body()?.words
+            if (!fresh.isNullOrEmpty()) {
+                ModelUpdateManager.cacheWordBank(this@MainActivity, fresh)
+                fresh
+            } else {
                 ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
             }
+        } catch (e: Exception) {
+            // Offline or server down — whatever was cached is still better than nothing.
+            Log.w(TAG, "Word bank fetch failed, using cache: ${e.message}")
+            ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
+        }
 
-            val map = mutableMapOf<String, String>()
-            for (word in words) {
-                val translation = word.filipino_translation
-                if (!translation.isNullOrBlank()) {
-                    map[word.label.lowercase()] = translation
-                }
+        val map = mutableMapOf<String, String>()
+        for (word in words) {
+            val translation = word.filipino_translation
+            if (!translation.isNullOrBlank()) {
+                map[word.label.lowercase()] = translation
             }
-            // Never trade a populated map for an empty one: this now runs on every
-            // onResume, and a failed fetch with no cache would otherwise wipe working
-            // translations until the next successful load.
-            if (map.isEmpty() && filipinoMap.isNotEmpty()) {
-                Log.w(TAG, "Word bank returned no translations; keeping ${filipinoMap.size} existing")
-                return@launch
-            }
+        }
+        // Never trade a populated map for an empty one: this now runs on every
+        // onResume, and a failed fetch with no cache would otherwise wipe working
+        // translations until the next successful load.
+        if (map.isEmpty() && filipinoMap.isNotEmpty()) {
+            Log.w(TAG, "Word bank returned no translations; keeping ${filipinoMap.size} existing")
+            return
+        }
 
-            withContext(Dispatchers.Main) {
-                filipinoMap = map
-                Log.i(TAG, "Loaded ${map.size} Filipino translation(s)")
-                // Also save to history manager if needed
-                words.forEach { word ->
-                    if (!word.filipino_translation.isNullOrBlank()) {
-                        historyManager.setTranslation(word.label.lowercase(), word.filipino_translation)
-                    }
+        withContext(Dispatchers.Main) {
+            filipinoMap = map
+            Log.i(TAG, "Loaded ${map.size} Filipino translation(s)")
+            // Also save to history manager if needed
+            words.forEach { word ->
+                if (!word.filipino_translation.isNullOrBlank()) {
+                    historyManager.setTranslation(word.label.lowercase(), word.filipino_translation)
                 }
             }
         }

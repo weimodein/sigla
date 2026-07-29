@@ -185,8 +185,17 @@ const ManageModel = () => {
           setTrainingModelId(null);
           setTrainingVersion("");
           showSuccess(`Model ${model.version_number} trained successfully`);
-          const trainedNote = `Model trained on ${model.total_classes ?? "—"} gesture class(es).`;
-          setResultModal({ title: "Training Results", data: { message: trainedNote, model } });
+          // Flattened to the shape the results modal reads. Passing the raw
+          // model object left every field unreadable, so the modal rendered
+          // nothing but a title and a Close button.
+          setResultModal({
+            title: "Training Results",
+            message:
+              "Training finished. Test the model to measure its accuracy before deploying it.",
+            accuracy: model.accuracy ?? null,
+            totalClasses: model.total_classes ?? null,
+            versionNumber: model.version_number,
+          });
           fetchData();
         } else if (model.status === "failed") {
           clearInterval(pollingRef.current);
@@ -277,9 +286,18 @@ const ManageModel = () => {
     setActionLoading(true);
     try {
       const result = await testModel(testModal.id);
+      const tested = testModal;
       showSuccess("Model evaluation complete");
       setTestModal(null);
-      setResultModal({ title: "Test Results", data: result });
+      // The API returns the metrics under `test_result` — the modal used to read
+      // `result`, which never existed, so accuracy and class count never showed.
+      setResultModal({
+        title: "Test Results",
+        message: result?.message || "Model evaluation complete.",
+        accuracy: result?.test_result?.accuracy ?? null,
+        totalClasses: result?.test_result?.total_classes ?? null,
+        versionNumber: tested?.version_number,
+      });
       fetchData();
     } catch (err) {
       showError(
@@ -632,7 +650,7 @@ const ManageModel = () => {
                 {paginatedModels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={7}
                       className="text-center py-10"
                       style={{ color: C.muted, fontSize: "0.85rem" }}
                     >
@@ -809,22 +827,101 @@ const ManageModel = () => {
                           style={{ background: "#fafafa" }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <td colSpan={4} className="px-4 py-4">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          {/* Must match the 7 header cells (chevron, Version,
+                              Status, Accuracy, Trained By, Trained At, Actions)
+                              or the panel stops short and leaves a dead gutter. */}
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
                               <MetricBox
                                 label="Total Classes"
                                 value={model.total_classes ?? "—"}
                                 color={C.text}
                               />
+                              <MetricBox
+                                label="Accuracy"
+                                value={fmt(model.accuracy)}
+                                color={
+                                  model.accuracy == null
+                                    ? C.muted
+                                    : getMetricColor(model.accuracy)
+                                }
+                              />
+                              {/* Words this version was trained on. The mobile word
+                                  bank is derived from this list, so it explains why
+                                  a revert changes the words on the device. */}
+                              <MetricBox
+                                label="Words in Bank"
+                                value={
+                                  Array.isArray(model.trained_word_ids)
+                                    ? model.trained_word_ids.length
+                                    : "—"
+                                }
+                                color={C.text}
+                              />
+                              <MetricBox
+                                label="Trained"
+                                value={
+                                  model.trained_at
+                                    ? new Date(model.trained_at).toLocaleDateString()
+                                    : "—"
+                                }
+                                color={C.text}
+                              />
                             </div>
-                            {model.notes && (
-                              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.border}` }}>
-                                <p className="text-xs font-medium text-gray-500 mb-1">
-                                  Notes
-                                </p>
-                                <p className="text-sm text-gray-600">{model.notes}</p>
+
+                            {/* Deployment + notes. The integrity checksum is
+                                deliberately not surfaced: it is verified on the
+                                device before a downloaded model replaces the
+                                active one, and the raw hash means nothing to an
+                                administrator reading this table. */}
+                            {(model.deployed_at || model.notes) && (
+                              <div
+                                className="mt-3 pt-3 grid grid-cols-1 sm:grid-cols-4 gap-3"
+                                style={{ borderTop: `1px solid ${C.border}` }}
+                              >
+                                {model.deployed_at && (
+                                  <div>
+                                    <p className="text-xs font-medium text-gray-500 mb-1">
+                                      Last Deployed
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      {new Date(model.deployed_at).toLocaleString()}
+                                    </p>
+                                  </div>
+                                )}
+                                {model.notes && (
+                                  <div className="sm:col-span-3">
+                                    <p className="text-xs font-medium text-gray-500 mb-1">
+                                      Notes
+                                    </p>
+                                    <p className="text-sm text-gray-600 break-words">
+                                      {model.notes}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
                             )}
+
+                            {/* Why a run failed. This was previously only visible
+                                as a toast while the page happened to be open, so
+                                reopening the page lost the reason entirely. */}
+                            {model.status === "failed" && (
+                              <div
+                                className="mt-3 pt-3"
+                                style={{ borderTop: `1px solid ${C.border}` }}
+                              >
+                                <p className="text-xs font-medium mb-1" style={{ color: C.red }}>
+                                  Training Error
+                                </p>
+                                <p
+                                  className="text-sm rounded-lg p-3"
+                                  style={{ background: "#fef2f2", color: "#b91c1c" }}
+                                >
+                                  {model.training_error || "No error detail was recorded."}
+                                </p>
+                              </div>
+                            )}
+
                           </td>
                         </tr>
                       )}
@@ -1062,20 +1159,35 @@ const ManageModel = () => {
       {resultModal && (
         <AppModal title={resultModal.title} onClose={() => setResultModal(null)}>
           <div className="space-y-3 text-sm">
-            {resultModal.data?.accuracy && (
+            {resultModal.message && (
+              <p className="text-gray-700 leading-relaxed">
+                {resultModal.message}
+              </p>
+            )}
+            {(resultModal.accuracy != null ||
+              resultModal.totalClasses != null) && (
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Accuracy</p>
-                  <p className="font-bold text-lg text-blue-900">
-                    {fmt(resultModal.data.accuracy)}
-                  </p>
-                </div>
+                {resultModal.accuracy != null && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Accuracy</p>
+                    <p className="font-bold text-lg text-blue-900">
+                      {fmt(resultModal.accuracy)}
+                    </p>
+                  </div>
+                )}
+                {resultModal.totalClasses != null && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Gesture classes</p>
+                    <p className="font-bold text-lg text-blue-900">
+                      {resultModal.totalClasses}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
-            {resultModal.data?.result?.total_classes && (
-              <p className="text-gray-600">
-                Total classes trained:{" "}
-                <strong>{resultModal.data.result.total_classes}</strong>
+            {resultModal.versionNumber && (
+              <p className="text-gray-500 text-xs">
+                Version <strong>{resultModal.versionNumber}</strong>
               </p>
             )}
             <button

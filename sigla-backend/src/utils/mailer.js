@@ -75,12 +75,30 @@ const escapeHtml = (value) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
   );
 
-// Tells an administrator their username and/or email was changed for them.
+// Who made the change. Deliberately role-only — never a username: these notices
+// land in an inbox that may itself be compromised, and "the super administrator"
+// is all the recipient needs to know whether to be alarmed.
+const actorPhrase = (actor) =>
+  actor === "self" ? "You updated" : "The super administrator updated";
+
+// Closing line: a self-service change the recipient did not make is the signal
+// that their session or inbox is compromised.
+const actorFooter = (actor) =>
+  actor === "self"
+    ? "If this wasn't you, contact the super administrator immediately."
+    : "You do not need to do anything. If you did not expect this change, contact the super administrator immediately.";
+
+// Tells an administrator their username and/or email was changed.
 //
 // `changes` is a list of { field, from, to }. When the email address itself
 // changed this is sent to BOTH the old and the new address: the old address is
 // the only way the affected person finds out about a change they did not make.
-const sendAccountChangeNotice = async ({ to, adminUsername, changes = [] }) => {
+const sendAccountChangeNotice = async ({
+  to,
+  adminUsername,
+  changes = [],
+  actor = "super_admin",
+}) => {
   if (!to || changes.length === 0) return;
 
   const rows = changes
@@ -101,12 +119,76 @@ const sendAccountChangeNotice = async ({ to, adminUsername, changes = [] }) => {
     subject: "SIGLA — Your Account Details Were Updated",
     htmlContent: noticeShell(`
         <p>Hello ${escapeHtml(adminUsername)},</p>
-        <p>The super administrator updated your SIGLA administrator account:</p>
+        <p>${actorPhrase(actor)} your SIGLA administrator account:</p>
         <table style="margin: 24px 0; font-size: 14px; border-collapse: collapse;">
           ${rows}
         </table>
-        <p>You do not need to do anything. If you did not expect this change,
-        contact the super administrator immediately.</p>
+        <p>${actorFooter(actor)}</p>
+      `),
+  });
+};
+
+// Tells an administrator their password was changed — by them, through the
+// forgot-password flow or their own account settings.
+//
+// Carries no password and no code. Distinct from sendTemporaryPasswordNotice
+// below, whose wording is specific to a super-administrator hand-over.
+const sendPasswordChangedNotice = async ({ to, adminUsername, actor = "self" }) => {
+  if (!to) return;
+
+  const opening =
+    actor === "self"
+      ? "Your SIGLA administrator password was just changed."
+      : "The super administrator changed the password on your SIGLA administrator account.";
+
+  await client.transactionalEmails.sendTransacEmail({
+    sender: FROM(),
+    to: [{ email: to }],
+    subject: "SIGLA — Your Password Was Changed",
+    htmlContent: noticeShell(`
+        <p>Hello ${escapeHtml(adminUsername)},</p>
+        <p>${opening}</p>
+        <p>If you made this change, no action is needed. If you did not, your
+        account may be compromised — contact the super administrator immediately.</p>
+      `),
+  });
+};
+
+// Tells an administrator their account was suspended, restored, or removed.
+// One function for all three so the wording stays consistent.
+const sendAccountStatusNotice = async ({ to, adminUsername, status }) => {
+  if (!to) return;
+
+  const copy = {
+    deactivated: {
+      subject: "SIGLA — Your Account Was Deactivated",
+      body: `<p>The super administrator deactivated your SIGLA administrator
+        account. You will not be able to sign in until it is reactivated.</p>`,
+    },
+    active: {
+      subject: "SIGLA — Your Account Was Reactivated",
+      body: `<p>The super administrator reactivated your SIGLA administrator
+        account. You can sign in again with your existing credentials.</p>`,
+    },
+    deleted: {
+      subject: "SIGLA — Your Account Was Removed",
+      body: `<p>The super administrator removed your SIGLA administrator
+        account. You will no longer be able to sign in.</p>`,
+    },
+  }[status];
+
+  // An unrecognised status is a programming error, not something to guess at.
+  if (!copy) return;
+
+  await client.transactionalEmails.sendTransacEmail({
+    sender: FROM(),
+    to: [{ email: to }],
+    subject: copy.subject,
+    htmlContent: noticeShell(`
+        <p>Hello ${escapeHtml(adminUsername)},</p>
+        ${copy.body}
+        <p>If you have questions about this change, contact the super
+        administrator.</p>
       `),
   });
 };
@@ -138,5 +220,7 @@ const sendTemporaryPasswordNotice = async ({ to, adminUsername }) => {
 module.exports = {
   sendVerificationCode,
   sendAccountChangeNotice,
+  sendPasswordChangedNotice,
+  sendAccountStatusNotice,
   sendTemporaryPasswordNotice,
 };

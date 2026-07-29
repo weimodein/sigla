@@ -71,7 +71,11 @@ data class ModelInfo(
     val tflite_url: String? = null,
     val motion_tflite_url: String? = null,
     val labels_motion_url: String? = null,
-    val word_bank_url: String? = null,
+    // No word_bank_url: the word bank is a live query against the database
+    // (words gain thumbnails, videos and translation edits after deployment),
+    // not a static artifact pinned to a model version. The server derives the
+    // list from whichever version is deployed, so GET words/word-bank already
+    // returns exactly this model's words.
     val accuracy: Double? = null,
     val checksum: String? = null,
     val deployed_at: String? = null

@@ -30,6 +30,77 @@ async function uploadToSupabase(storagePath, buffer, contentType) {
   return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
 }
 
+// ── Which words feed a training run ──────────────────────────
+// The eligibility filter mirrors mlController.getApprovedDataset, so the set
+// recorded here stays in lock-step with the classes the model actually learned
+// (the same set labels_motion.json names).
+//
+// Called at TRAINING time and stored on the version row. It is deliberately not
+// re-derived at deploy time: the dataset can change between training and deploy,
+// and a reverted model must advertise the words it was trained on, not today's.
+async function getTrainedWordIds() {
+  const trainedSamples = await GestureSample.findAll({
+    attributes: ["word_id"],
+    where: {
+      [Op.or]: [
+        { status: "approved" },
+        { status: "pending", is_validated: true },
+      ],
+    },
+    include: [
+      {
+        model: Word,
+        as: "word",
+        attributes: [],
+        required: true,
+        where: {
+          [Op.or]: [{ status: "approved" }, { is_active: true }],
+        },
+      },
+    ],
+  });
+
+  return [...new Set(trainedSamples.map((s) => s.word_id))];
+}
+
+// ── Make Word.is_active match the deployed version ───────────
+// is_active was a one-way latch: deploy set it true and nothing ever set it
+// back, so every word ever deployed stayed visible and a revert never shrank the
+// word bank. Reconciling both directions keeps the admin "Active" count honest
+// and keeps the /word-bank fallback correct for rows with no trained_word_ids.
+//
+// A version with no recorded class list (trained before that column existed)
+// tells us nothing — skip rather than deactivating everything.
+async function reconcileActiveWords(model) {
+  const ids = Array.isArray(model.trained_word_ids)
+    ? model.trained_word_ids
+    : null;
+
+  if (!ids) {
+    console.warn(
+      `[reconcileActiveWords] version ${model.version_number} has no trained_word_ids — leaving is_active untouched`,
+    );
+    return;
+  }
+
+  if (ids.length > 0) {
+    await Word.update(
+      { is_active: true },
+      { where: { id: { [Op.in]: ids }, is_active: false } },
+    );
+  }
+
+  await Word.update(
+    { is_active: false },
+    {
+      where: {
+        is_active: true,
+        ...(ids.length > 0 ? { id: { [Op.notIn]: ids } } : {}),
+      },
+    },
+  );
+}
+
 // ── Copy a model version's files into the fixed deployed/ folder + recompute its
 // checksum. The mobile app always downloads from this fixed path regardless of which
 // version is "active", and verifies it against the ModelVersion row's stored checksum
@@ -236,6 +307,13 @@ const trainModel = async (req, res) => {
           { timeout: 20 * 60 * 1000, headers: { "ngrok-skip-browser-warning": "1" } },
         );
         const r = response.data;
+
+        // Capture the class list NOW, while it is still true. Deriving it later
+        // at deploy time would read a dataset that may have gained or lost
+        // samples since, so a reverted model would advertise words it was never
+        // trained on. This is the set labels_motion.json names.
+        const trainedWordIds = await getTrainedWordIds();
+
         await modelRecord.update({
           status:            "trained",
           accuracy:          r.accuracy           || null,
@@ -244,6 +322,7 @@ const trainModel = async (req, res) => {
           h5_url:            r.h5_url              || null,
           trained_at:        new Date(),
           training_error:    null,
+          trained_word_ids:  trainedWordIds,
         });
         console.log(`[trainModel] version ${version_number} training complete`);
       } catch (mlErr) {
@@ -405,43 +484,17 @@ const deployModel = async (req, res) => {
       await model.update({ status: "deployed", deployed_at: new Date() });
     }
 
-    // ── Activate the words that were used for training ───────────────────────
-    // Every word whose samples fed this training run becomes visible in the
-    // mobile word bank. The eligibility filter mirrors mlController.getApprovedDataset
-    // so the activated set stays in lock-step with what was actually trained.
+    // ── Make the visible word bank match this version ────────────────────────
+    // Words this version was trained on become visible; words it was not trained
+    // on are hidden. Backfill trained_word_ids for versions trained before that
+    // column existed, so this deploy — and any later revert to it — has a class
+    // list to work from.
     // Wrapped in try/catch — failure here must never leave the model stuck.
     try {
-      const trainedSamples = await GestureSample.findAll({
-        attributes: ["word_id"],
-        where: {
-          [Op.or]: [
-            { status: "approved" },
-            { status: "pending", is_validated: true },
-          ],
-        },
-        include: [
-          {
-            model: Word,
-            as: "word",
-            attributes: [],
-            required: true,
-            where: {
-              [Op.or]: [{ status: "approved" }, { is_active: true }],
-            },
-          },
-        ],
-      });
-
-      const trainedWordIds = [
-        ...new Set(trainedSamples.map((s) => s.word_id)),
-      ];
-
-      if (trainedWordIds.length > 0) {
-        await Word.update(
-          { is_active: true },
-          { where: { id: { [Op.in]: trainedWordIds }, is_active: false } },
-        );
+      if (!Array.isArray(model.trained_word_ids)) {
+        await model.update({ trained_word_ids: await getTrainedWordIds() });
       }
+      await reconcileActiveWords(model);
     } catch (wordErr) {
       console.error("Word activation error (non-fatal):", wordErr.message);
     }
@@ -510,6 +563,16 @@ const revertModel = async (req, res) => {
       status: "deployed",
       deployed_at: new Date(),
     });
+
+    // ── Roll the word bank back with the model ───────────────────────────────
+    // Without this the revert only swapped the .tflite: words added by a newer
+    // version stayed visible and the phone advertised words the restored model
+    // cannot predict. A version with no recorded class list is left alone.
+    try {
+      await reconcileActiveWords(model);
+    } catch (wordErr) {
+      console.error("Word reconciliation error (non-fatal):", wordErr.message);
+    }
 
     // Log activity
     await logActivity({

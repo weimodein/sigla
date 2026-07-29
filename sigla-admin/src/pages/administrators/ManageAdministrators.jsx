@@ -392,6 +392,17 @@ const ManageAdministrators = () => {
   const showSuccess = (msg) => toast.success(msg);
   const showError = (msg) => toast.error(msg);
 
+  // The action itself already succeeded by the time the server answers — only
+  // the courtesy email to the administrator may have failed. Say so rather than
+  // reporting a plain success the super admin would read as "they were told".
+  const reportOutcome = (data, successMsg) => {
+    if (data?.notified === false) {
+      toast.warning(`${successMsg} The notification email could not be sent.`);
+    } else {
+      showSuccess(successMsg);
+    }
+  };
+
   // ── Create Administrator ─────────────────────────────────────
   // Step 1: validate the form, then open a confirmation dialog.
   const handleCreateAdmin = () => {
@@ -438,8 +449,8 @@ const ManageAdministrators = () => {
       return;
     setActionLoading(true);
     try {
-      await deactivateAdministrator(id);
-      showSuccess("Administrator deactivated.");
+      const data = await deactivateAdministrator(id);
+      reportOutcome(data, "Administrator deactivated.");
       fetchStats();
       fetchTabData();
     } catch (err) {
@@ -452,8 +463,8 @@ const ManageAdministrators = () => {
   const handleReactivate = async (id) => {
     setActionLoading(true);
     try {
-      await reactivateAdministrator(id);
-      showSuccess("Administrator reactivated successfully.");
+      const data = await reactivateAdministrator(id);
+      reportOutcome(data, "Administrator reactivated successfully.");
       fetchStats();
       fetchTabData();
     } catch (err) {
@@ -468,8 +479,8 @@ const ManageAdministrators = () => {
       return;
     setActionLoading(true);
     try {
-      await deleteAdministrator(id);
-      showSuccess("Administrator permanently deleted");
+      const data = await deleteAdministrator(id);
+      reportOutcome(data, "Administrator permanently deleted");
       fetchStats();
       fetchTabData();
     } catch (err) {
@@ -506,13 +517,7 @@ const ManageAdministrators = () => {
         email,
       });
       // The change is saved either way; only the notice may have failed.
-      if (data?.notified === false) {
-        toast.warning(
-          "Administrator updated, but the notification email could not be sent.",
-        );
-      } else {
-        showSuccess("Administrator updated successfully");
-      }
+      reportOutcome(data, "Administrator updated successfully.");
       setEditModal(null);
       fetchTabData();
     } catch (err) {

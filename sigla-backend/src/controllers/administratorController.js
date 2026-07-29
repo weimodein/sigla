@@ -8,6 +8,8 @@ const {
 const { logActivity } = require("../utils/activityLogger.js");
 const {
   sendAccountChangeNotice,
+  sendPasswordChangedNotice,
+  sendAccountStatusNotice,
   sendTemporaryPasswordNotice,
 } = require("../utils/mailer.js");
 const {
@@ -194,6 +196,26 @@ const createAdministrator = async (req, res) => {
   }
 };
 
+// Sends a status-change notice without ever letting a mail failure surface as a
+// failed request: the status change is already committed by this point, so the
+// caller only reports whether the notice got through.
+//
+// An account with no linked email has nobody to notify — that is not a failure,
+// so `notified` stays true.
+const notifyStatusChange = async ({ email, username, status }) => {
+  if (!email) return true;
+  try {
+    await sendAccountStatusNotice({ to: email, adminUsername: username, status });
+    return true;
+  } catch (err) {
+    console.error(
+      `Failed to send "${status}" status notice to ${email}:`,
+      err.message,
+    );
+    return false;
+  }
+};
+
 // ── PATCH /api/administrators/:id/deactivate ──────────────────────────
 const deactivateAdministrator = async (req, res) => {
   try {
@@ -218,8 +240,15 @@ const deactivateAdministrator = async (req, res) => {
       details: `Deactivated administrator: ${user.username}`,
     });
 
+    const notified = await notifyStatusChange({
+      email: user.email,
+      username: user.username,
+      status: "deactivated",
+    });
+
     return res.status(200).json({
       message: "Administrator deactivated successfully.",
+      notified,
     });
   } catch (err) {
     console.error("Deactivate administrator error:", err);
@@ -251,7 +280,16 @@ const reactivateAdministrator = async (req, res) => {
       details: `Reactivated administrator: ${user.username}`,
     });
 
-    return res.status(200).json({ message: "Administrator reactivated successfully" });
+    const notified = await notifyStatusChange({
+      email: user.email,
+      username: user.username,
+      status: "active",
+    });
+
+    return res.status(200).json({
+      message: "Administrator reactivated successfully",
+      notified,
+    });
   } catch (err) {
     console.error("Reactivate administrator error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -275,6 +313,11 @@ const deleteAdministrator = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "Administrator not found" });
     }
+
+    // Captured before the cascade below, which detaches this administrator from
+    // their submissions — the notice still needs to name the right person.
+    const deletedEmail = user.email;
+    const deletedUsername = user.username;
 
     // Cancel all pending word submissions from this administrator
     const pendingWords = await Word.findAll({
@@ -312,9 +355,16 @@ const deleteAdministrator = async (req, res) => {
       details: `Deleted administrator: ${user.username}`,
     });
 
+    const notified = await notifyStatusChange({
+      email: deletedEmail,
+      username: deletedUsername,
+      status: "deleted",
+    });
+
     return res.status(200).json({
       message: "Administrator account permanently deleted.",
       cancelled_submissions: pendingWords.length,
+      notified,
     });
   } catch (err) {
     console.error("Delete administrator error:", err);
@@ -457,12 +507,16 @@ const updateAdministrator = async (req, res) => {
         : `Updated administrator account: ${user.username}${password ? " (password changed)" : ""}`,
     });
 
-    // Notify the affected administrator. When the address itself changed, the
-    // OLD address is told too — it is the only way the affected person learns
-    // about a change they did not make. Never fatal: the change is already
-    // saved, so a mail outage must not surface as a failed edit.
+    // Notify the affected administrator — including when they changed their own
+    // account, so a password change made through a hijacked session still lands
+    // in the real owner's inbox. When the address itself changed, the OLD address
+    // is told too: it is the only way the affected person learns about a change
+    // they did not make. Never fatal — the change is already saved, so a mail
+    // outage must not surface as a failed edit.
+    const actor = isSelf ? "self" : "super_admin";
     let notified = true;
-    if (!isSelf && changes.length > 0) {
+
+    if (changes.length > 0) {
       const emailChanged = nextEmail !== previousEmail;
       const recipients = emailChanged
         ? [previousEmail, nextEmail]
@@ -475,11 +529,30 @@ const updateAdministrator = async (req, res) => {
             to,
             adminUsername: previousUsername,
             changes,
+            actor,
           });
         } catch (err) {
           notified = false;
           console.error(`Failed to send account-change notice to ${to}:`, err.message);
         }
+      }
+    }
+
+    // A password change is its own notice — it is not a field with a before and
+    // after, so it never appears in `changes`. Only reachable on a self-edit.
+    if (password && nextEmail) {
+      try {
+        await sendPasswordChangedNotice({
+          to: nextEmail,
+          adminUsername: previousUsername,
+          actor,
+        });
+      } catch (err) {
+        notified = false;
+        console.error(
+          `Failed to send password-changed notice to ${nextEmail}:`,
+          err.message,
+        );
       }
     }
 
