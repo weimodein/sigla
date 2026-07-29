@@ -6,7 +6,15 @@ const {
   GestureSample,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
-const { validatePassword, validateUsername } = require("../utils/validators.js");
+const {
+  sendAccountChangeNotice,
+  sendTemporaryPasswordNotice,
+} = require("../utils/mailer.js");
+const {
+  validatePassword,
+  validateUsername,
+  validateEmail,
+} = require("../utils/validators.js");
 
 // Regular administrator accounts are role_id = 1 (0 = super administrator).
 const ADMIN_ROLE_ID = 1;
@@ -317,9 +325,12 @@ const deleteAdministrator = async (req, res) => {
 // ── PUT /api/administrators/:id ────────────────────────────────────────
 const updateAdministrator = async (req, res) => {
   try {
-    // Note: email is intentionally NOT accepted here — it can only be changed
-    // through the verified email flow (POST /users/email/request-code + verify).
-    const { username, password } = req.body;
+    // The super administrator may set an administrator's email directly here so
+    // that someone locked out of their inbox can still be recovered. An account
+    // editing ITSELF still goes through the verified flow
+    // (POST /administrators/email/request-code + /administrators/email/verify),
+    // which proves control of the address before linking it.
+    const { username, email, password } = req.body;
 
     // Any admin may edit their OWN account; only a super admin may edit others.
     const isSelf = String(req.params.id) === String(req.user.id);
@@ -327,6 +338,27 @@ const updateAdministrator = async (req, res) => {
     if (!isSelf && !isSuper) {
       return res.status(403).json({
         message: "Access denied. Only the super administrator can edit other accounts.",
+      });
+    }
+
+    // A super admin must not be able to choose another account's password:
+    // knowing it means being able to sign in as that administrator, which would
+    // make every administrator_id in activity_logs unprovable. Restoring access
+    // goes through POST /administrators/:id/reset-password, which forces the
+    // administrator to replace the temporary password at next login.
+    if (!isSelf && password) {
+      return res.status(400).json({
+        message:
+          "You cannot set another administrator's password. Use Reset Password instead.",
+      });
+    }
+
+    // Email here is the super admin acting on someone else. A self-edit must
+    // still prove control of the address via the verified flow.
+    if (isSelf && email !== undefined) {
+      return res.status(400).json({
+        message:
+          "Verify your own email address through the email verification flow.",
       });
     }
 
@@ -361,8 +393,33 @@ const updateAdministrator = async (req, res) => {
       }
     }
 
-    // Password is optional on edit — only updated when a new one is provided.
-    const updates = { username: nextUsername };
+    // Email is optional on edit, and only reachable when a super admin is
+    // editing someone else (self-edits were rejected above).
+    let nextEmail = user.email;
+    if (email !== undefined) {
+      // An empty value unlinks the address rather than storing "".
+      if (email === null || String(email).trim() === "") {
+        nextEmail = null;
+      } else {
+        const emailError = validateEmail(email);
+        if (emailError) {
+          return res.status(400).json({ message: emailError });
+        }
+        nextEmail = String(email).trim();
+
+        if (nextEmail !== user.email) {
+          const taken = await Administrator.findOne({
+            where: { email: nextEmail },
+          });
+          if (taken && taken.id !== user.id) {
+            return res.status(409).json({ message: "Email already in use" });
+          }
+        }
+      }
+    }
+
+    // Password is optional on edit, and only reachable on a self-edit.
+    const updates = { username: nextUsername, email: nextEmail };
     if (password) {
       const passwordError = validatePassword(password);
       if (passwordError) {
@@ -371,19 +428,163 @@ const updateAdministrator = async (req, res) => {
       updates.password = await bcrypt.hash(password, 10);
     }
 
+    // Capture the before-values so the log entry and the notification can name
+    // what actually moved, rather than just saying "updated".
+    const previousUsername = user.username;
+    const previousEmail = user.email;
+
     await user.update(updates);
+
+    const changes = [];
+    if (nextUsername !== previousUsername) {
+      changes.push({ field: "username", from: previousUsername, to: nextUsername });
+    }
+    if (nextEmail !== previousEmail) {
+      changes.push({ field: "email", from: previousEmail, to: nextEmail });
+    }
+
+    const changeSummary = changes
+      .map((c) => `${c.field} "${c.from ?? "(not set)"}" → "${c.to ?? "(not set)"}"`)
+      .join("; ");
 
     await logActivity({
       administrator_id: req.user.id,
       action: "updated_admin",
       target_type: "administrator",
       target_id: user.id,
-      details: `Updated administrator account: ${user.username}${password ? " (password changed)" : ""}`,
+      details: changeSummary
+        ? `Updated administrator ${previousUsername}: ${changeSummary}${password ? "; password changed" : ""}`
+        : `Updated administrator account: ${user.username}${password ? " (password changed)" : ""}`,
     });
 
-    return res.status(200).json({ message: "Administrator updated successfully" });
+    // Notify the affected administrator. When the address itself changed, the
+    // OLD address is told too — it is the only way the affected person learns
+    // about a change they did not make. Never fatal: the change is already
+    // saved, so a mail outage must not surface as a failed edit.
+    let notified = true;
+    if (!isSelf && changes.length > 0) {
+      const emailChanged = nextEmail !== previousEmail;
+      const recipients = emailChanged
+        ? [previousEmail, nextEmail]
+        : [nextEmail];
+
+      const targets = [...new Set(recipients.filter(Boolean))];
+      for (const to of targets) {
+        try {
+          await sendAccountChangeNotice({
+            to,
+            adminUsername: previousUsername,
+            changes,
+          });
+        } catch (err) {
+          notified = false;
+          console.error(`Failed to send account-change notice to ${to}:`, err.message);
+        }
+      }
+    }
+
+    return res.status(200).json({
+      message: "Administrator updated successfully",
+      notified,
+    });
   } catch (err) {
     console.error("Update administrator error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ── POST /api/administrators/:id/reset-password ────────────────────────
+// Super administrator sets a TEMPORARY password for an administrator account
+// and hands it over directly (in person, by phone — not by email).
+//
+// This is the only way a super administrator can change someone else's
+// password, and it is deliberately self-expiring: must_complete_setup is set
+// back to true, so the administrator is forced through onboarding and must
+// choose their own username and password before reaching any module. The super
+// administrator's knowledge of the temporary password therefore stops being
+// useful the moment it is used, which keeps activity-log attribution honest.
+const resetAdministratorPassword = async (req, res) => {
+  try {
+    // A non-numeric :id would reach Postgres as an invalid integer cast and
+    // surface as a 500. Treat it as "not found" instead.
+    if (!/^\d+$/.test(req.params.id)) {
+      return res.status(404).json({ message: "Administrator not found" });
+    }
+
+    const { password } = req.body;
+
+    if (!password) {
+      return res
+        .status(400)
+        .json({ message: "A temporary password is required" });
+    }
+
+    // Same rule as every other password entry point — a reset must not be a
+    // way to introduce a weaker password.
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
+    }
+
+    // Deleted accounts are not recoverable through this route.
+    const user = await Administrator.findOne({
+      where: {
+        id: req.params.id,
+        role_id: ADMIN_ROLE_ID,
+        status: { [Op.in]: ["active", "deactivated"] },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Administrator not found" });
+    }
+
+    await user.update({
+      password: await bcrypt.hash(password, 10),
+      // Force onboarding again so the administrator replaces this password
+      // (and confirms an email) before they can use the account.
+      must_complete_setup: true,
+      // A locked-out account must actually be recoverable.
+      failed_login_attempts: 0,
+      lockout_until: null,
+      lockout_count: 0,
+    });
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "reset_admin_password",
+      target_type: "administrator",
+      target_id: user.id,
+      // Never log the password itself.
+      details: `Reset the password for administrator ${user.username}; account setup was reset`,
+    });
+
+    // Non-fatal, and never carries the password — see mailer.js.
+    let notified = true;
+    if (user.email) {
+      try {
+        await sendTemporaryPasswordNotice({
+          to: user.email,
+          adminUsername: user.username,
+        });
+      } catch (err) {
+        notified = false;
+        console.error(
+          `Failed to send password-reset notice to ${user.email}:`,
+          err.message,
+        );
+      }
+    }
+
+    return res.status(200).json({
+      message:
+        "Password reset. Give the temporary password to the administrator directly — they must choose their own credentials at next login.",
+      notified,
+      username: user.username,
+      has_email: Boolean(user.email),
+    });
+  } catch (err) {
+    console.error("Reset administrator password error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -391,7 +592,12 @@ const updateAdministrator = async (req, res) => {
 // ── POST /api/administrators/complete-setup ────────────────────────────
 // Finishes forced first-login onboarding for the logged-in account:
 // requires that an email is already linked (email-first), then sets the new
-// username + password and clears the must_complete_setup flag.
+// password and clears the must_complete_setup flag.
+//
+// Username is OPTIONAL. must_complete_setup is set in two different situations
+// — a brand-new account, and an account whose password the super administrator
+// just reset — and only the first is a reason to demand a new username. A
+// password reset must force a password change and nothing else.
 const completeSetup = async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -406,21 +612,25 @@ const completeSetup = async (req, res) => {
     }
 
     // Email-first: an email must have been linked (via the verified email flow).
+    // Already satisfied for any account arriving here from a password reset.
     if (!user.email) {
       return res
         .status(400)
         .json({ message: "Link and verify your email address first" });
     }
 
-    if (!username || !username.trim() || !password) {
-      return res
-        .status(400)
-        .json({ message: "New username and password are required" });
+    if (!password) {
+      return res.status(400).json({ message: "A new password is required" });
     }
 
-    const checkedUsername = validateUsername(username);
-    if (checkedUsername.error) {
-      return res.status(400).json({ message: checkedUsername.error });
+    // Keep the existing username when none is supplied.
+    let trimmedUsername = user.username;
+    if (username !== undefined && String(username).trim() !== "") {
+      const checkedUsername = validateUsername(username);
+      if (checkedUsername.error) {
+        return res.status(400).json({ message: checkedUsername.error });
+      }
+      trimmedUsername = checkedUsername.value;
     }
 
     const passwordError = validatePassword(password);
@@ -428,7 +638,6 @@ const completeSetup = async (req, res) => {
       return res.status(400).json({ message: passwordError });
     }
 
-    const trimmedUsername = checkedUsername.value;
     if (trimmedUsername !== user.username) {
       const taken = await Administrator.findOne({ where: { username: trimmedUsername } });
       if (taken) {
@@ -468,5 +677,6 @@ module.exports = {
   reactivateAdministrator,
   deleteAdministrator,
   updateAdministrator,
+  resetAdministratorPassword,
   completeSetup,
 };

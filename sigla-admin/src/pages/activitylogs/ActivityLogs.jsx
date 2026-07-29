@@ -31,6 +31,7 @@ const ACTION_META = {
   deactivated_admin:    { label: "Deactivated Admin",    color: C.red },
   reactivated_admin:    { label: "Reactivated Admin",    color: C.green },
   deleted_admin:        { label: "Deleted Admin",        color: C.red },
+  reset_admin_password: { label: "Reset Admin Password", color: C.orange },
   added_word:           { label: "Added Word",           color: C.green },
   updated_word:         { label: "Updated Word",         color: C.primary },
   deleted_word:         { label: "Deleted Word",         color: C.red },

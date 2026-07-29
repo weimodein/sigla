@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -25,8 +25,32 @@ const Onboarding = () => {
   const toast = useToast();
   const navigate = useNavigate();
 
+  // must_complete_setup is set both for a brand-new account and for an account
+  // whose password the super administrator just reset. Only the first has an
+  // email still to link — asking an administrator to re-verify an address they
+  // already hold is pointless friction, so skip straight to credentials when
+  // one is present.
+  //
   // step: 1 = link email, 2 = set credentials
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(() => (user?.email ? 2 : 1));
+
+  // Whether the email step is part of THIS session's flow. Frozen once, so
+  // linking an email at step 1 does not retroactively hide the step indicator.
+  const [emailStepNeeded, setEmailStepNeeded] = useState(() => !user?.email);
+
+  // user is hydrated synchronously from localStorage, so the initialisers above
+  // normally see the right value. On a hard refresh that cached copy can be
+  // stale, and getMe() resolves afterwards — sync once when it does, but only
+  // ever forward (skipping a step that turns out to be done), never backward.
+  const syncedFromServer = useRef(false);
+  useEffect(() => {
+    if (syncedFromServer.current || loading || !user) return;
+    syncedFromServer.current = true;
+    if (user.email) {
+      setEmailStepNeeded(false);
+      setStep((s) => (s === 1 ? 2 : s));
+    }
+  }, [loading, user]);
 
   // Email flow
   const [emailPhase, setEmailPhase] = useState("enter"); // "enter" | "verify"
@@ -38,8 +62,10 @@ const Onboarding = () => {
   // confirms before a code is sent to a possibly mistyped address.
   const [confirmEmail, setConfirmEmail] = useState(false);
 
-  // Credentials flow
-  const [username, setUsername] = useState("");
+  // Credentials flow. Username is seeded from the account: an administrator
+  // who is only here because their password was reset should not have to
+  // invent a new name. Changing it stays optional.
+  const [username, setUsername] = useState(user?.username || "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [credLoading, setCredLoading] = useState(false);
@@ -130,7 +156,7 @@ const Onboarding = () => {
 
   const handleCompleteSetup = async () => {
     if (!username.trim()) {
-      toast.error("Please choose a username");
+      toast.error("Username cannot be empty");
       return;
     }
     if (!isValidPassword(password)) {
@@ -186,40 +212,46 @@ const Onboarding = () => {
             style={{ width: 56, height: 56, objectFit: "contain", margin: "0 auto 8px" }}
           />
           <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: C.text, margin: 0 }}>
-            Complete Your Account Setup
+            {emailStepNeeded ? "Complete Your Account Setup" : "Set a New Password"}
           </h1>
           <p style={{ fontSize: "0.85rem", color: C.muted, margin: "6px 0 0" }}>
-            For security, link an email and set your own credentials before continuing.
+            {emailStepNeeded
+              ? "For security, link an email and set your own credentials before continuing."
+              : "Your password was reset. Choose a new one to continue."}
           </p>
         </div>
 
-        {/* Step indicator */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-          {[1, 2].map((s) => (
-            <div key={s} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div
-                style={{
-                  height: 4,
-                  borderRadius: 2,
-                  background: step >= s ? C.primary : C.border,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: step >= s ? C.primary : C.muted,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                }}
-              >
-                {s === 1 ? <Mail size={12} /> : <UserCog size={12} />}
-                {s === 1 ? "Link Email" : "Set Credentials"}
-              </span>
-            </div>
-          ))}
-        </div>
+        {/* Step indicator — only meaningful when there is more than one step.
+            An account that already has an email never sees the email step, so
+            showing a "Link Email" pill it cannot act on would just confuse. */}
+        {emailStepNeeded && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+            {[1, 2].map((s) => (
+              <div key={s} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                <div
+                  style={{
+                    height: 4,
+                    borderRadius: 2,
+                    background: step >= s ? C.primary : C.border,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: step >= s ? C.primary : C.muted,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  {s === 1 ? <Mail size={12} /> : <UserCog size={12} />}
+                  {s === 1 ? "Link Email" : "Set Credentials"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Step 1 — Email */}
         {step === 1 && (
@@ -298,7 +330,7 @@ const Onboarding = () => {
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                New Username
+                {emailStepNeeded ? "New Username" : "Username"}
               </label>
               <input
                 type="text"
@@ -307,6 +339,11 @@ const Onboarding = () => {
                 placeholder="Choose a username"
                 className={inputCls}
               />
+              {!emailStepNeeded && (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Keep this as it is unless you want to change it.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -341,7 +378,11 @@ const Onboarding = () => {
               className="w-full flex items-center justify-center gap-1.5 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50"
             >
               <Check size={15} />
-              {credLoading ? "Finishing..." : "Finish Setup"}
+              {credLoading
+                ? "Finishing..."
+                : emailStepNeeded
+                  ? "Finish Setup"
+                  : "Save New Password"}
             </button>
           </div>
         )}

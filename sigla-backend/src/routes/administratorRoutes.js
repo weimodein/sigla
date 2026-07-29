@@ -13,6 +13,7 @@ const {
   reactivateAdministrator,
   deleteAdministrator,
   updateAdministrator,
+  resetAdministratorPassword,
 } = require("../controllers/administratorController.js");
 const { requestEmailCode, verifyEmailCode } = require("../controllers/emailController.js");
 const { completeSetup } = require("../controllers/administratorController.js");
@@ -42,6 +43,9 @@ router.post("/", roleMiddleware("super_admin"), createAdministrator);
 router.get("/:id", roleMiddleware("super_admin"), getAdministratorById);
 router.patch("/:id/deactivate", roleMiddleware("super_admin"), deactivateAdministrator);
 router.patch("/:id/reactivate", roleMiddleware("super_admin"), reactivateAdministrator);
+// Sets a TEMPORARY password and forces onboarding again — the only way a super
+// admin can change someone else's password. See the controller for why.
+router.post("/:id/reset-password", roleMiddleware("super_admin"), resetAdministratorPassword);
 // PUT /:id stays open to any admin so each account can edit ITSELF; the
 // controller allows the update only for self-edits or when the caller is super.
 router.put("/:id", roleMiddleware("admin"), updateAdministrator);
@@ -60,5 +64,7 @@ module.exports = router;
 // POST   /api/administrators                  → create administrator (username + password)
 // PATCH  /api/administrators/:id/deactivate   → deactivate administrator
 // PATCH  /api/administrators/:id/reactivate   → reactivate deactivated administrator
-// PUT    /api/administrators/:id              → edit administrator info
+// POST   /api/administrators/:id/reset-password → set a temporary password
+//                                                 (forces onboarding again)
+// PUT    /api/administrators/:id              → edit administrator username/email
 // DELETE /api/administrators/:id              → permanently delete administrator

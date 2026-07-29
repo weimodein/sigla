@@ -51,3 +51,14 @@ export const createAdministrator = async (data) => {
   const response = await api.post("/administrators", data);
   return response.data;
 };
+
+// Sets a TEMPORARY password on another administrator's account. They are forced
+// through onboarding at next login to choose their own credentials, so this
+// grants no lasting ability to sign in as them.
+// Resolves to { message, notified, username, has_email }.
+export const resetAdministratorPassword = async (id, password) => {
+  const response = await api.post(`/administrators/${id}/reset-password`, {
+    password,
+  });
+  return response.data;
+};

@@ -10,6 +10,7 @@ import {
   deleteAdministrator,
   updateAdministrator,
   createAdministrator,
+  resetAdministratorPassword,
 } from "../../api/administratorApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
@@ -25,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserPlus,
+  KeyRound,
 } from "lucide-react";
 
 // ── Color Palette ────────────────────────────────────────────
@@ -302,12 +304,19 @@ const ManageAdministrators = () => {
     confirmPassword: "",
   });
 
-  // Edit form. Username and password are the only editable fields: email is owned
-  // by the verified email-change flow, never set on an admin's behalf.
+  // Edit form. Username and email are edited directly by the super admin so a
+  // locked-out account can be recovered. Password is never typed here — it is
+  // display-only, and changing it goes through the Reset Password dialog.
   const [editForm, setEditForm] = useState({
     username: "",
-    password: "",
+    email: "",
   });
+
+  // Reset-password dialog: the target admin, the typed temporary password, and
+  // a final confirmation step before it is applied.
+  const [resetModal, setResetModal] = useState(null);
+  const [resetForm, setResetForm] = useState({ password: "", confirm: "" });
+  const [confirmReset, setConfirmReset] = useState(false);
 
   // ── Fetch data ──────────────────────────────────────────────
   const fetchStats = async () => {
@@ -473,7 +482,7 @@ const ManageAdministrators = () => {
   const handleEditOpen = (admin) => {
     setEditForm({
       username: admin.username || "",
-      password: "",
+      email: admin.email || "",
     });
     setEditModal(admin);
   };
@@ -483,25 +492,86 @@ const ManageAdministrators = () => {
       showError("Username is required");
       return;
     }
-    // Password is optional on edit; validate only when a new one is entered.
-    if (editForm.password && !isValidPassword(editForm.password)) {
+    const email = editForm.email.trim();
+    // Email is optional — an account may have none linked yet. Shape is checked
+    // server-side by validateEmail; this is just an early, friendlier catch.
+    if (email && !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email)) {
+      showError("Please enter a valid email address");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const data = await updateAdministrator(editModal.id, {
+        username: editForm.username.trim(),
+        email,
+      });
+      // The change is saved either way; only the notice may have failed.
+      if (data?.notified === false) {
+        toast.warning(
+          "Administrator updated, but the notification email could not be sent.",
+        );
+      } else {
+        showSuccess("Administrator updated successfully");
+      }
+      setEditModal(null);
+      fetchTabData();
+    } catch (err) {
+      showError(err.response?.data?.message || "Failed to update administrator");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ── Reset Password ───────────────────────────────────────────
+  const handleResetOpen = (admin) => {
+    setResetForm({ password: "", confirm: "" });
+    setConfirmReset(false);
+    setResetModal(admin);
+  };
+
+  // Step 1: validate the typed temporary password, then confirm.
+  const handleResetSubmit = () => {
+    if (!resetForm.password) {
+      showError("Enter a temporary password");
+      return;
+    }
+    if (!isValidPassword(resetForm.password)) {
       showError(
         "Password must be at least 8 characters and include a letter and a number",
       );
       return;
     }
+    if (resetForm.password !== resetForm.confirm) {
+      showError("Passwords do not match");
+      return;
+    }
+    setConfirmReset(true);
+  };
+
+  // Step 2: apply it.
+  const confirmResetPassword = async () => {
     setActionLoading(true);
     try {
-      const payload = {
-        username: editForm.username.trim(),
-      };
-      if (editForm.password) payload.password = editForm.password;
-      await updateAdministrator(editModal.id, payload);
-      showSuccess("Administrator updated successfully");
-      setEditModal(null);
+      const data = await resetAdministratorPassword(
+        resetModal.id,
+        resetForm.password,
+      );
+      setConfirmReset(false);
+      setResetModal(null);
+      setResetForm({ password: "", confirm: "" });
+      if (data?.has_email && data?.notified === false) {
+        toast.warning(
+          "Password reset, but the notification email could not be sent.",
+        );
+      } else {
+        showSuccess(
+          "Password reset. Give the temporary password to the administrator directly.",
+        );
+      }
       fetchTabData();
     } catch (err) {
-      showError(err.response?.data?.message || "Failed to update administrator");
+      showError(err.response?.data?.message || "Failed to reset password");
+      setConfirmReset(false);
     } finally {
       setActionLoading(false);
     }
@@ -792,7 +862,7 @@ const ManageAdministrators = () => {
 
       {/* Edit Administrator Modal */}
       {editModal && (
-        <AppModal title="Edit Administrator" onClose={() => setEditModal(null)}>
+        <AppModal title="Administrator Details" onClose={() => setEditModal(null)}>
           <div className="space-y-3">
             <div>
               <label
@@ -820,15 +890,15 @@ const ManageAdministrators = () => {
                 className="block text-xs font-medium mb-1"
                 style={{ color: "#4b5563" }}
               >
-                New Password <span style={{ color: C.muted }}>(optional)</span>
+                Email
               </label>
               <input
-                type="password"
-                value={editForm.password}
+                type="email"
+                value={editForm.email}
                 onChange={(e) =>
-                  setEditForm({ ...editForm, password: e.target.value })
+                  setEditForm({ ...editForm, email: e.target.value })
                 }
-                placeholder="Leave blank to keep current password"
+                placeholder="No email linked yet"
                 className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
                 style={{
                   borderColor: C.border,
@@ -837,8 +907,42 @@ const ManageAdministrators = () => {
                 }}
               />
               <p className="text-[11px] mt-1" style={{ color: C.muted }}>
-                If set: at least 8 characters, including a letter and a number.
+                Changing this notifies the administrator at both the old and the
+                new address.
               </p>
+            </div>
+            {/* Password is display-only — it is never typed into this form. */}
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Password
+              </label>
+              <div
+                className="w-full border rounded-xl px-3 py-2 flex items-center justify-between gap-3"
+                style={{ borderColor: C.border, background: "#f9fafb" }}
+              >
+                <span
+                  className="text-sm tracking-[0.3em] select-none"
+                  style={{ color: C.muted }}
+                >
+                  ••••••••
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = editModal;
+                    setEditModal(null);
+                    handleResetOpen(target);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition whitespace-nowrap"
+                  style={{ background: C.orange + "18", color: C.orange }}
+                >
+                  <KeyRound size={13} />
+                  Reset Password
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 pt-2">
               <button
@@ -987,6 +1091,130 @@ const ManageAdministrators = () => {
                 style={{ borderColor: C.border, color: "#4b5563" }}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </AppModal>
+      )}
+
+      {/* Reset Password Modal */}
+      {resetModal && !confirmReset && (
+        <AppModal
+          title="Reset Password"
+          onClose={() => setResetModal(null)}
+        >
+          <div className="space-y-3">
+            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
+              Set a temporary password for{" "}
+              <strong style={{ color: C.text }}>{resetModal.username}</strong>.
+              Give it to them directly — they will be asked to choose their own
+              username and password the next time they sign in.
+            </p>
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Temporary Password
+              </label>
+              <input
+                type="password"
+                value={resetForm.password}
+                onChange={(e) =>
+                  setResetForm({ ...resetForm, password: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+              <p className="text-[11px] mt-1" style={{ color: C.muted }}>
+                At least 8 characters, including a letter and a number.
+              </p>
+            </div>
+            <div>
+              <label
+                className="block text-xs font-medium mb-1"
+                style={{ color: "#4b5563" }}
+              >
+                Confirm Temporary Password
+              </label>
+              <input
+                type="password"
+                value={resetForm.confirm}
+                onChange={(e) =>
+                  setResetForm({ ...resetForm, confirm: e.target.value })
+                }
+                className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none"
+                style={{
+                  borderColor: C.border,
+                  background: C.surface,
+                  color: C.text,
+                }}
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleResetSubmit}
+                disabled={actionLoading}
+                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ background: C.orange, color: "#fff" }}
+              >
+                Reset Password
+              </button>
+              <button
+                onClick={() => setResetModal(null)}
+                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
+                style={{ borderColor: C.border, color: "#4b5563" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </AppModal>
+      )}
+
+      {/* Reset Password Confirmation */}
+      {resetModal && confirmReset && (
+        <AppModal
+          title="Confirm Password Reset"
+          onClose={() => setConfirmReset(false)}
+        >
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
+              Reset the password for{" "}
+              <strong style={{ color: C.text }}>{resetModal.username}</strong>?
+              Their current password stops working immediately. They sign in with
+              the temporary password and are asked to set their own password
+              before they can continue.
+              {!resetModal.email &&
+                " Because this account has no linked email yet, they will also be asked to link one."}
+            </p>
+            {resetModal.email && (
+              <p className="text-[11px] leading-relaxed" style={{ color: C.muted }}>
+                They will be notified at {maskEmail(resetModal.email)}. For
+                security, the temporary password is not included in that email —
+                give it to them yourself.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={confirmResetPassword}
+                disabled={actionLoading}
+                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ background: C.orange, color: "#fff" }}
+              >
+                {actionLoading ? "Resetting..." : "Confirm Reset"}
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                disabled={actionLoading}
+                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                style={{ borderColor: C.border, color: "#4b5563" }}
+              >
+                Back
               </button>
             </div>
           </div>
