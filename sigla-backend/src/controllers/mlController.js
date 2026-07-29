@@ -3,12 +3,10 @@ const { Op } = require("sequelize");
 
 /**
  * GET /api/ml/dataset
- * Returns all approved gesture samples grouped by word label.
- * Format: { "LABEL": [ { "sequence": [[...], ...] }, ... ] } for every sample —
- * static gestures are a length-1 sequence (one held-pose frame), motion the
- * full extracted window. No separate static/motion field: sigla-ml re-derives
- * which one each sample is from the sequence's own content (see
- * preprocessor.classify_motion_or_static / partition_dataset_by_word_type).
+ * Returns all approved gesture samples grouped by word label. Every gesture is
+ * motion; the static "features" format is no longer produced.
+ * Format: { "LABEL": [ { sequence: [[...147], x30], sample_id, file_url,
+ *                        submitted_by }, ... ] }
  */
 const getApprovedDataset = async (req, res) => {
   try {
@@ -41,7 +39,7 @@ const getApprovedDataset = async (req, res) => {
       return res.status(404).json({ message: "No approved samples found" });
     }
 
-    // Group samples by word label.
+    // Group samples by word label. Every sample is a motion sequence (30×147).
     const dataset = {};
 
     for (const sample of samples) {
@@ -49,7 +47,19 @@ const getApprovedDataset = async (req, res) => {
       if (!dataset[label]) dataset[label] = [];
 
       if (sample.sequence && Array.isArray(sample.sequence)) {
-        dataset[label].push({ sequence: sample.sequence });
+        // sample_id / file_url identify the source clip. They used to be dropped
+        // here, which left the ML service unable to record WHICH samples landed in
+        // which split — so a reported metric could not be reproduced or audited,
+        // and a grouped (per-signer / per-session) split was impossible to build
+        // even in principle. submitted_by is included for the same reason: it is
+        // the grouping key a StratifiedGroupKFold will need once a second signer
+        // contributes. Consumers ignore unknown keys, so this is additive.
+        dataset[label].push({
+          sequence: sample.sequence,
+          sample_id: sample.id,
+          file_url: sample.file_url,
+          submitted_by: sample.submitted_by,
+        });
       } else {
         console.warn(`Sample ${sample.id} has no embedded sequence, skipping`);
       }

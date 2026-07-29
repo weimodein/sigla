@@ -16,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -265,12 +266,15 @@ class WordDetailActivity : AppCompatActivity() {
     }
 
     private fun speakWord(label: String) {
-        if (isTtsReady) {
+        if (!isTtsReady) return
+        val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
+        }
+        // Resolving the voice can block on a query into the TTS engine process
+        // (cached after the first time), so it must not run on the main thread.
+        lifecycleScope.launch(Dispatchers.IO) {
             TtsVoiceHelper.applyPreferredVoice(tts, appSettings)
-            val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
-            val params = Bundle().apply {
-                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
-            }
             tts?.speak(label, TextToSpeech.QUEUE_FLUSH, params, null)
         }
     }

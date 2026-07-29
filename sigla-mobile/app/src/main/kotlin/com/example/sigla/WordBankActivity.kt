@@ -2,6 +2,8 @@ package com.example.sigla
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.InputFilter
 import android.text.InputType
 import android.view.View
@@ -31,9 +33,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.recyclerview.widget.GridLayoutManager
 
+private const val SEARCH_DEBOUNCE_MS = 250L
+
 class WordBankActivity : AppCompatActivity() {
 
-    
+    // Search debounce — see setupSearch()
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private var searchRunnable: Runnable? = null
+
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var btnSidebar: MaterialButton
     private lateinit var btnCategoryPill: MaterialButton
@@ -175,6 +182,7 @@ class WordBankActivity : AppCompatActivity() {
             onCategoryCardClicked(item)
         }
         rvCategoryGrid.layoutManager = GridLayoutManager(this, 2)
+        rvCategoryGrid.setHasFixedSize(true)
         rvCategoryGrid.adapter = gridAdapter
     }
 
@@ -476,15 +484,23 @@ class WordBankActivity : AppCompatActivity() {
 
     private fun setupSearch() {
         etSearch.addTextChangedListener { text ->
-            searchQuery = text?.toString()?.trim() ?: ""
-            if (searchQuery.isNotEmpty()) {
-                selectedCategory = "All Categories" // search across everything
-                showListMode()
-            } else if (!isGridMode) {
-                showGridMode()
-                refreshCategoryGrid()
+            val query = text?.toString()?.trim() ?: ""
+            // Debounced: applyFilters() walks every word and rebinds the whole
+            // adapter, so running it on each keystroke made typing stutter.
+            searchRunnable?.let { searchHandler.removeCallbacks(it) }
+            val runnable = Runnable {
+                searchQuery = query
+                if (searchQuery.isNotEmpty()) {
+                    selectedCategory = "All Categories" // search across everything
+                    showListMode()
+                } else if (!isGridMode) {
+                    showGridMode()
+                    refreshCategoryGrid()
+                }
+                applyFilters()
             }
-            applyFilters()
+            searchRunnable = runnable
+            searchHandler.postDelayed(runnable, SEARCH_DEBOUNCE_MS)
         }
     }
 
@@ -695,6 +711,9 @@ class WordBankActivity : AppCompatActivity() {
     private fun setupRecyclerView() {
         adapter = SimpleWordAdapter(mutableListOf()) { word -> openWordDetail(word) }
         rvWords.layoutManager = LinearLayoutManager(this)
+        // Row height doesn't depend on content, so RecyclerView can skip a full
+        // layout pass whenever the data set changes.
+        rvWords.setHasFixedSize(true)
         rvWords.adapter = adapter
     }
 
@@ -915,6 +934,8 @@ class WordBankActivity : AppCompatActivity() {
     override fun onDestroy() {
         // lifecycleScope already cancels downloadJob; this just prevents a leaked window.
         dismissDownloadDialog()
+        // A pending debounced search would otherwise retain this activity.
+        searchRunnable?.let { searchHandler.removeCallbacks(it) }
         super.onDestroy()
     }
 

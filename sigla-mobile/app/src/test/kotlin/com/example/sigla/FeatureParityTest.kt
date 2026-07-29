@@ -17,16 +17,12 @@ import kotlin.math.abs
  */
 class FeatureParityTest {
 
-    // Mirror of Python normalize_frame: per-hand normalize (skip absent), then pose.
+    // Calls the PRODUCTION normalizeFrame — the same function parseResult() uses.
+    // This used to be a test-local reimplementation of the per-hand presence rule,
+    // which meant the test could pass while the real path regressed.
     private fun normalizeLikePython(frame: FloatArray): FloatArray {
         val out = frame.copyOf()
-        for (hand in 0..1) {
-            val base = hand * 63
-            var present = false
-            for (k in base until base + 63) if (out[k] != 0f) { present = true; break }
-            if (present) normalizeHandBlock(out, base)
-        }
-        normalizePoseBlock(out)
+        normalizeFrame(out)
         return out
     }
 
@@ -71,5 +67,148 @@ class FeatureParityTest {
         val in_degenerateShoulders = floatArrayOf(6.76778257e-01f, 8.97416949e-01f, 8.51343989e-01f, 7.74420083e-01f, 7.21692622e-01f, 4.16015387e-01f, 6.12983286e-01f, 2.47556508e-01f, 7.07595587e-01f, 7.06152558e-01f, 6.77036166e-01f, 4.55839217e-01f, 4.02544260e-01f, 4.35816735e-01f, 1.26671389e-01f, 7.75456071e-01f, 5.33895910e-01f, 4.10014898e-01f, 5.38423002e-01f, 6.77312195e-01f, 4.05168682e-01f, 7.64512539e-01f, 8.35570693e-01f, 4.09945846e-01f, 2.10252926e-01f, 7.08298624e-01f, 8.94359112e-01f, 2.18390524e-01f, 6.70140564e-01f, 7.60258734e-01f, 8.36457551e-01f, 1.98705137e-01f, 1.73447937e-01f, 8.90297294e-01f, 1.93405181e-01f, 2.41446048e-01f, 5.59962332e-01f, 4.57018435e-01f, 7.00313747e-01f, 2.52445787e-01f, 8.31542194e-01f, 2.73755878e-01f, 7.15288818e-01f, 1.54082820e-01f, 4.78722066e-01f, 1.26046658e-01f, 3.51048559e-01f, 3.49784553e-01f, 6.75798774e-01f, 4.64013994e-01f, 1.45419493e-01f, 8.96289349e-01f, 8.10959458e-01f, 8.33059132e-01f, 2.97260433e-01f, 4.15288210e-01f, 2.81743586e-01f, 1.99925110e-01f, 1.26419142e-01f, 5.02669156e-01f, 1.98506922e-01f, 2.41043493e-01f, 7.88380563e-01f, 4.87394214e-01f, 2.46962816e-01f, 6.35891676e-01f, 3.12691897e-01f, 5.21549761e-01f, 3.26362282e-01f, 5.12928963e-01f, 6.02826893e-01f, 5.28966486e-01f, 4.16483283e-01f, 7.32651055e-01f, 7.98749983e-01f, 2.43497014e-01f, 2.09046975e-01f, 1.90553308e-01f, 8.83677363e-01f, 8.53273034e-01f, 2.84533739e-01f, 8.75926077e-01f, 2.66254127e-01f, 5.05180836e-01f, 4.97908026e-01f, 8.31964731e-01f, 1.32423088e-01f, 3.52280647e-01f, 5.79979777e-01f, 1.53118581e-01f, 2.89240450e-01f, 4.72050756e-01f, 8.04685593e-01f, 7.08767593e-01f, 7.63184369e-01f, 7.08855808e-01f, 6.66176617e-01f, 7.79754698e-01f, 6.45181358e-01f, 6.88546419e-01f, 3.41315597e-01f, 2.34112576e-01f, 7.05219984e-01f, 2.32669830e-01f, 8.35564673e-01f, 5.77314258e-01f, 3.63547295e-01f, 8.49314511e-01f, 2.24104211e-01f, 5.11573076e-01f, 1.73243254e-01f, 8.72342169e-01f, 5.60300827e-01f, 7.42933273e-01f, 3.25537950e-01f, 7.41437316e-01f, 6.62273586e-01f, 6.14945173e-01f, 8.60450268e-01f, 4.46793079e-01f, 4.32070732e-01f, 6.53696895e-01f, 7.68044233e-01f, 3.68060827e-01f, 6.35725617e-01f, 2.67229915e-01f, 5.41359961e-01f, 7.15337336e-01f, 1.52251959e-01f, 6.82273626e-01f, 1.12345979e-01f, 8.66680026e-01f, 6.82273626e-01f, 1.12345979e-01f, 8.66680026e-01f, 5.18639088e-01f, 6.84679091e-01f, 1.67806312e-01f, 5.50233483e-01f, 5.46486974e-01f, 8.45691085e-01f, 1.31684467e-01f, 4.62255716e-01f, 6.04858339e-01f, 5.40597558e-01f, 1.59328878e-01f, 5.74582696e-01f)
         val exp_degenerateShoulders = floatArrayOf(0.00000000e+00f, 0.00000000e+00f, 0.00000000e+00f, 1.90841466e-01f, -3.43454152e-01f, -8.50852072e-01f, -1.24687612e-01f, -1.27015567e+00f, -2.80957013e-01f, 5.74122295e-02f, -4.30735409e-01f, -7.73016214e-01f, -5.35991788e-01f, -9.02200103e-01f, -1.41637647e+00f, 1.92866310e-01f, -7.10503817e-01f, -8.62580061e-01f, -2.70416081e-01f, -4.30195928e-01f, -8.72052014e-01f, 1.71477124e-01f, -1.20878838e-01f, -8.62715065e-01f, -9.11826253e-01f, -3.69632781e-01f, 8.40732902e-02f, -8.95921290e-01f, -4.44212914e-01f, -1.78026617e-01f, 3.12094033e-01f, -1.36563599e+00f, -1.32495141e+00f, 4.17324096e-01f, -1.37599480e+00f, -1.19204891e+00f, -2.28317350e-01f, -8.60761285e-01f, -2.95189410e-01f, -8.29360068e-01f, -1.28752559e-01f, -1.12889898e+00f, 7.52690956e-02f, -1.45285046e+00f, -7.28291571e-01f, -1.07640791e+00f, -1.06787992e+00f, -9.80300605e-01f, -1.91440503e-03f, -8.47088397e-01f, -1.37973320e+00f, 4.29035604e-01f, -1.68981627e-01f, -3.57378498e-02f, -7.41769612e-01f, -9.42323208e-01f, -1.11328709e+00f, -9.32012022e-01f, -1.50691938e+00f, -6.81486845e-01f, -9.34783876e-01f, -1.28288543e+00f, -1.23062357e-01f, 0.00000000e+00f, 0.00000000e+00f, 0.00000000e+00f, -5.82569301e-01f, 9.15648520e-01f, -1.03216898e+00f, 8.51491913e-02f, 1.18667853e+00f, -3.56556982e-01f, -2.36462399e-01f, 1.61959529e+00f, 5.43073773e-01f, -8.13309312e-01f, -1.26435667e-01f, -1.48504305e+00f, 1.32146156e+00f, 2.02182627e+00f, -1.17165208e+00f, 1.29561377e+00f, 6.43295720e-02f, -4.35873568e-01f, 3.50597762e-02f, 1.95077074e+00f, -1.67888629e+00f, -4.50555056e-01f, 1.11049163e+00f, -1.60987437e+00f, -6.60771430e-01f, 7.50587165e-01f, 5.62866926e-01f, 7.38200486e-01f, 1.72141278e+00f, 2.43309096e-01f, 5.96174896e-01f, 1.77666891e+00f, 3.09777427e-02f, 6.70770109e-01f, 3.14632535e-01f, -1.33978856e+00f, 7.26370454e-01f, -4.76619564e-02f, 6.65837526e-01f, 2.99850941e-01f, 3.88767242e-01f, 7.11688280e-01f, -8.77977252e-01f, 8.82379889e-01f, -1.54276586e+00f, 1.28366280e+00f, 1.04486942e+00f, 3.56945157e-01f, -5.39732337e-01f, 1.64889431e+00f, 8.79741609e-02f, 4.25336510e-01f, 2.04575968e+00f, -6.30575716e-01f, -1.84483886e-01f, 1.35631156e+00f, 4.40681159e-01f, -3.97933841e-01f, 1.29638386e+00f, -1.22935414e+00f, -1.40913672e+05f, 6.02991375e+05f, -7.14428062e+05f, 0.00000000e+00f, 0.00000000e+00f, 0.00000000e+00f, 0.00000000e+00f, 0.00000000e+00f, 0.00000000e+00f, -1.63634547e+05f, 5.72333125e+05f, -6.98873688e+05f, -1.32040141e+05f, 4.34140969e+05f, -2.09889414e+04f, -5.50589125e+05f, 3.49909719e+05f, -2.61821688e+05f, -1.41676062e+05f, 4.69828984e+04f, -2.92097344e+05f)
         check(in_degenerateShoulders, exp_degenerateShoulders)
+    }
+
+    // ── Window selection / velocity parity ───────────────────────────────────
+    //
+    // Guards the signal that picks the 30-frame window. Inputs are rebuilt from
+    // the same deterministic recipe as sigla-ml tools/gen_parity_fixtures.py
+    // (_make_sequence), so no multi-hundred-KB float dumps are needed; only the
+    // expected peak index is pinned. Regenerate with:
+    //     python tools/gen_parity_fixtures.py
+
+    private fun makeSequence(n: Int, peakAt: Int, pose: Boolean, slot: Int): List<FloatArray> {
+        val seq = ArrayList<FloatArray>(n)
+        for (i in 0 until n) {
+            val frame = FloatArray(147)
+            for (k in 0 until 147) {
+                frame[k] = (((i * 31 + k * 7) % 97) * 0.0001).toFloat()
+            }
+            if (!pose) for (k in 126 until 147) frame[k] = 0f
+            if (slot == 0) for (k in 63 until 126) frame[k] = 0f
+            else for (k in 0 until 63) frame[k] = 0f
+            seq.add(frame)
+        }
+        if (pose) {
+            for (j in intArrayOf(126 + 5 * 3, 126 + 5 * 3 + 1, 126 + 6 * 3, 126 + 6 * 3 + 1)) {
+                seq[peakAt][j] = seq[peakAt - 1][j] + 5.0f
+            }
+        } else {
+            val base = slot * 63
+            for (i in intArrayOf(4, 8, 12, 16, 20)) {
+                seq[peakAt][base + i * 3] = seq[peakAt - 1][base + i * 3] + 5.0f
+            }
+        }
+        return seq
+    }
+
+    private fun peakIndex(frames: List<FloatArray>): Int {
+        var peakIdx = frames.size / 2
+        var peakVel = 0f
+        for (i in 1 until frames.size) {
+            val v = frameVelocity(frames[i - 1], frames[i])
+            if (v > peakVel) { peakVel = v; peakIdx = i }
+        }
+        return peakIdx
+    }
+
+    /** Two motion spikes: a big one at [entryAt] (the hand-raise) and a smaller,
+     *  real one at [signAt]. Mirrors how the training clips actually look. */
+    private fun makeEntrySpike(n: Int, entryAt: Int, signAt: Int): List<FloatArray> {
+        val seq = ArrayList<FloatArray>(n)
+        for (i in 0 until n) {
+            val f = FloatArray(147)
+            for (k in 0 until 147) f[k] = (((i * 31 + k * 7) % 97) * 0.0001).toFloat()
+            for (k in 63 until 126) f[k] = 0f
+            seq.add(f)
+        }
+        for (j in intArrayOf(126 + 5 * 3, 126 + 5 * 3 + 1, 126 + 6 * 3, 126 + 6 * 3 + 1)) {
+            seq[entryAt][j] = seq[entryAt - 1][j] + 5.0f   // hand-raise: LARGER
+            seq[signAt][j]  = seq[signAt - 1][j]  + 2.0f   // actual sign: smaller
+        }
+        return seq
+    }
+
+    @Test
+    fun peakSearchIgnoresEntrySpike() {
+        // The bug this encodes: source clips are "raise, sign, lower", and the
+        // hand-raise is a bigger velocity spike than the sign itself (measured on a
+        // real clip: 0.4844 at f2 vs 0.2098 at f16). A plain argmax centres the
+        // window on the entry movement and cuts off the gesture, which is what made
+        // GOOD MORNING / GOOD AFTERNOON / I'M FINE mutually confusable.
+        val frames = makeEntrySpike(40, entryAt = 2, signAt = 20)
+
+        // Plain argmax is fooled by the entry spike...
+        assertEquals(3, peakIndex(frames))
+
+        // ...but the production picker (smoothing + edge margin) lands on the sign.
+        // Exact value from tools/gen_parity_fixtures.py.
+        assertEquals(20, peakVelocityIndex(frames))
+    }
+
+    @Test
+    fun peakSearchIgnoresExitSpike() {
+        // "lower" end of raise-sign-lower: a big spike at the tail must not win either.
+        val frames = makeEntrySpike(40, entryAt = 37, signAt = 18)
+        assertEquals(20, peakVelocityIndex(frames))
+    }
+
+    @Test
+    fun windowSelectionParity() {
+        // Expected values from `python tools/gen_parity_fixtures.py`, which now
+        // generates from the PRODUCTION picker (peak_velocity_index) rather than a
+        // plain argmax — pinning argmax values would pin numbers the real code
+        // never produces. They differ by a frame or two from the raw argmax because
+        // of the 5-frame smoothing.
+        assertEquals(29, peakVelocityIndex(makeSequence(45, 30, true,  0)))
+        assertEquals(13, peakVelocityIndex(makeSequence(45, 12, false, 0)))
+        // Left-hand-only: all data in slot 1. The OLD velocity signal read hand
+        // slot 0 only, so it saw zero velocity everywhere and defaulted to n/2 = 20.
+        // Pinning 24 keeps that blindness from returning.
+        assertEquals(24, peakVelocityIndex(makeSequence(40, 25, false, 1)))
+        assertEquals(10, peakVelocityIndex(makeSequence(17, 9,  true,  0)))
+    }
+
+    @Test
+    fun exactlySequenceLengthIsIdentity() {
+        // With exactly SEQUENCE_LENGTH frames the only possible window is [0:30],
+        // so both sides must return the input unchanged. Pinned because sigla-ml's
+        // center_on_peak_velocity has the matching `n == SEQUENCE_LENGTH` branch, and
+        // on the EXTRACTION side that branch was a real bug: clips surviving at exactly
+        // 30 frames were stored with no window ever selected (extract.py now resamples
+        // above SEQUENCE_LENGTH and passes force=True). If either side is ever changed
+        // to window a 30-frame input differently, this test fails and forces the other
+        // side to be updated in lockstep.
+        val frames = makeSequence(30, 25, pose = true, slot = 0)
+        assertEquals(25, peakIndex(frames))   // motion stays where it is
+    }
+
+    @Test
+    fun velocityIgnoresWristCenteredHandTranslation() {
+        // After normalize_frame the hand blocks are wrist-centred, so translating a
+        // hand cannot change them. The pose block is shoulder-centred and DOES move.
+        // This encodes why the signal reads pose wrists rather than hand landmarks.
+        val a = makeSequence(2, 1, true, 0)[0]
+        val b = a.copyOf()
+        for (j in 0 until 21) b[j * 3] += 1.0f          // translate hand slot 0 in x
+        assertEquals(0f, frameVelocity(a, b), 1e-6f)
+
+        val c = a.copyOf()
+        c[126 + 5 * 3] += 1.0f                           // move the left pose wrist
+        assert(frameVelocity(a, c) > 0.9f) { "pose wrist motion must register" }
+    }
+
+    // ── Layout constant parity ───────────────────────────────────────────────
+    // Cheap guard against one side's constants being edited alone.
+    @Test
+    fun layoutConstantParity() {
+        assertEquals(147, FEATURE_SIZE)
+        assertEquals(126, POSE_BASE)
+        assertEquals(1, POSE_LSHOULDER)
+        assertEquals(2, POSE_RSHOULDER)
+        assertEquals(
+            listOf(0, 11, 12, 13, 14, 15, 16),
+            POSE_KEYPOINTS.toList()
+        )
     }
 }

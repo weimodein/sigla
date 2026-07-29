@@ -1,0 +1,90 @@
+{
+  "accuracy_mean": 0.9804545454545455,
+  "accuracy_std": 0.018608626809507943,
+  "folds": 5,
+  "per_fold_accuracy": [
+    0.9772727272727273,
+    1.0,
+    0.975,
+    0.95,
+    1.0
+  ],
+  "per_class_recall": {
+    "GOOD AFTERNOON": [
+      0.8,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "GOOD EVENING": [
+      1.0,
+      1.0,
+      0.75,
+      1.0,
+      1.0
+    ],
+    "GOOD MORNING": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "HELLO": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "HOW ARE YOU": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "I'M FINE": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "NICE TO MEET YOU": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "SEE YOU TOMORROW": [
+      1.0,
+      1.0,
+      1.0,
+      0.75,
+      1.0
+    ],
+    "THANK YOU": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "YOU'RE WELCOME": [
+      1.0,
+      1.0,
+      1.0,
+      0.75,
+      1.0
+    ]
+  },
+  "confusions": {
+    "GOOD AFTERNOON -> GOOD EVENING": 1,
+    "GOOD EVENING -> GOOD MORNING": 1,
+    "SEE YOU TOMORROW -> GOOD EVENING": 1,
+    "YOU'RE WELCOME -> I'M FINE": 1
+  }
+}

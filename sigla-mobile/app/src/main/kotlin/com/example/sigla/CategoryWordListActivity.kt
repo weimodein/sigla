@@ -78,6 +78,7 @@ class CategoryWordListActivity : AppCompatActivity() {
 
         adapter = SimpleWordAdapter(mutableListOf()) { word -> openWordDetail(word) }
         rvCategoryWords.layoutManager = LinearLayoutManager(this)
+        rvCategoryWords.setHasFixedSize(true)
         rvCategoryWords.adapter = adapter
 
         loadWords()

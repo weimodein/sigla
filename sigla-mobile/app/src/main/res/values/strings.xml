@@ -1,16 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SIGLA</string>
-        <!-- activity_collection.xml -->
-    <string name="btn_back_description">Go back</string>
-    <string name="collection_label_placeholder">LABEL</string>
-    <string name="collection_type_placeholder">STATIC</string>
-    <string name="collection_count_placeholder">0 / 300</string>
-    <string name="rec_indicator">⬤ REC</string>
-    <string name="collection_overlay_hint">Show your hand to begin…</string>
-    <string name="collection_complete">✓ Collection Complete!</string>
-    <string name="btn_undo">↩ Undo Last</string>
-    <!-- Add these entries inside your existing <resources> tag in res/values/strings.xml -->
+
 
     <!-- Suggest Word Screen -->
     <string name="suggest_a_word_title">Suggest a Word</string>
