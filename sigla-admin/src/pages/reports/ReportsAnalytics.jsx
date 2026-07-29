@@ -440,14 +440,14 @@ const ReportsAnalytics = () => {
           value={wordStats?.total}
           icon={BookOpen}
           color="bg-blue-900"
-          onClick={() => navigate("/word_bank")}
+          onClick={() => navigate("/dataset")}
         />
         <StatCard
           title="Gesture Samples"
           value={wordStats?.total_samples}
           icon={Database}
           color="bg-blue-700"
-          onClick={() => navigate("/word_bank")}
+          onClick={() => navigate("/dataset")}
         />
         <StatCard
           title="Total Categories"

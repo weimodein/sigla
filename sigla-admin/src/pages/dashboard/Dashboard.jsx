@@ -216,8 +216,8 @@ const Dashboard = () => {
         ) : (
           <StatCard title="Account Created" value={formatDate(user?.created_at)} icon={CalendarDays} color="bg-blue-900" />
         )}
-        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800"   onClick={() => navigate("/word_bank")} />
-        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700"   onClick={() => navigate("/word_bank")} />
+        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800"   onClick={() => navigate("/dataset")} />
+        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700"   onClick={() => navigate("/dataset")} />
         <StatCard title="Total Categories"    value={categoryCount}            icon={Tag}           color="bg-yellow-500" onClick={() => navigate("/categories")} />
       </div>
 

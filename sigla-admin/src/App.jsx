@@ -10,7 +10,10 @@ import Login from "./pages/auth/Login.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import ManageAdministrators from "./pages/administrators/ManageAdministrators.jsx";
-import ManageWordBank from "./pages/words/ManageWordBank.jsx";
+// ManageWordBank is intentionally not imported — /word_bank now redirects to
+// /dataset. The file is kept on disk for reference until its sample-gallery
+// logic is confirmed unnecessary, but importing it would bundle 1400 unused
+// lines and keep the divergent upload rules alive.
 import ManageWord from "./pages/words/ManageWord.jsx";
 import ManageCategories from "./pages/categories/ManageCategories.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
@@ -53,16 +56,13 @@ const App = () => {
                 </SuperRoute>
               }
             />
-            <Route
-              path="/word_bank"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ManageWordBank />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* Superseded by /dataset (ManageWord), which is what the sidebar
+                links to and which uses the current video + MediaPipe upload
+                flow. ManageWordBank was built around per-image sample review and
+                manual approval; admin uploads are auto-approved now, so there is
+                nothing left for it to review. Kept as a redirect so existing
+                bookmarks and any stale link still land somewhere useful. */}
+            <Route path="/word_bank" element={<Navigate to="/dataset" replace />} />
             <Route
               path="/dataset"
               element={
