@@ -59,38 +59,6 @@ class SettingsActivity : AppCompatActivity() {
         bindReplayTutorial()
     }
 
-    override fun onResume() {
-        super.onResume()
-        refreshSidebarAuthState()
-    }
-    // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
-
-    private fun refreshSidebarAuthState() {
-        val sidebar = drawer.getChildAt(1) ?: return
-        val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
-        val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
-        val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        if (session.isLoggedIn) {
-            tvUsername?.text = session.username ?: "User"
-            tvEmail?.text = session.email ?: ""
-            btnSignIn?.visibility = View.GONE
-        } else {
-            tvUsername?.text = "Guest User"
-            tvEmail?.text = "Not signed in"
-            btnSignIn?.visibility = View.VISIBLE
-        }
-    }  
-
-    private fun openAuthDialog() {
-        val dialog = AuthDialogFragment()
-        dialog.onSignedIn = {
-            refreshSidebarAuthState()
-            // Optional: reload data that requires login
-            // finish()
-            // startActivity(intent)
-        }
-        dialog.show(supportFragmentManager, "auth")
-    }
     // ── Top bar ───────────────────────────────────────────────────────────────
 
     private fun setupTopBar() {
@@ -101,7 +69,6 @@ class SettingsActivity : AppCompatActivity() {
     // ── Sidebar ───────────────────────────────────────────────────────────────
 
     private fun setupSidebar() {
-        refreshSidebarAuthState()
         setActiveNavItem(R.id.navSettings)
 
         findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
@@ -119,38 +86,19 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(this, TranslationHistoryActivity::class.java))
             finish()
         }
-
-        findViewById<View>(R.id.navNotifications)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, NotificationsActivity::class.java))
-            finish()
-        }
-        findViewById<View>(R.id.navProfile)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
-                startActivity(Intent(this, ProfileActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()                         // ← ADD THIS
-            }
-        }
         findViewById<View>(R.id.navSettings)?.setOnClickListener {
             drawer.closeDrawer(GravityCompat.START)
         }
-        findViewById<View>(R.id.btnSidebarSignIn)?.setOnClickListener {
-            drawer.closeDrawers()
-            openAuthDialog()  // ← You need to add openAuthDialog method
-        }
     }
 
-
+    // Only the ids nav_sidebar.xml actually defines — navNotifications and
+    // navProfile were full-hierarchy misses on every call (see MainActivity's
+    // setActiveNavItem for the same fix).
     private fun setActiveNavItem(activeId: Int) {
         val navIds = listOf(
             R.id.navMainInterface,
             R.id.navWordBank,
             R.id.navTranslationHistory,
-            R.id.navNotifications,
-            R.id.navProfile,
             R.id.navSettings
         )
         navIds.forEach { id ->

@@ -154,6 +154,10 @@ class MainActivity : AppCompatActivity() {
         historyManager = TranslationHistoryManager.getInstance(this)
         appSettings = AppSettings.getInstance(this)
         showFilipino = appSettings.showFilipino
+        // Restores whichever camera the user was last on — otherwise every fresh
+        // instance of this activity (e.g. returning from another module, since
+        // navigating away calls finish()) reset back to the rear camera default.
+        isFrontCamera = appSettings.isFrontCamera
 
         // Check first launch / onboarding
         if (session.isFirstLaunch) {
@@ -533,6 +537,7 @@ class MainActivity : AppCompatActivity() {
         // Flip camera
         binding.btnFlipCamera.setOnClickListener {
             isFrontCamera = !isFrontCamera
+            appSettings.isFrontCamera = isFrontCamera
             // No-op if the models are still loading — flipping is still valid.
             predictor?.reset()
             resetHandednessLatch()

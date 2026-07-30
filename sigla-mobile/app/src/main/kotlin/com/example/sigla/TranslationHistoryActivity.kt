@@ -19,7 +19,6 @@ import com.google.android.material.button.MaterialButton
 class TranslationHistoryActivity : AppCompatActivity() {
 
     private lateinit var drawerLayout: DrawerLayout
-    private lateinit var session: SessionManager
     private lateinit var btnSidebar: MaterialButton
     private lateinit var btnClearAll: MaterialButton
     private lateinit var rvHistory: RecyclerView
@@ -36,8 +35,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_translation_history)
 
-        session = SessionManager.getInstance(this)  // ← ADD THIS
-        drawerLayout = findViewById(R.id.drawerLayout)  // ← ADD THIS
+        drawerLayout = findViewById(R.id.drawerLayout)
 
         historyManager = TranslationHistoryManager.getInstance(this)
 
@@ -50,34 +48,6 @@ class TranslationHistoryActivity : AppCompatActivity() {
         wireListeners()
     }
 
-    override fun onResume() {
-        super.onResume()
-        refreshSidebarAuthState()
-    }
-    // ── Resume Sidebar ─────────────────────────────────────────────────────────────────
-    private fun refreshSidebarAuthState() {
-        val sidebar = drawerLayout.getChildAt(1) ?: return
-        val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
-        val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
-        val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        if (session.isLoggedIn) {
-            tvUsername?.text = session.username ?: "User"
-            tvEmail?.text = session.email ?: ""
-            btnSignIn?.visibility = View.GONE
-        } else {
-            tvUsername?.text = "Guest User"
-            tvEmail?.text = "Not signed in"
-            btnSignIn?.visibility = View.VISIBLE
-        }
-    }    
-
-    private fun openAuthDialog() {
-        val dialog = AuthDialogFragment()
-        dialog.onSignedIn = {
-            refreshSidebarAuthState()
-        }
-        dialog.show(supportFragmentManager, "auth")
-    }
     // ── Views ─────────────────────────────────────────────────────────────────
 
     private fun bindViews() {
@@ -102,23 +72,6 @@ class TranslationHistoryActivity : AppCompatActivity() {
     private fun setupSidebar() {
         val sidebar = findViewById<View>(R.id.sidebarDrawer)
         NavigationHelper.setup(this, drawerLayout, sidebar, Screen.HISTORY)
-        
-        // Override the sign-in button click to use your openAuthDialog
-        findViewById<View>(R.id.btnSidebarSignIn)?.setOnClickListener {
-            drawerLayout.closeDrawers()
-            openAuthDialog()
-        }
-        
-        // Override Profile navigation to check login
-        findViewById<View>(R.id.navProfile)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {
-                startActivity(Intent(this, ProfileActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()
-            }
-        }
     }
 
     // ── RecyclerView ──────────────────────────────────────────────────────────

@@ -3,12 +3,10 @@ package com.example.sigla
 import android.app.Activity
 import android.content.Intent
 import android.widget.ImageView
-import android.widget.TextView
 import androidx.drawerlayout.widget.DrawerLayout
 import android.view.View
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -23,22 +21,11 @@ object NavigationHelper {
         sidebar: View,
         current: Screen
     ) {
-        val session = SessionManager.getInstance(activity)
-
-        // User info
-        val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
-        val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
-        val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-
-        if (session.isLoggedIn) {
-            tvUsername?.text = session.username ?: "User"
-            tvEmail?.text = session.email ?: ""
-            btnSignIn?.visibility = View.GONE
-        } else {
-            tvUsername?.text = "Guest User"
-            tvEmail?.text = "Not signed in"
-            btnSignIn?.visibility = View.VISIBLE
-        }
+        // tvSidebarUsername / tvSidebarEmail / btnSidebarSignIn are deliberately not
+        // looked up here: none of them exist in nav_sidebar.xml (the layout that's
+        // actually inflated), so every lookup was a guaranteed full-hierarchy miss
+        // paid on every navigation between modules (same issue fixed in MainActivity's
+        // setActiveNavItem).
 
         // Highlight current item
         highlightCurrent(sidebar, current)
@@ -69,26 +56,6 @@ object NavigationHelper {
             }
         }
 
-        sidebar.findViewById<View>(R.id.navNotifications)?.setOnClickListener {
-            drawerLayout.closeDrawers()
-            if (current != Screen.NOTIFICATIONS) {
-                activity.startActivity(Intent(activity, NotificationsActivity::class.java))
-                if (current != Screen.MAIN) activity.finish()
-            }
-        }
-
-        sidebar.findViewById<View>(R.id.navProfile)?.setOnClickListener {
-            drawerLayout.closeDrawers()
-            if (!session.isLoggedIn) {
-                activity.startActivity(Intent(activity, AuthActivity::class.java))
-                return@setOnClickListener
-            }
-            if (current != Screen.PROFILE) {
-                activity.startActivity(Intent(activity, ProfileActivity::class.java))
-                if (current != Screen.MAIN) activity.finish()
-            }
-        }
-
         sidebar.findViewById<View>(R.id.navSettings)?.setOnClickListener {
             drawerLayout.closeDrawers()
             if (current != Screen.SETTINGS) {
@@ -96,21 +63,17 @@ object NavigationHelper {
                 if (current != Screen.MAIN) activity.finish()
             }
         }
-
-        // Sign In button
-        btnSignIn?.setOnClickListener {
-            drawerLayout.closeDrawers()
-            activity.startActivity(Intent(activity, AuthActivity::class.java))
-        }
+        // navNotifications / navProfile / btnSidebarSignIn are deliberately not wired
+        // here: none of those ids exist in nav_sidebar.xml, so each lookup was a
+        // guaranteed full-hierarchy miss paid on every navigation between modules.
     }
 
     private fun highlightCurrent(sidebar: View, current: Screen) {
-        val selectedColor = 0xFF4A90E2.toInt()
-        
-        // Reset all first
+        // Only the ids nav_sidebar.xml actually defines — navNotifications and
+        // navProfile were full-hierarchy misses on every call.
         val allNavItems = listOf(
             R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
-            R.id.navNotifications, R.id.navProfile, R.id.navSettings
+            R.id.navSettings
         )
         
         allNavItems.forEach { id ->

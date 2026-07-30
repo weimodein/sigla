@@ -127,39 +127,10 @@ class WordBankActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshSidebarAuthState()  // ← UPDATE SIDEBAR WHEN ACTIVITY RESUMES
         // Favorites membership may have changed in the word detail screen.
         if (allWords.isNotEmpty()) {
             if (isGridMode) refreshCategoryGrid() else applyFilters()
         }
-    }
-    // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
-
-    private fun refreshSidebarAuthState() {
-        val sidebar = drawerLayout.getChildAt(1) ?: return
-        val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
-        val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
-        val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        if (session.isLoggedIn) {
-            tvUsername?.text = session.username ?: "User"
-            tvEmail?.text = session.email ?: ""
-            btnSignIn?.visibility = View.GONE
-        } else {
-            tvUsername?.text = "Guest User"
-            tvEmail?.text = "Not signed in"
-            btnSignIn?.visibility = View.VISIBLE
-        }
-    }
-
-        private fun openAuthDialog() {
-        val dialog = AuthDialogFragment()
-        dialog.onSignedIn = {
-            refreshSidebarAuthState()
-            // Optional: reload data that requires login
-            // finish()
-            // startActivity(intent)
-        }
-        dialog.show(supportFragmentManager, "auth")
     }
 
     private fun bindViews() {
@@ -268,7 +239,6 @@ class WordBankActivity : AppCompatActivity() {
     // ── Sidebar ───────────────────────────────────────────────────────────────
 
     private fun setupSidebar() {
-        refreshSidebarAuthState()
         setActiveNavItem(R.id.navWordBank)
 
         findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
@@ -284,44 +254,20 @@ class WordBankActivity : AppCompatActivity() {
             startActivity(Intent(this, TranslationHistoryActivity::class.java))
             finish()
         }
-
-        // For Notifications - ADD LOGIN CHECK
-        findViewById<View>(R.id.navNotifications)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
-                startActivity(Intent(this, NotificationsActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()                         // ← ADD THIS
-            }
-        }
-
-        // For Profile - ADD LOGIN CHECK
-        findViewById<View>(R.id.navProfile)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
-                startActivity(Intent(this, ProfileActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()                         // ← ADD THIS
-            }
-        }
         findViewById<View>(R.id.navSettings)?.setOnClickListener {
             drawerLayout.closeDrawer(GravityCompat.START)
             startActivity(Intent(this, SettingsActivity::class.java))
             finish()
         }
-
-        findViewById<View>(R.id.btnSidebarSignIn)?.setOnClickListener {
-            drawerLayout.closeDrawers()
-            openAuthDialog()
-        }
     }
 
+    // Only the ids nav_sidebar.xml actually defines — navNotifications and
+    // navProfile were full-hierarchy misses on every call (see MainActivity's
+    // setActiveNavItem for the same fix).
     private fun setActiveNavItem(activeId: Int) {
         val navIds = listOf(
             R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
-            R.id.navNotifications, R.id.navProfile, R.id.navSettings
+            R.id.navSettings
         )
         navIds.forEach { id ->
             val view = findViewById<LinearLayout>(id)
