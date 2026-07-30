@@ -639,18 +639,20 @@ private fun setActiveNavItem(activeId: Int) {
         val view = findViewById<LinearLayout>(id)
         if (id == activeId) {
             view?.setBackgroundResource(R.drawable.bg_nav_item_selected)
+            val selectedColor = ContextCompat.getColor(this, R.color.sig_nav_selected_text)
             (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                android.content.res.ColorStateList.valueOf(0xFF4A90E2.toInt())
+                android.content.res.ColorStateList.valueOf(selectedColor)
             (view?.getChildAt(1) as? TextView)?.apply {
-                setTextColor(0xFF4A90E2.toInt())
+                setTextColor(selectedColor)
                 setTypeface(null, android.graphics.Typeface.BOLD)
             }
         } else {
             view?.setBackgroundResource(R.drawable.bg_nav_item_default)
+            val defaultColor = ContextCompat.getColor(this, R.color.sig_nav_default_text)
             (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                android.content.res.ColorStateList.valueOf(0xFF6C757D.toInt())
+                android.content.res.ColorStateList.valueOf(defaultColor)
             (view?.getChildAt(1) as? TextView)?.apply {
-                setTextColor(0xFF6C757D.toInt())
+                setTextColor(defaultColor)
                 setTypeface(null, android.graphics.Typeface.NORMAL)
             }
         }

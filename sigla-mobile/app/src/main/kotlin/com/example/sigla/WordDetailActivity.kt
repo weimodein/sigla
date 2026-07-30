@@ -1,5 +1,6 @@
 package com.example.sigla
 
+import android.app.AlertDialog
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.View
@@ -193,15 +194,53 @@ class WordDetailActivity : AppCompatActivity() {
         val cached = ModelUpdateManager.getLocalVideo(this, w.id)
         if (cached != null) {
             tvMediaCaption.text = "Demo Video · tap to play"
-            val start = View.OnClickListener { playLocalVideo(cached) }
+            val start = View.OnClickListener { playVideo(cached.absolutePath) }
             playOverlay.setOnClickListener(start)
             noMediaPlaceholder.setOnClickListener(start)
         } else {
-            tvMediaCaption.text = "Tap to download demo video"
-            val download = View.OnClickListener { downloadThenPlay(w, resolvedVideo) }
-            playOverlay.setOnClickListener(download)
-            noMediaPlaceholder.setOnClickListener(download)
+            tvMediaCaption.text = "Tap to play demo video"
+            val play = View.OnClickListener { showConfirmDownloadVideoDialog(w, resolvedVideo) }
+            playOverlay.setOnClickListener(play)
+            noMediaPlaceholder.setOnClickListener(play)
         }
+    }
+
+    // Same shared dialog_confirm_action layout used by Word Bank's "Download All"
+    // and Translation History's "Delete All", so all confirmation popups look alike.
+    // The video plays either way — Yes/No only decides whether it's also saved
+    // locally for offline use (Yes downloads then plays the cached file; No
+    // streams resolvedVideo directly without saving anything to disk).
+    private fun showConfirmDownloadVideoDialog(w: WordBankWord, resolvedVideo: String) {
+        val metered = NetworkUtils.isMetered(this)
+
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Download demo video?"
+
+        val base = "Do you want to download the demo video for " +
+            "\"${w.label.capitalizeFirst()}\" so it's available offline?"
+        view.findViewById<TextView>(R.id.tvConfirmMessage).text = if (metered) {
+            "$base\n\nYou're on mobile data. Downloading may use a significant amount of data — " +
+                "Wi-Fi is recommended."
+        } else {
+            base
+        }
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).text = "NO"
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "YES"
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener {
+            dialog.dismiss()
+            playVideo(resolvedVideo)
+        }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            dialog.dismiss()
+            downloadThenPlay(w, resolvedVideo)
+        }
+
+        dialog.show()
     }
 
     private fun downloadThenPlay(w: WordBankWord, resolvedVideo: String) {
@@ -216,16 +255,16 @@ class WordDetailActivity : AppCompatActivity() {
             val file = ModelUpdateManager.downloadWordVideo(this@WordDetailActivity, w.id, resolvedVideo)
             progressVideo.visibility = View.GONE
             if (file != null) {
-                playLocalVideo(file)
+                playVideo(file.absolutePath)
             } else {
-                Toast.makeText(this@WordDetailActivity, "Failed to download video", Toast.LENGTH_SHORT).show()
-                // Revert to the download placeholder so the user can retry
-                setupVideoPlaceholder(w, resolvedVideo)
+                // Download failed, but the video still plays — it just isn't saved.
+                Toast.makeText(this@WordDetailActivity, "Couldn't save video — playing without downloading", Toast.LENGTH_SHORT).show()
+                playVideo(resolvedVideo)
             }
         }
     }
 
-    private fun playLocalVideo(file: java.io.File) {
+    private fun playVideo(path: String) {
         noMediaPlaceholder.visibility = View.GONE
         ivThumbnail.visibility        = View.GONE
         videoDemo.visibility          = View.VISIBLE
@@ -233,7 +272,7 @@ class WordDetailActivity : AppCompatActivity() {
         progressVideo.visibility      = View.VISIBLE
         tvMediaCaption.text = "Demo Video"
 
-        videoDemo.setVideoPath(file.absolutePath)
+        videoDemo.setVideoPath(path)
         videoDemo.setOnPreparedListener { mp ->
             progressVideo.visibility = View.GONE
             mp.isLooping = true
