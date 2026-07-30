@@ -9,6 +9,7 @@ const {
   Category,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
+const { validateWordLabel } = require("../utils/validators.js");
 const { sequelize } = require("../config/db.js");
 
 // Resolve a category *name* (what the form and mobile send) to its id, or null
@@ -288,7 +289,16 @@ const getAllWords = async (req, res) => {
     if (status) where.status = status;
     if (sign_type) where.sign_type = sign_type;
     // The filter arrives as a category name; resolve it to the FK.
-    if (category) where.category_id = await resolveCategoryId(category);
+    //
+    // A name that matches nothing resolves to null, and assigning that directly
+    // meant `category_id: null` — which matches every UNCATEGORISED word instead
+    // of none. Picking a since-deleted category from a stale dropdown therefore
+    // filled the table with unrelated words as though they belonged to it. An
+    // unresolvable filter must match nothing, so use an id that cannot exist.
+    if (category) {
+      const resolvedCategoryId = await resolveCategoryId(category);
+      where.category_id = resolvedCategoryId === null ? -1 : resolvedCategoryId;
+    }
     if (search) {
       where[Op.or] = [
         { label: { [Op.iLike]: `%${search}%` } },
@@ -407,6 +417,11 @@ const submitWord = async (req, res) => {
         .json({ message: "Label and sign type are required" });
     }
 
+    const labelError = validateWordLabel(label);
+    if (labelError) {
+      return res.status(400).json({ message: labelError });
+    }
+
     const normalized = normalizeLabel(label);
 
     // Check for duplicate normalized label
@@ -465,6 +480,11 @@ const adminAddWord = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Label and sign type are required" });
+    }
+
+    const labelError = validateWordLabel(label);
+    if (labelError) {
+      return res.status(400).json({ message: labelError });
     }
 
     const normalized = normalizeLabel(label);
@@ -933,6 +953,36 @@ const updateWord = async (req, res) => {
 
     const updatedLabel = label || word.label;
     const updatedNormalized = normalizeLabel(updatedLabel);
+    const updatedSignType = sign_type || word.sign_type;
+
+    const labelError = validateWordLabel(updatedLabel);
+    if (labelError) {
+      return res.status(400).json({ message: labelError });
+    }
+
+    // Renaming onto an existing label used to be allowed: adminAddWord guards
+    // this with a 409 but the update path did not, so two words could end up
+    // sharing a normalized_label. Training then produces two classes with the
+    // same name, which corrupts the dataset rather than just the display.
+    //
+    // Skipped when the normalized label is unchanged, so re-saving a word with
+    // its own label (or only a casing/punctuation tweak) is not a false positive.
+    if (updatedNormalized !== word.normalized_label) {
+      const duplicate = await Word.findOne({
+        where: {
+          id: { [Op.ne]: word.id },
+          normalized_label: updatedNormalized,
+          sign_type: updatedSignType,
+          status: { [Op.in]: ["pending", "approved"] },
+        },
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          message: "A word with this label already exists in the system",
+          word_id: duplicate.id,
+        });
+      }
+    }
 
     // Only touch the category when the form supplied one; a blank/absent value
     // leaves the existing link intact.
@@ -945,7 +995,7 @@ const updateWord = async (req, res) => {
       label: updatedLabel,
       normalized_label: updatedNormalized,
       description: description ?? word.description,
-      sign_type: sign_type || word.sign_type,
+      sign_type: updatedSignType,
       category_id: nextCategoryId,
       filipino_translation:
         filipino_translation !== undefined

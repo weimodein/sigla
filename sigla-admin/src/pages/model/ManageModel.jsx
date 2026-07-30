@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import {
   getAllModels,
@@ -272,8 +272,18 @@ const ManageModel = () => {
   };
 
   const sortedModels = [...models].sort((a, b) => {
-    let va = a[sortField] ?? "";
-    let vb = b[sortField] ?? "";
+    let va = a[sortField];
+    let vb = b[sortField];
+
+    // Nulls last in BOTH directions. Coercing them to "" put untested models
+    // (null accuracy) at the head of an ascending sort, since `0.95 > ""` is
+    // true — "not measured" is not the smallest value, it is absent.
+    const aMissing = va === null || va === undefined || va === "";
+    const bMissing = vb === null || vb === undefined || vb === "";
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+
     if (typeof va === "string") va = va.toLowerCase();
     if (typeof vb === "string") vb = vb.toLowerCase();
     if (va < vb) return sortDir === "asc" ? -1 : 1;
@@ -720,10 +730,13 @@ const ManageModel = () => {
                   </tr>
                 ) : (
                   paginatedModels.map((model) => (
-                    <>
+                    // Keyed on the FRAGMENT. The key used to sit on the inner
+                    // <tr>, where React never sees it, so this list reconciled by
+                    // index: with a row expanded, a re-sort or refetch could
+                    // re-match the open detail panel to a different version.
+                    <Fragment key={model.id}>
                       {/* Main row */}
                       <tr
-                        key={model.id}
                         className="border-t hover:bg-gray-50 text-sm"
                         style={{
                           cursor: "pointer",
@@ -986,7 +999,7 @@ const ManageModel = () => {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   ))
                 )}
               </tbody>
@@ -1160,12 +1173,28 @@ const ManageModel = () => {
                 become inactive.
               </div>
             )}
-            {wordStats?.ready_to_activate > 0 && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
-                <strong>{wordStats.ready_to_activate}</strong> word{wordStats.ready_to_activate !== 1 ? "s" : ""} with
-                enough approved samples will become visible in the mobile app after this deploy.
-              </div>
-            )}
+            {/* Describe what deploy ACTUALLY does. This used to print
+                wordStats.ready_to_activate — words with enough approved samples —
+                but deploy calls reconcileActiveWords, which sets the visible word
+                bank to exactly THIS version's trained_word_ids. Deploying an older
+                version therefore activated none of those words and hid others,
+                while the dialog promised the opposite. */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
+              {Array.isArray(deployModal.trained_word_ids) ? (
+                <>
+                  The mobile word bank will match this version:{" "}
+                  <strong>{deployModal.trained_word_ids.length}</strong> word
+                  {deployModal.trained_word_ids.length !== 1 ? "s" : ""} visible.
+                  Words this version was not trained on become hidden.
+                </>
+              ) : (
+                <>
+                  The mobile word bank will be set to the words this version was
+                  trained on. This version has no recorded word list, so the
+                  current set is kept.
+                </>
+              )}
+            </div>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleDeploy}

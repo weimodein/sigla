@@ -128,9 +128,18 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
         <div>
           <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Label *</label>
+          {/* Enter submits, and maxLength matches Word.label's VARCHAR(100) — an
+              over-long paste previously reached Postgres and returned a bare 500. */}
           <input
             value={form.label}
             onChange={e => setForm(f => ({ ...f, label: e.target.value.toUpperCase() }))}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !saving && form.label) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            maxLength={100}
             placeholder="e.g. HELLO, BANANA, GOOD MORNING"
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
           />
@@ -606,6 +615,9 @@ const ManageWord = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  // Trails `search` by 400ms; the fetch keys off this so typing does not fire a
+  // request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -640,7 +652,7 @@ const ManageWord = () => {
     setLoading(true);
     try {
       const params = { page, limit: PAGE_SIZE };
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
       if (filterCategory) params.category = filterCategory;
       const data = await getAllWords(params);
       // A newer request has started since this one — discard the result.
@@ -666,9 +678,18 @@ const ManageWord = () => {
   // whenever the filter changed while page !== 1 — the effect ran once with the
   // old page, then again after setPage committed. Resetting the page in the same
   // event as the filter change means only one render, so only one request.
+  // The fetch keys off the DEBOUNCED search, so typing "hello" issues one
+  // request instead of five. `search` still updates on every keystroke, keeping
+  // the input responsive, and the page reset below stays on the raw keystroke so
+  // a filter change remains a single render.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     fetchWords();
-  }, [page, search, filterCategory]);
+  }, [page, debouncedSearch, filterCategory]);
 
   // Filter setters that also return to page 1, so a filter change is a single
   // state update and therefore a single fetch.
@@ -707,7 +728,14 @@ const ManageWord = () => {
     }
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  // Floored at 1, and clamped below. Deleting the only word on the last page used
+  // to leave `page` past the end: the table showed "No words found" while the
+  // footer read "Showing 21–20 of 20" and Next stayed enabled, recoverable only
+  // by clicking Prev.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   // Every category, so the filter is stable regardless of which words are on the
   // current page. Falls back to the categories present in the loaded rows if the

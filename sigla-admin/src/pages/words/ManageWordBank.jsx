@@ -120,6 +120,8 @@ const ManageWordBank = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState("");
+  // Trails `search` by 400ms; the fetch keys off this, not every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [filterCat, setFilterCat] = useState("");
   const [page, setPage] = useState(1);
@@ -171,7 +173,7 @@ const ManageWordBank = () => {
     try {
       const params = { limit: FETCH_LIMIT };
       if (activeTab !== "all") params.status = activeTab;
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
       if (filterCat) params.category = filterCat;
       const data = await getAllWords(params);
       if (requestId !== fetchIdRef.current) return;
@@ -189,10 +191,16 @@ const ManageWordBank = () => {
 
   useEffect(() => { fetchStats(); }, []);
 
+  // Debounced so typing issues one request rather than one per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // One effect, one request. This used to call setPage(1) AND fetchWords() in the
   // same effect, so a filter change fetched with the stale page and then again
   // after the page committed. The page is now reset by the filter setters below.
-  useEffect(() => { fetchWords(); }, [activeTab, search, filterCat, page]);
+  useEffect(() => { fetchWords(); }, [activeTab, debouncedSearch, filterCat, page]);
 
   const applyTab = (value) => { setActiveTab(value); setPage(1); };
   const applySearch = (value) => { setSearch(value); setPage(1); };

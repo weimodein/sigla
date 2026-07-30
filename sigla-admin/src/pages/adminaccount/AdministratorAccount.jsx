@@ -780,12 +780,25 @@ const AdministratorAccount = () => {
                       </p>
                     </div>
                   </div>
+                  {/* The whole flow depends on a code sent to the linked address.
+                      Without this gate a freshly created admin — who has no email
+                      until they link one — reached a step reading "a code will be
+                      sent to" followed by blank, then got "Email is required"
+                      from the server. The Email card above gates the same way. */}
                   <button
                     onClick={() => setPassStep("request")}
-                    className="w-full text-sm font-semibold py-2 rounded-lg transition bg-blue-900 hover:bg-blue-800 text-white"
+                    disabled={!user?.email}
+                    title={!user?.email ? "Link an email address first" : undefined}
+                    className="w-full text-sm font-semibold py-2 rounded-lg transition bg-blue-900 hover:bg-blue-800 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-900"
                   >
                     Change Password
                   </button>
+                  {!user?.email && (
+                    <p className="text-xs mt-2" style={{ color: C.muted }}>
+                      Add and verify an email address above to enable password
+                      changes.
+                    </p>
+                  )}
                 </div>
               ) : (
                 /* ── Password change flow ── */

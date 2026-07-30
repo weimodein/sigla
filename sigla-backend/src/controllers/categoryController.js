@@ -2,6 +2,7 @@ const { Op } = require("sequelize");
 const { Category, Word } = require("../models/index.js");
 const { sequelize } = require("../config/db.js");
 const { logActivity } = require("../utils/activityLogger.js");
+const { validateCategoryName } = require("../utils/validators.js");
 
 // ── GET /api/categories ───────────────────────────────────────
 const getAllCategories = async (req, res) => {
@@ -36,8 +37,9 @@ const getAllCategories = async (req, res) => {
 const createCategory = async (req, res) => {
   try {
     const { name, description } = req.body;
-    if (!name || !name.trim()) {
-      return res.status(400).json({ message: "Name is required" });
+    const nameError = validateCategoryName(name);
+    if (nameError) {
+      return res.status(400).json({ message: nameError });
     }
     const trimmed = name.trim();
 
@@ -85,6 +87,11 @@ const updateCategory = async (req, res) => {
 
     let newName = category.name;
     if (name && name.trim() && name.trim() !== category.name) {
+      const nameError = validateCategoryName(name);
+      if (nameError) {
+        await t.rollback();
+        return res.status(400).json({ message: nameError });
+      }
       newName = name.trim();
 
       // Duplicate check (excluding this row)

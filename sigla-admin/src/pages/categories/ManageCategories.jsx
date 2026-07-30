@@ -75,9 +75,19 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
         <div>
           <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Name *</label>
+          {/* Enter submits — for a two-field dialog that is the expected gesture,
+              and it did nothing before. maxLength matches Category.name's
+              VARCHAR(50) so the limit is visible instead of arriving as a 500. */}
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            onKeyDown={e => {
+              if (e.key === "Enter" && !saving && form.name.trim()) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            maxLength={50}
             placeholder="e.g. greeting, food, color"
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
           />

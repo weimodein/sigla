@@ -65,10 +65,38 @@ const validateEmail = (email) => {
   return null;
 };
 
+// Word.label is VARCHAR(100) and Category.name is VARCHAR(50). Without these
+// checks an over-long value reached Postgres and came back as a bare 500
+// "Server error", which the UI showed as a generic failure with no hint that
+// length was the problem — the same reason username and email are capped above.
+const WORD_LABEL_MAX = 100;
+const CATEGORY_NAME_MAX = 50;
+
+// Returns an error string, or null when the label is acceptable.
+const validateWordLabel = (label) => {
+  if (typeof label !== "string" || !label.trim()) return "Word label is required";
+  if (label.trim().length > WORD_LABEL_MAX) {
+    return `Word label must be at most ${WORD_LABEL_MAX} characters`;
+  }
+  return null;
+};
+
+const validateCategoryName = (name) => {
+  if (typeof name !== "string" || !name.trim()) return "Category name is required";
+  if (name.trim().length > CATEGORY_NAME_MAX) {
+    return `Category name must be at most ${CATEGORY_NAME_MAX} characters`;
+  }
+  return null;
+};
+
 module.exports = {
   validatePassword,
   validateUsername,
   validateEmail,
+  validateWordLabel,
+  validateCategoryName,
   PASSWORD_MESSAGE,
   EMAIL_MESSAGE,
+  WORD_LABEL_MAX,
+  CATEGORY_NAME_MAX,
 };

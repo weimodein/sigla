@@ -261,12 +261,27 @@ const ReportsAnalytics = () => {
       .map(([, v]) => v);
   }, [wordsInRange, filter]);
 
+  // Two fixes here:
+  //   • Untested versions are EXCLUDED rather than plotted at 0%. `m.accuracy ? …
+  //     : 0` made "never measured" indistinguishable from a genuine 0% and sent
+  //     the line diving to the axis.
+  //   • Sorted oldest→newest. getAllModels returns created_at DESC and nothing
+  //     re-sorted it, so a chart titled "per Version" ran backwards in time and a
+  //     rising accuracy trend read as a regression.
   const modelAccuracyData = useMemo(
     () =>
-      models.map((m) => ({
-        name: m.version_number,
-        accuracy: m.accuracy ? parseFloat((m.accuracy * 100).toFixed(1)) : 0,
-      })),
+      models
+        .filter((m) => m.accuracy != null)
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(a.trained_at || a.created_at || 0) -
+            new Date(b.trained_at || b.created_at || 0),
+        )
+        .map((m) => ({
+          name: m.version_number,
+          accuracy: parseFloat((m.accuracy * 100).toFixed(1)),
+        })),
     [models]
   );
 

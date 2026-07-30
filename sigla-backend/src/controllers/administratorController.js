@@ -90,8 +90,14 @@ const getDeletedAdministrators = async (req, res) => {
 // ── GET /api/administrators/stats ──────────────────────────────────────
 const getAdministratorStats = async (req, res) => {
   try {
+    // `total` excludes soft-deleted accounts so it agrees with the list this card
+    // links to — getAllAdministrators hardcodes the same exclusion. Counting them
+    // here made the card read one higher than the number of rows on screen.
+    // Nothing is lost: deleted accounts have their own count below.
     const [total, active, deactivated, deleted] = await Promise.all([
-      Administrator.count({ where: { role_id: ADMIN_ROLE_ID } }),
+      Administrator.count({
+        where: { role_id: ADMIN_ROLE_ID, status: { [Op.ne]: "deleted" } },
+      }),
       Administrator.count({ where: { role_id: ADMIN_ROLE_ID, status: "active" } }),
       Administrator.count({ where: { role_id: ADMIN_ROLE_ID, status: "deactivated" } }),
       Administrator.count({ where: { role_id: ADMIN_ROLE_ID, status: "deleted" } }),

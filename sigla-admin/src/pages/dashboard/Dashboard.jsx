@@ -169,7 +169,18 @@ const Dashboard = () => {
   }
 
   const deployedModel      = modelStats?.current_model;
-  const modelsWithAccuracy = (allModels || []).filter((m) => m.accuracy != null).slice(0, 8);
+  // Newest 8 tested versions, then re-sorted oldest→newest for display: the API
+  // returns created_at DESC, so listing it as-is read backwards in time under a
+  // "by version" heading. Slicing before the sort keeps this the 8 most RECENT
+  // versions rather than the 8 oldest.
+  const modelsWithAccuracy = (allModels || [])
+    .filter((m) => m.accuracy != null)
+    .slice(0, 8)
+    .sort(
+      (a, b) =>
+        new Date(a.trained_at || a.created_at || 0) -
+        new Date(b.trained_at || b.created_at || 0),
+    );
 
   // Recent activity = the logged-in account's own audit-log entries
   const recentActivity = (myActivity || []).map((log) => ({
