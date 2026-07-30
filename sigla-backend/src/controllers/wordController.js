@@ -815,11 +815,17 @@ const activateWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    const cap = getSampleCap(word);
+    // Activation is gated by the ACTIVATION THRESHOLD (20), not the sample cap
+    // (25). These are different things: the cap limits how many samples may be
+    // uploaded for a word, the threshold is how many approved samples make it
+    // eligible to activate. Using the cap here created a dead zone — a word with
+    // 20-24 approved samples was reported "ready to activate" by getWordStats and
+    // checkAndActivateWord, while this endpoint refused it.
+    const threshold = getActivationThreshold();
 
-    if ((word.approved_sample_count || 0) < cap) {
+    if ((word.approved_sample_count || 0) < threshold) {
       return res.status(400).json({
-        message: `Cannot activate: needs ${cap} approved samples but only has ${word.approved_sample_count || 0}.`,
+        message: `Cannot activate: needs ${threshold} approved samples but only has ${word.approved_sample_count || 0}.`,
       });
     }
 

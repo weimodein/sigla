@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
 const ToastContext = createContext(null);
@@ -46,8 +46,20 @@ export const ToastProvider = ({ children }) => {
   const warning = useCallback((msg, dur) => addToast(msg, "warning", dur), [addToast]);
   const info = useCallback((msg, dur) => addToast(msg, "info", dur), [addToast]);
 
+  // Memoised, and this matters beyond render cost. The provider re-renders every
+  // time a toast is added OR auto-dismissed, and a fresh object literal here gave
+  // `toast` a new identity on each of those renders. Components listing `toast`
+  // in a dependency array — Dashboard and ActivityLogs both do — therefore
+  // refetched their entire dataset twice per toast: once when it appeared, once
+  // when it expired. The callbacks below are already stable via useCallback, so
+  // this value now never changes identity.
+  const value = useMemo(
+    () => ({ success, error, warning, info }),
+    [success, error, warning, info],
+  );
+
   return (
-    <ToastContext.Provider value={{ success, error, warning, info }}>
+    <ToastContext.Provider value={value}>
       {children}
       <div className="fixed top-4 right-4 z-50 space-y-2 w-80 max-h-screen overflow-y-auto">
         {toasts.map((toast) => {

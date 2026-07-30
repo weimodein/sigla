@@ -86,13 +86,37 @@ const Badge = ({ value }) => {
 };
 
 
+// ── Upload limits ─────────────────────────────────────────────
+// Both upload paths on this page send files as base64 inside a JSON body, so the
+// binding limit is express.json({ limit: "50mb" }) in server.js — NOT multer's
+// 100 MB, which only applies to the multipart clip-upload route. Base64 inflates
+// by ~4/3, so a 50 MB body caps the real payload at ~37 MB. 35 MB leaves margin.
+const MAX_UPLOAD_BYTES = 35 * 1024 * 1024;
+const MAX_UPLOAD_FILES = 30;
+const ACCEPTED_IMAGE_EXTS = ["jpg", "jpeg", "png", "webp"];
+const ACCEPTED_VIDEO_EXTS = ["mp4", "mov", "webm"];
+
+const formatBytes = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 // ── Main Component ────────────────────────────────────────────
 const ManageWordBank = () => {
   const [searchParams] = useSearchParams();
   const wordIdRef = useRef(searchParams.get("wordId"));
+  // Discriminates concurrent word fetches so only the newest writes to state.
+  const fetchIdRef = useRef(0);
   const [activeTab, setActiveTab] = useState("all");
   const [stats, setStats] = useState(null);
   const [words, setWords] = useState([]);
+  // Total matching words on the server, which can exceed the fetched page.
+  const [serverTotal, setServerTotal] = useState(0);
+  // Live counts for the open gallery, refreshed on every sample mutation.
+  const [sampleMeta, setSampleMeta] = useState(null);
+  // In-flight guard for approve/reject inside the gallery.
+  const [sampleActionLoading, setSampleActionLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const [search, setSearch] = useState("");
@@ -132,24 +156,47 @@ const ManageWordBank = () => {
     }
   };
 
+  // Rows are fetched in one capped page and paginated in the browser. The cap
+  // matters: `words.length` is NOT the number of matching words, so the server's
+  // own `total` is kept separately — reporting words.length as the total made a
+  // 700-word bank claim "500 words" with the rest silently unreachable.
+  const FETCH_LIMIT = 500;
+
   const fetchWords = async () => {
+    // Only the newest request may write to state: a slow earlier fetch landing
+    // after a newer one would otherwise repopulate the table with results for a
+    // filter the user has already changed.
+    const requestId = ++fetchIdRef.current;
     setLoading(true);
     try {
-      const params = { limit: 500 };
+      const params = { limit: FETCH_LIMIT };
       if (activeTab !== "all") params.status = activeTab;
       if (search) params.search = search;
       if (filterCat) params.category = filterCat;
       const data = await getAllWords(params);
-      setWords(data.words || []);
+      if (requestId !== fetchIdRef.current) return;
+      const rows = data.words || [];
+      setWords(rows);
+      // Fall back to the row count when the API omits `total`.
+      setServerTotal(typeof data.total === "number" ? data.total : rows.length);
     } catch {
+      if (requestId !== fetchIdRef.current) return;
       toast.error("Failed to load words");
     } finally {
-      setLoading(false);
+      if (requestId === fetchIdRef.current) setLoading(false);
     }
   };
 
   useEffect(() => { fetchStats(); }, []);
-  useEffect(() => { setPage(1); fetchWords(); }, [activeTab, search, filterCat]);
+
+  // One effect, one request. This used to call setPage(1) AND fetchWords() in the
+  // same effect, so a filter change fetched with the stale page and then again
+  // after the page committed. The page is now reset by the filter setters below.
+  useEffect(() => { fetchWords(); }, [activeTab, search, filterCat, page]);
+
+  const applyTab = (value) => { setActiveTab(value); setPage(1); };
+  const applySearch = (value) => { setSearch(value); setPage(1); };
+  const applyCategoryFilter = (value) => { setFilterCat(value); setPage(1); };
 
   // Open gallery for wordId from URL query param (e.g. from Dashboard pending reviews)
   useEffect(() => {
@@ -166,9 +213,26 @@ const ManageWordBank = () => {
   const showError = (msg) => toast.error(msg);
 
   // ── Reload samples helper ───────────────────────────────────
+  // getWordSamples returns the authoritative counts alongside the rows. Keeping
+  // only `samples` meant the gallery header and the activation gate went on
+  // reading `galleryModal`, a snapshot taken when the modal opened — so
+  // approving samples updated the list but not the counts, leaving the amber
+  // banner up and the activate button disabled until the modal was reopened.
+  const applySampleMeta = (data) => {
+    setSampleMeta({
+      total_samples: data.total_samples,
+      approved_sample_count: data.approved_sample_count,
+      is_active: data.is_active,
+      // Prefer the server's threshold over a hardcoded copy of the constant.
+      activation_threshold: data.activation_threshold,
+      sample_cap: data.sample_cap,
+    });
+  };
+
   const reloadSamples = async (wordId) => {
     const data = await getWordSamples(wordId);
     setSamples(data.samples || []);
+    applySampleMeta(data);
   };
 
   // ── Open image gallery ──────────────────────────────────────
@@ -176,12 +240,14 @@ const ManageWordBank = () => {
     setModal({ type: "gallery", data: word });
     setSamplesLoading(true);
     setSamples([]);
+    setSampleMeta(null);
     setMotionSequences([]);
     setPerSeqVideos({});
     setPerSeqSpeeds({});
     try {
       const data = await getWordSamples(word.id);
       setSamples(data.samples || []);
+      applySampleMeta(data);
       // Every word is a motion gesture — fetch its sequences.
       setMotionSequencesLoading(true);
       try {
@@ -200,7 +266,13 @@ const ManageWordBank = () => {
   };
 
   // ── Per-sample approve/reject ───────────────────────────────
+  // Each of these guards on sampleActionLoading. Without it, rapid clicking
+  // issued overlapping mutations AND overlapping reloadSamples calls, so the
+  // last response to land won and the gallery could settle on pre-mutation
+  // state. The buttons are disabled from the same flag.
   const handleApproveSample = async (wordId, sampleId) => {
+    if (sampleActionLoading) return;
+    setSampleActionLoading(true);
     try {
       await approveSample(wordId, sampleId);
       showSuccess("Sample approved");
@@ -209,10 +281,14 @@ const ManageWordBank = () => {
       fetchWords();
     } catch (err) {
       showError(err.response?.data?.message || "Failed to approve sample");
+    } finally {
+      setSampleActionLoading(false);
     }
   };
 
   const handleRejectSample = async (wordId, sampleId) => {
+    if (sampleActionLoading) return;
+    setSampleActionLoading(true);
     try {
       await rejectSample(wordId, sampleId);
       showSuccess("Sample rejected");
@@ -221,12 +297,16 @@ const ManageWordBank = () => {
       fetchWords();
     } catch (err) {
       showError(err.response?.data?.message || "Failed to reject sample");
+    } finally {
+      setSampleActionLoading(false);
     }
   };
 
   // ── Per-user approve/reject all ─────────────────────────────
   const handleApproveAllByUser = async (wordId, userId, username) => {
+    if (sampleActionLoading) return;
     if (!window.confirm(`Approve all samples from ${username}?`)) return;
+    setSampleActionLoading(true);
     try {
       await approveAllSamplesByUser(wordId, userId);
       showSuccess(`All samples from ${username} approved`);
@@ -235,17 +315,28 @@ const ManageWordBank = () => {
       fetchWords();
     } catch (err) {
       showError(err.response?.data?.message || "Failed to approve all by user");
+    } finally {
+      setSampleActionLoading(false);
     }
   };
 
   const handleRejectAllByUser = async (wordId, userId, username) => {
+    if (sampleActionLoading) return;
     if (!window.confirm(`Reject all samples from ${username}?`)) return;
+    setSampleActionLoading(true);
     try {
       await rejectAllSamplesByUser(wordId, userId);
       showSuccess(`All samples from ${username} rejected`);
       await reloadSamples(wordId);
+      // These two were missing here while all three sibling handlers had them,
+      // so the stat cards and the word row kept stale counts after a bulk
+      // reject until something else refreshed them.
+      fetchStats();
+      fetchWords();
     } catch (err) {
       showError(err.response?.data?.message || "Failed to reject all by user");
+    } finally {
+      setSampleActionLoading(false);
     }
   };
 
@@ -432,6 +523,31 @@ const ManageWordBank = () => {
 
   const handleAdminUpload = async () => {
     if (!uploadForm.files.length) { showError("Please select at least one image"); return; }
+
+    // Every file goes into ONE JSON body, so the aggregate size is what matters
+    // against the server's express.json limit — see MAX_UPLOAD_BYTES. Checked
+    // before encoding: base64ing a large selection freezes the tab for seconds
+    // and then fails with an opaque 413 that surfaced as a generic
+    // "Failed to upload samples".
+    if (uploadForm.files.length > MAX_UPLOAD_FILES) {
+      showError(`Select at most ${MAX_UPLOAD_FILES} files at a time (chose ${uploadForm.files.length}).`);
+      return;
+    }
+    const badType = uploadForm.files.find(
+      (f) => !ACCEPTED_IMAGE_EXTS.includes(f.name.split(".").pop()?.toLowerCase()),
+    );
+    if (badType) {
+      showError(`"${badType.name}" is not a supported image (${ACCEPTED_IMAGE_EXTS.join(", ")}).`);
+      return;
+    }
+    const totalBytes = uploadForm.files.reduce((sum, f) => sum + f.size, 0);
+    if (totalBytes > MAX_UPLOAD_BYTES) {
+      showError(
+        `Those ${uploadForm.files.length} files total ${formatBytes(totalBytes)}. The limit is ${formatBytes(MAX_UPLOAD_BYTES)} per upload.`,
+      );
+      return;
+    }
+
     setActionLoading(true);
     try {
       const toBase64 = (file) => new Promise((resolve, reject) => {
@@ -504,6 +620,24 @@ const ManageWordBank = () => {
   const handleVideoFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // accept="video/*" on the input is a picker hint, not enforcement — a drag
+    // or paste bypasses it. Validate before reading the file, since this is sent
+    // base64 in a JSON body against the same server limit as the image upload.
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!ACCEPTED_VIDEO_EXTS.includes(ext)) {
+      showError(`"${ext ?? "unknown"}" is not a supported video (${ACCEPTED_VIDEO_EXTS.join(", ")}).`);
+      e.target.value = "";
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      showError(
+        `That video is ${formatBytes(file.size)}. The limit is ${formatBytes(MAX_UPLOAD_BYTES)}.`,
+      );
+      e.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = reader.result.split(",")[1];
@@ -549,13 +683,25 @@ const ManageWordBank = () => {
   ];
 
   // ── Gallery threshold helpers ────────────────────────────────
-  const motionThreshold = 20;
-  const approvedCount = galleryModal?.approved_sample_count || 0;
+  // Read from sampleMeta (refreshed on every mutation) and fall back to the
+  // galleryModal snapshot only until the first fetch lands. The threshold comes
+  // from the API rather than a hardcoded 20, so it cannot drift from the
+  // backend's ACTIVATION_THRESHOLD the way the duplicated constant did.
+  const motionThreshold = sampleMeta?.activation_threshold ?? 20;
+  const approvedCount =
+    sampleMeta?.approved_sample_count ?? galleryModal?.approved_sample_count ?? 0;
+  const totalSampleCount =
+    sampleMeta?.total_samples ?? galleryModal?.total_samples ?? 0;
   const thresholdMet = approvedCount >= motionThreshold;
-  const remaining = motionThreshold - approvedCount;
+  const remaining = Math.max(0, motionThreshold - approvedCount);
 
   // ── Pagination ───────────────────────────────────────────────
-  const totalPages = Math.ceil(words.length / pageSize);
+  // Floored at 1, and clamped below, so deleting the last row on a page cannot
+  // leave `page` past the end showing an empty table while words still exist.
+  const totalPages = Math.max(1, Math.ceil(words.length / pageSize));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
   const paginatedWords = words.slice((page - 1) * pageSize, page * pageSize);
 
   // ── JSX ─────────────────────────────────────────────────────
@@ -600,7 +746,7 @@ const ManageWordBank = () => {
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => applyTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition
               ${activeTab === tab.key ? "border-blue-900 text-blue-900" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
@@ -617,13 +763,13 @@ const ManageWordBank = () => {
             type="text"
             placeholder="Search words..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => applySearch(e.target.value)}
             className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900"
           />
         </div>
         <select
           value={filterCat}
-          onChange={(e) => setFilterCat(e.target.value)}
+          onChange={(e) => applyCategoryFilter(e.target.value)}
           className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-900"
         >
           <option value="">All Categories</option>
@@ -638,7 +784,8 @@ const ManageWordBank = () => {
         <div className="dash-card-header flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-800">Word List</h3>
           <span className="text-xs text-gray-500">
-            {words.length} word{words.length !== 1 ? "s" : ""}
+            {serverTotal} word{serverTotal !== 1 ? "s" : ""}
+            {serverTotal > words.length && ` · showing first ${words.length}`}
             {totalPages > 1 && ` · page ${page}/${totalPages}`}
           </span>
         </div>
@@ -759,7 +906,9 @@ const ManageWordBank = () => {
         {words.length > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600">
             <span className="text-xs text-gray-500">
-              Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, words.length)} of {words.length}
+              Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, words.length)} of{" "}
+              {words.length}
+              {serverTotal > words.length && ` (of ${serverTotal} total — refine your search to reach the rest)`}
             </span>
             <div className="flex items-center gap-2">
               <select
@@ -800,9 +949,9 @@ const ManageWordBank = () => {
             <div className="bg-gray-50 rounded-lg px-4 py-3 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  <span className="font-medium">{galleryModal.approved_sample_count || 0}</span> approved
+                  <span className="font-medium">{approvedCount}</span> approved
                   {" / "}
-                  <span className="font-medium">{galleryModal.total_samples || 0}</span> total
+                  <span className="font-medium">{totalSampleCount}</span> total
                   {galleryModal.is_active && (
                     <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">
                       Active in app
@@ -959,13 +1108,15 @@ const ManageWordBank = () => {
                       )}
                       <button
                         onClick={() => handleApproveAllByUser(galleryModal.id, group.userId, group.username)}
-                        className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded"
+                        disabled={sampleActionLoading}
+                        className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Approve All
                       </button>
                       <button
                         onClick={() => handleRejectAllByUser(galleryModal.id, group.userId, group.username)}
-                        className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded"
+                        disabled={sampleActionLoading}
+                        className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Reject All
                       </button>
@@ -1178,7 +1329,8 @@ const ManageWordBank = () => {
                             {sample.status !== "approved" && (
                               <button
                                 onClick={() => handleApproveSample(galleryModal.id, sample.id)}
-                                className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-0.5 rounded"
+                                disabled={sampleActionLoading}
+                                className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-0.5 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 ✓ Approve
                               </button>
@@ -1186,7 +1338,8 @@ const ManageWordBank = () => {
                             {sample.status !== "rejected" && (
                               <button
                                 onClick={() => handleRejectSample(galleryModal.id, sample.id)}
-                                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-0.5 rounded"
+                                disabled={sampleActionLoading}
+                                className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-0.5 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 ✕ Reject
                               </button>

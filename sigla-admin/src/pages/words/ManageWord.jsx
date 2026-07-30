@@ -614,6 +614,15 @@ const ManageWord = () => {
   const [demoVideoWord, setDemoVideoWord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [stats, setStats] = useState(null);
+  // Full category list for the filter dropdown. Derived from the words on the
+  // current page it could only ever offer the ~10 categories visible, and
+  // selecting one narrowed `words`, which then dropped the selected value from
+  // its own dropdown.
+  const [allCategories, setAllCategories] = useState([]);
+  // Guards against out-of-order responses: only the newest request may write to
+  // state. Without this a slow earlier fetch can land after a newer one and
+  // repopulate the table with results for a filter the user already changed.
+  const fetchIdRef = useRef(0);
 
   // Summary-card counts come from a separate endpoint than the table, so they
   // are refreshed here — every mutation already routes through fetchWords().
@@ -627,24 +636,65 @@ const ManageWord = () => {
   };
 
   const fetchWords = async () => {
+    const requestId = ++fetchIdRef.current;
     setLoading(true);
     try {
       const params = { page, limit: PAGE_SIZE };
       if (search) params.search = search;
       if (filterCategory) params.category = filterCategory;
       const data = await getAllWords(params);
+      // A newer request has started since this one — discard the result.
+      if (requestId !== fetchIdRef.current) return;
       setWords(data.words || []);
       setTotal(data.total || 0);
       fetchStats();
     } catch {
+      if (requestId !== fetchIdRef.current) return;
       errorToast("Failed to load words");
     } finally {
-      setLoading(false);
+      if (requestId === fetchIdRef.current) setLoading(false);
     }
   };
 
-  useEffect(() => { fetchWords(); }, [page]);
-  useEffect(() => { setPage(1); fetchWords(); }, [search, filterCategory]);
+  // ONE effect owns loading the table, and the page is reset by the SETTERS
+  // below rather than by a second effect.
+  //
+  // History: this was two effects, one on [page] and one on [search,
+  // filterCategory] that called setPage(1) AND fetchWords(). That fetched twice
+  // on mount, and a filter change raced a stale-page fetch against the page-1
+  // fetch. Collapsing to one effect plus a page-reset effect still fired twice
+  // whenever the filter changed while page !== 1 — the effect ran once with the
+  // old page, then again after setPage committed. Resetting the page in the same
+  // event as the filter change means only one render, so only one request.
+  useEffect(() => {
+    fetchWords();
+  }, [page, search, filterCategory]);
+
+  // Filter setters that also return to page 1, so a filter change is a single
+  // state update and therefore a single fetch.
+  const applySearch = (value) => {
+    setSearch(value);
+    setPage(1);
+  };
+
+  const applyCategoryFilter = (value) => {
+    setFilterCategory(value);
+    setPage(1);
+  };
+
+  // Filter options come from the full category list, not the current page.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getCategories();
+        if (!cancelled) setAllCategories(data.categories || []);
+      } catch {
+        // Non-blocking: the table still works, the filter just has no options.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleDelete = async (word) => {
     try {
@@ -659,7 +709,12 @@ const ManageWord = () => {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const categories = [...new Set(words.map(w => w.category).filter(Boolean))];
+  // Every category, so the filter is stable regardless of which words are on the
+  // current page. Falls back to the categories present in the loaded rows if the
+  // category request failed.
+  const categoryOptions = allCategories.length
+    ? allCategories.map((c) => c.name).filter(Boolean)
+    : [...new Set(words.map((w) => w.category).filter(Boolean))];
 
   return (
     <div>
@@ -759,14 +814,14 @@ const ManageWord = () => {
           <input
             placeholder="Search words..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => applySearch(e.target.value)}
             style={{ width: "100%", padding: "8px 8px 8px 32px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", boxSizing: "border-box" }}
           />
         </div>
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+        <select value={filterCategory} onChange={e => applyCategoryFilter(e.target.value)}
           style={{ padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", minWidth: "140px" }}>
           <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c.toLowerCase()}>{c}</option>)}
+          {categoryOptions.map(c => <option key={c} value={c.toLowerCase()}>{c}</option>)}
         </select>
       </div>
 

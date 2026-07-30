@@ -2,7 +2,11 @@ import { useState, useEffect, useMemo, memo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
-import { getAdministratorStats, getAllAdministrators } from "../../api/administratorApi.js";
+import {
+  getAdministratorStats,
+  getDeactivatedAdministrators,
+  getDeletedAdministrators,
+} from "../../api/administratorApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
 import { getCategories } from "../../api/categoryApi.js";
@@ -97,6 +101,35 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 );
 
 // ── Main Component ────────────────────────────────────────────
+// The words endpoint is paginated; this page pulls one large page and derives its
+// charts from it. Kept as a named constant so the truncation notice and the fetch
+// can never disagree.
+const WORD_FETCH_LIMIT = 500;
+
+// Start of the window for each range option, or null for "all time".
+const rangeStart = (range) => {
+  const now = new Date();
+  if (range === "week") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 6); // today plus the previous 6 days
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (range === "month") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 29);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (range === "year") {
+    const d = new Date(now);
+    d.setFullYear(d.getFullYear() - 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  return null;
+};
+
 const ReportsAnalytics = () => {
   const toast = useToast();
   const navigate = useNavigate();
@@ -110,6 +143,8 @@ const ReportsAnalytics = () => {
   const [deactivatedUsers, setDeactivatedUsers] = useState([]);
   const [deletedUsers, setDeletedUsers] = useState([]);
   const [words, setWords] = useState([]);
+  // Total words on the server, which may exceed WORD_FETCH_LIMIT.
+  const [wordTotal, setWordTotal] = useState(0);
   const [models, setModels] = useState([]);
   const [categoryCount, setCategoryCount] = useState(null);
 
@@ -128,24 +163,36 @@ const ReportsAnalytics = () => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      // The admin roster (GET /administrators) is super-only. Regular admins skip it
-      // and simply don't see the per-admin deactivated/deleted tables.
-      const [uStats, wStats, usersData, wordsData, catsData] = await Promise.all([
-        getAdministratorStats(),
-        getWordStats(),
-        isSuper ? getAllAdministrators({ limit: 500 }) : Promise.resolve({ administrators: [] }),
-        getAllWords({ limit: 500 }),
-        getCategories(),
-      ]);
+      // The deactivated/deleted rosters are super-only. Regular admins skip them
+      // and simply don't see those tables.
+      //
+      // These come from the DEDICATED endpoints. Filtering GET /administrators by
+      // status could never work for deleted accounts: that route hardcodes
+      // `status != "deleted"`, so the "Deleted Accounts" table was guaranteed to
+      // render empty no matter how many accounts had been deleted.
+      const [uStats, wStats, deactivatedData, deletedData, wordsData, catsData] =
+        await Promise.all([
+          getAdministratorStats(),
+          getWordStats(),
+          isSuper ? getDeactivatedAdministrators() : Promise.resolve({ administrators: [] }),
+          isSuper ? getDeletedAdministrators() : Promise.resolve({ administrators: [] }),
+          getAllWords({ limit: WORD_FETCH_LIMIT }),
+          getCategories(),
+        ]);
 
       setUserStats(uStats);
       setWordStats(wStats);
       setCategoryCount((catsData.categories || []).length);
 
-      const users = usersData.administrators || [];
-      setDeactivatedUsers(users.filter((u) => u.status === "deactivated"));
-      setDeletedUsers(users.filter((u) => u.status === "deleted"));
+      setDeactivatedUsers(deactivatedData.administrators || []);
+      setDeletedUsers(deletedData.administrators || []);
       setWords(wordsData.words || []);
+      // The word list is capped, so charts and the PDF are built from a subset
+      // when the bank is larger. Tracked so that can be stated rather than
+      // presented as complete.
+      setWordTotal(
+        typeof wordsData.total === "number" ? wordsData.total : (wordsData.words || []).length,
+      );
 
       try {
         const mData = await getModelVersions();
@@ -167,30 +214,52 @@ const ReportsAnalytics = () => {
   }, [filter, isSuper]);
 
   // ── Chart data helpers ──────────────────────────────────────
-  const submissionTrend = useMemo(() => {
-    const counts = {};
-    words.forEach((w) => {
-      const date = new Date(w.created_at);
-      let key;
-      if (filter === "week")
-        key = date.toLocaleDateString("en-PH", { weekday: "short" });
-      else if (filter === "month")
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          day: "numeric",
-        });
-      else
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          year: "numeric",
-        });
-      counts[key] = (counts[key] || 0) + 1;
+  // Words submitted inside the selected range. The range used to be cosmetic —
+  // it changed only the x-axis label format while every bucket still counted
+  // ALL words ever created, so "Week" collapsed every Monday in history into a
+  // single point and the PDF claimed to be filtered when it was not.
+  const wordsInRange = useMemo(() => {
+    const start = rangeStart(filter);
+    if (!start) return words;
+    return words.filter((w) => {
+      const t = new Date(w.created_at).getTime();
+      return Number.isFinite(t) && t >= start.getTime();
     });
-    return Object.entries(counts).map(([name, submissions]) => ({
-      name,
-      submissions,
-    }));
   }, [words, filter]);
+
+  const submissionTrend = useMemo(() => {
+    // Bucket by a SORTABLE key, carrying the label separately. Keying on the
+    // display string meant "Mar 5" merged across years, and Object.entries
+    // preserved the API's created_at DESC order, so the chart ran newest→oldest.
+    const buckets = new Map();
+    wordsInRange.forEach((w) => {
+      const date = new Date(w.created_at);
+      if (Number.isNaN(date.getTime())) return;
+
+      let sortKey;
+      let label;
+      if (filter === "week" || filter === "month") {
+        // One point per calendar day.
+        sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        label =
+          filter === "week"
+            ? date.toLocaleDateString("en-PH", { weekday: "short" })
+            : date.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+      } else {
+        // One point per calendar month.
+        sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        label = date.toLocaleDateString("en-PH", { month: "short", year: "numeric" });
+      }
+
+      const existing = buckets.get(sortKey);
+      if (existing) existing.submissions += 1;
+      else buckets.set(sortKey, { name: label, submissions: 1 });
+    });
+
+    return [...buckets.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v);
+  }, [wordsInRange, filter]);
 
   const modelAccuracyData = useMemo(
     () =>
@@ -201,6 +270,12 @@ const ReportsAnalytics = () => {
     [models]
   );
 
+  // Sample counts are cumulative per word, not per-period, so this intentionally
+  // uses the full list rather than wordsInRange — restricting it to a date window
+  // would show a word's lifetime sample count only if it happened to be created
+  // inside that window, which is misleading.
+  //
+  // `.filter()` already copies, so the `.sort()` below no longer mutates state.
   const samplesPerWord = useMemo(
     () =>
       words
@@ -235,7 +310,12 @@ const ReportsAnalytics = () => {
       const dateStr = new Date().toLocaleDateString("en-US", {
         year: "numeric", month: "long", day: "numeric",
       });
-      const filterLabel = filter.charAt(0).toUpperCase() + filter.slice(1);
+      // Name the actual window, not just the option. The header used to read
+      // "Filter: Week" over all-time data, which made every export misleading.
+      const rangeFrom = rangeStart(filter);
+      const filterLabel = rangeFrom
+        ? `${filter.charAt(0).toUpperCase() + filter.slice(1)} (since ${rangeFrom.toLocaleDateString("en-PH")})`
+        : "All time";
 
       // ── Header ───────────────────────────────────────────────
       doc.setFontSize(18);
@@ -250,8 +330,11 @@ const ReportsAnalytics = () => {
       let y = 40;
       const sectionGap = 10;
 
+      // A heading plus at least one table row needs roughly 25mm. The old
+      // threshold of 265 let a title be drawn near the foot of a page while
+      // autoTable pushed its table to the next one, orphaning the heading.
       const addSectionTitle = (title) => {
-        if (y > 265) { doc.addPage(); y = 20; }
+        if (y > 250) { doc.addPage(); y = 20; }
         doc.setFontSize(13);
         doc.setFont("helvetica", "bold");
         doc.text(title, 14, y);
@@ -280,6 +363,18 @@ const ReportsAnalytics = () => {
 
       if (reportSections.sample_counts) {
         addSectionTitle("Gesture Samples per Word");
+        // State the truncation rather than presenting a capped subset as the
+        // complete picture.
+        if (wordTotal > words.length) {
+          doc.setFontSize(9);
+          doc.text(
+            `Showing ${words.length} of ${wordTotal} words (most recent first).`,
+            14,
+            y,
+          );
+          doc.setFontSize(11);
+          y += 5;
+        }
         autoTable(doc, {
           startY: y,
           head: [["Word", "Total Samples", "Approved Samples"]],

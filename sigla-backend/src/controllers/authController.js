@@ -19,6 +19,11 @@ const generateCode = () =>
 // and getMe() so both return the same role string for a given role_id.
 const ROLE_MAP = { 0: "super_admin", 1: "admin" };
 
+// How long a VERIFIED reset code stays spendable. Long enough to choose and
+// confirm a password, short enough that a leaked/abandoned grant is not a
+// standing takeover path.
+const RESET_GRANT_TTL_MS = 15 * 60 * 1000;
+
 // ── Helper: generate JWT ──────────────────────────────────────
 const generateToken = ({ id, role_name, status }) =>
   jwt.sign(
@@ -333,7 +338,16 @@ const verifyResetCode = async (req, res) => {
       });
     }
 
-    await record.update({ is_used: true });
+    // Verifying the code opens a fresh, short window in which the new password
+    // may be set. Without extending expires_at the grant would inherit the
+    // 5-minute deadline of the code itself, counted from when it was SENT — so a
+    // user who took a few minutes to choose a password would be rejected at the
+    // final step. resetPassword requires this window to still be open, which is
+    // what stops a verified row from being replayable forever.
+    await record.update({
+      is_used: true,
+      expires_at: new Date(Date.now() + RESET_GRANT_TTL_MS),
+    });
 
     return res
       .status(200)
@@ -361,16 +375,39 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: passwordError });
     }
 
+    // A verified code is a ONE-TIME, TIME-LIMITED grant.
+    //
+    // This route is public, so its only gate is this record. Matching on
+    // `is_used: true` alone — with no expiry and no consumption — meant that any
+    // account which had ever completed one reset stayed permanently resettable
+    // by anyone who knew its email address: POST {email, password} and the
+    // account was taken over, no code and no login required. The same verified
+    // row could also be replayed indefinitely.
+    //
+    // Three conditions close that: the row must still be within its expiry
+    // window, must not already have been consumed (session_invalidated), and is
+    // consumed below the moment it is spent.
     const verified = await EmailVerification.findOne({
-      where: { email, type: "password_reset", is_used: true },
+      where: {
+        email,
+        type: "password_reset",
+        is_used: true,
+        session_invalidated: false,
+        expires_at: { [Op.gt]: new Date() },
+      },
       order: [["created_at", "DESC"]],
     });
 
     if (!verified) {
-      return res
-        .status(400)
-        .json({ message: "Reset code not verified. Please verify first." });
+      return res.status(400).json({
+        message:
+          "Reset code not verified, already used, or expired. Request a new code.",
+      });
     }
+
+    // Consume it BEFORE changing the password, so a failure later cannot leave a
+    // spent grant reusable.
+    await verified.update({ session_invalidated: true });
 
     // Load the row rather than bulk-updating by email: the audit entry needs an
     // administrator_id, and the notice needs a username.

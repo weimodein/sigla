@@ -54,7 +54,26 @@ const AppModal = ({ title, onClose, children, wide = false }) => {
     if (!panel) return;
     const first = panel.querySelectorAll(FOCUSABLE)[0];
     first?.focus();
-    return () => { triggerRef.current?.focus?.(); };
+    return () => {
+      // Only restore focus if the trigger is still in the document. After a
+      // modal-driven delete its row — and therefore the button that opened the
+      // modal — is gone, and focusing a detached node silently drops focus to
+      // <body>, so the next Tab restarts from the top of the page.
+      const trigger = triggerRef.current;
+      if (trigger && document.contains(trigger)) {
+        trigger.focus?.();
+      } else {
+        // Fall back to the main region so keyboard navigation resumes near where
+        // the user was, rather than at the very start of the document.
+        const main = document.querySelector("main") || document.body;
+        if (main instanceof HTMLElement) {
+          const hadTabIndex = main.hasAttribute("tabindex");
+          if (!hadTabIndex) main.setAttribute("tabindex", "-1");
+          main.focus?.();
+          if (!hadTabIndex) main.removeAttribute("tabindex");
+        }
+      }
+    };
   }, []);
 
   // Keyboard: Escape closes; Tab traps focus inside

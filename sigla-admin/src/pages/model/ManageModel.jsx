@@ -161,8 +161,27 @@ const ManageModel = () => {
         getWordStats(),
       ]);
       setStats(statsData);
-      setModels(modelsData.models || []);
+      const list = modelsData.models || [];
+      setModels(list);
       setWordStats(wordStatsData);
+
+      // Adopt a training run that is already in flight. Training happens in a
+      // background job on the server, so it survives the admin navigating away
+      // or reloading — but trainingModelId is component state and does not.
+      // Without this, returning to the page showed no banner, re-enabled the
+      // Train button, and never reported the outcome: the run looked stuck at
+      // "training" forever even though the server had finished it.
+      const inFlight = list.find((m) => m.status === "training");
+      setTrainingModelId((current) => {
+        if (inFlight) {
+          setTrainingVersion(inFlight.version_number || "");
+          return inFlight.id;
+        }
+        // Only clear when we were tracking a run the server no longer reports as
+        // training; leave an id set moments ago by handleTrain alone, since the
+        // row may not have been re-read yet.
+        return current && !list.some((m) => m.id === current) ? null : current;
+      });
     } catch (err) {
       toast.error("Failed to load model data");
     } finally {
@@ -174,10 +193,32 @@ const ManageModel = () => {
     fetchData();
   }, []);
 
-  // Poll training status every 5 seconds when a training job is in progress
+  // Poll training status every 5 seconds when a training job is in progress.
+  //
+  // The interval is cleared on unmount and whenever trainingModelId changes, and
+  // fetchData re-adopts an in-flight run on mount, so navigating away and back
+  // resumes polling rather than losing the run.
   useEffect(() => {
     if (!trainingModelId) return;
+
+    // A row stranded at "training" (server restarted mid-run, so nothing will
+    // ever mark it trained/failed) would otherwise poll every 5s for the whole
+    // session and keep the Train button disabled forever. Give up after 30
+    // minutes — well past the 20-minute ML timeout — and say so.
+    const startedAt = Date.now();
+    const POLL_TIMEOUT_MS = 30 * 60 * 1000;
+
     pollingRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        clearInterval(pollingRef.current);
+        setTrainingModelId(null);
+        setTrainingVersion("");
+        showError(
+          "Stopped tracking this training run — it has not reported back. Reload to check its status.",
+        );
+        fetchData();
+        return;
+      }
       try {
         const { model } = await getModelStatus(trainingModelId);
         if (model.status === "trained") {
@@ -204,8 +245,17 @@ const ManageModel = () => {
           showError(`Training failed: ${model.training_error || "Unknown error"}`);
           fetchData();
         }
-      } catch {
-        // Network hiccup — keep polling
+      } catch (err) {
+        // A missing or forbidden model will never resolve — stop rather than
+        // hammering the endpoint for the rest of the session. Network hiccups
+        // (no response) keep polling, which is the original intent.
+        const status = err.response?.status;
+        if (status === 404 || status === 403 || status === 401) {
+          clearInterval(pollingRef.current);
+          setTrainingModelId(null);
+          setTrainingVersion("");
+          fetchData();
+        }
       }
     }, 5000);
     return () => clearInterval(pollingRef.current);
@@ -241,7 +291,16 @@ const ManageModel = () => {
     : [...sortedModels];
 
   // ── Paginate ────────────────────────────────────────────────
-  const totalPages = Math.ceil(filteredModels.length / pageSize);
+  // Floored at 1 so an empty list does not produce page 0.
+  const totalPages = Math.max(1, Math.ceil(filteredModels.length / pageSize));
+
+  // Keep the current page valid as the list shrinks. Deleting the only row on
+  // the last page used to leave `page` past the end, rendering "No models found.
+  // Train your first model to get started." while models still existed.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const paginatedModels = filteredModels.slice(
     (page - 1) * pageSize,
     page * pageSize
@@ -748,7 +807,8 @@ const ManageModel = () => {
                                 </button>
                                 <button
                                   onClick={() => handleDelete(model)}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  disabled={actionLoading}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
                                     background: "#fecaca",
                                     color: "#991b1b",
@@ -788,7 +848,8 @@ const ManageModel = () => {
                                 </button>
                                 <button
                                   onClick={() => handleDelete(model)}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  disabled={actionLoading}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
                                     background: "#fecaca",
                                     color: "#991b1b",

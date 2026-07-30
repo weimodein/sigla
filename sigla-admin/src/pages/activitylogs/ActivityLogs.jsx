@@ -32,6 +32,10 @@ const ACTION_META = {
   reactivated_admin:    { label: "Reactivated Admin",    color: C.green },
   deleted_admin:        { label: "Deleted Admin",        color: C.red },
   reset_admin_password: { label: "Reset Admin Password", color: C.orange },
+  // Written by authController.resetPassword. Missing here meant the row rendered
+  // via the fallback humaniser but was absent from the Action Type dropdown, so
+  // the most security-relevant event could not be filtered for.
+  password_reset_completed: { label: "Password Reset", color: C.orange },
   added_word:           { label: "Added Word",           color: C.green },
   updated_word:         { label: "Updated Word",         color: C.primary },
   deleted_word:         { label: "Deleted Word",         color: C.red },
@@ -428,7 +432,11 @@ const ActivityLogs = () => {
             </tbody>
           </table>
         </div>
-        {!loading && total > pageSize && (
+        {/* Rendered whenever there are rows, not only when they overflow one
+            page. Gating on `total > pageSize` hid the whole bar — including the
+            page-size <select> — so choosing 100/page with fewer results stranded
+            the user at 100 with no way back short of a reload. */}
+        {!loading && total > 0 && (
           <Pagination
             page={page}
             totalPages={totalPages}

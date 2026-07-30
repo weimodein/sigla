@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { login as loginApi, getMe } from "../api/authApi.js";
+import { login as loginApi, getMe, SESSION_EXPIRED_EVENT } from "../api/authApi.js";
 
 const AuthContext = createContext(null);
 
@@ -45,6 +45,22 @@ export const AuthProvider = ({ children }) => {
     };
 
     restoreSession();
+  }, []);
+
+  // ── Session expiry ────────────────────────────────────────
+  // The axios interceptor clears localStorage on a 401, but that alone leaves
+  // this provider's `user` state populated — ProtectedRoute kept rendering and
+  // every subsequent request went out with no token, failing indefinitely until
+  // the admin manually reloaded. Dropping `user` here makes isLoggedIn false, so
+  // ProtectedRoute redirects to /login on the next render.
+  useEffect(() => {
+    const onExpired = () => {
+      storage.remove("token");
+      storage.remove("user");
+      setUser(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   // ── Login ─────────────────────────────────────────────────

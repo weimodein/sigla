@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -143,12 +143,27 @@ const AdministratorAccount = () => {
   const [emailCode, setEmailCode] = useState("");
   const [emailCooldown, setEmailCooldown] = useState(0);
 
+  // All three timers below are held in refs and cleared on unmount. This page
+  // logs the user out 2s after a password change, unmounting itself while a
+  // cooldown may still be counting down — previously leaving live timers behind.
+  const emailCooldownRef = useRef(null);
+  const passCooldownRef = useRef(null);
+  const logoutTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (emailCooldownRef.current) clearInterval(emailCooldownRef.current);
+    if (passCooldownRef.current) clearInterval(passCooldownRef.current);
+    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+  }, []);
+
   const startEmailCooldown = () => {
+    if (emailCooldownRef.current) clearInterval(emailCooldownRef.current);
     setEmailCooldown(60);
-    const interval = setInterval(() => {
+    emailCooldownRef.current = setInterval(() => {
       setEmailCooldown((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(emailCooldownRef.current);
+          emailCooldownRef.current = null;
           return 0;
         }
         return prev - 1;
@@ -233,11 +248,13 @@ const AdministratorAccount = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
 
   const startCooldown = () => {
+    if (passCooldownRef.current) clearInterval(passCooldownRef.current);
     setResendCooldown(60);
-    const interval = setInterval(() => {
+    passCooldownRef.current = setInterval(() => {
       setResendCooldown((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(passCooldownRef.current);
+          passCooldownRef.current = null;
           return 0;
         }
         return prev - 1;
@@ -304,7 +321,7 @@ const AdministratorAccount = () => {
     try {
       await resetPassword(user?.email, newPass);
       toast.success("Password changed successfully. Please log in again.");
-      setTimeout(() => {
+      logoutTimerRef.current = setTimeout(() => {
         logout();
         navigate("/login");
       }, 2000);
@@ -749,11 +766,17 @@ const AdministratorAccount = () => {
                       >
                         Password
                       </p>
+                      {/* "Last changed: Never" was hardcoded — it read "Never"
+                          even immediately after a successful change, which is
+                          misleading for a security panel. There is no
+                          password_changed_at column to derive a real date from,
+                          so state where the history actually lives instead of
+                          inventing one. */}
                       <p
                         className="text-xs"
                         style={{ color: C.muted, margin: "1px 0 0" }}
                       >
-                        Last changed: Never
+                        Changes are recorded in the activity logs
                       </p>
                     </div>
                   </div>

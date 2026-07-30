@@ -113,6 +113,7 @@ const ManageCategories = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [page, setPage] = useState(1);
 
   const fetchCategories = async () => {
@@ -167,6 +168,11 @@ const ManageCategories = () => {
   };
 
   const handleDelete = async () => {
+    // Guard against a double-click: without the flag a second call fires while
+    // the first is in flight, 404s, and shows "not found" AFTER the delete
+    // actually succeeded.
+    if (deleting) return;
+    setDeleting(true);
     try {
       await deleteCategory(deleteTarget.id);
       success(`Category "${deleteTarget.name}" deleted`);
@@ -174,6 +180,8 @@ const ManageCategories = () => {
       fetchCategories();
     } catch (err) {
       errorToast(err.response?.data?.message || "Failed to delete");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -346,15 +354,32 @@ const ManageCategories = () => {
           <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "12px" }}>
             Delete category <strong>"{deleteTarget.name}"</strong>?
           </p>
+          {/* A category still in use cannot be deleted, so the button is
+              disabled rather than offering an action that is guaranteed to fail
+              (it used to say "the backend will block this deletion" and stay
+              clickable). The rule is enforced server-side in
+              categoryController.deleteCategory. */}
           {deleteTarget.word_count > 0 && (
             <p style={{ fontSize: "0.85rem", color: C.red, marginBottom: "20px" }}>
-              ⚠ This category is used by {deleteTarget.word_count} word(s). The backend will block this deletion.
+              ⚠ This category is used by {deleteTarget.word_count} word(s). Move
+              those words to another category, or delete them first.
             </p>
           )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-            <button onClick={() => setDeleteTarget(null)} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-            <button onClick={handleDelete} style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.red, color: "white", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600 }}>
-              Delete
+            <button onClick={() => setDeleteTarget(null)} disabled={deleting} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: deleting ? "not-allowed" : "pointer", fontSize: "0.875rem", opacity: deleting ? 0.6 : 1 }}>Cancel</button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting || deleteTarget.word_count > 0}
+              title={deleteTarget.word_count > 0 ? "This category is still in use" : undefined}
+              style={{
+                padding: "8px 16px", borderRadius: "8px", border: "none",
+                background: C.red, color: "white",
+                cursor: deleting || deleteTarget.word_count > 0 ? "not-allowed" : "pointer",
+                fontSize: "0.875rem", fontWeight: 600,
+                opacity: deleting || deleteTarget.word_count > 0 ? 0.5 : 1,
+              }}
+            >
+              {deleting ? "Deleting..." : "Delete"}
             </button>
           </div>
         </AppModal>

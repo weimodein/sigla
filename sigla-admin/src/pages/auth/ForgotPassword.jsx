@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
@@ -9,6 +9,11 @@ import {
 } from "../../api/authApi.js";
 import { Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
 import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
+
+// Mirrors validatePassword in sigla-backend/src/utils/validators.js: >=8 chars,
+// at least one letter, at least one number. Same rule the other screens use.
+const isValidPassword = (pw) =>
+  pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
 
 const C = {
   text: "#1f2937",
@@ -121,14 +126,29 @@ const ForgotPassword = () => {
     document.head.appendChild(style);
   }, []);
 
+  // Held in a ref so unmount can clear it. This page navigates to /login right
+  // after a successful reset — while the 60s cooldown is still running — so
+  // without cleanup every successful reset left a 1 Hz timer ticking against an
+  // unmounted component for up to a minute.
+  const cooldownRef = useRef(null);
+
   const startCooldown = useCallback(() => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
     setResendCooldown(60);
-    const iv = setInterval(() => {
+    cooldownRef.current = setInterval(() => {
       setResendCooldown((p) => {
-        if (p <= 1) { clearInterval(iv); return 0; }
+        if (p <= 1) {
+          clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
+          return 0;
+        }
         return p - 1;
       });
     }, 1000);
+  }, []);
+
+  useEffect(() => () => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
   }, []);
 
   // Validate the shape, then ask for confirmation when the domain is unfamiliar.
@@ -193,7 +213,13 @@ const ForgotPassword = () => {
   const handleReset = useCallback(async (e) => {
     e.preventDefault();
     if (newPass !== confirm) { toast.error("Passwords do not match"); return; }
-    if (newPass.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    // Must match validatePassword in sigla-backend/src/utils/validators.js —
+    // this used to allow 6 characters, so "abc123" passed here and was rejected
+    // by the server after a round-trip.
+    if (!isValidPassword(newPass)) {
+      toast.error("Password must be at least 8 characters and include a letter and a number");
+      return;
+    }
     setLoading(true);
     try {
       await resetPassword(email, newPass);

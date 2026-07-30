@@ -280,6 +280,7 @@ const ManageAdministrators = () => {
   const [activeTab, setActiveTab] = useState("all");
   const toast = useToast();
   const [stats, setStats] = useState(null);
+  const [statsError, setStatsError] = useState(false);
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -319,12 +320,19 @@ const ManageAdministrators = () => {
   const [confirmReset, setConfirmReset] = useState(false);
 
   // ── Fetch data ──────────────────────────────────────────────
+  // These four cards are the module's headline content, so a failure has to be
+  // visible. Swallowing it left every card showing "—", which reads exactly like
+  // a legitimate zero: there was no way to tell "0 deleted administrators" from
+  // "the stats endpoint is down". Non-blocking still — the table below renders
+  // from its own request.
   const fetchStats = async () => {
+    setStatsError(false);
     try {
       const data = await getAdministratorStats();
       setStats(data);
     } catch {
-      // non-blocking
+      setStats(null);
+      setStatsError(true);
     }
   };
 
@@ -728,6 +736,22 @@ const ManageAdministrators = () => {
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
+        </div>
+      ) : statsError ? (
+        <div
+          className="mb-6 rounded-xl px-4 py-3 flex items-center justify-between gap-3"
+          style={{ background: "#fef2f2", border: "1px solid #fecaca" }}
+        >
+          <p className="text-sm" style={{ color: "#b91c1c" }}>
+            Could not load the administrator counts. The list below is unaffected.
+          </p>
+          <button
+            onClick={fetchStats}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap"
+            style={{ background: "#b91c1c", color: "#fff" }}
+          >
+            Retry
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

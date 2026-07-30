@@ -70,18 +70,28 @@ const Onboarding = () => {
   const [confirm, setConfirm] = useState("");
   const [credLoading, setCredLoading] = useState(false);
 
+  // Ref + unmount cleanup: completing setup navigates away while the cooldown may
+  // still be running, which otherwise leaves a 1 Hz timer on an unmounted page.
+  const cooldownRef = useRef(null);
+
   const startCooldown = () => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
     setCooldown(60);
-    const iv = setInterval(() => {
+    cooldownRef.current = setInterval(() => {
       setCooldown((p) => {
         if (p <= 1) {
-          clearInterval(iv);
+          clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
           return 0;
         }
         return p - 1;
       });
     }, 1000);
   };
+
+  useEffect(() => () => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+  }, []);
 
   if (loading) {
     return (

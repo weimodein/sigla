@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -25,12 +25,23 @@ const Layout = ({ children }) => {
     );
   }, [sidebarCollapsed]);
 
+  // Tracked so rapid toggling cannot stack timeouts — an earlier one would
+  // otherwise strip the transitioning class while a later transition is still
+  // running — and so an unmount mid-transition does not leave the class behind.
+  const transitionTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+  }, []);
+
   const handleToggle = (collapsed) => {
     document.body.classList.add("sidebar-transitioning");
     // --sidebar-width is updated by the effect above, which reacts to this state.
     setSidebarCollapsed(collapsed);
-    setTimeout(() => {
+    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = setTimeout(() => {
       document.body.classList.remove("sidebar-transitioning");
+      transitionTimerRef.current = null;
     }, 250);
   };
 

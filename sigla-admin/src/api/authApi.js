@@ -14,7 +14,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 responses globally — clear session so ProtectedRoute redirects to login.
+// Event name AuthContext listens for. This module cannot import AuthContext
+// (that would be circular — AuthContext imports loginApi/getMe from here), and
+// clearing localStorage alone does NOT re-render React: AuthContext.user stayed
+// populated, so ProtectedRoute kept rendering the page while every request went
+// out unauthenticated and 401'd forever. Dispatching an event lets the provider
+// drop its own state and trigger the redirect.
+export const SESSION_EXPIRED_EVENT = "sigla:session-expired";
+
+// Handle 401 responses globally — clear the session and tell AuthContext, so
+// ProtectedRoute redirects to login.
 // Skip auth endpoints so their errors propagate normally to the calling component.
 api.interceptors.response.use(
   (response) => response,
@@ -24,6 +33,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     }
     return Promise.reject(error);
   },
