@@ -2,7 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const ProtectedRoute = ({ children }) => {
-  const { isLoggedIn, loading } = useAuth();
+  const { isLoggedIn, needsSetup, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,6 +14,11 @@ const ProtectedRoute = ({ children }) => {
 
   if (!isLoggedIn) {
     return <Navigate to="/login" replace />;
+  }
+
+  // New admins must finish first-login setup before accessing the platform.
+  if (needsSetup) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return children;

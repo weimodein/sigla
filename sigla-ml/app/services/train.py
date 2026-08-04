@@ -1,7 +1,6 @@
 import os
 import re
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from app.utils.preprocessor import (
     fetch_approved_samples,
@@ -13,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
+FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
@@ -125,12 +124,10 @@ def train(version_number: str, model_id: int) -> dict:
         )
 
     # ── Step 2: Train motion model (LSTM) ─────────────────────
+    # Split happens BEFORE augmentation inside prepare_motion_dataset, so X_val/y_val
+    # is real, unaugmented data the model never trained on — a genuine holdout.
     print(f"\n--- Training Motion Model (LSTM) — {total_classes} classes ---")
-    X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
-
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_motion, y_motion, test_size=0.2, random_state=42, stratify=y_motion
-    )
+    X_train, y_train, X_val, y_val, motion_label_map = prepare_motion_dataset(motion_dataset)
 
     model = build_motion_model(len(motion_label_map))
 
@@ -156,8 +153,24 @@ def train(version_number: str, model_id: int) -> dict:
         verbose=1,
     )
 
-    accuracy = max(history.history["val_accuracy"])
-    print(f"Motion model best val accuracy: {accuracy:.4f}")
+    # `max(val_accuracy)` is the best epoch on the SAME split EarlyStopping used to
+    # select the weights (restore_best_weights=True) — an optimistic maximum by
+    # construction, not a measure of generalization. Report the restored model's
+    # actual score on that split instead, and label it for what it is.
+    #
+    # For a trustworthy number run tools/cross_validate.py, which trains K folds and
+    # scores every sample while held out. Nothing in this function can produce an
+    # unbiased estimate: the split it evaluates is the split it selected on.
+    selection_best = max(history.history["val_accuracy"])
+    if len(X_val):
+        _, accuracy = model.evaluate(X_val, y_val, verbose=0)
+    else:
+        accuracy = selection_best
+
+    print(f"Motion model val accuracy (restored weights): {accuracy:.4f}")
+    print(f"  best epoch during training (optimistic, selection metric): {selection_best:.4f}")
+    print(f"  NOTE: both are measured on the model-selection split. For a")
+    print(f"        generalization estimate run: python tools/cross_validate.py")
 
     # ── Step 3: Save + convert + upload ───────────────────────
     h5_path = os.path.join(version_dir, "sign_model_motion.h5")
@@ -177,18 +190,18 @@ def train(version_number: str, model_id: int) -> dict:
     print(f"Training complete for version: {version_number}")
     print(f"{'='*50}\n")
 
-    # NOTE: the "accuracy"/"tflite_url"/"h5_url" keys carry the motion model's
-    # values so the backend (which reads those generic keys) stays compatible.
+    # Every gesture is motion, so there is a single model — its values are
+    # reported under the generic keys the backend and both clients read.
     return {
         "version_number":     version_number,
         "model_id":           model_id,
         "total_classes":      total_classes,
+        # Restored-weights score on the model-selection split. Still optimistic
+        # (it is the split that selected the weights) but no longer the max over
+        # 200 epochs. tools/cross_validate.py is the trustworthy number.
         "accuracy":           round(float(accuracy), 4),
-        "motion_accuracy":    round(float(accuracy), 4),
-        "motion_trained":     True,
-        "motion_classes":     total_classes,
+        "selection_best_accuracy": round(float(selection_best), 4),
+        "accuracy_note":      "measured on the model-selection split; run cross_validate.py for a generalization estimate",
         "tflite_url":         motion_tflite_url,
         "h5_url":             motion_h5_url,
-        "motion_tflite_url":  motion_tflite_url,
-        "motion_h5_url":      motion_h5_url,
     }

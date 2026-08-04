@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import {
   getAllModels,
@@ -161,8 +161,27 @@ const ManageModel = () => {
         getWordStats(),
       ]);
       setStats(statsData);
-      setModels(modelsData.models || []);
+      const list = modelsData.models || [];
+      setModels(list);
       setWordStats(wordStatsData);
+
+      // Adopt a training run that is already in flight. Training happens in a
+      // background job on the server, so it survives the admin navigating away
+      // or reloading — but trainingModelId is component state and does not.
+      // Without this, returning to the page showed no banner, re-enabled the
+      // Train button, and never reported the outcome: the run looked stuck at
+      // "training" forever even though the server had finished it.
+      const inFlight = list.find((m) => m.status === "training");
+      setTrainingModelId((current) => {
+        if (inFlight) {
+          setTrainingVersion(inFlight.version_number || "");
+          return inFlight.id;
+        }
+        // Only clear when we were tracking a run the server no longer reports as
+        // training; leave an id set moments ago by handleTrain alone, since the
+        // row may not have been re-read yet.
+        return current && !list.some((m) => m.id === current) ? null : current;
+      });
     } catch (err) {
       toast.error("Failed to load model data");
     } finally {
@@ -174,10 +193,32 @@ const ManageModel = () => {
     fetchData();
   }, []);
 
-  // Poll training status every 5 seconds when a training job is in progress
+  // Poll training status every 5 seconds when a training job is in progress.
+  //
+  // The interval is cleared on unmount and whenever trainingModelId changes, and
+  // fetchData re-adopts an in-flight run on mount, so navigating away and back
+  // resumes polling rather than losing the run.
   useEffect(() => {
     if (!trainingModelId) return;
+
+    // A row stranded at "training" (server restarted mid-run, so nothing will
+    // ever mark it trained/failed) would otherwise poll every 5s for the whole
+    // session and keep the Train button disabled forever. Give up after 30
+    // minutes — well past the 20-minute ML timeout — and say so.
+    const startedAt = Date.now();
+    const POLL_TIMEOUT_MS = 30 * 60 * 1000;
+
     pollingRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        clearInterval(pollingRef.current);
+        setTrainingModelId(null);
+        setTrainingVersion("");
+        showError(
+          "Stopped tracking this training run — it has not reported back. Reload to check its status.",
+        );
+        fetchData();
+        return;
+      }
       try {
         const { model } = await getModelStatus(trainingModelId);
         if (model.status === "trained") {
@@ -185,10 +226,17 @@ const ManageModel = () => {
           setTrainingModelId(null);
           setTrainingVersion("");
           showSuccess(`Model ${model.version_number} trained successfully`);
-          const motionNote = model.motion_trained
-            ? `Motion model trained (${model.motion_classes} classes).`
-            : `Motion model NOT trained — need at least 2 motion gesture classes.`;
-          setResultModal({ title: "Training Results", data: { message: motionNote, model } });
+          // Flattened to the shape the results modal reads. Passing the raw
+          // model object left every field unreadable, so the modal rendered
+          // nothing but a title and a Close button.
+          setResultModal({
+            title: "Training Results",
+            message:
+              "Training finished. Test the model to measure its accuracy before deploying it.",
+            accuracy: model.accuracy ?? null,
+            totalClasses: model.total_classes ?? null,
+            versionNumber: model.version_number,
+          });
           fetchData();
         } else if (model.status === "failed") {
           clearInterval(pollingRef.current);
@@ -197,8 +245,17 @@ const ManageModel = () => {
           showError(`Training failed: ${model.training_error || "Unknown error"}`);
           fetchData();
         }
-      } catch {
-        // Network hiccup — keep polling
+      } catch (err) {
+        // A missing or forbidden model will never resolve — stop rather than
+        // hammering the endpoint for the rest of the session. Network hiccups
+        // (no response) keep polling, which is the original intent.
+        const status = err.response?.status;
+        if (status === 404 || status === 403 || status === 401) {
+          clearInterval(pollingRef.current);
+          setTrainingModelId(null);
+          setTrainingVersion("");
+          fetchData();
+        }
       }
     }, 5000);
     return () => clearInterval(pollingRef.current);
@@ -215,8 +272,18 @@ const ManageModel = () => {
   };
 
   const sortedModels = [...models].sort((a, b) => {
-    let va = a[sortField] ?? "";
-    let vb = b[sortField] ?? "";
+    let va = a[sortField];
+    let vb = b[sortField];
+
+    // Nulls last in BOTH directions. Coercing them to "" put untested models
+    // (null accuracy) at the head of an ascending sort, since `0.95 > ""` is
+    // true — "not measured" is not the smallest value, it is absent.
+    const aMissing = va === null || va === undefined || va === "";
+    const bMissing = vb === null || vb === undefined || vb === "";
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+
     if (typeof va === "string") va = va.toLowerCase();
     if (typeof vb === "string") vb = vb.toLowerCase();
     if (va < vb) return sortDir === "asc" ? -1 : 1;
@@ -234,7 +301,16 @@ const ManageModel = () => {
     : [...sortedModels];
 
   // ── Paginate ────────────────────────────────────────────────
-  const totalPages = Math.ceil(filteredModels.length / pageSize);
+  // Floored at 1 so an empty list does not produce page 0.
+  const totalPages = Math.max(1, Math.ceil(filteredModels.length / pageSize));
+
+  // Keep the current page valid as the list shrinks. Deleting the only row on
+  // the last page used to leave `page` past the end, rendering "No models found.
+  // Train your first model to get started." while models still existed.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const paginatedModels = filteredModels.slice(
     (page - 1) * pageSize,
     page * pageSize
@@ -279,9 +355,18 @@ const ManageModel = () => {
     setActionLoading(true);
     try {
       const result = await testModel(testModal.id);
+      const tested = testModal;
       showSuccess("Model evaluation complete");
       setTestModal(null);
-      setResultModal({ title: "Test Results", data: result });
+      // The API returns the metrics under `test_result` — the modal used to read
+      // `result`, which never existed, so accuracy and class count never showed.
+      setResultModal({
+        title: "Test Results",
+        message: result?.message || "Model evaluation complete.",
+        accuracy: result?.test_result?.accuracy ?? null,
+        totalClasses: result?.test_result?.total_classes ?? null,
+        versionNumber: tested?.version_number,
+      });
       fetchData();
     } catch (err) {
       showError(
@@ -634,7 +719,7 @@ const ManageModel = () => {
                 {paginatedModels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={7}
                       className="text-center py-10"
                       style={{ color: C.muted, fontSize: "0.85rem" }}
                     >
@@ -645,10 +730,13 @@ const ManageModel = () => {
                   </tr>
                 ) : (
                   paginatedModels.map((model) => (
-                    <>
+                    // Keyed on the FRAGMENT. The key used to sit on the inner
+                    // <tr>, where React never sees it, so this list reconciled by
+                    // index: with a row expanded, a re-sort or refetch could
+                    // re-match the open detail panel to a different version.
+                    <Fragment key={model.id}>
                       {/* Main row */}
                       <tr
-                        key={model.id}
                         className="border-t hover:bg-gray-50 text-sm"
                         style={{
                           cursor: "pointer",
@@ -732,7 +820,8 @@ const ManageModel = () => {
                                 </button>
                                 <button
                                   onClick={() => handleDelete(model)}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  disabled={actionLoading}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
                                     background: "#fecaca",
                                     color: "#991b1b",
@@ -772,7 +861,8 @@ const ManageModel = () => {
                                 </button>
                                 <button
                                   onClick={() => handleDelete(model)}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  disabled={actionLoading}
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
                                     background: "#fecaca",
                                     color: "#991b1b",
@@ -811,26 +901,105 @@ const ManageModel = () => {
                           style={{ background: "#fafafa" }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <td colSpan={4} className="px-4 py-4">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          {/* Must match the 7 header cells (chevron, Version,
+                              Status, Accuracy, Trained By, Trained At, Actions)
+                              or the panel stops short and leaves a dead gutter. */}
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
                               <MetricBox
                                 label="Total Classes"
                                 value={model.total_classes ?? "—"}
                                 color={C.text}
                               />
+                              <MetricBox
+                                label="Accuracy"
+                                value={fmt(model.accuracy)}
+                                color={
+                                  model.accuracy == null
+                                    ? C.muted
+                                    : getMetricColor(model.accuracy)
+                                }
+                              />
+                              {/* Words this version was trained on. The mobile word
+                                  bank is derived from this list, so it explains why
+                                  a revert changes the words on the device. */}
+                              <MetricBox
+                                label="Words in Bank"
+                                value={
+                                  Array.isArray(model.trained_word_ids)
+                                    ? model.trained_word_ids.length
+                                    : "—"
+                                }
+                                color={C.text}
+                              />
+                              <MetricBox
+                                label="Trained"
+                                value={
+                                  model.trained_at
+                                    ? new Date(model.trained_at).toLocaleDateString()
+                                    : "—"
+                                }
+                                color={C.text}
+                              />
                             </div>
-                            {model.notes && (
-                              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${C.border}` }}>
-                                <p className="text-xs font-medium text-gray-500 mb-1">
-                                  Notes
-                                </p>
-                                <p className="text-sm text-gray-600">{model.notes}</p>
+
+                            {/* Deployment + notes. The integrity checksum is
+                                deliberately not surfaced: it is verified on the
+                                device before a downloaded model replaces the
+                                active one, and the raw hash means nothing to an
+                                administrator reading this table. */}
+                            {(model.deployed_at || model.notes) && (
+                              <div
+                                className="mt-3 pt-3 grid grid-cols-1 sm:grid-cols-4 gap-3"
+                                style={{ borderTop: `1px solid ${C.border}` }}
+                              >
+                                {model.deployed_at && (
+                                  <div>
+                                    <p className="text-xs font-medium text-gray-500 mb-1">
+                                      Last Deployed
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      {new Date(model.deployed_at).toLocaleString()}
+                                    </p>
+                                  </div>
+                                )}
+                                {model.notes && (
+                                  <div className="sm:col-span-3">
+                                    <p className="text-xs font-medium text-gray-500 mb-1">
+                                      Notes
+                                    </p>
+                                    <p className="text-sm text-gray-600 break-words">
+                                      {model.notes}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
                             )}
+
+                            {/* Why a run failed. This was previously only visible
+                                as a toast while the page happened to be open, so
+                                reopening the page lost the reason entirely. */}
+                            {model.status === "failed" && (
+                              <div
+                                className="mt-3 pt-3"
+                                style={{ borderTop: `1px solid ${C.border}` }}
+                              >
+                                <p className="text-xs font-medium mb-1" style={{ color: C.red }}>
+                                  Training Error
+                                </p>
+                                <p
+                                  className="text-sm rounded-lg p-3"
+                                  style={{ background: "#fef2f2", color: "#b91c1c" }}
+                                >
+                                  {model.training_error || "No error detail was recorded."}
+                                </p>
+                              </div>
+                            )}
+
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   ))
                 )}
               </tbody>
@@ -1004,12 +1173,28 @@ const ManageModel = () => {
                 become inactive.
               </div>
             )}
-            {wordStats?.ready_to_activate > 0 && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
-                <strong>{wordStats.ready_to_activate}</strong> word{wordStats.ready_to_activate !== 1 ? "s" : ""} with
-                enough approved samples will become visible in the mobile app after this deploy.
-              </div>
-            )}
+            {/* Describe what deploy ACTUALLY does. This used to print
+                wordStats.ready_to_activate — words with enough approved samples —
+                but deploy calls reconcileActiveWords, which sets the visible word
+                bank to exactly THIS version's trained_word_ids. Deploying an older
+                version therefore activated none of those words and hid others,
+                while the dialog promised the opposite. */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
+              {Array.isArray(deployModal.trained_word_ids) ? (
+                <>
+                  The mobile word bank will match this version:{" "}
+                  <strong>{deployModal.trained_word_ids.length}</strong> word
+                  {deployModal.trained_word_ids.length !== 1 ? "s" : ""} visible.
+                  Words this version was not trained on become hidden.
+                </>
+              ) : (
+                <>
+                  The mobile word bank will be set to the words this version was
+                  trained on. This version has no recorded word list, so the
+                  current set is kept.
+                </>
+              )}
+            </div>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleDeploy}
@@ -1064,20 +1249,35 @@ const ManageModel = () => {
       {resultModal && (
         <AppModal title={resultModal.title} onClose={() => setResultModal(null)}>
           <div className="space-y-3 text-sm">
-            {resultModal.data?.accuracy && (
+            {resultModal.message && (
+              <p className="text-gray-700 leading-relaxed">
+                {resultModal.message}
+              </p>
+            )}
+            {(resultModal.accuracy != null ||
+              resultModal.totalClasses != null) && (
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Accuracy</p>
-                  <p className="font-bold text-lg text-blue-900">
-                    {fmt(resultModal.data.accuracy)}
-                  </p>
-                </div>
+                {resultModal.accuracy != null && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Accuracy</p>
+                    <p className="font-bold text-lg text-blue-900">
+                      {fmt(resultModal.accuracy)}
+                    </p>
+                  </div>
+                )}
+                {resultModal.totalClasses != null && (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500">Gesture classes</p>
+                    <p className="font-bold text-lg text-blue-900">
+                      {resultModal.totalClasses}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
-            {resultModal.data?.result?.total_classes && (
-              <p className="text-gray-600">
-                Total classes trained:{" "}
-                <strong>{resultModal.data.result.total_classes}</strong>
+            {resultModal.versionNumber && (
+              <p className="text-gray-500 text-xs">
+                Version <strong>{resultModal.versionNumber}</strong>
               </p>
             )}
             <button

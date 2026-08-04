@@ -2,19 +2,25 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import SuperRoute from "./components/SuperRoute.jsx";
 import Layout from "./components/Layout.jsx";
 
 // Pages
 import Login from "./pages/auth/Login.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
-import ManageUsers from "./pages/users/ManageUsers.jsx";
-import ManageWordBank from "./pages/words/ManageWordBank.jsx";
-import ManageDataset from "./pages/words/ManageDataset.jsx";
+import ManageAdministrators from "./pages/administrators/ManageAdministrators.jsx";
+// ManageWordBank is intentionally not imported — /word_bank now redirects to
+// /dataset. The file is kept on disk for reference until its sample-gallery
+// logic is confirmed unnecessary, but importing it would bundle 1400 unused
+// lines and keep the divergent upload rules alive.
+import ManageWord from "./pages/words/ManageWord.jsx";
 import ManageCategories from "./pages/categories/ManageCategories.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";
 import AdministratorAccount from "./pages/adminaccount/AdministratorAccount.jsx";
 import ReportsAnalytics from "./pages/reports/ReportsAnalytics.jsx";
+import ActivityLogs from "./pages/activitylogs/ActivityLogs.jsx";
+import Onboarding from "./pages/onboarding/Onboarding.jsx";
 
 const App = () => {
   return (
@@ -25,6 +31,9 @@ const App = () => {
             {/* Public */}
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+
+            {/* Forced first-login onboarding (self-guards on auth + needsSetup) */}
+            <Route path="/onboarding" element={<Onboarding />} />
 
             {/* Protected — with sidebar layout */}
             <Route
@@ -38,31 +47,28 @@ const App = () => {
               }
             />
             <Route
-              path="/users"
+              path="/administrators"
               element={
-                <ProtectedRoute>
+                <SuperRoute>
                   <Layout>
-                    <ManageUsers />
+                    <ManageAdministrators />
                   </Layout>
-                </ProtectedRoute>
+                </SuperRoute>
               }
             />
-            <Route
-              path="/word_bank"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ManageWordBank />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            {/* Superseded by /dataset (ManageWord), which is what the sidebar
+                links to and which uses the current video + MediaPipe upload
+                flow. ManageWordBank was built around per-image sample review and
+                manual approval; admin uploads are auto-approved now, so there is
+                nothing left for it to review. Kept as a redirect so existing
+                bookmarks and any stale link still land somewhere useful. */}
+            <Route path="/word_bank" element={<Navigate to="/dataset" replace />} />
             <Route
               path="/dataset"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <ManageDataset />
+                    <ManageWord />
                   </Layout>
                 </ProtectedRoute>
               }
@@ -103,6 +109,16 @@ const App = () => {
                 <ProtectedRoute>
                   <Layout>
                     <ReportsAnalytics />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/activity-logs"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ActivityLogs />
                   </Layout>
                 </ProtectedRoute>
               }

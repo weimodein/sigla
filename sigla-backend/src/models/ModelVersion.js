@@ -18,15 +18,7 @@ const ModelVersion = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    motion_tflite_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
     h5_url: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    motion_h5_url: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
@@ -34,22 +26,22 @@ const ModelVersion = sequelize.define(
       type: DataTypes.FLOAT,
       allowNull: true,
     },
-    motion_accuracy: {
-      type: DataTypes.FLOAT,
-      allowNull: true,
-    },
     total_classes: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
-    motion_classes: {
-      type: DataTypes.INTEGER,
+    // The word ids this version was actually trained on — the same set that
+    // labels_motion.json names. The mobile word bank is derived from this, so
+    // deploying or reverting changes the visible words without touching Word
+    // rows. NULL means "recorded before this column existed": callers must fall
+    // back to Word.is_active rather than treating it as an empty set.
+    //
+    // Requires a manual migration — this project has no migration tooling and
+    // never calls sequelize.sync():
+    //   ALTER TABLE model_versions ADD COLUMN trained_word_ids JSONB;
+    trained_word_ids: {
+      type: DataTypes.JSONB,
       allowNull: true,
-    },
-    motion_trained: {
-      type: DataTypes.BOOLEAN,
-      allowNull: true,
-      defaultValue: false,
     },
     trained_by: {
       type: DataTypes.INTEGER,
@@ -72,10 +64,6 @@ const ModelVersion = sequelize.define(
       },
     },
     training_error: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
-    word_bank_url: {
       type: DataTypes.TEXT,
       allowNull: true,
     },

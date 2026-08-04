@@ -12,4 +12,87 @@
     <color name="colorSuccess">#4CAF50</color>
     <color name="colorWarning">#FF9800</color>
     <color name="colorSidebarBg">#E3F2FD</color>
+    <color name="colorOnboardingBg">#FFFFFF</color>
+    <color name="colorNavy">#14234A</color>
+    <color name="colorHeaderNavy">#1A2E5A</color>
+    <color name="colorTeal">#1D9E75</color>
+    <color name="colorTextBody">#5B6373</color>
+    <color name="colorIndicatorInactive">#D7DBE4</color>
+    <color name="colorIconBoxFill">#1FFFFFFF</color>
+    <color name="colorIconBoxStroke">#2EFFFFFF</color>
+    <color name="colorWbBg">#DCE9FB</color>
+    <color name="colorWbSectionLabel">#0D3E6B</color>
+    <color name="colorWbCountMuted">#7A8CA3</color>
+ 
+    <!-- Category card colors -->
+    <color name="cardFavoritesBg">#FFFFFF</color>
+    <color name="cardFavoritesFg">#1D4ED8</color>
+ 
+    <color name="cardAllWordsBg">#C9D6F5</color>
+    <color name="cardAllWordsFg">#2C3E82</color>
+    <color name="cardAllWordsTitle">#14234A</color>
+ 
+    <color name="cardGreetingsBg">#1E6FA8</color>
+    <color name="cardAlphabetBg">#5D5FA0</color>
+    <color name="cardDailyLifeBg">#0B2A55</color>
+    <color name="cardEmotionsBg">#2E7A96</color>
+
+    <!-- Add these to your existing colors -->
+    <color name="cardIconBg">#E8F4FD</color>   
+    <color name="cardGreetingsTitle">#E65100</color>
+    <color name="cardAlphabetTitle">#2E7D32</color>
+    <color name="cardDailyLifeTitle">#0D47A1</color>
+    <color name="cardEmotionsTitle">#880E4F</color>
+    <color name="cardFavoritesTitle">#F57F17</color>
+
+    <!-- ════════════════════════════════════════════════════════════
+         Dark-mode-aware semantic tokens (light values here; overridden
+         in values-night/colors.xml). Used by the sidebar, Word Bank,
+         Translation History, and Settings screens.
+    ════════════════════════════════════════════════════════════ -->
+    <color name="sig_page_bg">#F2F6FC</color>
+    <color name="sig_chrome_navy">#1E3B8B</color>
+    <color name="sig_chrome_halo">#869EE0</color>
+    <color name="sig_surface_card">#FFFFFF</color>
+    <color name="sig_text_primary">#0D3E6B</color>
+    <color name="sig_text_secondary">#78909C</color>
+    <color name="sig_icon_accent">#0D3E6B</color>
+    <color name="sig_accent">#4A90E2</color>
+    <color name="sig_accent_pill">#B9CDF0</color>
+    <color name="sig_nav_selected_fill">#401E3B8B</color>
+    <color name="sig_nav_selected_text">#4A90E2</color>
+    <color name="sig_nav_default_text">#1A2E5A</color>
+    <color name="sig_nav_default_subtitle">#6C7A9C</color>
+    <color name="sig_divider">#E0E4F0</color>
+    <color name="sig_delete_icon">#EF5350</color>
+    <color name="sig_icon_bg_soft">#E3F2FD</color>
+    <color name="sig_icon_bg_danger">#FFEBEE</color>
+    <color name="sig_header_button_bg">#FFFFFF</color>
+    <color name="sig_toggle_unselected">#B9CDF0</color>
+    <color name="sig_toggle_unselected_text">#0D3E6B</color>
+    <color name="sig_reset_card_bg">#FFF5F5</color>
+    <color name="sig_reset_subtitle">#C97A7A</color>
+    <color name="sig_reset_accent">#D32F2F</color>
+
+    <!-- Borders: transparent in light mode (light surfaces have enough
+         natural contrast); dark mode gives each a visible 1px edge since
+         several dark fills otherwise collapse into the same lightness. -->
+    <color name="sig_border_chrome">#00000000</color>
+    <color name="sig_border_icon_badge">#00000000</color>
+    <color name="sig_border_card">#00000000</color>
+    <color name="sig_border_reset_card">#00000000</color>
+    <color name="sig_border_reset_icon">#00000000</color>
+
+    <!-- Icon badge chips (sidebar nav icon box, hand-icon circles, Dark
+         Mode/Tutorial icon badges) -->
+    <color name="sig_icon_box_bg">#1A2E5A</color>
+    <color name="sig_icon_badge_icon">#0D3E6B</color>
+
+    <!-- Favorites / All Words tile icon chip (the two fixed dark tiles,
+         not the hashed colorful ones) -->
+    <color name="sig_favtile_badge">#33FFFFFF</color>
+    <color name="sig_favtile_icon">#0D3E6B</color>
+
+    <color name="sig_switch_thumb">#FFFFFF</color>
+
 </resources>

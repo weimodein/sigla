@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    values-night/colors.xml
+    Dark-mode overrides for the semantic tokens declared in values/colors.xml.
+    Three distinct lightness tiers, darkest to lightest: page background →
+    card surface → icon badge/interactive element — plus a 1px border on
+    anything that needs a clear edge against its neighbor.
+-->
+<resources>
+    <color name="sig_page_bg">#12172B</color>
+    <color name="sig_chrome_navy">#1C2340</color>
+    <color name="sig_chrome_halo">#262E52</color>
+    <color name="sig_surface_card">#1E2540</color>
+    <color name="sig_text_primary">#F0F2FA</color>
+    <color name="sig_text_secondary">#9AA1C4</color>
+    <color name="sig_icon_accent">#7C93E0</color>
+    <color name="sig_accent">#5C7CE0</color>
+    <color name="sig_accent_pill">#2A355C</color>
+    <color name="sig_nav_selected_fill">#3A4A8C</color>
+    <color name="sig_nav_selected_text">#8FA4EF</color>
+    <color name="sig_nav_default_text">#F0F2FA</color>
+    <color name="sig_nav_default_subtitle">#9AA1C4</color>
+    <color name="sig_divider">#2A3155</color>
+    <color name="sig_delete_icon">#E8746F</color>
+    <color name="sig_icon_bg_soft">#2A3363</color>
+    <color name="sig_icon_bg_danger">#4A2530</color>
+    <color name="sig_header_button_bg">#1E2540</color>
+    <color name="sig_toggle_unselected">#252C4E</color>
+    <color name="sig_toggle_unselected_text">#AEBBF0</color>
+    <color name="sig_reset_card_bg">#2E1A22</color>
+    <color name="sig_reset_subtitle">#D4A296</color>
+    <color name="sig_reset_accent">#F0997B</color>
+
+    <color name="sig_border_chrome">#2A3363</color>
+    <color name="sig_border_icon_badge">#3A4680</color>
+    <color name="sig_border_card">#2A3155</color>
+    <color name="sig_border_reset_card">#5C2C3A</color>
+    <color name="sig_border_reset_icon">#6B3446</color>
+
+    <color name="sig_icon_box_bg">#2A3363</color>
+    <color name="sig_icon_badge_icon">#AEBBF0</color>
+
+    <color name="sig_favtile_badge">#3A4066</color>
+    <color name="sig_favtile_icon">#AEBBF0</color>
+
+    <color name="sig_switch_thumb">#F5F6FB</color>
+</resources>

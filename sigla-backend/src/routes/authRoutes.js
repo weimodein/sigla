@@ -2,9 +2,6 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const {
-  register,
-  verifyEmail,
-  setPassword,
   login,
   forgotPassword,
   resetPassword,
@@ -14,14 +11,14 @@ const {
 } = require("../controllers/authController.js");
 
 // Public routes
-router.post("/register", register);
-router.post("/verify-email", verifyEmail);
-router.post("/set-password", setPassword);
+// NOTE: Public self-registration is disabled — accounts are created only by a
+// super administrator via the Manage Administrators module. The register /
+// verify-email / set-password self-signup endpoints have been removed.
 router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
-router.post("/resend-code", resendCode); // New route to resend verification code
-router.post("/verify-reset-code", verifyResetCode); // New route to verify reset code
+router.post("/resend-code", resendCode); // Resend verification code (password reset / email link)
+router.post("/verify-reset-code", verifyResetCode); // Verify reset code before resetting password
 
 // Protected route
 router.get("/me", authMiddleware, getMe);

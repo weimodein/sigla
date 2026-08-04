@@ -69,11 +69,6 @@ async def train_model(request: TrainRequest):
             "total_classes":     result.get("total_classes"),
             "tflite_url":        result.get("tflite_url"),
             "h5_url":            result.get("h5_url"),
-            "motion_tflite_url": result.get("motion_tflite_url"),
-            "motion_h5_url":     result.get("motion_h5_url"),
-            "motion_accuracy":   result.get("motion_accuracy"),
-            "motion_trained":    result.get("motion_trained"),
-            "motion_classes":    result.get("motion_classes"),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -214,7 +209,7 @@ async def extract_landmarks(file: UploadFile = File(...)):
     """
     try:
         video_bytes = await file.read()
-        sequence = extract_motion_landmarks(video_bytes)
+        sequence = extract_motion_landmarks(video_bytes, file.filename)
         if sequence is None:
             raise HTTPException(status_code=422, detail="No hands detected in video")
         return {"type": "motion", "sequence": sequence}

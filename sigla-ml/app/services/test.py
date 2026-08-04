@@ -7,8 +7,8 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
     classification_report,
+    confusion_matrix,
 )
-from sklearn.model_selection import train_test_split
 from app.utils.preprocessor import (
     fetch_approved_samples,
     prepare_motion_dataset,
@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    126))
+FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
@@ -79,10 +79,10 @@ def test(version_number: str, model_id: int) -> dict:
     h5_path = download_model_from_supabase(version_number, "sign_model_motion.h5")
 
     # ── Step 3: Prepare + split ───────────────────────────────
-    X_motion, y_motion, motion_label_map = prepare_motion_dataset(motion_dataset)
-    _, X_test, _, y_test = train_test_split(
-        X_motion, y_motion, test_size=0.2, random_state=42, stratify=y_motion
-    )
+    # Same split logic (and random_state) as train.py, so X_test/y_test here is the
+    # identical real, unaugmented holdout the model's val_accuracy was measured
+    # against during training — a genuine evaluation, not data it trained on.
+    _, _, X_test, y_test, motion_label_map = prepare_motion_dataset(motion_dataset)
 
     # ── Step 4: Evaluate ──────────────────────────────────────
     print("Evaluating motion model...")
@@ -101,12 +101,32 @@ def test(version_number: str, model_id: int) -> dict:
         zero_division=0
     )
 
+    # Per-class precision/recall shows a class is weak but not WHICH other class it's
+    # being confused with. Surface the top confusions explicitly (e.g. "NO -> YES: 3")
+    # so a weak class's likely culprit is visible without manually reading a full matrix.
+    labels_sorted = [motion_label_map[i] for i in range(len(motion_label_map))]
+    cm = confusion_matrix(y_test, preds, labels=list(range(len(motion_label_map))))
+    confusions = []
+    for true_idx, row in enumerate(cm):
+        for pred_idx, count in enumerate(row):
+            if true_idx != pred_idx and count > 0:
+                confusions.append((count, labels_sorted[true_idx], labels_sorted[pred_idx]))
+    confusions.sort(reverse=True)
+    # Plain ASCII only — Windows' default console/log encoding (cp1252) can't print
+    # arrows/em-dashes and would crash this function after the (expensive) evaluation
+    # already ran, discarding the result instead of returning it.
+    confusion_lines = "\n".join(
+        f"  {true_label} -> predicted as {pred_label}: {count}"
+        for count, true_label, pred_label in confusions
+    ) or "  (none - every class classified correctly)"
+
     print(f"Motion Model Results:")
     print(f"  Accuracy:  {accuracy:.4f}")
     print(f"  Precision: {precision:.4f}")
     print(f"  Recall:    {recall:.4f}")
     print(f"  F1 Score:  {f1:.4f}")
     print(f"\nClassification Report:\n{report}")
+    print(f"Top confusions (true -> predicted):\n{confusion_lines}")
 
     print(f"\n{'='*50}")
     print(f"Evaluation complete for version: {version_number}")
@@ -118,6 +138,7 @@ def test(version_number: str, model_id: int) -> dict:
         "recall":                round(float(recall),    4),
         "f1_score":              round(float(f1),        4),
         "classification_report": report,
+        "top_confusions":        confusion_lines,
     }
 
     return {

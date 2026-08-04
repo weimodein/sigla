@@ -24,6 +24,7 @@ class AppSettings(context: Context) {
                 INSTANCE ?: AppSettings(context.applicationContext).also { INSTANCE = it }
             }
     }
+    
 
     var volume: Int
         get() = prefs.getInt(KEY_VOLUME, 80)

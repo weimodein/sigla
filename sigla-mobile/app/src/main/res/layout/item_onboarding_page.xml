@@ -1,35 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="32dp"
-    android:background="#E3F2FD">
+    android:background="@color/colorOnboardingBg">
 
-    <TextView
-        android:id="@+id/tvPageIcon"
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/headerGuideline"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="64sp"
-        android:layout_marginBottom="24dp" />
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.38" />
+
+    <com.example.sigla.CurvedHeaderView
+        android:id="@+id/headerCurve"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/headerGuideline"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <View
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_gravity="center"
+            android:layout_marginBottom="20dp"
+            android:background="@drawable/bg_icon_box2" />
+
+        <ImageView
+            android:id="@+id/ivIcon"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:layout_marginBottom="20dp"
+            android:contentDescription="@null" />
+    </com.example.sigla.CurvedHeaderView>
+
+    <TextView
+        android:id="@+id/tvPageEyebrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAllCaps="true"
+        android:textSize="12sp"
+        android:fontFamily="@font/poppins_medium"
+        android:letterSpacing="0.2"
+        android:textColor="@color/colorTeal"
+        app:layout_constraintTop_toBottomOf="@id/headerGuideline"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="26dp" />
 
     <TextView
         android:id="@+id/tvPageTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:textColor="#1A3A6B"
-        android:layout_marginBottom="16dp" />
+        android:textSize="26sp"
+        android:fontFamily="@font/poppins_bold"
+        android:textColor="@color/colorNavy"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/tvPageEyebrow"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp" />
 
     <TextView
         android:id="@+id/tvPageDescription"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:textSize="14sp"
-        android:textColor="#546E7A"
+        android:textSize="15sp"
+        android:fontFamily="@font/poppins_regular"
+        android:lineSpacingMultiplier="1.45"
+        android:textColor="@color/colorTextBody"
         android:gravity="center"
-        android:lineSpacingMultiplier="1.4" />
+        android:paddingHorizontal="30dp"
+        app:layout_constraintTop_toBottomOf="@id/tvPageTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="14dp" />
 
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

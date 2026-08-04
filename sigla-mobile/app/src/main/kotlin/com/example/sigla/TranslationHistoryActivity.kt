@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -130,6 +129,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
             onDelete = { flatIndex -> deleteEntry(flatIndex) }
         )
         rvHistory.layoutManager = LinearLayoutManager(this)
+        rvHistory.setHasFixedSize(true)
         rvHistory.adapter       = adapter
     }
 
@@ -164,7 +164,9 @@ class TranslationHistoryActivity : AppCompatActivity() {
     // ── Data ──────────────────────────────────────────────────────────────────
 
     private fun refreshList() {
-        android.util.Log.d("HistoryDebug", "Total saved entries: ${historyManager.getAll().size}")
+        // getGrouped() already reads and parses the whole history; the debug log
+        // that used to sit here called getAll() again, doubling the work on
+        // every refresh (including every swipe-to-delete).
         val grouped = historyManager.getGrouped()
         val items = mutableListOf<HistoryItem>()
         var flatIndex = 0
@@ -195,15 +197,18 @@ class TranslationHistoryActivity : AppCompatActivity() {
     }
 
     private fun confirmClearAll() {
-        AlertDialog.Builder(this)
-            .setTitle("Clear History")
-            .setMessage("Are you sure you want to permanently remove all translation history?")
-            .setPositiveButton("Clear All") { _, _ ->
-                historyManager.clearAll()
-                refreshList()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            historyManager.clearAll()
+            refreshList()
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     // ── UI state ──────────────────────────────────────────────────────────────
@@ -258,11 +263,9 @@ class HistoryAdapter(
     }
 
     class EntryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val tvGestureTypeBadge : TextView    = view.findViewById(R.id.tvGestureTypeBadge)
-        val tvWord             : TextView    = view.findViewById(R.id.tvWord)
-        val tvConfidence       : TextView    = view.findViewById(R.id.tvConfidence)
-        val tvTime             : TextView    = view.findViewById(R.id.tvTime)
-        val btnDelete          : ImageButton = view.findViewById(R.id.btnDelete)
+        val tvWord    : TextView = view.findViewById(R.id.tvWord)
+        val tvTime    : TextView = view.findViewById(R.id.tvTime)
+        val btnDelete : View     = view.findViewById(R.id.btnDelete)
     }
 
     // ── Adapter overrides ─────────────────────────────────────────────────────
@@ -294,18 +297,8 @@ class HistoryAdapter(
                 (holder as EntryViewHolder).apply {
                     val e = item.entry
 
-                    tvWord.text       = e.word
-                    tvConfidence.text = "${e.confidence}% confidence"
-                    tvTime.text       = TranslationHistoryManager.formatTime(e.timestamp)
-
-                    // Badge: normalise to uppercase for display
-                    val badgeLabel = e.gestureType.uppercase()
-                    tvGestureTypeBadge.text = badgeLabel
-
-                    // Blue for STATIC, teal for MOTION — matches UI version colours
-                    val badgeColor = if (badgeLabel == "STATIC") 0xFF0056A4.toInt()
-                                     else                        0xFF00796B.toInt()
-                    tvGestureTypeBadge.setBackgroundColor(badgeColor)
+                    tvWord.text = e.word
+                    tvTime.text = TranslationHistoryManager.formatTime(e.timestamp)
 
                     // Delete button passes flatIndex back to the Activity
                     btnDelete.setOnClickListener { onDelete(item.flatIndex) }

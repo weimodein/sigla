@@ -2,53 +2,69 @@ package com.example.sigla
 
 import android.content.Intent
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
+import android.os.Handler
+import android.os.Looper
 import android.text.InputFilter
 import android.text.InputType
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import android.widget.VideoView
 import android.widget.ProgressBar
 import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
+import androidx.core.view.WindowCompat
 import androidx.core.widget.addTextChangedListener
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
-import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import java.util.Locale
+import androidx.recyclerview.widget.GridLayoutManager
+
+private const val SEARCH_DEBOUNCE_MS = 250L
 
 class WordBankActivity : AppCompatActivity() {
 
+    // Search debounce — see setupSearch()
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private var searchRunnable: Runnable? = null
+
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var btnSidebar: MaterialButton
-    private lateinit var btnCreateCategory: MaterialButton
-    private lateinit var actvCategory: AutoCompleteTextView
+    private lateinit var btnCategoryPill: MaterialButton
     private lateinit var etSearch: TextInputEditText
     private lateinit var rvWords: RecyclerView
     private lateinit var emptyState: LinearLayout
     private lateinit var tvEntryCount: TextView
     private lateinit var progressLoading: ProgressBar
-    private lateinit var adapter: WordBankAdapter
+    private lateinit var adapter: SimpleWordAdapter
     private lateinit var session: SessionManager
+    private lateinit var categoryGridContainer: LinearLayout
+    private lateinit var rvCategoryGrid: RecyclerView
+    private lateinit var gridAdapter: CategoryGridAdapter
+    private lateinit var btnDownloadAllVideos: MaterialButton
+    private var isGridMode = true
+
+    // Bulk demo-video download state. The dialog reference is kept so onDestroy
+    // can dismiss it and avoid leaking the window.
+    private var downloadJob: Job? = null
+    private var downloadDialog: AlertDialog? = null
 
     private var selectedCategory = "All Categories"
+    private var gridCategoryFilter = "All Categories"
+    private var dbCategories = listOf<CategoryItem>()
     private var searchQuery = ""
     private var allWords = listOf<WordBankWord>()
     private var isLoading = false
@@ -70,37 +86,35 @@ class WordBankActivity : AppCompatActivity() {
         )
     }
 
-    // TTS
-    private var tts: TextToSpeech? = null
-    private var isTtsReady = false
-    private val appSettings by lazy { AppSettings.getInstance(this) }
-
     // Custom categories management
     private lateinit var customCategoryManager: CustomCategoryManager
     private var customCategories = mutableListOf<CustomCategory>()
+    private lateinit var favoritesManager: FavoritesManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_word_bank)
 
+        // Some devices/Android versions ignore the theme's android:statusBarColor
+        // (newer edge-to-edge behavior), leaving a white status bar with a gap
+        // above the header. Setting it explicitly here is reliable everywhere.
+        window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+
         session = SessionManager.getInstance(this)    // ← ADD THIS
         drawerLayout = findViewById(R.id.drawerLayout) // ← ADD THIS
+        favoritesManager = FavoritesManager.getInstance(this)
 
         bindViews()
         setupTopBar()
         setupSidebar()
         setupRecyclerView()
+        setupCategoryGrid()
         setupCategoryDropdown()
         setupSearch()
         wireListeners()
-
-        // Initialize TTS
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.ENGLISH
-                isTtsReady = true
-            }
-        }
+        bindDownloadAllButton()
+        showGridMode()
 
         // Initialize custom category manager
         customCategoryManager = CustomCategoryManager.getInstance(this)
@@ -108,11 +122,16 @@ class WordBankActivity : AppCompatActivity() {
 
         // Load words from backend
         loadWords()
+        loadCategories()   // ← ADD THIS
     }
 
     override fun onResume() {
         super.onResume()
         refreshSidebarAuthState()  // ← UPDATE SIDEBAR WHEN ACTIVITY RESUMES
+        // Favorites membership may have changed in the word detail screen.
+        if (allWords.isNotEmpty()) {
+            if (isGridMode) refreshCategoryGrid() else applyFilters()
+        }
     }
     // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
 
@@ -132,7 +151,7 @@ class WordBankActivity : AppCompatActivity() {
         }
     }
 
-    private fun openAuthDialog() {
+        private fun openAuthDialog() {
         val dialog = AuthDialogFragment()
         dialog.onSignedIn = {
             refreshSidebarAuthState()
@@ -146,14 +165,97 @@ class WordBankActivity : AppCompatActivity() {
     private fun bindViews() {
         drawerLayout = findViewById(R.id.drawerLayout)
         btnSidebar = findViewById(R.id.btnSidebar)
-        btnCreateCategory = findViewById(R.id.btnCreateCategory)
-        actvCategory = findViewById(R.id.actvCategory)
+        btnCategoryPill = findViewById(R.id.btnCategoryPill)
         etSearch = findViewById(R.id.etSearch)
         rvWords = findViewById(R.id.rvWords)
         emptyState = findViewById(R.id.emptyState)
         tvEntryCount = findViewById(R.id.tvEntryCount)
         progressLoading = findViewById(R.id.progressLoading)
+        categoryGridContainer = findViewById(R.id.categoryGridContainer)
+        rvCategoryGrid = findViewById(R.id.rvCategoryGrid)
+        btnDownloadAllVideos = findViewById(R.id.btnDownloadAllVideos)
     }
+
+    // ── Category Grid ───────────────────────────────────────────────────────────────
+    private fun setupCategoryGrid() {
+        gridAdapter = CategoryGridAdapter(mutableListOf()) { item ->
+            onCategoryCardClicked(item)
+        }
+        rvCategoryGrid.layoutManager = GridLayoutManager(this, 2)
+        rvCategoryGrid.setHasFixedSize(true)
+        rvCategoryGrid.adapter = gridAdapter
+    }
+
+    private fun refreshCategoryGrid() {
+        // Nothing to show until words load. Categories are a nicety on top of the
+        // word list — the grid must NOT be gated on the categories API succeeding.
+        if (allWords.isEmpty()) {
+            gridAdapter.setItems(emptyList())
+            if (isGridMode) {
+                emptyState.visibility = if (isLoading) View.GONE else View.VISIBLE
+            }
+            return
+        }
+
+        if (isGridMode) emptyState.visibility = View.GONE
+
+        // Prefer the DB categories; fall back to the categories present on the
+        // loaded words so the grid still works when /categories is empty.
+        val categoryNames: List<String> = if (dbCategories.isNotEmpty()) {
+            dbCategories.map { it.name }
+        } else {
+            allWords.map { it.category }
+                .filter { it.isNotBlank() }
+                .distinctBy { it.lowercase() }
+                .sorted()
+        }
+
+        val items = mutableListOf<CategoryGridItem>()
+
+        if (gridCategoryFilter == "All Categories") {
+            val favoritesCount = allWords.count { favoritesManager.isFavorite(it.id) }
+            items.add(CategoryGridItem(displayName = "Favorites", wordCount = favoritesCount, isFavorites = true))
+            items.add(CategoryGridItem(displayName = "All Words", wordCount = allWords.size, isAllWords = true))
+            categoryNames.forEach { catName ->
+                val count = allWords.count { it.category.equals(catName, ignoreCase = true) }
+                items.add(CategoryGridItem(displayName = catName, wordCount = count))
+            }
+        } else {
+            val count = allWords.count { it.category.equals(gridCategoryFilter, ignoreCase = true) }
+            items.add(CategoryGridItem(displayName = gridCategoryFilter, wordCount = count))
+        }
+
+        gridAdapter.setItems(items)
+    }
+
+    private fun onCategoryCardClicked(item: CategoryGridItem) {
+        val intent = Intent(this, CategoryWordListActivity::class.java).apply {
+            putExtra(CategoryWordListActivity.EXTRA_CATEGORY_NAME, item.displayName)
+            putExtra(CategoryWordListActivity.EXTRA_IS_FAVORITES, item.isFavorites)
+            putExtra(CategoryWordListActivity.EXTRA_IS_ALL_WORDS, item.isAllWords)
+        }
+        startActivity(intent)
+    }
+
+    private fun showListMode() {
+        isGridMode = false
+        categoryGridContainer.visibility = View.GONE
+        tvEntryCount.visibility = View.VISIBLE
+        rvWords.visibility = View.VISIBLE
+        // emptyState visibility is still managed by applyFilters()
+    }
+
+    private fun showGridMode() {
+        isGridMode = true
+        categoryGridContainer.visibility = View.VISIBLE
+        tvEntryCount.visibility = View.GONE
+        rvWords.visibility = View.GONE
+        emptyState.visibility = View.GONE
+        // Spinner reflects whether words are still loading — never gate it on the
+        // categories API, which may legitimately return empty.
+        progressLoading.visibility = if (isLoading && allWords.isEmpty()) View.VISIBLE else View.GONE
+    }
+
 
     // ── Top bar ───────────────────────────────────────────────────────────────
 
@@ -258,6 +360,8 @@ class WordBankActivity : AppCompatActivity() {
             if (cached != null && cached.isNotEmpty()) {
                 allWords = cached
                 applyFilters()
+                refreshCategoryGrid()
+                refreshDownloadAllEnabled()
                 progressLoading.visibility = View.GONE
                 isLoading = false
                 // Download missing images in background
@@ -272,6 +376,8 @@ class WordBankActivity : AppCompatActivity() {
                     if (fresh.isNotEmpty() && fresh != allWords) {
                         allWords = fresh
                         applyFilters()
+                        refreshCategoryGrid()
+                        refreshDownloadAllEnabled()
                         // Cache the fresh data
                         ModelUpdateManager.cacheWordBank(this@WordBankActivity, fresh)
                         // Download images in background
@@ -287,11 +393,44 @@ class WordBankActivity : AppCompatActivity() {
             } finally {
                 progressLoading.visibility = View.GONE
                 isLoading = false
-                if (allWords.isEmpty()) {
+                refreshDownloadAllEnabled()
+                if (isGridMode) {
+                    // Re-render the grid now that loading finished; this also drives
+                    // the empty-state message when there are genuinely no words.
+                    refreshCategoryGrid()
+                } else if (allWords.isEmpty()) {
                     emptyState.visibility = View.VISIBLE
                     rvWords.visibility = View.GONE
                 }
             }
+        }
+    }
+
+    private fun loadCategories() {
+        lifecycleScope.launch {
+            // Show cached categories immediately (offline support)
+            val cached = ModelUpdateManager.loadCachedCategories(this@WordBankActivity)
+            if (cached != null && cached.isNotEmpty()) {
+                dbCategories = cached
+                refreshCategoryGrid()
+            }
+
+            try {
+                val response = ApiClient.get(session.token ?: "").getCategories()
+                if (response.isSuccessful) {
+                    val fresh = response.body()?.categories ?: emptyList()
+                    if (fresh.isNotEmpty() && fresh != dbCategories) {
+                        dbCategories = fresh
+                        refreshCategoryGrid()
+                        ModelUpdateManager.cacheCategories(this@WordBankActivity, fresh)
+                    }
+                }
+            } catch (e: Exception) {
+                // Network unavailable — cached categories (if any) are already shown above
+            }
+            // Note: the loading spinner is owned solely by loadWords(); categories
+            // are supplementary and must not hide/show it (they can arrive before or
+            // after the word fetch and would otherwise leave a stuck or premature state).
         }
     }
 
@@ -305,45 +444,63 @@ class WordBankActivity : AppCompatActivity() {
     // ── Category dropdown ─────────────────────────────────────────────────────
 
     private fun setupCategoryDropdown() {
-        refreshCategoryDropdown()
-        actvCategory.setOnItemClickListener { _, _, position, _ ->
-            val allCategories = getCategoryDisplayList()
-            selectedCategory = allCategories[position]
-            applyFilters()
-        }
-
-        actvCategory.setOnLongClickListener {
-            val currentText = actvCategory.text.toString()
-            val customCat = customCategories.find { it.name == currentText }
-            if (customCat != null) {
-                showManageCategoryDialog(customCat)
-                true
-            } else {
-                false
+        btnCategoryPill.setOnClickListener {
+            val popup = android.widget.PopupMenu(this, btnCategoryPill)
+            val categories = getCategoryDisplayList()
+            categories.forEachIndexed { index, name ->
+                popup.menu.add(0, index, index, name)
             }
+            popup.setOnMenuItemClickListener { item ->
+                gridCategoryFilter = categories[item.itemId]
+                btnCategoryPill.text = if (gridCategoryFilter == "All Categories") "All Category" else gridCategoryFilter
+                showGridMode()       // stay/return to grid
+                refreshCategoryGrid()
+                true
+            }
+            popup.show()
         }
-    }
+    }   
 
     private fun getCategoryDisplayList(): List<String> {
-        val systemCategories = listOf("All Categories") + FSL_CATEGORIES
+        val baseCategories = if (dbCategories.isNotEmpty()) {
+            dbCategories.map { it.name }
+        } else {
+            FSL_CATEGORIES  // fallback if API hasn't returned yet, or failed
+        }
+        val systemCategories = listOf("All Categories") + baseCategories.map { it.capitalizeFirst() }
         val customCategoryNames = customCategories.map { it.name }
         return systemCategories + customCategoryNames
     }
-
+    
     private fun refreshCategoryDropdown() {
         val allCategories = getCategoryDisplayList()
         val dropdownAdapter = ArrayAdapter(
             this, android.R.layout.simple_dropdown_item_1line, allCategories
         )
-        actvCategory.setAdapter(dropdownAdapter)
+        //actvCategory.setAdapter(dropdownAdapter)
     }
 
     // ── Search ────────────────────────────────────────────────────────────────
 
     private fun setupSearch() {
         etSearch.addTextChangedListener { text ->
-            searchQuery = text?.toString()?.trim() ?: ""
-            applyFilters()
+            val query = text?.toString()?.trim() ?: ""
+            // Debounced: applyFilters() walks every word and rebinds the whole
+            // adapter, so running it on each keystroke made typing stutter.
+            searchRunnable?.let { searchHandler.removeCallbacks(it) }
+            val runnable = Runnable {
+                searchQuery = query
+                if (searchQuery.isNotEmpty()) {
+                    selectedCategory = "All Categories" // search across everything
+                    showListMode()
+                } else if (!isGridMode) {
+                    showGridMode()
+                    refreshCategoryGrid()
+                }
+                applyFilters()
+            }
+            searchRunnable = runnable
+            searchHandler.postDelayed(runnable, SEARCH_DEBOUNCE_MS)
         }
     }
 
@@ -353,8 +510,8 @@ class WordBankActivity : AppCompatActivity() {
         val filtered = allWords.filter { word ->
             val matchesCategory = when {
                 selectedCategory == "All Categories" -> true
+                selectedCategory == "Favorites" -> favoritesManager.isFavorite(word.id)
                 else -> {
-                    // Check if selected category is a custom category
                     val customCat = customCategories.find { it.name == selectedCategory }
                     if (customCat != null) {
                         word.id in customCat.wordIds
@@ -373,131 +530,10 @@ class WordBankActivity : AppCompatActivity() {
         adapter.setWords(filtered.toMutableList())
         val count = filtered.size
         tvEntryCount.text = "Showing $count word${if (count != 1) "s" else ""}"
-        emptyState.visibility = if (count == 0 && !isLoading) View.VISIBLE else View.GONE
-        rvWords.visibility = if (count == 0 && !isLoading) View.GONE else View.VISIBLE
-    }
 
-    // ── Word detail bottom sheet ──────────────────────────────────────────────
-
-    private fun showWordDetail(word: WordBankWord) {
-        val dialog = BottomSheetDialog(this)
-        val view = layoutInflater.inflate(R.layout.bottom_sheet_word_detail, null)
-        dialog.setContentView(view)
-
-        view.findViewById<TextView>(R.id.tvDetailWord).text = word.label.uppercase()
-        view.findViewById<TextView>(R.id.tvDetailCategory).text = word.category
-
-        view.findViewById<TextView>(R.id.tvDetailGestureType).text = word.sign_type
-        view.findViewById<TextView>(R.id.tvDetailGestureType)
-            .setBackgroundColor(0xFF00796B.toInt())
-
-        // Audio playback
-        speakWord(word.label)
-
-        view.findViewById<MaterialButton>(R.id.btnPlayAudio).setOnClickListener {
-            speakWord(word.label)
-        }
-
-        // Video/Media setup
-        val videoView        = view.findViewById<VideoView>(R.id.videoDemo)
-        val ivThumbnail      = view.findViewById<ImageView>(R.id.ivThumbnail)
-        val noMediaPlaceholder = view.findViewById<android.widget.LinearLayout>(R.id.noMediaPlaceholder)
-        val progressVideo    = view.findViewById<ProgressBar>(R.id.progressVideo)
-        val playOverlay      = view.findViewById<android.widget.LinearLayout>(R.id.playOverlay)
-
-        val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
-        val localThumb    = ModelUpdateManager.getLocalThumb(this, word.id)
-        val thumbSource: Any? = localThumb ?: resolvedThumb
-        val resolvedVideo = ApiClient.resolveUrl(word.video_url)
-
-        when {
-            // A demonstration video → play it
-            !resolvedVideo.isNullOrBlank() -> {
-                noMediaPlaceholder.visibility = View.GONE
-                ivThumbnail.visibility        = View.GONE
-                videoView.visibility          = View.VISIBLE
-                progressVideo.visibility      = View.VISIBLE
-
-                videoView.setVideoPath(resolvedVideo)
-                videoView.setOnPreparedListener { mp ->
-                    progressVideo.visibility = View.GONE
-                    mp.isLooping = true
-                    mp.start()
-                }
-                videoView.setOnErrorListener { _, _, _ ->
-                    progressVideo.visibility  = View.GONE
-                    videoView.visibility      = View.GONE
-                    noMediaPlaceholder.visibility = View.VISIBLE
-                    true
-                }
-                // Tap to play/pause
-                videoView.setOnClickListener {
-                    if (videoView.isPlaying) {
-                        videoView.pause()
-                        playOverlay.visibility = View.VISIBLE
-                    } else {
-                        videoView.start()
-                        playOverlay.visibility = View.GONE
-                    }
-                }
-                playOverlay.setOnClickListener {
-                    videoView.start()
-                    playOverlay.visibility = View.GONE
-                }
-            }
-
-            // Static gesture with a thumbnail → show image
-            thumbSource != null -> {
-                noMediaPlaceholder.visibility = View.GONE
-                videoView.visibility          = View.GONE
-                ivThumbnail.visibility        = View.VISIBLE
-                Glide.with(this)
-                    .load(thumbSource)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .centerCrop()
-                    .into(ivThumbnail)
-            }
-
-            // Nothing set yet → show placeholder
-            else -> {
-                ivThumbnail.visibility    = View.GONE
-                videoView.visibility      = View.GONE
-                noMediaPlaceholder.visibility = View.VISIBLE
-            }
-        }
-
-        // Update media caption
-        val tvMediaCaption = view.findViewById<TextView>(R.id.tvMediaCaption)
-        tvMediaCaption.text = when {
-            !resolvedVideo.isNullOrBlank() ->
-                "Tap to play · pause · Gesture demonstration"
-            thumbSource != null ->
-                "Sample image of how to form this gesture"
-            else ->
-                "No demonstration available yet"
-        }
-
-        view.findViewById<MaterialButton>(R.id.btnAddToCategory).setOnClickListener {
-            showAddToCategoryDialog(word)
-            dialog.dismiss()
-        }
-
-        dialog.setOnDismissListener {
-            videoView.stopPlayback()
-        }
-
-        dialog.show()
-    }
-
-    private fun speakWord(word: String) {
-        if (isTtsReady) {
-            val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
-            val params = Bundle().apply {
-                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
-            }
-            tts?.speak(word, TextToSpeech.QUEUE_FLUSH, params, null)
-        } else {
-            Toast.makeText(this, "🔊 Playing: $word", Toast.LENGTH_SHORT).show()
+        if (!isGridMode) {
+            emptyState.visibility = if (count == 0 && !isLoading) View.VISIBLE else View.GONE
+            rvWords.visibility = if (count == 0 && !isLoading) View.GONE else View.VISIBLE
         }
     }
 
@@ -567,28 +603,6 @@ class WordBankActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    // FIX: added missing showCreateCategoryDialog referenced at lines 568 and 682
-    private fun showCreateCategoryDialog() {
-        showCategoryEditDialog(
-            title = "Create category",
-            hint = "Category name",
-            subtitle = "Create a new custom category to organize words.",
-            currentValue = "",
-            maxLength = 50,
-            extraValidate = { name ->
-                if (customCategories.any { it.name.equals(name, ignoreCase = true) })
-                    "\"$name\" already exists"
-                else
-                    null
-            }
-        ) { newName ->
-            val newCat = customCategoryManager.create(newName)
-            customCategories.add(newCat)
-            refreshCategoryDropdown()
-            Toast.makeText(this, "Category \"$newName\" created", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     // ── Manage category (rename / delete) ─────────────────────────────────────
 
     private fun showManageCategoryDialog(
@@ -647,7 +661,7 @@ class WordBankActivity : AppCompatActivity() {
 
                 if (selectedCategory == category.name) {
                     selectedCategory = newName
-                    actvCategory.setText(newName, false)
+                    //actvCategory.setText(newName, false)
                 }
 
                 refreshCategoryDropdown()
@@ -678,7 +692,7 @@ class WordBankActivity : AppCompatActivity() {
 
                 if (selectedCategory == category.name) {
                     selectedCategory = "All Categories"
-                    actvCategory.setText("", false)
+                    //actvCategory.setText("", false)
                 }
 
                 refreshCategoryDropdown()
@@ -692,69 +706,237 @@ class WordBankActivity : AppCompatActivity() {
             .show()
     }
 
-    // ── Add word to custom category ───────────────────────────────────────────
-
-    private fun showAddToCategoryDialog(word: WordBankWord) {
-        if (customCategories.isEmpty()) {
-            AlertDialog.Builder(this)
-                .setTitle("No Custom Categories")
-                .setMessage("You haven't created any custom categories yet. Would you like to create one?")
-                .setPositiveButton("Create") { _, _ -> showCreateCategoryDialog() }
-                .setNegativeButton("Cancel", null)
-                .show()
-            return
-        }
-
-        val options = customCategories.map { it.name }.toTypedArray()
-        val checked = BooleanArray(customCategories.size) { i ->
-            word.id in customCategories[i].wordIds
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("Add \"${word.label}\" to categories")
-            .setMultiChoiceItems(options, checked) { _, which, isChecked ->
-                val category = customCategories[which]
-                if (isChecked) {
-                    customCategoryManager.addWord(category.id, word.id)
-                    customCategories[which] = customCategoryManager.get(category.id)!!
-                    Toast.makeText(this, "Added to \"${category.name}\"", Toast.LENGTH_SHORT).show()
-                } else {
-                    customCategoryManager.removeWord(category.id, word.id)
-                    customCategories[which] = customCategoryManager.get(category.id)!!
-                    Toast.makeText(this, "Removed from \"${category.name}\"", Toast.LENGTH_SHORT).show()
-                }
-                // Refresh if viewing this category
-                if (selectedCategory == category.name) {
-                    applyFilters()
-                }
-            }
-            .setPositiveButton("Done", null)
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
     // ── RecyclerView setup ────────────────────────────────────────────────────
 
     private fun setupRecyclerView() {
-        adapter = WordBankAdapter(
-            words = mutableListOf(),
-            onWordClick = { word -> showWordDetail(word) },
-            onDemoClick = { word -> showWordDetail(word) }
-        )
+        adapter = SimpleWordAdapter(mutableListOf()) { word -> openWordDetail(word) }
         rvWords.layoutManager = LinearLayoutManager(this)
+        // Row height doesn't depend on content, so RecyclerView can skip a full
+        // layout pass whenever the data set changes.
+        rvWords.setHasFixedSize(true)
         rvWords.adapter = adapter
+    }
+
+    private fun openWordDetail(word: WordBankWord) {
+        startActivity(Intent(this, WordDetailActivity::class.java).apply {
+            putExtra(WordDetailActivity.EXTRA_WORD_ID, word.id)
+        })
     }
 
     // ── Wire listeners ────────────────────────────────────────────────────────
 
     private fun wireListeners() {
-        btnCreateCategory.setOnClickListener { showCreateCategoryDialog() }
-        btnCreateCategory.setOnLongClickListener {
-            if (customCategories.isNotEmpty()) {
-                Toast.makeText(this, "Long press on a category in the dropdown to manage it", Toast.LENGTH_LONG).show()
-            }
-            true
+        //btnCreateCategory.setOnClickListener { showCreateCategoryDialog() }
+        //btnCreateCategory.setOnLongClickListener {
+        //    if (customCategories.isNotEmpty()) {
+        //        Toast.makeText(this, "Long press on a category in the dropdown to manage it", Toast.LENGTH_LONG).show()
+        //    }
+        //    true
+        //}
+    }
+
+    // ── Bulk demo-video download ──────────────────────────────────────────────
+    // Individual videos are still tap-to-download in WordDetailActivity; this
+    // fetches every missing one in a single pass so the word bank works offline.
+    // Videos come straight from their storage URLs (no API endpoint mediates
+    // them), so this is entirely a client-side loop over the words we already hold.
+
+    private fun bindDownloadAllButton() {
+        btnDownloadAllVideos.setOnClickListener { onDownloadAllClicked() }
+        // Nothing to download until the word list arrives; refreshDownloadAllEnabled()
+        // switches it on from loadWords().
+        btnDownloadAllVideos.isEnabled = false
+    }
+
+    /**
+     * The button is live only when there are words to act on and no batch is running.
+     * Called wherever [allWords] changes, and around the batch itself.
+     */
+    private fun refreshDownloadAllEnabled() {
+        btnDownloadAllVideos.isEnabled = allWords.isNotEmpty() && downloadJob?.isActive != true
+    }
+
+    private fun onDownloadAllClicked() {
+        if (downloadJob?.isActive == true) return
+
+        if (allWords.isEmpty()) {
+            Toast.makeText(this, "Words are still loading. Please try again.", Toast.LENGTH_SHORT).show()
+            return
         }
+
+        val pending = ModelUpdateManager.pendingVideoDownloads(this, allWords)
+        if (pending.isEmpty()) {
+            showAllDownloadedDialog()
+            return
+        }
+
+        if (!NetworkUtils.isOnline(this)) {
+            Toast.makeText(this, "No internet connection.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        showConfirmDownloadDialog(pending.size)
+    }
+
+    // Nothing left to fetch — offer the way back out instead of a dead end.
+    private fun showAllDownloadedDialog() {
+        val cached = ModelUpdateManager.cachedVideoCount(this, allWords)
+        if (cached == 0) {
+            Toast.makeText(this, "No demo videos are available to download.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        // Reached when nothing is pending — which covers both "everything is cached" and
+        // "the remaining words have no demo video at all", so the copy stays neutral.
+        view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Nothing left to download"
+        view.findViewById<TextView>(R.id.tvConfirmMessage).text =
+            "$cached demo video${if (cached != 1) "s are" else " is"} saved for offline use " +
+            "(${formatBytes(ModelUpdateManager.cachedVideoBytes(this, allWords))})."
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).text = "CLOSE"
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "CLEAR"
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            dialog.dismiss()
+            lifecycleScope.launch {
+                val removed = ModelUpdateManager.clearCachedVideos(this@WordBankActivity, allWords)
+                Toast.makeText(
+                    this@WordBankActivity,
+                    "Cleared $removed downloaded video${if (removed != 1) "s" else ""}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun showConfirmDownloadDialog(pendingCount: Int) {
+        val metered = NetworkUtils.isMetered(this)
+
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Download all demo videos?"
+
+        // No size metadata exists for video_url, so we can only state a count here,
+        // never an estimated download size.
+        val base = "$pendingCount demo video${if (pendingCount != 1) "s" else ""} " +
+            "will be downloaded for offline use."
+        view.findViewById<TextView>(R.id.tvConfirmMessage).text = if (metered) {
+            "$base\n\nYou're on mobile data. This may use a significant amount of data — " +
+                "Wi-Fi is recommended."
+        } else {
+            base
+        }
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text =
+            if (metered) "DOWNLOAD ANYWAY" else "DOWNLOAD"
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            dialog.dismiss()
+            startBulkDownload()
+        }
+
+        dialog.show()
+    }
+
+    private fun startBulkDownload() {
+        val view = layoutInflater.inflate(R.layout.dialog_download_all_videos, null)
+        val dialog = AlertDialog.Builder(this).setView(view).setCancelable(false).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val tvCounter = view.findViewById<TextView>(R.id.tvDownloadCounter)
+        val tvCurrent = view.findViewById<TextView>(R.id.tvDownloadCurrentWord)
+        val progressBar = view.findViewById<ProgressBar>(R.id.progressDownloadAll)
+
+        view.findViewById<MaterialButton>(R.id.btnDownloadCancel).setOnClickListener {
+            downloadJob?.cancel()
+        }
+
+        dialog.show()
+        downloadDialog = dialog
+
+        downloadJob = lifecycleScope.launch {
+            btnDownloadAllVideos.isEnabled = false
+            // Written from the IO dispatcher, read on the main thread after cancellation.
+            val savedSoFar = java.util.concurrent.atomic.AtomicInteger(0)
+            try {
+                val result = ModelUpdateManager.downloadAllWordVideos(
+                    this@WordBankActivity,
+                    allWords
+                ) { progress ->
+                    savedSoFar.set(progress.completed)
+                    // onProgress arrives on the IO dispatcher — never touch views from there.
+                    runOnUiThread {
+                        val done = progress.completed + progress.failed
+                        tvCounter.text = "Downloading ${done.coerceAtMost(progress.total)} of ${progress.total}…"
+                        progressBar.max = progress.total.coerceAtLeast(1)
+                        progressBar.progress = done
+                        tvCurrent.text = progress.currentLabel?.let { "Current: $it" } ?: ""
+                    }
+                }
+
+                dismissDownloadDialog()
+                val message = if (result.failed == 0) {
+                    "${result.completed} demo video${if (result.completed != 1) "s" else ""} downloaded"
+                } else {
+                    "${result.completed} downloaded, ${result.failed} failed"
+                }
+                Toast.makeText(this@WordBankActivity, message, Toast.LENGTH_LONG).show()
+            } catch (e: CancellationException) {
+                // User pressed Cancel, or the activity went away. Completed files stay
+                // on disk, so a later run resumes rather than starting over.
+                dismissDownloadDialog()
+                // Only worth telling the user when the screen is still around; if the
+                // activity is going away the cancellation isn't something they chose.
+                if (!isFinishing && !isDestroyed) {
+                    val saved = savedSoFar.get()
+                    Toast.makeText(
+                        this@WordBankActivity,
+                        "Download cancelled — $saved video${if (saved != 1) "s" else ""} saved",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                throw e
+            } catch (e: Exception) {
+                dismissDownloadDialog()
+                Toast.makeText(this@WordBankActivity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                // Runs on the cancellation path too. Guarded because the activity may
+                // already be going away, which is what cancelled the job in the first place.
+                // Cleared first: this job is finishing, and refreshDownloadAllEnabled()
+                // consults downloadJob.isActive — which is still true inside this block.
+                downloadJob = null
+                if (!isFinishing && !isDestroyed) refreshDownloadAllEnabled()
+            }
+        }
+    }
+
+    private fun dismissDownloadDialog() {
+        downloadDialog?.let { if (it.isShowing) it.dismiss() }
+        downloadDialog = null
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L * 1024L -> "%.1f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
+        bytes >= 1024L * 1024L -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+        bytes >= 1024L -> "%.0f KB".format(bytes / 1024.0)
+        else -> "$bytes B"
+    }
+
+    override fun onDestroy() {
+        // lifecycleScope already cancels downloadJob; this just prevents a leaked window.
+        dismissDownloadDialog()
+        // A pending debounced search would otherwise retain this activity.
+        searchRunnable?.let { searchHandler.removeCallbacks(it) }
+        super.onDestroy()
     }
 
     // ── Back press ────────────────────────────────────────────────────────────
@@ -763,77 +945,12 @@ class WordBankActivity : AppCompatActivity() {
     override fun onBackPressed() {
         if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
             drawerLayout.closeDrawer(GravityCompat.START)
+        } else if (!isGridMode) {
+            showGridMode()
         } else {
             @Suppress("DEPRECATION")
             super.onBackPressed()
         }
     }
 
-    override fun onDestroy() {
-        tts?.shutdown()
-        super.onDestroy()
-    }
-}
-
-// ── Adapter for WordBankWord ───────────────────────────────────────────────────
-
-class WordBankAdapter(
-    private val words: MutableList<WordBankWord>,
-    private val onWordClick: (WordBankWord) -> Unit,
-    private val onDemoClick: (WordBankWord) -> Unit
-) : RecyclerView.Adapter<WordBankAdapter.WordViewHolder>() {
-
-    class WordViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val tvWord: TextView = view.findViewById(R.id.tvWord)
-        val tvCategory: TextView = view.findViewById(R.id.tvCategory)
-        val tvGestureType: TextView = view.findViewById(R.id.tvGestureType)
-        val btnWatchDemo: MaterialButton = view.findViewById(R.id.btnWatchDemo)
-        val ivThumbnail: ImageView = view.findViewById(R.id.ivThumbnail)
-        val llAudioFallback: android.widget.LinearLayout = view.findViewById(R.id.llAudioFallback)
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): WordViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_word_entry, parent, false)
-        return WordViewHolder(view)
-    }
-
-    override fun onBindViewHolder(holder: WordViewHolder, position: Int) {
-        val word = words[position]
-        holder.tvWord.text = word.label
-        holder.tvCategory.text = word.category
-        holder.tvGestureType.text = word.sign_type
-        holder.tvGestureType.setBackgroundColor(0xFF00796B.toInt())
-
-        // Load thumbnail
-        val resolvedThumb = ApiClient.resolveUrl(word.thumbnail_url)
-        val localThumb = ModelUpdateManager.getLocalThumb(holder.itemView.context, word.id)
-        val thumbSource: Any? = localThumb ?: resolvedThumb
-
-        if (thumbSource != null) {
-            Glide.with(holder.itemView.context)
-                .load(thumbSource)
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .centerCrop()
-                .placeholder(android.R.color.darker_gray)
-                .error(android.R.color.darker_gray)
-                .into(holder.ivThumbnail)
-            holder.ivThumbnail.visibility = View.VISIBLE
-            holder.llAudioFallback.visibility = View.GONE
-        } else {
-            holder.ivThumbnail.visibility = View.GONE
-            holder.llAudioFallback.visibility = View.VISIBLE
-        }
-
-        holder.itemView.setOnClickListener { onWordClick(word) }
-        holder.btnWatchDemo.setOnClickListener { onDemoClick(word) }
-    }
-
-    override fun getItemCount(): Int = words.size
-
-    fun setWords(newWords: MutableList<WordBankWord>) {
-        words.clear()
-        words.addAll(newWords)
-        notifyDataSetChanged()
-    }
 }

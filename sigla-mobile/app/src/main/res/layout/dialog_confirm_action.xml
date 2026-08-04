@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- dialog_confirm_action.xml
+     Generic destructive-action confirmation popup: navy title bar, light
+     body with a bold message, and a Cancel / destructive-action pill pair.
+     IDs are reusable for other confirmations beyond Clear All.
+-->
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="8dp"
+    app:cardBackgroundColor="@color/sig_surface_card">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Title bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/sig_chrome_navy"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="20dp"
+            android:paddingBottom="14dp">
+
+            <TextView
+                android:id="@+id/tvConfirmTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Delete all history?"
+                android:textColor="#FFFFFF"
+                android:textSize="19sp"
+                android:fontFamily="@font/poppins_bold" />
+
+        </LinearLayout>
+
+        <!-- Accent divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="5dp"
+            android:background="@color/sig_chrome_halo" />
+
+        <!-- Body -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/sig_page_bg"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="24dp"
+            android:paddingBottom="20dp">
+
+            <TextView
+                android:id="@+id/tvConfirmMessage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:text="This action cannot be undone."
+                android:textColor="@color/sig_text_primary"
+                android:textSize="16sp"
+                android:fontFamily="@font/poppins_bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConfirmCancel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="42dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:layout_marginEnd="10dp"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    android:text="CANCEL"
+                    android:textAllCaps="false"
+                    android:textSize="12sp"
+                    android:letterSpacing="0.04"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textColor="@color/sig_text_primary"
+                    app:cornerRadius="21dp"
+                    app:backgroundTint="@color/sig_accent_pill" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConfirmAction"
+                    android:layout_width="wrap_content"
+                    android:layout_height="42dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    android:text="DELETE"
+                    android:textAllCaps="false"
+                    android:textSize="12sp"
+                    android:letterSpacing="0.04"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textColor="#FFFFFF"
+                    app:cornerRadius="21dp"
+                    app:backgroundTint="@color/sig_chrome_navy" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

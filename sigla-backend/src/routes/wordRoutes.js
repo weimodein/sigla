@@ -1,9 +1,11 @@
 const express = require("express");
 const multer = require("multer");
+const { Op } = require("sequelize");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const roleMiddleware = require("../middleware/roleMiddleware.js");
-const Word = require("../models/Word.js");
+const requireSetupComplete = require("../middleware/requireSetupComplete.js");
+const { Word, Category, ModelVersion } = require("../models/index.js");
 const {
   getAllWords,
   getWordStats,
@@ -34,32 +36,65 @@ const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize
 
 // ... other requires
 
-// Public route for mobile word bank
+// Public route for mobile word bank.
+//
+// The word list is derived from the CURRENTLY DEPLOYED model version, not from a
+// standalone flag. Word.is_active used to be a one-way latch — deploy set it
+// true and nothing ever set it back — so reverting to an older model left the
+// phone advertising words that model was never trained on. Keying off the
+// deployed row means deploy and revert both move the word bank automatically.
+//
+// Falls back to is_active when the deployed version predates trained_word_ids,
+// or when nothing is deployed at all, so existing data behaves exactly as before.
 router.get("/word-bank", async (req, res) => {
   try {
-    const words = await Word.findAll({
-      where: { is_active: true },
+    const deployed = await ModelVersion.findOne({
+      where: { status: "deployed" },
+      attributes: ["id", "version_number", "trained_word_ids"],
+    });
+
+    const trainedIds = Array.isArray(deployed?.trained_word_ids)
+      ? deployed.trained_word_ids
+      : null;
+
+    const where = trainedIds
+      ? { id: { [Op.in]: trainedIds } }
+      : { is_active: true };
+
+    const rows = await Word.findAll({
+      where,
       attributes: [
         "id",
         "label",
         "description",
         "sign_type",
-        "category",
         "thumbnail_url",
         "video_url",
         "filipino_translation",
       ],
+      include: [{ model: Category, as: "category_ref", attributes: ["name"] }],
       order: [["label", "ASC"]],
     });
-    res.json({ words });
+    // Emit `category` as a name string (default "additional words") — the shape
+    // the mobile app's ModelInfo expects. category_id stays internal.
+    const words = rows.map((w) => {
+      const json = w.toJSON();
+      const category = json.category_ref?.name || "additional words";
+      delete json.category_ref;
+      return { ...json, category };
+    });
+    // model_version is additive — it lets the client tell which model this list
+    // belongs to and refetch when that changes. The `words` array is unchanged.
+    res.json({ words, model_version: deployed?.version_number ?? null });
   } catch (err) {
     console.error("Word bank error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-// All other routes require login
+// All other routes require login + completed first-login setup
 router.use(authMiddleware);
+router.use(requireSetupComplete);
 
 // ── Static routes first ───────────────────────────────────────
 router.get("/stats", roleMiddleware("admin"), getWordStats);

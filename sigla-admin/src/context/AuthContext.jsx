@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { login as loginApi, getMe } from "../api/authApi.js";
+import { login as loginApi, getMe, SESSION_EXPIRED_EVENT } from "../api/authApi.js";
 
 const AuthContext = createContext(null);
 
@@ -30,8 +30,8 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           const data = await getMe();
-          setUser(data.user);
-          storage.set("user", JSON.stringify(data.user));
+          setUser(data.administrator);
+          storage.set("user", JSON.stringify(data.administrator));
         } catch {
           storage.remove("token");
           storage.remove("user");
@@ -47,20 +47,44 @@ export const AuthProvider = ({ children }) => {
     restoreSession();
   }, []);
 
+  // ── Session expiry ────────────────────────────────────────
+  // The axios interceptor clears localStorage on a 401, but that alone leaves
+  // this provider's `user` state populated — ProtectedRoute kept rendering and
+  // every subsequent request went out with no token, failing indefinitely until
+  // the admin manually reloaded. Dropping `user` here makes isLoggedIn false, so
+  // ProtectedRoute redirects to /login on the next render.
+  useEffect(() => {
+    const onExpired = () => {
+      storage.remove("token");
+      storage.remove("user");
+      setUser(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
+
   // ── Login ─────────────────────────────────────────────────
   const login = async (identifier, password) => {
     const data = await loginApi(identifier, password);
 
-    // Only allow admin to access admin panel
-    if (data.user.role === "user") {
+    // Only allow admin / super-admin accounts to access the admin platform
+    if (data.administrator.role !== "admin" && data.administrator.role !== "super_admin") {
       throw new Error("Access denied. Admin accounts only.");
     }
 
     storage.set("token", data.token);
-    storage.set("user", JSON.stringify(data.user));
-    setUser(data.user);
+    storage.set("user", JSON.stringify(data.administrator));
+    setUser(data.administrator);
 
     return data;
+  };
+
+  // ── Refresh the current user from the server (after profile/email change) ─
+  const refreshUser = async () => {
+    const data = await getMe();
+    setUser(data.administrator);
+    storage.set("user", JSON.stringify(data.administrator));
+    return data.administrator;
   };
 
   // ── Logout ────────────────────────────────────────────────
@@ -71,8 +95,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Helpers ───────────────────────────────────────────────
-  const isAdmin = user?.role === "admin";
+  const isSuper = user?.role === "super_admin";
+  const isAdmin = user?.role === "admin" || isSuper;
   const isLoggedIn = !!user;
+  // New admins must complete first-login setup before using the platform.
+  const needsSetup = !!user?.must_complete_setup;
 
   return (
     <AuthContext.Provider
@@ -81,8 +108,11 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
+        refreshUser,
         isAdmin,
+        isSuper,
         isLoggedIn,
+        needsSetup,
       }}
     >
       {children}

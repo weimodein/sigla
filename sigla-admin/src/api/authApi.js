@@ -14,7 +14,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 responses globally — clear session so ProtectedRoute redirects to login.
+// Event name AuthContext listens for. This module cannot import AuthContext
+// (that would be circular — AuthContext imports loginApi/getMe from here), and
+// clearing localStorage alone does NOT re-render React: AuthContext.user stayed
+// populated, so ProtectedRoute kept rendering the page while every request went
+// out unauthenticated and 401'd forever. Dispatching an event lets the provider
+// drop its own state and trigger the redirect.
+export const SESSION_EXPIRED_EVENT = "sigla:session-expired";
+
+// Handle 401 responses globally — clear the session and tell AuthContext, so
+// ProtectedRoute redirects to login.
 // Skip auth endpoints so their errors propagate normally to the calling component.
 api.interceptors.response.use(
   (response) => response,
@@ -24,6 +33,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     }
     return Promise.reject(error);
   },
@@ -61,6 +71,24 @@ export const resetPassword = async (email, password) => {
 
 export const resendCode = async (email, type) => {
   const response = await api.post("/auth/resend-code", { email, type });
+  return response.data;
+};
+
+// ── Verified email add/change (authenticated) ─────────────────
+// Sends a 6-digit code to the NEW email being added/changed.
+export const requestEmailCode = async (email) => {
+  const response = await api.post("/administrators/email/request-code", { email });
+  return response.data;
+};
+
+export const verifyEmailCode = async (email, code) => {
+  const response = await api.post("/administrators/email/verify", { email, code });
+  return response.data;
+};
+
+// Finish forced first-login onboarding (email must already be linked).
+export const completeSetup = async ({ username, password }) => {
+  const response = await api.post("/administrators/complete-setup", { username, password });
   return response.data;
 };
 

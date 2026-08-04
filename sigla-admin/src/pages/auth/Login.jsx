@@ -104,8 +104,8 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(identifier, password);
-      navigate("/dashboard");
+      const data = await login(identifier, password);
+      navigate(data?.administrator?.must_complete_setup ? "/onboarding" : "/dashboard");
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || "Login failed");
     } finally { setLoading(false); }

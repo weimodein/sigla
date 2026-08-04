@@ -5,14 +5,40 @@ const axios = require("axios");
 const {
   Word,
   GestureSample,
-  User,
-  Notification,
-  // ActivityLog,
+  Administrator,
+  Category,
 } = require("../models/index.js");
+const { logActivity } = require("../utils/activityLogger.js");
+const { validateWordLabel } = require("../utils/validators.js");
+const { sequelize } = require("../config/db.js");
+
+// Resolve a category *name* (what the form and mobile send) to its id, or null
+// when the name is blank or matches no category. Case-insensitive, mirroring the
+// old text join. Returns the FK the words table now stores.
+const resolveCategoryId = async (name) => {
+  if (!name || !String(name).trim()) return null;
+  const cat = await Category.findOne({
+    where: sequelize.where(
+      sequelize.fn("LOWER", sequelize.col("name")),
+      String(name).trim().toLowerCase(),
+    ),
+  });
+  return cat ? cat.id : null;
+};
+
+// Flatten a Word instance (with category_ref included) to the API shape the
+// clients expect: a `category` name string, defaulting to "additional words".
+const withCategoryName = (word) => {
+  const json = typeof word.toJSON === "function" ? word.toJSON() : word;
+  const name = json.category_ref?.name || "additional words";
+  delete json.category_ref;
+  return { ...json, category: name };
+};
 
 const SUPABASE_URL         = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const SUPABASE_BUCKET      = process.env.SUPABASE_BUCKET_GESTURES || "gesture-samples";
+const SUPABASE_BUCKET_VIDEOS = process.env.SUPABASE_BUCKET_VIDEOS || "gesture-videos";
 
 // Fall back to local disk only when Supabase env vars are missing (dev without .env)
 const UPLOADS_DIR = path.join(__dirname, "../../uploads/samples");
@@ -21,8 +47,8 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 // ── Sample caps ───────────────────────────────────────────────
 // All gestures are motion; a single flat cap/threshold applies to every word.
 const PER_USER_CAP = 25;         // max samples ONE user can contribute to a word
-const DEFAULT_SAMPLE_CAP = 25;   // total cap across all users (when no admin sample_limit)
-const ACTIVATION_THRESHOLD = 25; // approved samples needed before a word is deploy-eligible
+const DEFAULT_SAMPLE_CAP = 25;   // flat total-sample cap per word, across all users
+const ACTIVATION_THRESHOLD = 20; // approved samples needed before a word is deploy-eligible (scope §17)
 
 // ── Helper: normalize word label ──────────────────────────────
 const normalizeLabel = (label) =>
@@ -31,13 +57,11 @@ const normalizeLabel = (label) =>
     .replace(/[^\w\s]/g, "")
     .trim();
 
-// ── Helper: total cap for a word (admin-set sample_limit or default) ───
-const getSampleCap = (word) => {
-  if (word && typeof word === "object" && word.sample_limit != null) {
-    return word.sample_limit;
-  }
-  return DEFAULT_SAMPLE_CAP;
-};
+// ── Helper: total sample cap per word ─────────────────────────
+// A flat default applies to every word. (The `word` argument is kept so the
+// call sites are unchanged and a per-word cap could return later.)
+// eslint-disable-next-line no-unused-vars
+const getSampleCap = (word) => DEFAULT_SAMPLE_CAP;
 
 // ── Helper: per-user cap ──────────────────────────────────────
 const getPerUserCap = () => PER_USER_CAP;
@@ -56,42 +80,6 @@ const getUserSampleCount = async (userId, wordId) => {
 const getApprovedSampleCount = async (wordId) => {
   return await GestureSample.count({
     where: { word_id: wordId, status: "approved" },
-  });
-};
-
-// ── Helper: send submission result notification ───────────────
-const sendSubmissionNotification = async (
-  userId,
-  wordLabel,
-  approved,
-  total,
-  maxLimit,
-  totalUserApproved = approved,
-) => {
-  let title, message;
-
-  if (approved === 0) {
-    // All rejected
-    title = "Submission Rejected";
-    message = `None of your submitted samples for "${wordLabel}" were approved. Please review the terms and conditions and the gesture collection instructions before submitting again.`;
-  } else if (approved === total) {
-    // All approved
-    title = "Submission Approved";
-    message = `All ${approved} of your submitted samples for "${wordLabel}" have been accepted. Your contribution has been successfully added to the system.`;
-  } else {
-    // Partial
-    const remaining = Math.max(0, maxLimit - totalUserApproved);
-    title = "Submission Partially Approved";
-    message = `${approved} out of ${total} submitted samples for "${wordLabel}" were approved. You may still contribute up to ${remaining} more samples for this word.`;
-  }
-
-  await Notification.create({
-    user_id: userId,
-    title,
-    message,
-    type: "submission_result",
-    is_read: false,
-    delivered: false,
   });
 };
 
@@ -164,13 +152,34 @@ const extractAndStoreSample = async (
       sample_count: 1,
       status: "approved",
       is_validated: true,
-      landmarks: null,
       sequence: sequence,
     });
 
     return { file: filename, status: "ok", type: "video", sample_id: sample.id };
   } catch (err) {
-    const detail = err.response?.data?.detail || err.message;
+    // Log the cause. This used to return silently, so a batch where EVERY clip
+    // failed still came back as HTTP 207 "N processed, M failed" with nothing in
+    // the server log — the failure was invisible from both the terminal and the UI.
+    //
+    // err.message alone is rarely enough: Sequelize puts the real Postgres error in
+    // err.original (type mismatch, constraint, connection) and validation failures in
+    // err.errors, while an ML-service rejection arrives as err.response.data.detail.
+    const detail =
+      err.response?.data?.detail ||
+      err.original?.message ||
+      err.errors?.map((e) => e.message).join("; ") ||
+      err.message;
+
+    console.error(
+      `[extractAndStoreSample] FAILED "${filename}" (word=${word.label}): ${detail}`,
+      {
+        name: err.name,
+        http_status: err.response?.status,
+        pg_code: err.original?.code,
+        validation: err.errors?.map((e) => `${e.path}: ${e.message}`),
+      },
+    );
+
     return { file: filename, status: "failed", type: "video", error: detail };
   }
 };
@@ -215,6 +224,54 @@ const saveImage = async (base64, index, folder = "static") => {
   }
 };
 
+// ── Upload a demonstration video to Supabase Storage ─────────
+// Mirrors saveImage: pushes to the gesture-videos bucket and returns the
+// public URL. Falls back to local disk when Supabase env vars are absent.
+const VIDEO_CONTENT_TYPES = {
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  avi: "video/x-msvideo",
+  mkv: "video/x-matroska",
+};
+
+const saveVideo = async (buffer, ext, wordId) => {
+  const cleanExt = (ext || "mp4").replace(/[^a-z0-9]/gi, "").toLowerCase() || "mp4";
+  const contentType = VIDEO_CONTENT_TYPES[cleanExt] || "application/octet-stream";
+  const filename = `gesture_${wordId}_${Date.now()}.${cleanExt}`;
+
+  if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+    try {
+      const storagePath = filename;
+      const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET_VIDEOS}/${storagePath}`;
+      const res = await axios.post(url, buffer, {
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+          "Content-Type": contentType,
+          "x-upsert": "true",
+        },
+        maxBodyLength: Infinity,
+        validateStatus: null, // don't throw on non-2xx, log it instead
+      });
+      if (res.status >= 200 && res.status < 300) {
+        return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_VIDEOS}/${storagePath}`;
+      }
+      console.error(`Supabase video upload failed [${res.status}]:`, JSON.stringify(res.data));
+      throw new Error(`Supabase ${res.status}: ${JSON.stringify(res.data)}`);
+    } catch (e) {
+      console.error("Supabase video upload error:", e.message);
+      throw e; // propagate so the upload fails visibly instead of saving broken paths
+    }
+  }
+
+  // Local fallback
+  const videosDir = path.join(__dirname, "../../uploads/videos");
+  if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
+  const filepath = path.join(videosDir, filename);
+  fs.writeFileSync(filepath, buffer);
+  return `/uploads/videos/${filename}`;
+};
+
 // ── GET /api/words ────────────────────────────────────────────
 const getAllWords = async (req, res) => {
   try {
@@ -231,7 +288,17 @@ const getAllWords = async (req, res) => {
     const where = {};
     if (status) where.status = status;
     if (sign_type) where.sign_type = sign_type;
-    if (category) where.category = category;
+    // The filter arrives as a category name; resolve it to the FK.
+    //
+    // A name that matches nothing resolves to null, and assigning that directly
+    // meant `category_id: null` — which matches every UNCATEGORISED word instead
+    // of none. Picking a since-deleted category from a stale dropdown therefore
+    // filled the table with unrelated words as though they belonged to it. An
+    // unresolvable filter must match nothing, so use an id that cannot exist.
+    if (category) {
+      const resolvedCategoryId = await resolveCategoryId(category);
+      where.category_id = resolvedCategoryId === null ? -1 : resolvedCategoryId;
+    }
     if (search) {
       where[Op.or] = [
         { label: { [Op.iLike]: `%${search}%` } },
@@ -243,11 +310,12 @@ const getAllWords = async (req, res) => {
       where,
       include: [
         {
-          model: User,
+          model: Administrator,
           as: "submitter",
           attributes: ["id", "username"],
         },
-        { model: User, as: "reviewer", attributes: ["id", "username"] },
+        { model: Administrator, as: "reviewer", attributes: ["id", "username"] },
+        { model: Category, as: "category_ref", attributes: ["name"] },
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -258,7 +326,7 @@ const getAllWords = async (req, res) => {
       total: count,
       page: parseInt(page),
       totalPages: Math.ceil(count / limit),
-      words: rows,
+      words: rows.map(withCategoryName),
     });
   } catch (err) {
     console.error("Get all words error:", err);
@@ -306,16 +374,16 @@ const getWordById = async (req, res) => {
       where: { id: req.params.id },
       include: [
         {
-          model: User,
+          model: Administrator,
           as: "submitter",
           attributes: ["id", "username"],
         },
-        { model: User, as: "reviewer", attributes: ["id", "username"] },
+        { model: Administrator, as: "reviewer", attributes: ["id", "username"] },
         {
           model: GestureSample,
           as: "samples",
           include: [
-            { model: User, as: "submitter", attributes: ["id", "username"] },
+            { model: Administrator, as: "submitter", attributes: ["id", "username"] },
           ],
         },
       ],
@@ -333,7 +401,7 @@ const getWordById = async (req, res) => {
 };
 
 // ── POST /api/words ───────────────────────────────────────────
-// User submits a new word — normalizes label before duplicate check
+// Administrator submits a new word — normalizes label before duplicate check
 const submitWord = async (req, res) => {
   try {
     const {
@@ -347,6 +415,11 @@ const submitWord = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Label and sign type are required" });
+    }
+
+    const labelError = validateWordLabel(label);
+    if (labelError) {
+      return res.status(400).json({ message: labelError });
     }
 
     const normalized = normalizeLabel(label);
@@ -372,7 +445,7 @@ const submitWord = async (req, res) => {
       normalized_label: normalized,
       description: description || null,
       sign_type,
-      category: category || "additional words",
+      category_id: await resolveCategoryId(category),
       submitted_by: req.user.id,
       status: "pending",
       is_locked: false,
@@ -409,6 +482,11 @@ const adminAddWord = async (req, res) => {
         .json({ message: "Label and sign type are required" });
     }
 
+    const labelError = validateWordLabel(label);
+    if (labelError) {
+      return res.status(400).json({ message: labelError });
+    }
+
     const normalized = normalizeLabel(label);
 
     // Check for duplicate
@@ -434,7 +512,7 @@ const adminAddWord = async (req, res) => {
       normalized_label: normalized,
       description: description || null,
       sign_type,
-      category: category || "additional words",
+      category_id: await resolveCategoryId(category),
       filipino_translation: filipino_translation || null,
       submitted_by: req.user.id,
       status: "approved",
@@ -443,6 +521,14 @@ const adminAddWord = async (req, res) => {
       approved_sample_count: 0,
       reviewed_by: req.user.id,
       reviewed_at: new Date(),
+    });
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "added_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Added word: ${word.label}`,
     });
 
     return res.status(201).json({
@@ -513,257 +599,6 @@ const adminUploadSamples = async (req, res) => {
     });
   } catch (err) {
     console.error("Admin upload samples error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ── POST /api/words/:id/samples ───────────────────────────────
-// User uploads gesture samples — enforces per-user per-word cap
-const uploadSamples = async (req, res) => {
-  try {
-    const word = await Word.findOne({ where: { id: req.params.id } });
-
-    if (!word) {
-      return res.status(404).json({ message: "Word not found" });
-    }
-
-    const existingSampleCount = await GestureSample.count({ where: { word_id: word.id } });
-    if (existingSampleCount > 0) {
-      return res.status(409).json({
-        message: "Samples already exist for this word. No additional samples can be added.",
-      });
-    }
-
-    const {
-      file_url,
-      sample_count,
-      landmarks,
-      sequence,
-      images,
-    } = req.body;
-
-    // DEBUG: Log incoming motion gesture data
-    console.log("=== UPLOAD SAMPLES DEBUG ===");
-    console.log("word_id:", req.params.id);
-    console.log("sample_count from client:", sample_count);
-    console.log("landmarks array:", Array.isArray(landmarks), landmarks ? landmarks.length : "N/A");
-    console.log("sequence array:", Array.isArray(sequence), sequence ? sequence.length : "N/A");
-    console.log("images array:", Array.isArray(images), images ? (Array.isArray(images[0]) ? "nested (motion)" : "flat (static)") : "N/A");
-    if (sequence && Array.isArray(sequence)) {
-      console.log("sequence[0] type:", typeof sequence[0], Array.isArray(sequence[0]) ? "(is array)" : "(not array)");
-      console.log("sequence structure:", sequence.length > 0 ? (Array.isArray(sequence[0]) ? `Batch of ${sequence.length} sequences` : `Single sequence with ${sequence.length} frames`) : "empty");
-    }
-
-    // Either a file_url or direct landmark data must be provided
-    const hasLandmarkData =
-      (landmarks && Array.isArray(landmarks) && landmarks.length > 0) ||
-      (sequence && Array.isArray(sequence) && sequence.length > 0);
-
-    if (!file_url && !hasLandmarkData) {
-      console.log("ERROR: No landmark data provided");
-      return res.status(400).json({
-        message:
-          "Either file_url or landmark data (landmarks/sequence) is required",
-      });
-    }
-
-    // For motion gestures: sample_count is the number of sequences in the batch
-    // sequence structure: List<List<List<Float>>> = batch of sequences, each sequence has frames
-    const isMotionBatch = sequence && Array.isArray(sequence) && sequence.length > 0 && Array.isArray(sequence[0]) && Array.isArray(sequence[0][0]);
-
-    // Derive sample count: if landmark data provided directly, count from the array
-    let newCount = parseInt(sample_count) || 0;
-    if (newCount <= 0) {
-      if (isMotionBatch) {
-        // Motion batch: each element is a complete sequence
-        newCount = sequence.length;
-      } else if (landmarks) {
-        // Static batch: each element is a single landmark
-        newCount = landmarks.length;
-      } else if (sequence) {
-        // Single sequence (fallback): count frames
-        newCount = sequence.length;
-      }
-    }
-
-    if (newCount <= 0) {
-      return res
-        .status(400)
-        .json({ message: "sample_count must be greater than 0" });
-    }
-
-    const totalCap = getSampleCap(word);
-    const perUserCap = getPerUserCap();
-
-    // Use live DB counts — word.total_samples can be stale
-    const [totalSamples, userTotal] = await Promise.all([
-      GestureSample.count({ where: { word_id: word.id } }),
-      getUserSampleCount(req.user.id, word.id),
-    ]);
-
-    // ── 1. Total cap across all users ─────────────────────────
-    if (totalSamples >= totalCap) {
-      return res.status(400).json({
-        message: `The sample limit of ${totalCap} for "${word.label}" has already been reached (${totalSamples}/${totalCap}). No more submissions are accepted for this word.`,
-        limit_reached: true,
-      });
-    }
-
-    const totalRemaining = totalCap - totalSamples;
-    if (totalSamples + newCount > totalCap) {
-      return res.status(400).json({
-        message: `Adding ${newCount} samples would exceed the ${totalCap}-sample limit for "${word.label}". Only ${totalRemaining} more sample${totalRemaining !== 1 ? "s" : ""} can be collected in total.`,
-        remaining: totalRemaining,
-      });
-    }
-
-    // ── 2. Block resubmission if user's submission was fully approved ─────────
-    const [userApprovedCount, userPendingCount] = await Promise.all([
-      GestureSample.count({ where: { word_id: word.id, submitted_by: req.user.id, status: "approved" } }),
-      GestureSample.count({ where: { word_id: word.id, submitted_by: req.user.id, status: "pending" } }),
-    ]);
-    if (userApprovedCount > 0 && userPendingCount === 0) {
-      return res.status(400).json({
-        message: `Your submission for "${word.label}" has already been fully approved. No further samples can be added for this word.`,
-        user_limit_reached: true,
-      });
-    }
-
-    // ── 3. Per-user cap ───────────────────────────────────────
-    if (userTotal >= perUserCap) {
-      return res.status(400).json({
-        message: `You have already contributed the maximum of ${perUserCap} samples for "${word.label}". Other users can still contribute up to the word's total limit.`,
-        user_limit_reached: true,
-      });
-    }
-
-    const userRemaining = perUserCap - userTotal;
-    if (userTotal + newCount > perUserCap) {
-      return res.status(400).json({
-        message: `Adding ${newCount} samples would exceed your personal limit of ${perUserCap} for "${word.label}". You can still add up to ${userRemaining} more sample${userRemaining !== 1 ? "s" : ""}.`,
-        remaining: userRemaining,
-        user_limit_reached: false,
-      });
-    }
-
-    // When landmark data is sent directly (no file upload), create one record per sample
-    // so the admin gallery shows individual entries rather than one batched record.
-    if (hasLandmarkData) {
-      const hasImages = Array.isArray(images) && images.length > 0;
-
-      // Check if this is a motion batch (List<List<List<Float>>>) or single sequence (List<List<Float>>)
-      // Motion batch: sequence[0][0] exists and is an array (batch of sequences)
-      // Single sequence: sequence[0] is an array of landmarks (one sequence with frames)
-      const isMotionBatch = sequence && Array.isArray(sequence) &&
-        sequence.length > 0 && Array.isArray(sequence[0]) &&
-        Array.isArray(sequence[0][0]);
-
-      console.log("isMotionBatch:", isMotionBatch);
-
-      if (isMotionBatch) {
-        // MOTION BATCH: Each sequence[idx] is a complete sequence (array of frames)
-        // images[idx] should be an array of base64 strings for that sequence's frames
-        console.log("Processing MOTION BATCH with", sequence.length, "sequences");
-
-        // Process sequences one at a time to avoid overwhelming Supabase with concurrent uploads
-        const records = [];
-        for (let idx = 0; idx < sequence.length; idx++) {
-          const seq = sequence[idx];
-          const frameImages = hasImages && Array.isArray(images[idx]) ? images[idx] : [];
-          console.log(`  Sequence ${idx}: ${seq.length} frames, ${frameImages.length} images`);
-
-          // Upload 5 evenly-spaced frames (0%, 25%, 50%, 75%, 100%) to save storage
-          let file_url = "";
-          if (frameImages.length > 0) {
-            const count = Math.min(5, frameImages.length);
-            const picks = Array.from({ length: count }, (_, k) =>
-              Math.round((k / (count - 1 || 1)) * (frameImages.length - 1))
-            );
-            const imageUrls = await Promise.all(picks.map((fi, k) => saveImage(frameImages[fi], idx * count + k, "motion")));
-            file_url = imageUrls.join("|");
-          }
-
-          records.push({
-            word_id: word.id,
-            submitted_by: req.user.id,
-            file_url: file_url,
-            landmarks: null,
-            sequence: seq,
-            sample_count: 1,
-            status: "pending",
-            is_validated: true,
-          });
-        }
-
-        console.log("Creating", records.length, "motion sample records");
-        await GestureSample.bulkCreate(records);
-      } else if (sequence && Array.isArray(sequence) && sequence.length > 0) {
-        // SINGLE SEQUENCE (fallback): The entire sequence array is ONE sample
-        // This handles the case where client sends one sequence at a time
-        console.log("Processing SINGLE SEQUENCE with", sequence.length, "frames");
-
-        const frameImages = hasImages && Array.isArray(images) && !Array.isArray(images[0]) ? images : [];
-        const imageUrls = await Promise.all(frameImages.map((base64, i) => saveImage(base64, i, "motion")));
-        const file_url = imageUrls.join("|");
-
-        const record = {
-          word_id: word.id,
-          submitted_by: req.user.id,
-          file_url: file_url,
-          landmarks: null,
-          sequence: sequence,  // One complete sequence
-          sample_count: 1,  // One sequence = one sample
-          status: "pending",
-          is_validated: true,
-        };
-
-        console.log("Creating 1 motion sample record");
-        await GestureSample.create(record);
-      } else {
-        // STATIC: each sample is a single landmark set
-        console.log("Processing STATIC batch with", landmarks.length, "samples");
-
-        const records = await Promise.all(landmarks.map(async (lm, i) => ({
-          word_id: word.id,
-          submitted_by: req.user.id,
-          file_url:
-            hasImages && images[i]
-              ? await saveImage(images[i], i)
-              : `landmark_direct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          landmarks: lm,
-          sequence: null,
-          sample_count: 1,
-          status: "pending",
-          is_validated: true,
-        })));
-        await GestureSample.bulkCreate(records);
-      }
-    } else {
-      // Old style: single file upload (not landmark data)
-      console.log("Processing FILE UPLOAD with sample_count:", newCount);
-
-      await GestureSample.create({
-        word_id: word.id,
-        submitted_by: req.user.id,
-        file_url,
-        sample_count: newCount,
-        status: "pending",
-        is_validated: true,
-      });
-    }
-
-    console.log("=== END UPLOAD SAMPLES DEBUG ===");
-
-    await word.update({ total_samples: (word.total_samples || 0) + newCount });
-
-    return res.status(201).json({
-      message: "Samples uploaded successfully",
-      user_total: userTotal + newCount,
-      user_remaining: perUserCap - (userTotal + newCount),
-      total_remaining: totalCap - (totalSamples + newCount),
-    });
-  } catch (err) {
-    console.error("Upload samples error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -840,19 +675,6 @@ const approveAllSamplesByUser = async (req, res) => {
 
     await checkAndActivateWord(word, req.user.id);
     const approvedCount = await getApprovedSampleCount(word.id);
-    const cap = getSampleCap(word);
-    const userApprovedAfter = approvedBefore + pendingCount;
-
-    if (pendingCount > 0) {
-      await sendSubmissionNotification(
-        req.params.userId,
-        word.label,
-        pendingCount,
-        pendingCount,
-        cap,
-        userApprovedAfter,
-      );
-    }
 
     return res.status(200).json({
       message: "All samples from user approved",
@@ -886,19 +708,6 @@ const rejectAllSamplesByUser = async (req, res) => {
         },
       },
     );
-
-    const cap = getSampleCap(word);
-
-    if (pendingCount > 0) {
-      await sendSubmissionNotification(
-        req.params.userId,
-        word.label,
-        0,
-        pendingCount,
-        cap,
-        existingApproved,
-      );
-    }
 
     return res.status(200).json({ message: "All samples from user rejected" });
   } catch (err) {
@@ -942,26 +751,15 @@ const approveSubmission = async (req, res) => {
     );
 
     const totalApproved = await getApprovedSampleCount(word.id);
-    const cap = getSampleCap(word);
     const activated = await checkAndActivateWord(word, req.user.id);
-    const userApprovedAfter = approvedBeforeCount + pendingCount;
 
-    await sendSubmissionNotification(
-      user_id,
-      word.label,
-      pendingCount,
-      pendingCount,
-      cap,
-      userApprovedAfter,
-    );
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "approved_submission",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Approved submission for word: ${word.label} — ${totalApproved} total approved samples. Activated: ${activated}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "approved_submission",
+      target_type: "word",
+      target_id: word.id,
+      details: `Approved submission for word: ${word.label} — ${totalApproved} total approved samples. Activated: ${activated}`,
+    });
 
     return res.status(200).json({
       message: "Submission approved",
@@ -1012,24 +810,13 @@ const rejectSubmission = async (req, res) => {
       });
     }
 
-    const cap = getSampleCap(word);
-    const userApprovedCount = userSamples.filter((s) => s.status === "approved").length;
-    await sendSubmissionNotification(
-      user_id,
-      word.label,
-      0,
-      userSamples.length,
-      cap,
-      userApprovedCount,
-    );
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "rejected_submission",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Rejected submission for word: ${word.label}. Reason: ${reason || "No reason provided"}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "rejected_submission",
+      target_type: "word",
+      target_id: word.id,
+      details: `Rejected submission for word: ${word.label}. Reason: ${reason || "No reason provided"}`,
+    });
 
     return res
       .status(200)
@@ -1048,15 +835,29 @@ const activateWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    const cap = getSampleCap(word);
+    // Activation is gated by the ACTIVATION THRESHOLD (20), not the sample cap
+    // (25). These are different things: the cap limits how many samples may be
+    // uploaded for a word, the threshold is how many approved samples make it
+    // eligible to activate. Using the cap here created a dead zone — a word with
+    // 20-24 approved samples was reported "ready to activate" by getWordStats and
+    // checkAndActivateWord, while this endpoint refused it.
+    const threshold = getActivationThreshold();
 
-    if ((word.approved_sample_count || 0) < cap) {
+    if ((word.approved_sample_count || 0) < threshold) {
       return res.status(400).json({
-        message: `Cannot activate: needs ${cap} approved samples but only has ${word.approved_sample_count || 0}.`,
+        message: `Cannot activate: needs ${threshold} approved samples but only has ${word.approved_sample_count || 0}.`,
       });
     }
 
     await word.update({ is_active: true });
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "activated_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Activated word: ${word.label}`,
+    });
 
     return res.status(200).json({ message: "Word activated successfully." });
   } catch (err) {
@@ -1083,24 +884,13 @@ const approveWord = async (req, res) => {
       reviewed_at: new Date(),
     });
 
-    if (word.submitted_by) {
-      await Notification.create({
-        user_id: word.submitted_by,
-        title: "Word Approved",
-        message: `Your submitted word "${word.label}" has been approved. It will appear in the app after the next model update.`,
-        type: "word_approved",
-        is_read: false,
-        delivered: false,
-      });
-    }
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "approved_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Approved word: ${word.label}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "approved_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Approved word: ${word.label}`,
+    });
 
     return res
       .status(200)
@@ -1130,26 +920,13 @@ const rejectWord = async (req, res) => {
       reviewed_at: new Date(),
     });
 
-    if (word.submitted_by) {
-      await Notification.create({
-        user_id: word.submitted_by,
-        title: "Word Rejected",
-        message: reason
-          ? `Your submitted word "${word.label}" was rejected. Reason: ${reason}`
-          : `Your submitted word "${word.label}" was rejected. Please review the terms and conditions and gesture collection instructions before submitting again.`,
-        type: "word_rejected",
-        is_read: false,
-        delivered: false,
-      });
-    }
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "rejected_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Rejected word: ${word.label}. Reason: ${reason || "No reason provided"}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "rejected_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Rejected word: ${word.label}. Reason: ${reason || "No reason provided"}`,
+    });
 
     return res.status(200).json({ message: "Word rejected successfully" });
   } catch (err) {
@@ -1167,7 +944,6 @@ const updateWord = async (req, res) => {
       sign_type,
       category,
       filipino_translation,
-      sample_limit,
     } = req.body;
 
     const word = await Word.findOne({ where: { id: req.params.id } });
@@ -1175,44 +951,65 @@ const updateWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    // Validate sample_limit when provided
-    if (sample_limit !== undefined && sample_limit !== null) {
-      const parsed = parseInt(sample_limit);
-      if (isNaN(parsed) || parsed < 1) {
-        return res
-          .status(400)
-          .json({ message: "sample_limit must be a positive integer" });
+    const updatedLabel = label || word.label;
+    const updatedNormalized = normalizeLabel(updatedLabel);
+    const updatedSignType = sign_type || word.sign_type;
+
+    const labelError = validateWordLabel(updatedLabel);
+    if (labelError) {
+      return res.status(400).json({ message: labelError });
+    }
+
+    // Renaming onto an existing label used to be allowed: adminAddWord guards
+    // this with a 409 but the update path did not, so two words could end up
+    // sharing a normalized_label. Training then produces two classes with the
+    // same name, which corrupts the dataset rather than just the display.
+    //
+    // Skipped when the normalized label is unchanged, so re-saving a word with
+    // its own label (or only a casing/punctuation tweak) is not a false positive.
+    if (updatedNormalized !== word.normalized_label) {
+      const duplicate = await Word.findOne({
+        where: {
+          id: { [Op.ne]: word.id },
+          normalized_label: updatedNormalized,
+          sign_type: updatedSignType,
+          status: { [Op.in]: ["pending", "approved"] },
+        },
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          message: "A word with this label already exists in the system",
+          word_id: duplicate.id,
+        });
       }
     }
 
-    const updatedLabel = label || word.label;
-    const updatedNormalized = normalizeLabel(updatedLabel);
+    // Only touch the category when the form supplied one; a blank/absent value
+    // leaves the existing link intact.
+    const nextCategoryId =
+      category !== undefined && category !== null && String(category).trim() !== ""
+        ? await resolveCategoryId(category)
+        : word.category_id;
 
     await word.update({
       label: updatedLabel,
       normalized_label: updatedNormalized,
       description: description ?? word.description,
-      sign_type: sign_type || word.sign_type,
-      category: category || word.category,
+      sign_type: updatedSignType,
+      category_id: nextCategoryId,
       filipino_translation:
         filipino_translation !== undefined
           ? filipino_translation
           : word.filipino_translation,
-      sample_limit:
-        sample_limit !== undefined
-          ? sample_limit === null
-            ? null
-            : parseInt(sample_limit)
-          : word.sample_limit,
     });
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "updated_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Updated word: ${word.label}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "updated_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Updated word: ${word.label}`,
+    });
 
     return res.status(200).json({ message: "Word updated successfully" });
   } catch (err) {
@@ -1229,15 +1026,18 @@ const deleteWord = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "deleted_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Deleted word: ${word.label} — all associated gesture samples and word bank entry removed`,
-    // });
+    const deletedWordId = word.id;
+    const deletedWordLabel = word.label;
 
     await word.destroy();
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "deleted_word",
+      target_type: "word",
+      target_id: deletedWordId,
+      details: `Deleted word: ${deletedWordLabel} — all associated gesture samples and word bank entry removed`,
+    });
 
     return res.status(200).json({
       message:
@@ -1260,7 +1060,7 @@ const getSamples = async (req, res) => {
     const samples = await GestureSample.findAll({
       where: { word_id: word.id },
       include: [
-        { model: User, as: "submitter", attributes: ["id", "username"] },
+        { model: Administrator, as: "submitter", attributes: ["id", "username"] },
       ],
       order: [["created_at", "DESC"]],
     });
@@ -1345,19 +1145,13 @@ const approveAllSamplesForWord = async (req, res) => {
 
     await word.update({ approved_sample_count: totalApproved });
 
-    // Notify each affected submitter
-    const cap = getSampleCap(word);
-    for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
-      await sendSubmissionNotification(userId, word.label, pendingCount, pendingCount, cap, pendingCount);
-    }
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "approved_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Approved all ${count} pending samples for word: ${word.label}. Activated: ${activated}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "approved_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Approved all ${count} pending samples for word: ${word.label}. Activated: ${activated}`,
+    });
 
     return res.status(200).json({
       message: `${count} samples approved`,
@@ -1404,19 +1198,13 @@ const rejectAllSamplesForWord = async (req, res) => {
       });
     }
 
-    // Notify each affected submitter
-    const cap = getSampleCap(word);
-    for (const [userId, pendingCount] of Object.entries(submitterCounts)) {
-      await sendSubmissionNotification(userId, word.label, 0, pendingCount, cap, 0);
-    }
-
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "rejected_word",
-    //   target_type: "word",
-    //   target_id: word.id,
-    //   details: `Rejected all ${count} pending samples for word: ${word.label}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "rejected_word",
+      target_type: "word",
+      target_id: word.id,
+      details: `Rejected all ${count} pending samples for word: ${word.label}`,
+    });
 
     return res.status(200).json({ message: `${count} samples rejected` });
   } catch (err) {
@@ -1437,7 +1225,7 @@ const getMotionSequences = async (req, res) => {
     const samples = await GestureSample.findAll({
       where: { word_id: word.id, status: "approved" },
       include: [
-        { model: User, as: "submitter", attributes: ["id", "username"] },
+        { model: Administrator, as: "submitter", attributes: ["id", "username"] },
       ],
       order: [["created_at", "ASC"]],
     });
@@ -1757,14 +1545,12 @@ async function setVideo(req, res) {
     let videoUrl = req.body.video_url || null;
 
     if (!videoUrl && req.body.video_base64) {
-      const ext = (req.body.video_ext || "mp4").replace(/[^a-z0-9]/gi, "");
-      const videosDir = path.join(__dirname, "../../uploads/videos");
-      if (!fs.existsSync(videosDir))
-        fs.mkdirSync(videosDir, { recursive: true });
-      const filename = `gesture_${word.id}_${Date.now()}.${ext}`;
-      const filepath = path.join(videosDir, filename);
-      fs.writeFileSync(filepath, Buffer.from(req.body.video_base64, "base64"));
-      videoUrl = `/uploads/videos/${filename}`;
+      // Uploading a new file replaces any existing demo video (one per word)
+      videoUrl = await saveVideo(
+        Buffer.from(req.body.video_base64, "base64"),
+        req.body.video_ext,
+        word.id,
+      );
     }
 
     if (!videoUrl)
@@ -1773,6 +1559,14 @@ async function setVideo(req, res) {
         .json({ message: "Either video_url or video_base64 is required" });
 
     await word.update({ video_url: videoUrl });
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "set_word_video",
+      target_type: "word",
+      target_id: word.id,
+      details: `Set demo video for word: ${word.label}`,
+    });
 
     return res
       .status(200)
@@ -1833,6 +1627,18 @@ const uploadVideos = async (req, res) => {
       else failCount++;
     }
 
+    // Surface the outcome server-side. The response is HTTP 207 either way, so a
+    // wholly-failed batch is otherwise indistinguishable from a successful one in
+    // the terminal — and the admin UI shows the same "processed" wording.
+    if (failCount > 0) {
+      console.warn(
+        `[uploadVideos] "${word.label}": ${successCount} stored, ${failCount} FAILED ` +
+          `(per-clip reasons logged above)`,
+      );
+    } else {
+      console.log(`[uploadVideos] "${word.label}": ${successCount} stored`);
+    }
+
     // Update word counters
     const newApproved = await getApprovedSampleCount(word.id);
     await word.update({
@@ -1841,6 +1647,14 @@ const uploadVideos = async (req, res) => {
     });
     await word.reload();
     await checkAndActivateWord(word, req.user.id);
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "uploaded_samples",
+      target_type: "word",
+      target_id: word.id,
+      details: `Uploaded gesture samples for word: ${word.label} — ${successCount} processed, ${failCount} failed/skipped`,
+    });
 
     return res.status(207).json({
       message: `${successCount} file(s) processed, ${failCount} failed/skipped`,
@@ -1865,7 +1679,6 @@ module.exports = {
   rejectWord,
   updateWord,
   deleteWord,
-  uploadSamples,
   getSamples,
   getMotionSequences,
   generateVideo,

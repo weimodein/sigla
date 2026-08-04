@@ -98,6 +98,9 @@ class SessionManager(context: Context) {
             .remove(KEY_NAME)
             .remove(KEY_EMAIL)
             .apply()
+        // The shared HTTP client caches the token, so it has to be dropped too
+        // or signed-out requests would keep sending the old credential.
+        ApiClient.clearToken()
     }
 
     // ── Onboarding ─────────────────────────────────────────────────

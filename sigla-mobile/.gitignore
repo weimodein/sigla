@@ -22,6 +22,7 @@ navigation/
 
 # Local configuration
 local.properties
+.env
 
 # OS
 .DS_Store

@@ -74,11 +74,6 @@ export const submitWord = async (data) => {
   return response.data;
 };
 
-export const uploadSamples = async (wordId, data) => {
-  const response = await api.post(`/words/${wordId}/samples`, data);
-  return response.data;
-};
-
 export const getUserSampleCount = async (wordId) => {
   const response = await api.get(`/words/${wordId}/user-sample-count`);
   return response.data;

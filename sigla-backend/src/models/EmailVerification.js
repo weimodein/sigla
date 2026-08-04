@@ -9,7 +9,7 @@ const EmailVerification = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
-    user_id: {
+    administrator_id: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
@@ -25,7 +25,7 @@ const EmailVerification = sequelize.define(
       type: DataTypes.STRING(20),
       allowNull: false,
       validate: {
-        isIn: [["registration", "password_reset"]],
+        isIn: [["registration", "password_reset", "email_change"]],
       },
     },
     is_used: {

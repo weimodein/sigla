@@ -20,6 +20,15 @@ data class AuthResponse(
     val user: UserResponse? = null
 )
 
+data class CategoryItem(
+    val id: Int,
+    val name: String,
+    val description: String? = null,
+    val word_count: Int = 0
+)
+
+data class CategoriesResponse(val categories: List<CategoryItem>)
+
 data class UserResponse(
     val id: Int = 0,
     val username: String = "",
@@ -62,7 +71,11 @@ data class ModelInfo(
     val tflite_url: String? = null,
     val motion_tflite_url: String? = null,
     val labels_motion_url: String? = null,
-    val word_bank_url: String? = null,
+    // No word_bank_url: the word bank is a live query against the database
+    // (words gain thumbnails, videos and translation edits after deployment),
+    // not a static artifact pinned to a model version. The server derives the
+    // list from whichever version is deployed, so GET words/word-bank already
+    // returns exactly this model's words.
     val accuracy: Double? = null,
     val checksum: String? = null,
     val deployed_at: String? = null
@@ -79,16 +92,6 @@ data class ChangePasswordRequest(
 )
 
 data class MessageResponse(val message: String)
-
-data class UserSettingsData(
-    val voice_type: String,
-    val dark_mode: Boolean
-)
-data class UserSettingsResponse(val settings: UserSettingsData)
-data class UpdateSettingsRequest(
-    val voice_type: String,
-    val dark_mode: Boolean
-)
 
 
 // ── API Service ───────────────────────────────────────────────
@@ -127,6 +130,10 @@ interface ApiService {
     @GET("words/word-bank")
     suspend fun getWordBank(): Response<WordBankResponse>
 
+    // Categories (public read)
+    @GET("categories")
+    suspend fun getCategories(): Response<CategoriesResponse>
+
     // Notifications (auth)
     @GET("notifications")
     suspend fun getNotifications(): Response<NotificationsResponse>
@@ -142,13 +149,6 @@ interface ApiService {
 
     @DELETE("notifications/{id}")
     suspend fun deleteNotification(@Path("id") id: Int): Response<MessageResponse>
-
-    // Settings (auth)
-    @GET("users/settings")
-    suspend fun getMySettings(): Response<UserSettingsResponse>
-
-    @PATCH("users/settings")
-    suspend fun updateMySettings(@Body body: UpdateSettingsRequest): Response<MessageResponse>
 
     // Profile (auth)
     @PUT("users/{id}")

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solid filled circle (not a thin outline) so the dropdown affordance is
+     unmistakable at small sizes instead of reading as "missing". -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,2a10,10 0,0 1,0 20a10,10 0,0 1,0 -20z"
+        android:fillColor="@color/sig_icon_accent"/>
+    <path
+        android:pathData="M7.5,10l4.5,4.5l4.5,-4.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"/>
+</vector>

@@ -2,10 +2,16 @@ import { useState, useEffect, useMemo, memo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
-import { getUserStats, getAllUsers } from "../../api/userApi.js";
+import {
+  getAdministratorStats,
+  getDeactivatedAdministrators,
+  getDeletedAdministrators,
+} from "../../api/administratorApi.js";
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
+import { getCategories } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
   BarChart,
   Bar,
@@ -19,12 +25,10 @@ import {
   Legend,
 } from "recharts";
 import {
-  Users,
   BookOpen,
-  Clock,
-  AlertTriangle,
-  UserX,
-  Trash2,
+  Database,
+  Tag,
+  Cpu,
   Download,
 } from "lucide-react";
 
@@ -97,34 +101,60 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 );
 
 // ── Main Component ────────────────────────────────────────────
+// The words endpoint is paginated; this page pulls one large page and derives its
+// charts from it. Kept as a named constant so the truncation notice and the fetch
+// can never disagree.
+const WORD_FETCH_LIMIT = 500;
+
+// Start of the window for each range option, or null for "all time".
+const rangeStart = (range) => {
+  const now = new Date();
+  if (range === "week") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 6); // today plus the previous 6 days
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (range === "month") {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 29);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (range === "year") {
+    const d = new Date(now);
+    d.setFullYear(d.getFullYear() - 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  return null;
+};
+
 const ReportsAnalytics = () => {
   const toast = useToast();
   const navigate = useNavigate();
+  const { isSuper } = useAuth();
   const [filter, setFilter] = useState("month");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   const [userStats, setUserStats] = useState(null);
   const [wordStats, setWordStats] = useState(null);
-  const [allUsers, setAllUsers] = useState([]);
-  const [warnedUsers, setWarnedUsers] = useState([]);
   const [deactivatedUsers, setDeactivatedUsers] = useState([]);
   const [deletedUsers, setDeletedUsers] = useState([]);
   const [words, setWords] = useState([]);
+  // Total words on the server, which may exceed WORD_FETCH_LIMIT.
+  const [wordTotal, setWordTotal] = useState(0);
   const [models, setModels] = useState([]);
+  const [categoryCount, setCategoryCount] = useState(null);
 
+  // Report sections per scope §20: word statistics, gesture sample counts, model accuracy.
   const [reportSections, setReportSections] = useState({
-    user_stats: true,
-    word_submissions: true,
+    word_stats: true,
     sample_counts: true,
-    registration_trends: true,
     model_accuracy: true,
-    warned_users: true,
-    deactivated_users: true,
-    deleted_users: true,
   });
 
-  const [warnedPage, setWarnedPage] = useState(1);
   const [deactivatedPage, setDeactivatedPage] = useState(1);
   const [deletedPage, setDeletedPage] = useState(1);
   const PAGE_SIZE = 5;
@@ -133,22 +163,36 @@ const ReportsAnalytics = () => {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [uStats, wStats, usersData, wordsData] = await Promise.all([
-        getUserStats(),
-        getWordStats(),
-        getAllUsers({ limit: 500 }),
-        getAllWords({ limit: 500 }),
-      ]);
+      // The deactivated/deleted rosters are super-only. Regular admins skip them
+      // and simply don't see those tables.
+      //
+      // These come from the DEDICATED endpoints. Filtering GET /administrators by
+      // status could never work for deleted accounts: that route hardcodes
+      // `status != "deleted"`, so the "Deleted Accounts" table was guaranteed to
+      // render empty no matter how many accounts had been deleted.
+      const [uStats, wStats, deactivatedData, deletedData, wordsData, catsData] =
+        await Promise.all([
+          getAdministratorStats(),
+          getWordStats(),
+          isSuper ? getDeactivatedAdministrators() : Promise.resolve({ administrators: [] }),
+          isSuper ? getDeletedAdministrators() : Promise.resolve({ administrators: [] }),
+          getAllWords({ limit: WORD_FETCH_LIMIT }),
+          getCategories(),
+        ]);
 
       setUserStats(uStats);
       setWordStats(wStats);
+      setCategoryCount((catsData.categories || []).length);
 
-      const users = usersData.users || [];
-      setAllUsers(users);
-      setWarnedUsers(users.filter((u) => (u.warning_count || 0) > 0));
-      setDeactivatedUsers(users.filter((u) => u.status === "deactivated"));
-      setDeletedUsers(users.filter((u) => u.status === "deleted"));
+      setDeactivatedUsers(deactivatedData.administrators || []);
+      setDeletedUsers(deletedData.administrators || []);
       setWords(wordsData.words || []);
+      // The word list is capped, so charts and the PDF are built from a subset
+      // when the bank is larger. Tracked so that can be stated rather than
+      // presented as complete.
+      setWordTotal(
+        typeof wordsData.total === "number" ? wordsData.total : (wordsData.words || []).length,
+      );
 
       try {
         const mData = await getModelVersions();
@@ -165,68 +209,88 @@ const ReportsAnalytics = () => {
 
   useEffect(() => {
     fetchAll();
-    setWarnedPage(1);
     setDeactivatedPage(1);
     setDeletedPage(1);
-  }, [filter]);
+  }, [filter, isSuper]);
 
   // ── Chart data helpers ──────────────────────────────────────
-  const registrationTrend = useMemo(() => {
-    const counts = {};
-    allUsers.forEach((u) => {
-      const date = new Date(u.created_at);
-      let key;
-      if (filter === "week")
-        key = date.toLocaleDateString("en-PH", { weekday: "short" });
-      else if (filter === "month")
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          day: "numeric",
-        });
-      else
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          year: "numeric",
-        });
-      counts[key] = (counts[key] || 0) + 1;
+  // Words submitted inside the selected range. The range used to be cosmetic —
+  // it changed only the x-axis label format while every bucket still counted
+  // ALL words ever created, so "Week" collapsed every Monday in history into a
+  // single point and the PDF claimed to be filtered when it was not.
+  const wordsInRange = useMemo(() => {
+    const start = rangeStart(filter);
+    if (!start) return words;
+    return words.filter((w) => {
+      const t = new Date(w.created_at).getTime();
+      return Number.isFinite(t) && t >= start.getTime();
     });
-    return Object.entries(counts).map(([name, users]) => ({ name, users }));
-  }, [allUsers, filter]);
-
-  const submissionTrend = useMemo(() => {
-    const counts = {};
-    words.forEach((w) => {
-      const date = new Date(w.created_at);
-      let key;
-      if (filter === "week")
-        key = date.toLocaleDateString("en-PH", { weekday: "short" });
-      else if (filter === "month")
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          day: "numeric",
-        });
-      else
-        key = date.toLocaleDateString("en-PH", {
-          month: "short",
-          year: "numeric",
-        });
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return Object.entries(counts).map(([name, submissions]) => ({
-      name,
-      submissions,
-    }));
   }, [words, filter]);
 
+  const submissionTrend = useMemo(() => {
+    // Bucket by a SORTABLE key, carrying the label separately. Keying on the
+    // display string meant "Mar 5" merged across years, and Object.entries
+    // preserved the API's created_at DESC order, so the chart ran newest→oldest.
+    const buckets = new Map();
+    wordsInRange.forEach((w) => {
+      const date = new Date(w.created_at);
+      if (Number.isNaN(date.getTime())) return;
+
+      let sortKey;
+      let label;
+      if (filter === "week" || filter === "month") {
+        // One point per calendar day.
+        sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        label =
+          filter === "week"
+            ? date.toLocaleDateString("en-PH", { weekday: "short" })
+            : date.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+      } else {
+        // One point per calendar month.
+        sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        label = date.toLocaleDateString("en-PH", { month: "short", year: "numeric" });
+      }
+
+      const existing = buckets.get(sortKey);
+      if (existing) existing.submissions += 1;
+      else buckets.set(sortKey, { name: label, submissions: 1 });
+    });
+
+    return [...buckets.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v);
+  }, [wordsInRange, filter]);
+
+  // Two fixes here:
+  //   • Untested versions are EXCLUDED rather than plotted at 0%. `m.accuracy ? …
+  //     : 0` made "never measured" indistinguishable from a genuine 0% and sent
+  //     the line diving to the axis.
+  //   • Sorted oldest→newest. getAllModels returns created_at DESC and nothing
+  //     re-sorted it, so a chart titled "per Version" ran backwards in time and a
+  //     rising accuracy trend read as a regression.
   const modelAccuracyData = useMemo(
     () =>
-      models.map((m) => ({
-        name: m.version_number,
-        accuracy: m.accuracy ? parseFloat((m.accuracy * 100).toFixed(1)) : 0,
-      })),
+      models
+        .filter((m) => m.accuracy != null)
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(a.trained_at || a.created_at || 0) -
+            new Date(b.trained_at || b.created_at || 0),
+        )
+        .map((m) => ({
+          name: m.version_number,
+          accuracy: parseFloat((m.accuracy * 100).toFixed(1)),
+        })),
     [models]
   );
 
+  // Sample counts are cumulative per word, not per-period, so this intentionally
+  // uses the full list rather than wordsInRange — restricting it to a date window
+  // would show a word's lifetime sample count only if it happened to be created
+  // inside that window, which is misleading.
+  //
+  // `.filter()` already copies, so the `.sort()` below no longer mutates state.
   const samplesPerWord = useMemo(
     () =>
       words
@@ -241,6 +305,15 @@ const ReportsAnalytics = () => {
     [words]
   );
 
+  // Current model accuracy = the deployed model's accuracy (fallback: best model)
+  const currentModelAccuracy = useMemo(() => {
+    if (!models.length) return "—";
+    const deployed = models.find((m) => m.status === "deployed");
+    const best = [...models].sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0))[0];
+    const m = deployed || best;
+    return m?.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : "—";
+  }, [models]);
+
   const toggleSection = (key) =>
     setReportSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -252,7 +325,12 @@ const ReportsAnalytics = () => {
       const dateStr = new Date().toLocaleDateString("en-US", {
         year: "numeric", month: "long", day: "numeric",
       });
-      const filterLabel = filter.charAt(0).toUpperCase() + filter.slice(1);
+      // Name the actual window, not just the option. The header used to read
+      // "Filter: Week" over all-time data, which made every export misleading.
+      const rangeFrom = rangeStart(filter);
+      const filterLabel = rangeFrom
+        ? `${filter.charAt(0).toUpperCase() + filter.slice(1)} (since ${rangeFrom.toLocaleDateString("en-PH")})`
+        : "All time";
 
       // ── Header ───────────────────────────────────────────────
       doc.setFontSize(18);
@@ -267,8 +345,11 @@ const ReportsAnalytics = () => {
       let y = 40;
       const sectionGap = 10;
 
+      // A heading plus at least one table row needs roughly 25mm. The old
+      // threshold of 265 let a title be drawn near the foot of a page while
+      // autoTable pushed its table to the next one, orphaning the heading.
       const addSectionTitle = (title) => {
-        if (y > 265) { doc.addPage(); y = 20; }
+        if (y > 250) { doc.addPage(); y = 20; }
         doc.setFontSize(13);
         doc.setFont("helvetica", "bold");
         doc.text(title, 14, y);
@@ -277,34 +358,16 @@ const ReportsAnalytics = () => {
         doc.setFontSize(11);
       };
 
-      if (reportSections.user_stats) {
-        addSectionTitle("User Statistics");
-        autoTable(doc, {
-          startY: y,
-          head: [["Metric", "Count"]],
-          body: [
-            ["Total Users", userStats?.total ?? 0],
-            ["Active", userStats?.active ?? 0],
-            ["Deactivated", userStats?.deactivated ?? 0],
-            ["Warned", userStats?.warned ?? 0],
-          ],
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (reportSections.word_submissions) {
-        addSectionTitle("Word Submissions");
+      if (reportSections.word_stats) {
+        addSectionTitle("Word Statistics");
         autoTable(doc, {
           startY: y,
           head: [["Metric", "Count"]],
           body: [
             ["Total Words", wordStats?.total ?? 0],
-            ["Pending", wordStats?.pending ?? 0],
-            ["Approved", wordStats?.approved ?? 0],
-            ["Rejected", wordStats?.rejected ?? 0],
+            ["Active Words", wordStats?.active ?? 0],
+            ["Total Categories", categoryCount ?? 0],
+            ["Total Gesture Samples", wordStats?.total_samples ?? 0],
           ],
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
@@ -315,6 +378,18 @@ const ReportsAnalytics = () => {
 
       if (reportSections.sample_counts) {
         addSectionTitle("Gesture Samples per Word");
+        // State the truncation rather than presenting a capped subset as the
+        // complete picture.
+        if (wordTotal > words.length) {
+          doc.setFontSize(9);
+          doc.text(
+            `Showing ${words.length} of ${wordTotal} words (most recent first).`,
+            14,
+            y,
+          );
+          doc.setFontSize(11);
+          y += 5;
+        }
         autoTable(doc, {
           startY: y,
           head: [["Word", "Total Samples", "Approved Samples"]],
@@ -326,75 +401,21 @@ const ReportsAnalytics = () => {
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
-      if (reportSections.registration_trends) {
-        addSectionTitle("Registration Trends");
-        autoTable(doc, {
-          startY: y,
-          head: [["Period", "New Users"]],
-          body: registrationTrend.map((r) => [r.name, r.users]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
       if (reportSections.model_accuracy) {
         addSectionTitle("Model Accuracy per Version");
         autoTable(doc, {
           startY: y,
-          head: [["Version", "Accuracy"]],
+          head: [["Version", "Accuracy", "Status"]],
           body: models.map((m) => [
             m.version_number,
             m.accuracy ? `${(m.accuracy * 100).toFixed(1)}%` : "N/A",
+            m.status === "deployed" ? "Deployed" : (m.status || "—"),
           ]),
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
         });
         y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (reportSections.warned_users) {
-        addSectionTitle("Warned Users");
-        autoTable(doc, {
-          startY: y,
-          head: [["Username", "Email", "Warnings"]],
-          body: warnedUsers.map((u) => [u.username, u.email, `${u.warning_count}/2`]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (reportSections.deactivated_users) {
-        addSectionTitle("Deactivated Users");
-        autoTable(doc, {
-          startY: y,
-          head: [["Username", "Email", "Deactivated At"]],
-          body: deactivatedUsers.map((u) => [
-            u.username,
-            u.email,
-            u.deactivated_at ? new Date(u.deactivated_at).toLocaleDateString() : "—",
-          ]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
-      }
-
-      if (reportSections.deleted_users) {
-        addSectionTitle("Deleted Users");
-        autoTable(doc, {
-          startY: y,
-          head: [["Username", "Email"]],
-          body: deletedUsers.map((u) => [u.username, u.email]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
       }
 
       const filename = `sigla_report_${filter}_${new Date().toISOString().split("T")[0]}.pdf`;
@@ -465,18 +486,18 @@ const ReportsAnalytics = () => {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <SkeletonChart key={i} />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
             <SkeletonTable key={i} />
           ))}
         </div>
@@ -484,7 +505,7 @@ const ReportsAnalytics = () => {
           <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
           <div className="h-3 w-52 bg-gray-100 rounded mb-4" />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => (
+            {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-4 bg-gray-100 rounded" />
             ))}
           </div>
@@ -522,71 +543,40 @@ const ReportsAnalytics = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard
-          title="Total Users"
-          value={userStats?.total}
-          icon={Users}
-          color="bg-blue-900"
-          onClick={() => navigate("/users")}
-        />
+      {/* Summary Cards (scope §20): words, gesture samples, categories, model accuracy */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Words"
           value={wordStats?.total}
           icon={BookOpen}
+          color="bg-blue-900"
+          onClick={() => navigate("/dataset")}
+        />
+        <StatCard
+          title="Gesture Samples"
+          value={wordStats?.total_samples}
+          icon={Database}
+          color="bg-blue-700"
+          onClick={() => navigate("/dataset")}
+        />
+        <StatCard
+          title="Total Categories"
+          value={categoryCount}
+          icon={Tag}
           color="bg-green-600"
-          onClick={() => navigate("/word_bank")}
+          onClick={() => navigate("/categories")}
         />
         <StatCard
-          title="Pending Reviews"
-          value={wordStats?.pending}
-          icon={Clock}
-          color="bg-yellow-500"
-          onClick={() => navigate("/word_bank?status=pending")}
-        />
-        <StatCard
-          title="Warned Users"
-          value={userStats?.warned}
-          icon={AlertTriangle}
-          color="bg-orange-500"
-          onClick={() => navigate("/users")}
-        />
-        <StatCard
-          title="Deactivated"
-          value={userStats?.deactivated}
-          icon={UserX}
-          color="bg-red-500"
-          onClick={() => navigate("/users")}
-        />
-        <StatCard
-          title="Deleted Accounts"
-          value={deletedUsers.length}
-          icon={Trash2}
-          color="bg-gray-600"
-          onClick={() => navigate("/users")}
+          title="Current Model Accuracy"
+          value={currentModelAccuracy}
+          icon={Cpu}
+          color="bg-purple-600"
+          onClick={() => navigate("/model")}
         />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="dash-card">
-          <div className="dash-card-header">
-            <SectionHeader title="User Registration Trend" />
-          </div>
-          <div className="dash-card-body">
-            <ResponsiveContainer width="100%" height={220} debounce={200}>
-              <BarChart data={registrationTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="users" fill="#1e3a8a" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
         <div className="dash-card">
           <div className="dash-card-header">
             <SectionHeader title="Word Submission Trend" />
@@ -639,7 +629,7 @@ const ReportsAnalytics = () => {
           </div>
         </div>
 
-        <div className="dash-card">
+        <div className="dash-card lg:col-span-2">
           <div className="dash-card-header">
             <SectionHeader title="Gesture Samples per Word (Top 10)" />
           </div>
@@ -680,66 +670,13 @@ const ReportsAnalytics = () => {
         </div>
       </div>
 
-      {/* User Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="dash-card">
-          <div className="dash-card-header">
-            <SectionHeader title="Warned Users" count={warnedUsers.length} />
-          </div>
-          <div className="dash-card-body">
-            <SimpleTable
-              headers={["Username", "Email", "Warnings"]}
-              rows={warnedUsers
-                .slice(
-                  (warnedPage - 1) * PAGE_SIZE,
-                  warnedPage * PAGE_SIZE,
-                )
-                .map((u) => [
-                  u.username,
-                  u.email,
-                  `${u.warning_count}/2`,
-                ])}
-              emptyMessage="No warned users"
-            />
-            {warnedUsers.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-                <span>
-                  Page {warnedPage} of{" "}
-                  {Math.ceil(warnedUsers.length / PAGE_SIZE)}
-                </span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setWarnedPage((p) => Math.max(1, p - 1))}
-                    disabled={warnedPage === 1}
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() =>
-                      setWarnedPage((p) =>
-                        Math.min(
-                          Math.ceil(warnedUsers.length / PAGE_SIZE),
-                          p + 1,
-                        ),
-                      )
-                    }
-                    disabled={
-                      warnedPage >= Math.ceil(warnedUsers.length / PAGE_SIZE)
-                    }
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Administrator Lists — super admin only (per-admin data from /users) */}
+      {isSuper && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="dash-card">
           <div className="dash-card-header">
             <SectionHeader
-              title="Deactivated Users"
+              title="Deactivated Administrators"
               count={deactivatedUsers.length}
             />
           </div>
@@ -753,12 +690,12 @@ const ReportsAnalytics = () => {
                 )
                 .map((u) => [
                   u.username,
-                  u.email,
+                  u.email || "—",
                   u.deactivated_at
                     ? new Date(u.deactivated_at).toLocaleDateString("en-PH")
                     : "—",
                 ])}
-              emptyMessage="No deactivated users"
+              emptyMessage="No deactivated administrators"
             />
             {deactivatedUsers.length > PAGE_SIZE && (
               <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
@@ -810,7 +747,7 @@ const ReportsAnalytics = () => {
                   (deletedPage - 1) * PAGE_SIZE,
                   deletedPage * PAGE_SIZE,
                 )
-                .map((u) => [u.username, u.email])}
+                .map((u) => [u.username, u.email || "—"])}
               emptyMessage="No deleted accounts"
             />
             {deletedUsers.length > PAGE_SIZE && (
@@ -850,6 +787,7 @@ const ReportsAnalytics = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Generate Report */}
       <div className="dash-card">
@@ -876,14 +814,9 @@ const ReportsAnalytics = () => {
         <div className="dash-card-body">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { key: "user_stats", label: "User Statistics" },
-              { key: "word_submissions", label: "Word Submissions" },
-              { key: "sample_counts", label: "Sample Counts" },
-              { key: "registration_trends", label: "Registration Trends" },
+              { key: "word_stats", label: "Word Statistics" },
+              { key: "sample_counts", label: "Gesture Sample Counts" },
               { key: "model_accuracy", label: "Model Accuracy" },
-              { key: "warned_users", label: "Warned Users" },
-              { key: "deactivated_users", label: "Deactivated Users" },
-              { key: "deleted_users", label: "Deleted Accounts" },
             ].map(({ key, label }) => (
               <label
                 key={key}

@@ -4,10 +4,10 @@ const crypto = require("crypto");
 const {
   ModelVersion,
   Word,
-  User,
-  // ActivityLog,
-  Notification,
+  Administrator,
+  GestureSample,
 } = require("../models/index.js");
+const { logActivity } = require("../utils/activityLogger.js");
 require("dotenv").config();
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
@@ -30,12 +30,127 @@ async function uploadToSupabase(storagePath, buffer, contentType) {
   return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
 }
 
+// ── Which words feed a training run ──────────────────────────
+// The eligibility filter mirrors mlController.getApprovedDataset, so the set
+// recorded here stays in lock-step with the classes the model actually learned
+// (the same set labels_motion.json names).
+//
+// Called at TRAINING time and stored on the version row. It is deliberately not
+// re-derived at deploy time: the dataset can change between training and deploy,
+// and a reverted model must advertise the words it was trained on, not today's.
+async function getTrainedWordIds() {
+  const trainedSamples = await GestureSample.findAll({
+    attributes: ["word_id"],
+    where: {
+      [Op.or]: [
+        { status: "approved" },
+        { status: "pending", is_validated: true },
+      ],
+    },
+    include: [
+      {
+        model: Word,
+        as: "word",
+        attributes: [],
+        required: true,
+        where: {
+          [Op.or]: [{ status: "approved" }, { is_active: true }],
+        },
+      },
+    ],
+  });
+
+  return [...new Set(trainedSamples.map((s) => s.word_id))];
+}
+
+// ── Make Word.is_active match the deployed version ───────────
+// is_active was a one-way latch: deploy set it true and nothing ever set it
+// back, so every word ever deployed stayed visible and a revert never shrank the
+// word bank. Reconciling both directions keeps the admin "Active" count honest
+// and keeps the /word-bank fallback correct for rows with no trained_word_ids.
+//
+// A version with no recorded class list (trained before that column existed)
+// tells us nothing — skip rather than deactivating everything.
+async function reconcileActiveWords(model) {
+  const ids = Array.isArray(model.trained_word_ids)
+    ? model.trained_word_ids
+    : null;
+
+  if (!ids) {
+    console.warn(
+      `[reconcileActiveWords] version ${model.version_number} has no trained_word_ids — leaving is_active untouched`,
+    );
+    return;
+  }
+
+  if (ids.length > 0) {
+    await Word.update(
+      { is_active: true },
+      { where: { id: { [Op.in]: ids }, is_active: false } },
+    );
+  }
+
+  await Word.update(
+    { is_active: false },
+    {
+      where: {
+        is_active: true,
+        ...(ids.length > 0 ? { id: { [Op.notIn]: ids } } : {}),
+      },
+    },
+  );
+}
+
+// ── Copy a model version's files into the fixed deployed/ folder + recompute its
+// checksum. The mobile app always downloads from this fixed path regardless of which
+// version is "active", and verifies it against the ModelVersion row's stored checksum
+// — so both deployModel AND revertModel must call this. A status-only flip (no file
+// copy) leaves the fixed path serving stale bytes that don't match the "new" active
+// row's checksum, which makes the mobile app correctly refuse the download and keep
+// running whatever was last downloaded, silently. Used by deployModel and revertModel.
+async function syncModelFilesToDeployed(model) {
+  if (!model.tflite_url) {
+    throw new Error("Model has no .tflite file. Train the model first.");
+  }
+
+  // Derive base URL from the motion tflite file (all files share the same folder)
+  const baseUrl = model.tflite_url.substring(0, model.tflite_url.lastIndexOf("/"));
+  const files = [
+    { url: model.tflite_url, name: "sign_model_motion.tflite", required: true },
+    { url: `${baseUrl}/labels_motion.json`, name: "labels_motion.json", required: true },
+  ];
+
+  for (const file of files) {
+    if (!file.url || file.url === "null") {
+      if (file.required) throw new Error(`Missing URL for required file: ${file.name}`);
+      console.warn(`Skipping optional file ${file.name} – no URL provided.`);
+      continue;
+    }
+
+    const response = await axios.get(file.url, { responseType: "arraybuffer", timeout: 30000 });
+    const buffer = Buffer.from(response.data);
+    const contentType =
+      response.headers["content-type"] ||
+      (file.name.endsWith(".tflite") ? "application/octet-stream" : "application/json");
+    await uploadToSupabase(`deployed/${file.name}`, buffer, contentType);
+    console.log(
+      `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed/${file.name}`,
+    );
+
+    if (file.name === "sign_model_motion.tflite") {
+      const checksumHex = crypto.createHash("sha256").update(buffer).digest("hex");
+      await model.update({ checksum: checksumHex });
+      console.log(`SHA256 checksum saved: ${checksumHex}`);
+    }
+  }
+}
+
 // ── GET /api/models ───────────────────────────────────────────
 // Get all model versions
 const getAllModels = async (req, res) => {
   try {
     const models = await ModelVersion.findAll({
-      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
+      include: [{ model: Administrator, as: "trainer", attributes: ["id", "username"] }],
       order: [["created_at", "DESC"]],
     });
 
@@ -83,13 +198,9 @@ const getLatestModel = async (req, res) => {
         "id",
         "version_number",
         "tflite_url",
-        "motion_tflite_url",
         "accuracy",
-        "motion_accuracy",
         "deployed_at",
         "total_classes",
-        "motion_classes",
-        "motion_trained",
         "checksum",
       ],
       order: [["deployed_at", "DESC"]],
@@ -110,7 +221,6 @@ const getLatestModel = async (req, res) => {
       model: {
         ...model.toJSON(),
         tflite_url: base ? `${base}/sign_model_motion.tflite` : model.tflite_url,
-        motion_tflite_url: base ? `${base}/sign_model_motion.tflite` : model.motion_tflite_url,
         labels_motion_url: base ? `${base}/labels_motion.json` : null,
       },
     });
@@ -126,7 +236,7 @@ const getModelById = async (req, res) => {
   try {
     const model = await ModelVersion.findOne({
       where: { id: req.params.id },
-      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
+      include: [{ model: Administrator, as: "trainer", attributes: ["id", "username"] }],
     });
 
     if (!model) {
@@ -180,6 +290,14 @@ const trainModel = async (req, res) => {
       model: modelRecord,
     });
 
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "trained_model",
+      target_type: "model",
+      target_id: modelRecord.id,
+      details: `Started training model version ${version_number}`,
+    });
+
     // ── Background training job ───────────────────────────────
     (async () => {
       try {
@@ -189,19 +307,22 @@ const trainModel = async (req, res) => {
           { timeout: 20 * 60 * 1000, headers: { "ngrok-skip-browser-warning": "1" } },
         );
         const r = response.data;
+
+        // Capture the class list NOW, while it is still true. Deriving it later
+        // at deploy time would read a dataset that may have gained or lost
+        // samples since, so a reverted model would advertise words it was never
+        // trained on. This is the set labels_motion.json names.
+        const trainedWordIds = await getTrainedWordIds();
+
         await modelRecord.update({
           status:            "trained",
           accuracy:          r.accuracy           || null,
           total_classes:     r.total_classes       || null,
           tflite_url:        r.tflite_url          || null,
           h5_url:            r.h5_url              || null,
-          motion_tflite_url: r.motion_tflite_url   || null,
-          motion_h5_url:     r.motion_h5_url       || null,
-          motion_accuracy:   r.motion_accuracy     || null,
-          motion_trained:    r.motion_trained      || false,
-          motion_classes:    r.motion_classes      || null,
           trained_at:        new Date(),
           training_error:    null,
+          trained_word_ids:  trainedWordIds,
         });
         console.log(`[trainModel] version ${version_number} training complete`);
       } catch (mlErr) {
@@ -228,7 +349,7 @@ const getModelStatus = async (req, res) => {
   try {
     const model = await ModelVersion.findOne({
       where: { id: req.params.id },
-      include: [{ model: User, as: "trainer", attributes: ["id", "username"] }],
+      include: [{ model: Administrator, as: "trainer", attributes: ["id", "username"] }],
     });
     if (!model) return res.status(404).json({ message: "Model not found" });
     return res.status(200).json({ model });
@@ -287,13 +408,13 @@ const testModel = async (req, res) => {
     });
 
     // Log activity
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "tested_model",
-    //   target_type: "model",
-    //   target_id: model.id,
-    //   details: `Tested model version ${model.version_number}. Accuracy: ${testResult.accuracy}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "tested_model",
+      target_type: "model",
+      target_id: model.id,
+      details: `Tested model version ${model.version_number}. Accuracy: ${testResult.accuracy}`,
+    });
 
     return res.status(200).json({
       message: "Model tested successfully",
@@ -327,88 +448,8 @@ const deployModel = async (req, res) => {
       });
     }
 
-    // ── Upload model files to Supabase deployed folder ───────────────────────
-    // Derive base URL from the motion tflite file (all files share the same folder)
-    const baseUrl = model.tflite_url.substring(
-      0,
-      model.tflite_url.lastIndexOf("/"),
-    );
-
-    // Every model is a motion (LSTM) model. tflite_url holds the motion model URL;
-    // labels are in the same versioned folder.
-    const possibleFiles = [
-      {
-        url: model.tflite_url,
-        name: "sign_model_motion.tflite",
-        required: true,
-      },
-      {
-        url: `${baseUrl}/labels_motion.json`,
-        name: "labels_motion.json",
-        required: true,
-      },
-    ];
-
-    for (const file of possibleFiles) {
-      // Skip if the URL is missing or empty
-      if (!file.url || file.url === "null") {
-        if (file.required) {
-          throw new Error(`Missing URL for required file: ${file.name}`);
-        } else {
-          console.warn(
-            `Skipping optional file ${file.name} – no URL provided.`,
-          );
-          continue;
-        }
-      }
-
-      try {
-        const response = await axios.get(file.url, {
-          responseType: "arraybuffer",
-          timeout: 30000,
-        });
-        const buffer = Buffer.from(response.data);
-        const contentType =
-          response.headers["content-type"] ||
-          (file.name.endsWith(".tflite")
-            ? "application/octet-stream"
-            : "application/json");
-        await uploadToSupabase(`deployed/${file.name}`, buffer, contentType);
-        console.log(
-          `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed/${file.name}`,
-        );
-      } catch (err) {
-        if (file.required) {
-          console.error(
-            `Failed to upload required file ${file.name}:`,
-            err.message,
-          );
-          throw err; // fail the deployment if a required file is missing
-        } else {
-          console.warn(`Skipping optional file ${file.name}: ${err.message}`);
-        }
-      }
-    }
-
-    // ── Compute SHA256 checksum of the deployed motion .tflite ──────────────
-    // Saved so the mobile app can verify the downloaded model is not corrupted.
-    try {
-      const motionFile = possibleFiles.find((f) => f.name === "sign_model_motion.tflite");
-      if (motionFile) {
-        const motionResponse = await axios.get(motionFile.url, {
-          responseType: "arraybuffer",
-          timeout: 30000,
-        });
-        const checksumHex = crypto
-          .createHash("sha256")
-          .update(Buffer.from(motionResponse.data))
-          .digest("hex");
-        await model.update({ checksum: checksumHex });
-        console.log(`SHA256 checksum saved: ${checksumHex}`);
-      }
-    } catch (csErr) {
-      console.warn("Checksum computation failed (non-fatal):", csErr.message);
-    }
+    // Copy this version's files into deployed/ and recompute its checksum.
+    await syncModelFilesToDeployed(model);
 
     // If the model is already deployed (e.g., stuck from a previous partial failure), skip ML call.
     const alreadyDeployed = model.status === "deployed";
@@ -443,57 +484,29 @@ const deployModel = async (req, res) => {
       await model.update({ status: "deployed", deployed_at: new Date() });
     }
 
-    // ── Activate approved words ──────────────────────────────────────────────
+    // ── Make the visible word bank match this version ────────────────────────
+    // Words this version was trained on become visible; words it was not trained
+    // on are hidden. Backfill trained_word_ids for versions trained before that
+    // column existed, so this deploy — and any later revert to it — has a class
+    // list to work from.
     // Wrapped in try/catch — failure here must never leave the model stuck.
-    let wordsToActivate = [];
     try {
-      wordsToActivate = await Word.findAll({
-        where: { status: "approved", is_active: false },
-      });
-
-      for (const word of wordsToActivate) {
-        await word.update({ is_active: true });
+      if (!Array.isArray(model.trained_word_ids)) {
+        await model.update({ trained_word_ids: await getTrainedWordIds() });
       }
+      await reconcileActiveWords(model);
     } catch (wordErr) {
       console.error("Word activation error (non-fatal):", wordErr.message);
     }
 
-    // ── Notifications ─────────────────────────────────────────────────────────
-    try {
-      const activeUsers = await User.findAll({
-        where: { status: "active", role_id: 3 },
-        attributes: ["id"],
-      });
-
-      const newWordLabels = wordsToActivate.map((w) => w.label);
-      const wordNote =
-        newWordLabels.length > 0
-          ? ` ${newWordLabels.length} new word(s) added: ${newWordLabels.slice(0, 5).join(", ")}${newWordLabels.length > 5 ? "…" : ""}.`
-          : "";
-
-      const notifications = activeUsers.map((u) => ({
-        user_id: u.id,
-        title: "New Model Available",
-        message: `A new sign language model (${model.version_number}) has been deployed.${wordNote} Update your app to get the latest improvements.`,
-        type: "model_updated",
-      }));
-
-      if (notifications.length > 0)
-        await Notification.bulkCreate(notifications);
-    } catch (notifErr) {
-      console.error("Notification error (non-fatal):", notifErr.message);
-    }
-
     // Log activity
-    // try {
-    //   await ActivityLog.create({
-    //     user_id: req.user.id,
-    //     action: "deployed_model",
-    //     target_type: "model",
-    //     target_id: model.id,
-    //     details: `Deployed model version ${model.version_number}`,
-    //   });
-    // } catch (_) {}
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "deployed_model",
+      target_type: "model",
+      target_id: model.id,
+      details: `Deployed model version ${model.version_number}`,
+    });
 
     return res.status(200).json({
       message: `Model ${model.version_number} deployed successfully`,
@@ -532,7 +545,14 @@ const revertModel = async (req, res) => {
       });
     }
 
-    // Set all currently deployed models to inactive
+    // Copy this version's files into deployed/ and recompute its checksum. Without
+    // this, the fixed deployed/ path keeps serving the previously-active version's
+    // bytes while this row's stale checksum no longer matches them — the mobile app's
+    // integrity check then correctly rejects the download and silently keeps running
+    // whatever was last verified, so the "revert" never actually reaches the phone.
+    await syncModelFilesToDeployed(model);
+
+    // Set all other deployed models to inactive
     await ModelVersion.update(
       { status: "inactive" },
       { where: { status: "deployed" } },
@@ -544,14 +564,24 @@ const revertModel = async (req, res) => {
       deployed_at: new Date(),
     });
 
+    // ── Roll the word bank back with the model ───────────────────────────────
+    // Without this the revert only swapped the .tflite: words added by a newer
+    // version stayed visible and the phone advertised words the restored model
+    // cannot predict. A version with no recorded class list is left alone.
+    try {
+      await reconcileActiveWords(model);
+    } catch (wordErr) {
+      console.error("Word reconciliation error (non-fatal):", wordErr.message);
+    }
+
     // Log activity
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "reverted_model",
-    //   target_type: "model",
-    //   target_id: model.id,
-    //   details: `Reverted to model version ${model.version_number}`,
-    // });
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "reverted_model",
+      target_type: "model",
+      target_id: model.id,
+      details: `Reverted to model version ${model.version_number}`,
+    });
 
     return res.status(200).json({
       message: `Reverted to model version ${model.version_number} successfully`,
@@ -580,16 +610,18 @@ const deleteModel = async (req, res) => {
       });
     }
 
-    // Log before deleting
-    // await ActivityLog.create({
-    //   user_id: req.user.id,
-    //   action: "deleted_model",
-    //   target_type: "model",
-    //   target_id: model.id,
-    //   details: `Deleted model version ${model.version_number}`,
-    // });
+    const deletedModelId = model.id;
+    const deletedModelVersion = model.version_number;
 
     await model.destroy();
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "deleted_model",
+      target_type: "model",
+      target_id: deletedModelId,
+      details: `Deleted model version ${deletedModelVersion}`,
+    });
 
     return res.status(200).json({ message: "Model deleted successfully" });
   } catch (err) {

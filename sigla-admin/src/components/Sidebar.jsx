@@ -1,61 +1,54 @@
 import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { navItems } from "./navItems.js";
+import { getSidebarCollapsed, setSidebarCollapsed } from "./sidebarState.js";
 import {
-  LayoutDashboard,
-  Users,
-  Database,
-  Tag,
-  Cpu,
-  BarChart2,
-  Settings,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
-  X,
 } from "lucide-react";
 
-const navItems = [
-  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-  { label: "Manage Users", path: "/users", icon: Users },
-  { label: "Manage Dataset", path: "/dataset", icon: Database },
-  { label: "Manage Categories", path: "/categories", icon: Tag },
-  { label: "Manage Model", path: "/model", icon: Cpu },
-  { label: "Reports", path: "/reports", icon: BarChart2 },
-  { label: "Administrator Account", path: "/admin_account", icon: Settings },
-];
+const SURFACE = "#ffffff";
+const BORDER = "#f0f0f0";
+const ACTIVE = "#1e3a8a";
+const HOVER = "#f3f4f6";
+const TEXT = "#1f2937";
+const MUTED = "#6b7280";
 
-const Sidebar = ({ onToggle }) => {
-  const [collapsed, setCollapsed] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+const Sidebar = ({ onToggle, onLogout }) => {
+  // Lazy initialiser: restores the persisted width on the first render.
+  const [collapsed, setCollapsed] = useState(getSidebarCollapsed);
+  const { isSuper } = useAuth();
 
-  const handleLogout = () => setShowLogoutModal(true);
+  // Manage Administrators is exclusive to the super administrator.
+  const visibleNavItems = navItems.filter((item) => !item.superOnly || isSuper);
 
-  const confirmLogout = () => {
-    logout();
-    navigate("/login");
-  };
+  const handleLogout = () => onLogout?.();
 
   const handleToggle = () => {
     const next = !collapsed;
     setCollapsed(next);
+    setSidebarCollapsed(next);
     if (onToggle) onToggle(next);
   };
 
-  const transitionStyle = "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)";
+  const transitionStyle = "all 0.2s ease";
+
+  // Toggle button hover (light)
+  const toggleHoverIn = (e) => { e.currentTarget.style.background = HOVER; };
+  const toggleHoverOut = (e) => { e.currentTarget.style.background = "none"; };
 
   return (
-    <>
     <aside
       style={{
         width: collapsed ? "70px" : "280px",
-        background: "#1e3a8a",
+        background: SURFACE,
         display: "flex",
         flexDirection: "column",
         transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-        boxShadow: "2px 0 8px rgba(0, 0, 0, 0.1)",
+        borderRight: `1px solid ${BORDER}`,
+        boxShadow: "1px 0 2px rgba(0, 0, 0, 0.03)",
         zIndex: 1000,
         height: "100vh",
         position: "fixed",
@@ -68,10 +61,10 @@ const Sidebar = ({ onToggle }) => {
     >
       {/* Sidebar Header */}
       {collapsed ? (
-        /* ── Collapsed: logo on top, toggle below ── */
+        /* ── Collapsed: logo tile on top, toggle below ── */
         <div
           style={{
-            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            borderBottom: `1px solid ${BORDER}`,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -80,65 +73,101 @@ const Sidebar = ({ onToggle }) => {
             flexShrink: 0,
           }}
         >
-          <img
-            src="/logo_without_text_official.png"
-            alt="SIGLA logo"
-            style={{ width: "72px", height: "72px", objectFit: "contain" }}
-          />
+          <span
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "12px",
+              background: ACTIVE,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              // Clips the up-scaled mark below to the rounded tile.
+              overflow: "hidden",
+            }}
+          >
+            {/* The source PNG is ~43% artwork and ~57% transparent padding, so
+                it is scaled up and cropped by the tile to fill the square. */}
+            <img
+              src="/logo_without_text_official.png"
+              alt="SIGLA logo"
+              style={{
+                width: "48px",
+                height: "48px",
+                objectFit: "contain",
+                transform: "scale(2.2)",
+              }}
+            />
+          </span>
           <button
             onClick={handleToggle}
             style={{
               background: "none",
               border: "none",
-              color: "white",
+              color: MUTED,
               cursor: "pointer",
               padding: "8px",
-              borderRadius: "6px",
+              borderRadius: "8px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               transition: transitionStyle,
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "none";
-            }}
+            onMouseEnter={toggleHoverIn}
+            onMouseLeave={toggleHoverOut}
             aria-label="Expand sidebar"
           >
             <PanelLeftOpen size={20} />
           </button>
         </div>
       ) : (
-        /* ── Expanded: [logo] [SIGLA] on the left, toggle on the right ── */
+        /* ── Expanded: [logo tile] [SIGLA] on the left, toggle on the right ── */
         <div
           style={{
-            padding: "20px 24px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            padding: "16px 20px",
+            borderBottom: `1px solid ${BORDER}`,
             display: "flex",
             alignItems: "center",
             gap: "12px",
             flexShrink: 0,
           }}
         >
-          <img
-            src="/logo_without_text_official.png"
-            alt="SIGLA logo"
-            style={{
-              width: "72px",
-              height: "72px",
-              objectFit: "contain",
-              flexShrink: 0,
-            }}
-          />
           <span
             style={{
-              fontSize: "1.5rem",
+              width: "52px",
+              height: "52px",
+              borderRadius: "12px",
+              background: ACTIVE,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              // Clips the up-scaled mark below to the rounded tile.
+              overflow: "hidden",
+            }}
+          >
+            {/* The source PNG is ~43% artwork and ~57% transparent padding, so
+                it is scaled up and cropped by the tile to fill the square. */}
+            <img
+              src="/logo_without_text_official.png"
+              alt="SIGLA logo"
+              style={{
+                width: "52px",
+                height: "52px",
+                objectFit: "contain",
+                transform: "scale(2.2)",
+              }}
+            />
+          </span>
+          <span
+            style={{
+              fontSize: "1.3rem",
               fontWeight: 700,
-              color: "white",
+              color: TEXT,
               whiteSpace: "nowrap",
               flex: 1,
+              letterSpacing: "0.02em",
             }}
           >
             SIGLA
@@ -148,22 +177,18 @@ const Sidebar = ({ onToggle }) => {
             style={{
               background: "none",
               border: "none",
-              color: "white",
+              color: MUTED,
               cursor: "pointer",
               padding: "8px",
-              borderRadius: "6px",
+              borderRadius: "8px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               transition: transitionStyle,
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.2)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "none";
-            }}
+            onMouseEnter={toggleHoverIn}
+            onMouseLeave={toggleHoverOut}
             aria-label="Collapse sidebar"
           >
             <PanelLeftClose size={20} />
@@ -171,40 +196,21 @@ const Sidebar = ({ onToggle }) => {
         </div>
       )}
 
-      {/* User Info - conditionally rendered */}
-      {!collapsed && user?.name && (
-        <div
-          style={{
-            padding: "12px 24px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
-            flexShrink: 0,
-            transition: transitionStyle,
-          }}
-        >
-          <p
-            style={{
-              fontSize: "0.95rem",
-              fontWeight: 600,
-              color: "white",
-              marginBottom: 0,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {user?.name}
-          </p>
-        </div>
-      )}
 
       {/* Navigation Menu */}
       <nav
+        className="sidebar-nav"
         style={{
           flex: 1,
-          padding: "16px 0",
+          padding: "12px 12px",
           overflowY: "auto",
           overflowX: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
         }}
       >
-        {navItems.map(({ label, path, icon: Icon }) => (
+        {visibleNavItems.map(({ label, path, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}
@@ -213,28 +219,35 @@ const Sidebar = ({ onToggle }) => {
               display: "flex",
               alignItems: "center",
               justifyContent: collapsed ? "center" : "flex-start",
-              gap: collapsed ? 0 : "16px",
-              padding: collapsed ? "12px 0" : "12px 24px",
+              gap: collapsed ? 0 : "12px",
+              padding: collapsed ? "0" : "0 12px",
               textDecoration: "none",
               transition: transitionStyle,
-              minHeight: "48px",
-              height: "48px",
+              height: "42px",
+              borderRadius: "8px",
               whiteSpace: "nowrap",
-              background: isActive
-                ? collapsed
-                  ? "rgba(255, 255, 255, 0.2)"
-                  : "rgba(255, 255, 255, 0.1)"
-                : "transparent",
-              color: isActive ? "white" : "rgba(255, 255, 255, 0.8)",
-              borderLeft: isActive && !collapsed ? "3px solid white" : "none",
+              background: isActive ? ACTIVE : "transparent",
+              color: isActive ? "#ffffff" : MUTED,
+              fontWeight: isActive ? 600 : 500,
             })}
+            onMouseEnter={(e) => {
+              if (!e.currentTarget.classList.contains("active")) {
+                e.currentTarget.style.background = HOVER;
+                e.currentTarget.style.color = TEXT;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!e.currentTarget.classList.contains("active")) {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = MUTED;
+              }
+            }}
           >
             <Icon size={20} style={{ flexShrink: 0 }} />
             {!collapsed && (
               <span
                 style={{
-                  fontWeight: 500,
-                  fontSize: "0.95rem",
+                  fontSize: "0.92rem",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   flex: 1,
@@ -251,10 +264,10 @@ const Sidebar = ({ onToggle }) => {
       {/* Sidebar Footer - Logout */}
       <div
         style={{
-          borderTop: "1px solid rgba(255, 255, 255, 0.2)",
-          padding: "16px 0",
+          borderTop: `1px solid ${BORDER}`,
+          padding: "12px",
           flexShrink: 0,
-          background: "#1e3a8a",
+          background: SURFACE,
         }}
       >
         <button
@@ -264,121 +277,36 @@ const Sidebar = ({ onToggle }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: collapsed ? "center" : "flex-start",
-            gap: collapsed ? 0 : "16px",
+            gap: collapsed ? 0 : "12px",
             width: "100%",
             background: "none",
             border: "none",
-            padding: collapsed ? "12px 0" : "12px 24px",
-            minHeight: "48px",
-            height: "48px",
-            color: "rgba(255, 255, 255, 0.8)",
+            padding: collapsed ? "0" : "0 12px",
+            height: "42px",
+            borderRadius: "8px",
+            color: MUTED,
             cursor: "pointer",
             transition: transitionStyle,
-            borderRadius: 0,
             fontFamily: "inherit",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)";
-            e.currentTarget.style.color = "white";
+            e.currentTarget.style.background = "#fef2f2";
+            e.currentTarget.style.color = "#dc2626";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = "none";
-            e.currentTarget.style.color = "rgba(255, 255, 255, 0.8)";
+            e.currentTarget.style.color = MUTED;
           }}
         >
           <LogOut size={20} style={{ flexShrink: 0 }} />
           {!collapsed && (
-            <span
-              style={{
-                fontWeight: 500,
-                fontSize: "0.95rem",
-              }}
-            >
+            <span style={{ fontWeight: 500, fontSize: "0.92rem" }}>
               Logout
             </span>
           )}
         </button>
       </div>
     </aside>
-
-    {/* Logout confirmation modal */}
-    {showLogoutModal && (
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 2000,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "16px",
-          background: "rgba(0,0,0,0.4)",
-        }}
-        onClick={() => setShowLogoutModal(false)}
-      >
-        <div
-          style={{
-            background: "white",
-            borderRadius: "16px",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-            width: "100%",
-            maxWidth: "380px",
-            padding: "24px",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
-              Sign Out
-            </h3>
-            <button
-              onClick={() => setShowLogoutModal(false)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: "4px", borderRadius: "6px", display: "flex" }}
-            >
-              <X size={18} />
-            </button>
-          </div>
-          <p style={{ fontSize: "0.9rem", color: "#6b7280", marginBottom: "24px" }}>
-            Are you sure you want to sign out? Any unsaved changes will be lost.
-          </p>
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-            <button
-              onClick={() => setShowLogoutModal(false)}
-              style={{
-                padding: "8px 18px",
-                borderRadius: "8px",
-                border: "1px solid #e5e7eb",
-                background: "white",
-                color: "#374151",
-                fontSize: "0.875rem",
-                fontWeight: 500,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmLogout}
-              style={{
-                padding: "8px 18px",
-                borderRadius: "8px",
-                border: "none",
-                background: "#1e3a8a",
-                color: "white",
-                fontSize: "0.875rem",
-                fontWeight: 500,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-    </>
   );
 };
 

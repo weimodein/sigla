@@ -5,7 +5,10 @@
         <item name="colorPrimaryVariant">#1A237E</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSecondary">#764BA2</item>
-        <item name="android:windowBackground">#0A0E21</item>
+        <!-- Matches activity_main.xml's root background. When these differed the
+             starting window drew one colour and the real window snapped to
+             another, which read as a stutter during the transition. -->
+        <item name="android:windowBackground">#08162a</item>
         <item name="android:statusBarColor">#0A0E21</item>
         <item name="android:navigationBarColor">#0D1127</item>
     </style>

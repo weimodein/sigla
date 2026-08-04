@@ -31,9 +31,11 @@ const Word = sequelize.define(
       allowNull: false,
       validate: { isIn: [["FSL"]] },
     },
-    category: {
-      type: DataTypes.STRING(50),
-      defaultValue: "additional words",
+    // FK to categories.id (nullable = uncategorized). The API emits the category
+    // *name* by joining through this; there is no denormalized name column.
+    category_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     status: {
       type: DataTypes.STRING(20),
@@ -69,13 +71,6 @@ const Word = sequelize.define(
     is_locked: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
-    },
-    // Admin-defined cap on total gesture samples collected across all users.
-    // When null, falls back to the default cap (25).
-    sample_limit: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      defaultValue: null,
     },
     // Filipino translation of the word/phrase
     filipino_translation: {

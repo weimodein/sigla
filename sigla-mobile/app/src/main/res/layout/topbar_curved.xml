@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    topbar_curved.xml
+    Reusable curved blue top bar: hamburger icon box + title + subtitle.
+    Used by Word Bank, and intended for reuse by Translation History and Settings.
+
+    Usage:
+      <include layout="@layout/topbar_curved" />
+      Then, per screen, override the defaults if needed:
+        findViewById<TextView>(R.id.tvTopBarTitle).text = "..."
+        findViewById<TextView>(R.id.tvTopBarSubtitle).text = "..."
+      btnSidebar keeps the same id as the old topbar so existing
+      drawerLayout.openDrawer(...) wiring keeps working unchanged.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/topBarOuterWrapper"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_topbar_outer"
+    android:elevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_topbar_curved"
+        android:layout_margin="6dp"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="18dp"
+        android:gravity="center_vertical">
+
+        <!-- Sidebar 3-line hamburger button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSidebar"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:padding="0dp"
+            android:contentDescription="Open menu"
+            app:icon="@drawable/ic_menu_lines"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconSize="20dp"
+            app:iconTint="#FFFFFF"
+            app:backgroundTint="#14FFFFFF"
+            app:strokeColor="#33FFFFFF"
+            app:strokeWidth="1dp"
+            app:cornerRadius="10dp" />
+
+        <!-- Screen title + subtitle -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
+
+            <TextView
+                android:id="@+id/tvTopBarTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Word Bank"
+                android:textColor="#FFFFFF"
+                android:textSize="19sp"
+                android:fontFamily="@font/poppins_bold" />
+
+            <TextView
+                android:id="@+id/tvTopBarSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Filipino Sign Language Translator"
+                android:textColor="#80B0D4FF"
+                android:textSize="10sp"
+                android:fontFamily="@font/poppins_regular" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</FrameLayout>

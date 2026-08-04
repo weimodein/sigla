@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- dialog_download_all_videos.xml
+     Progress popup for the Word Bank bulk demo-video download. Same navy
+     title bar / accent divider / light body shell as dialog_confirm_action.xml,
+     with a determinate bar, an "x of y" counter, the word currently in flight,
+     and an explicit Cancel (the dialog itself is not cancelable).
+-->
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="8dp"
+    app:cardBackgroundColor="@color/sig_surface_card">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Title bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/sig_chrome_navy"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="20dp"
+            android:paddingBottom="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Downloading demo videos"
+                android:textColor="#FFFFFF"
+                android:textSize="19sp"
+                android:fontFamily="@font/poppins_bold" />
+
+        </LinearLayout>
+
+        <!-- Accent divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="5dp"
+            android:background="@color/sig_chrome_halo" />
+
+        <!-- Body -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/sig_page_bg"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="22dp"
+            android:paddingBottom="20dp">
+
+            <TextView
+                android:id="@+id/tvDownloadCounter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Preparing…"
+                android:textColor="@color/sig_text_primary"
+                android:textSize="15sp"
+                android:fontFamily="@font/poppins_bold" />
+
+            <ProgressBar
+                android:id="@+id/progressDownloadAll"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:max="100"
+                android:progress="0" />
+
+            <TextView
+                android:id="@+id/tvDownloadCurrentWord"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:text=""
+                android:textColor="@color/sig_text_secondary"
+                android:textSize="12sp"
+                android:fontFamily="@font/poppins_regular" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:orientation="horizontal"
+                android:gravity="end">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDownloadCancel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="42dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    android:text="CANCEL"
+                    android:textAllCaps="false"
+                    android:textSize="12sp"
+                    android:letterSpacing="0.04"
+                    android:fontFamily="@font/poppins_bold"
+                    android:textColor="@color/sig_text_primary"
+                    app:cornerRadius="21dp"
+                    app:backgroundTint="@color/sig_accent_pill" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>
