@@ -122,6 +122,7 @@ const extractAndStoreSample = async (
   mimetype,
   userId,
   fileUrl = null,
+  sessionId = null,
 ) => {
   const isVideo = VIDEO_RX.test(filename) || (mimetype || "").startsWith("video/");
 
@@ -149,6 +150,7 @@ const extractAndStoreSample = async (
       word_id: word.id,
       submitted_by: userId,
       file_url: fileUrl || `video_upload_${Date.now()}`,
+      session_id: sessionId,
       sample_count: 1,
       status: "approved",
       is_validated: true,
@@ -1610,6 +1612,20 @@ const uploadVideos = async (req, res) => {
       return res.status(400).json({ message: "At least one file is required" });
     }
 
+    // Who signed these clips, for signer-grouped cross-validation.
+    //
+    // Cannot be derived from submitted_by — that is the uploading ADMIN, identical
+    // across every signer (1 for 1664 of 1726 existing rows). Without a real grouping
+    // key, cross-validation puts the same signer in both train and test and the
+    // resulting accuracy overstates performance for a new user.
+    //
+    // Defaults to one group per upload batch, which is correct as long as a batch
+    // contains one signer's clips. Pass an explicit `session_id` form field to keep
+    // one signer's grouping intact across several batches.
+    const sessionId =
+      (req.body?.session_id || "").trim() ||
+      `upload_${req.user.id}_${Date.now()}`;
+
     const results = [];
     let successCount = 0;
     let failCount = 0;
@@ -1621,6 +1637,8 @@ const uploadVideos = async (req, res) => {
         file.originalname,
         file.mimetype,
         req.user.id,
+        null,
+        sessionId,
       );
       results.push(result);
       if (result.status === "ok") successCount++;
@@ -1660,6 +1678,9 @@ const uploadVideos = async (req, res) => {
       message: `${successCount} file(s) processed, ${failCount} failed/skipped`,
       results,
       approved_sample_count: newApproved,
+      // Returned so a caller uploading one signer's clips across several batches can
+      // pass it back as `session_id` and keep the grouping intact.
+      session_id: sessionId,
     });
   } catch (err) {
     console.error("Upload videos error:", err);

@@ -49,13 +49,17 @@ from app.utils.preprocessor import (  # noqa: E402
 
 # ── Constants mirrored from PredictionService.kt ──────────────────────────────
 # Keep these in sync with the Kotlin file; they are the thing under test.
-MIN_MOTION_FRAMES     = 8
+MIN_MOTION_FRAMES     = 12    # raised from 8: at 8, 22 of 30 input frames were padding
 MOTION_SLIDE_INTERVAL = 2
-MOTION_THRESHOLD      = 0.60
-MOTION_EARLY_CONF     = 0.60
+MOTION_THRESHOLD      = 0.70
+MOTION_EARLY_CONF     = 0.70
 MOTION_EARLY_STREAK   = 10
 EARLY_EXIT_THRESHOLD  = 0.95
-EARLY_EXIT_STREAK     = 10
+# Shorter than MOTION_EARLY_STREAK so the high-confidence tier fires SOONER. When both
+# were 10 the tier was unreachable: the streak resets below MOTION_EARLY_CONF, so any 10
+# consecutive >=0.95 frames also satisfied the 10-frame low-confidence tier checked in
+# the same pass.
+EARLY_EXIT_STREAK     = 4
 BUFFER_CAPACITY       = 90
 
 # The live buffer forces a run once it has been filling for BUFFER_FILL_MS and holds
@@ -178,15 +182,34 @@ class Simulator:
                     else:
                         streak, streak_label = 0, -1
 
+                    # Only an END-OF-GESTURE force may bypass the streak. `force` here
+                    # is the BUFFER_FILL_MS timer, which fires while the signer is
+                    # STILL SIGNING -- bypassing the streak there lets one frame fire
+                    # on a shared opening movement, the failure the 10-frame streak
+                    # exists to prevent. Matches ForceReason.TIMER in Kotlin.
                     if conf >= EARLY_EXIT_THRESHOLD:
-                        if streak >= EARLY_EXIT_STREAK or force:
+                        if streak >= EARLY_EXIT_STREAK:
                             return idx, conf, i
                     elif conf >= MOTION_EARLY_CONF:
                         if streak >= MOTION_EARLY_STREAK:
                             return idx, conf, i
 
+                    if force and conf >= MOTION_THRESHOLD and streak >= MOTION_EARLY_STREAK:
+                        return idx, conf, i
+                    continue
+
                 if force and conf >= MOTION_THRESHOLD:
                     return idx, conf, i
+
+        # Hands left the frame without a fire. On device this is the NO_HAND_TIMEOUT
+        # flush (ForceReason.END_OF_GESTURE), which runs ONE final forced inference and
+        # may bypass the streak -- the gesture is over, so this is the last chance to
+        # classify it. Without this the simulator under-reports accuracy relative to the
+        # real app, which was the case before D3 split the two force reasons.
+        if not self.legacy and len(buffer) >= MIN_MOTION_FRAMES:
+            idx, conf = self._predict(buffer)
+            if conf >= MOTION_THRESHOLD:
+                return idx, conf, len(sequence) - 1
 
         return None, None, None
 

@@ -23,6 +23,26 @@ SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
 
+def _load_cv_baseline() -> dict | None:
+    """
+    Read the cross-validation result written by tools/cross_validate.py, if present.
+
+    That file holds the only generalization estimate in the pipeline, so surfacing it
+    alongside the (optimistic) selection-split score gives an admin both numbers
+    instead of only the flattering one. Missing or malformed file is not an error —
+    evaluation must not fail because an optional report is absent or stale.
+    """
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "cv_baseline.json")
+    try:
+        with open(os.path.abspath(path)) as f:
+            data = json.load(f)
+        if "accuracy_mean" in data and "accuracy_std" in data:
+            return data
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def predict_keras(model, input_data: np.ndarray) -> np.ndarray:
     """Run the Keras (.h5) model on a batch and return predicted class indices.
 
@@ -79,10 +99,20 @@ def test(version_number: str, model_id: int) -> dict:
     h5_path = download_model_from_supabase(version_number, "sign_model_motion.h5")
 
     # ── Step 3: Prepare + split ───────────────────────────────
-    # Same split logic (and random_state) as train.py, so X_test/y_test here is the
-    # identical real, unaugmented holdout the model's val_accuracy was measured
-    # against during training — a genuine evaluation, not data it trained on.
-    _, _, X_test, y_test, motion_label_map = prepare_motion_dataset(motion_dataset)
+    # Same split logic AND the same default random_state=42 as train.py, so X_test
+    # here is byte-identical to the split that EarlyStopping(restore_best_weights=True)
+    # selected the weights on.
+    #
+    # That means this is NOT a generalization estimate, despite being the number the
+    # admin UI shows next to the word "test". The model was chosen to maximize
+    # accuracy on exactly these samples. It is a useful regression check — a sharp
+    # drop means something broke — but it is optimistic by construction, and
+    # train.py:156-173 says the same about its own number.
+    #
+    # tools/cross_validate.py is the trustworthy measurement: it trains K models and
+    # scores every sample exactly once while held out. Its result is surfaced below
+    # when cv_baseline.json is present.
+    _, _, X_test, y_test, motion_label_map, _ = prepare_motion_dataset(motion_dataset)
 
     # ── Step 4: Evaluate ──────────────────────────────────────
     print("Evaluating motion model...")
@@ -128,6 +158,16 @@ def test(version_number: str, model_id: int) -> dict:
     print(f"\nClassification Report:\n{report}")
     print(f"Top confusions (true -> predicted):\n{confusion_lines}")
 
+    print("\n  NOTE: measured on the model-selection split (same random_state as")
+    print("        training), so this is a regression check, NOT a generalization")
+    print("        estimate. Run tools/cross_validate.py for a trustworthy number.")
+
+    cv = _load_cv_baseline()
+    if cv:
+        print(f"  Cross-validated accuracy (tools/cross_validate.py): "
+              f"{cv['accuracy_mean']*100:.1f}% +/- {cv['accuracy_std']*100:.1f}% "
+              f"over {cv['folds']} folds")
+
     print(f"\n{'='*50}")
     print(f"Evaluation complete for version: {version_number}")
     print(f"{'='*50}\n")
@@ -139,7 +179,22 @@ def test(version_number: str, model_id: int) -> dict:
         "f1_score":              round(float(f1),        4),
         "classification_report": report,
         "top_confusions":        confusion_lines,
+        # Consumers (backend, admin UI) must not present `accuracy` as a
+        # generalization estimate — it is measured on the split the weights were
+        # selected on. These fields make that explicit rather than leaving it to a
+        # comment nobody reads at the call site.
+        "is_generalization_estimate": False,
+        "evaluation_note": (
+            "Measured on the model-selection split (same random_state as training). "
+            "Optimistic by construction — a regression check, not a generalization "
+            "estimate. Run tools/cross_validate.py for that."
+        ),
     }
+
+    if cv:
+        metrics["cross_validated_accuracy"]     = round(float(cv["accuracy_mean"]), 4)
+        metrics["cross_validated_accuracy_std"] = round(float(cv["accuracy_std"]),  4)
+        metrics["cross_validated_folds"]        = cv["folds"]
 
     return {
         "version_number": version_number,

@@ -147,23 +147,32 @@ def swap_rate(dataset: dict, name: str):
 def run_cv(dataset: dict, folds: int, epochs: int):
     from tensorflow import keras
     from sklearn.utils.class_weight import compute_class_weight
-    from app.services.train import build_motion_model
+    from app.services.train import build_motion_model, set_global_seed
 
     accs = []
     recalls = defaultdict(list)
     confusions = defaultdict(int)
 
     for fold in range(folds):
-        X_tr, y_tr, X_va, y_va, label_map = prepare_motion_dataset(
+        X_tr, y_tr, X_va, y_va, label_map, real_counts = prepare_motion_dataset(
             dataset, fold=fold, n_splits=folds, random_state=42
         )
         if len(X_va) == 0:
             continue
+
+        # Seed per fold so an A/B here measures the change, not init noise.
+        set_global_seed(42 * 1000 + fold)
+
         model = build_motion_model(len(label_map))
-        cw = compute_class_weight("balanced", classes=np.unique(y_tr), y=y_tr)
+        # Weight from real pre-augmentation counts — matches train.py.
+        classes_present = np.array(sorted(real_counts.keys()), dtype=np.int64)
+        real_labels = np.concatenate([
+            np.full(real_counts[c], c, dtype=np.int64) for c in classes_present
+        ])
+        cw = compute_class_weight("balanced", classes=classes_present, y=real_labels)
         model.fit(
             X_tr, y_tr, validation_data=(X_va, y_va), epochs=epochs, batch_size=32,
-            class_weight=dict(enumerate(cw)),
+            class_weight={int(c): float(w) for c, w in zip(classes_present, cw)},
             callbacks=[keras.callbacks.EarlyStopping(
                 monitor="val_accuracy", patience=20, restore_best_weights=True)],
             verbose=0,

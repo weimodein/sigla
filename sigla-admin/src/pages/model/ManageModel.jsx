@@ -880,6 +880,28 @@ const ManageModel = () => {
                                 </button>
                               </>
                             )}
+                            {/* A failed run produced no artifacts, so Revert is
+                                meaningless — but it still occupies a row, and
+                                without Delete those rows accumulate forever. */}
+                            {model.status === "failed" && (
+                              <button
+                                onClick={() => handleDelete(model)}
+                                disabled={actionLoading}
+                                className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                  background: "#fecaca",
+                                  color: "#991b1b",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.background = "#fca5a5")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background = "#fecaca")
+                                }
+                              >
+                                Delete
+                              </button>
+                            )}
                             {model.status === "deployed" && (
                               <span
                                 className="text-xs font-medium px-3 py-1.5 rounded-full"

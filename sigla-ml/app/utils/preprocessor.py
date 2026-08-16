@@ -16,6 +16,35 @@ SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 # recall across the full vocabulary, not just the words currently of interest.
 MIRROR_AUGMENTATION_ENABLED = os.getenv("MIRROR_AUGMENTATION_ENABLED", "false").lower() == "true"
 
+# Rotation augmentation: small in-plane (xy) rotations of already-normalized
+# sequences. Normalization removes translation and scale but NOT rotation, so
+# camera tilt / signer lean is otherwise unmodelled. Applied about the origin,
+# which is the wrist for hand blocks and the shoulder midpoint for the pose block
+# (both are exactly (0,0) post-normalize_frame) — the same convention that makes
+# mirror_sequence a plain `-x`.
+ROTATION_AUGMENTATION_ENABLED = os.getenv("ROTATION_AUGMENTATION_ENABLED", "true").lower() == "true"
+ROTATION_MAX_DEGREES = float(os.getenv("ROTATION_MAX_DEGREES", 12.0))
+
+# Truncated-prefix augmentation: train on partial gestures padded exactly the way
+# live inference pads them. PredictionService fires on a GROWING buffer and
+# right-pads by repeating the last frame when it holds < SEQUENCE_LENGTH frames,
+# so every early fire is an input shape the model never saw in training. This
+# augmentation puts those inputs in-distribution.
+#
+# NOTE: this deliberately trades a possible small CV loss for real-world early-fire
+# accuracy. cross_validate.py only scores COMPLETE gestures, so it cannot see the
+# benefit — judge this one with tools/simulate_early_fire.py instead.
+PREFIX_AUGMENTATION_ENABLED = os.getenv("PREFIX_AUGMENTATION_ENABLED", "true").lower() == "true"
+PREFIX_KEEP_MIN = float(os.getenv("PREFIX_KEEP_MIN", 0.40))
+PREFIX_KEEP_MAX = float(os.getenv("PREFIX_KEEP_MAX", 0.85))
+
+# Augmented copies per real training sequence. There used to be a `max(..., 150)`
+# floor here, which did two bad things at once: it turned a 3-clip class into 150
+# samples (~98% synthetic copies of 3 originals), and by padding every class to the
+# SAME count it made compute_class_weight('balanced') return exactly 1.0 for every
+# class — weighting that appeared to handle imbalance while doing nothing.
+AUGMENTATION_FACTOR = int(os.getenv("AUGMENTATION_FACTOR", 6))
+
 # Backend API configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
 ML_API_KEY  = os.getenv("ML_API_KEY")  # Must be set in .env
@@ -76,15 +105,31 @@ def fetch_approved_samples() -> dict:
     url = f"{BACKEND_URL}/ml/dataset"
     headers = {"X-API-Key": ML_API_KEY}
 
+    # The whole dataset arrives as ONE JSON body — every sample's full 30x147 float
+    # sequence inlined. Measured at 1726 samples / 42 classes: 98.2 MB taking 88.7s
+    # on a cold backend cache, which blew straight through the previous hardcoded
+    # 30s and failed training before a single epoch ran. The payload grows linearly
+    # with the dataset, so a fixed short timeout gets tighter every time a clip is
+    # added — exactly backwards.
+    #
+    # This is a read timeout on a large but healthy transfer, not a hung server, so a
+    # generous ceiling is correct. Override with ML_FETCH_TIMEOUT if a backend is
+    # genuinely unreachable and you want to fail fast instead.
+    timeout = float(os.getenv("ML_FETCH_TIMEOUT", 600.0))
+
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=timeout) as client:
             response = client.get(url, headers=headers)
             response.raise_for_status()
             dataset = response.json()
     except httpx.HTTPStatusError as e:
         raise ValueError(f"Backend API returned error {e.response.status_code}: {e.response.text}")
     except httpx.RequestError as e:
-        raise ValueError(f"Failed to connect to backend API: {e}")
+        raise ValueError(
+            f"Failed to connect to backend API after {timeout:.0f}s: {e}. "
+            f"If the dataset is large this may be a transfer timeout rather than an "
+            f"unreachable backend — raise ML_FETCH_TIMEOUT."
+        )
 
     if not dataset:
         raise ValueError("No approved samples found in backend database.")
@@ -339,15 +384,22 @@ def canonicalize_slots(seq: np.ndarray) -> np.ndarray:
     return out
 
 
-def _load_real_sequences(dataset: dict) -> dict:
+def _load_real_sequences(dataset: dict, with_groups: bool = False):
     """
     Normalize + peak-center every stored real sequence, grouped by label. No
     augmentation — this is the actual recorded data, used as the basis for both the
     augmented training set and the untouched evaluation set below.
+
+    `with_groups=True` additionally returns a parallel dict of per-sequence grouping
+    keys (session_id, falling back to a unique per-sample token when absent), for
+    signer-grouped cross-validation. Returned separately rather than bundled into the
+    sequence list so the default return shape is unchanged.
     """
     real = {}
+    groups = {}
     for label, samples in dataset.items():
         sequences = []
+        seq_groups = []
         skipped_empty = 0
         skipped_shape = 0
         for sample in samples:
@@ -378,6 +430,15 @@ def _load_real_sequences(dataset: dict) -> dict:
 
             sequences.append(seq)
 
+            # Grouping key. A NULL session_id means provenance was never recorded, so
+            # the sample gets a UNIQUE key rather than sharing a "None" bucket —
+            # merging unknowns would assert that they came from one signer, which was
+            # never observed and would corrupt a grouped split.
+            sid = sample.get("session_id")
+            seq_groups.append(
+                str(sid) if sid else f"__unknown_{label}_{sample.get('sample_id', len(seq_groups))}"
+            )
+
         if skipped_empty or skipped_shape:
             print(f"[preprocessor] '{label}': skipped {skipped_empty} empty and "
                   f"{skipped_shape} wrong-width sample(s) "
@@ -385,6 +446,7 @@ def _load_real_sequences(dataset: dict) -> dict:
 
         if sequences:
             real[label] = sequences
+            groups[label] = seq_groups
         else:
             # A dropped label is NOT a class in the trained model, but it may
             # still exist in the word bank — and every class index at or after
@@ -392,11 +454,12 @@ def _load_real_sequences(dataset: dict) -> dict:
             # words, so it must be loud.
             print(f"[preprocessor] WARNING: '{label}' has NO usable samples and is "
                   f"excluded from the model's classes. Every later class index shifts.")
-    return real
+    return (real, groups) if with_groups else real
 
 
 def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: int = 42,
-                           fold: int | None = None, n_splits: int = 5):
+                           fold: int | None = None, n_splits: int = 5,
+                           group_by_session: bool = False):
     """
     Prepare a motion dataset split BEFORE augmentation, so the evaluation split is
     always pure real (unaugmented) data. Augmenting first and splitting after (the
@@ -417,12 +480,41 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
       folds while still predicting each one exactly once while held out, and the
       spread across folds says whether a change is real or noise.
 
-    Returns (X_train, y_train, X_val, y_val, label_map). label_map (index -> label)
-    is identical for both splits — computed once from every label present, so the
-    model's output contract does not shift between folds.
+    Returns (X_train, y_train, X_val, y_val, label_map, real_train_counts).
+
+    label_map (index -> label) is identical for both splits — computed once from
+    every label present, so the model's output contract does not shift between folds.
+
+    real_train_counts (index -> int) is each class's REAL, pre-augmentation training
+    count, for computing class weights independently of the augmentation policy.
+    The old max(...,150) floor padded every class to the same size, which made
+    'balanced' weights on y_train come out exactly 1.0 — weighting that silently did
+    nothing. Deriving weights from these counts instead keeps that from recurring if
+    the augmentation policy ever changes again.
     """
-    real   = _load_real_sequences(dataset)
+    real, all_groups = _load_real_sequences(dataset, with_groups=True)
     labels = sorted(real.keys())
+
+    # Signer-grouped folds. Splitting per class (below) means a global
+    # StratifiedGroupKFold is unnecessary — stratification is already guaranteed by
+    # construction — so grouping is applied WITHIN each class: hold out whole signers,
+    # never individual clips.
+    #
+    # This is what makes the number mean "accuracy for a NEW signer". Ungrouped folds
+    # put the same signer on both sides, so the model can score by recognising the
+    # person rather than the sign.
+    if group_by_session:
+        distinct = {g for gs in all_groups.values() for g in gs}
+        real_sessions = {g for g in distinct if not g.startswith("__unknown_")}
+        if len(real_sessions) < 2:
+            raise ValueError(
+                f"group_by_session requires >=2 distinct session_id values, found "
+                f"{len(real_sessions)}. Samples without a session_id cannot be grouped "
+                f"(they are treated as singletons). Backfill gesture_samples.session_id "
+                f"first — see migrations/002_gesture_samples_session_id.sql."
+            )
+        print(f"[preprocessor] grouped split ON — {len(real_sessions)} session(s): "
+              f"{', '.join(sorted(real_sessions))}")
 
     label_map = { i: label for i, label in enumerate(labels) }
     label_idx = { label: i for i, label in enumerate(labels) }
@@ -437,6 +529,7 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
 
     X_train, y_train = [], []
     X_val,   y_val   = [], []
+    real_train_counts = {}   # class index -> real (pre-augmentation) train count
 
     for label in labels:
         sequences = real[label]
@@ -446,6 +539,21 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
             # Too few real samples to hold any out — everything goes to training;
             # this class just won't have a data point in the evaluation split.
             train_seqs, val_seqs = sequences, []
+        elif group_by_session and fold is not None:
+            # Leave-one-signer-out within this class: fold k holds out the k-th
+            # session entirely. GroupKFold does not shuffle (groups are the unit), so
+            # ordering the sessions deterministically keeps folds reproducible.
+            seq_groups = all_groups[label]
+            ordered = sorted(set(seq_groups))
+            k = min(n_splits, len(ordered))
+            held_out = ordered[fold % k]
+            train_seqs = [s for s, g in zip(sequences, seq_groups) if g != held_out]
+            val_seqs   = [s for s, g in zip(sequences, seq_groups) if g == held_out]
+            if not train_seqs:
+                # Every sample of this class belongs to the held-out signer, so it
+                # cannot be learned this fold. Train on it anyway rather than emit a
+                # class the model has never seen.
+                train_seqs, val_seqs = sequences, []
         elif fold is None:
             train_seqs, val_seqs = train_test_split(
                 sequences, test_size=test_size, random_state=random_state
@@ -460,6 +568,11 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
             train_seqs = [sequences[i] for i in tr_idx]
             val_seqs   = [sequences[i] for i in va_idx]
 
+        # Real (unaugmented) training count for this class, captured BEFORE any
+        # augmentation. This is what class weighting must be based on — see the
+        # real_counts note in this function's docstring.
+        real_train_counts[idx] = len(train_seqs)
+
         # Mirror-augment the TRAIN portion only (doubles it with flipped copies) —
         # same train-only rule as the noise/speed/dropout augmentation below, so the
         # validation split stays 100% real and unmirrored.
@@ -467,10 +580,20 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
             train_seqs = train_seqs + [mirror_sequence(s) for s in train_seqs]
 
         # Augment the TRAIN portion only — evaluation stays 100% real, unaugmented.
-        # 25 sequences × 6 = 150 augmented + 25 real = 175 total
-        target = max(len(train_seqs) * 6, 150)
+        #
+        # No `max(..., 150)` floor: it used to inflate a 3-clip class to 150 samples
+        # (~98% synthetic copies of 3 originals), which both overfit those originals
+        # and — because it equalized every class to the same count — made the
+        # downstream compute_class_weight('balanced') a no-op. Scaling purely by the
+        # real count keeps the genuine imbalance visible so class weights can act on it.
+        target = len(train_seqs) * AUGMENTATION_FACTOR
+
+        # Per-class generator. A single default_rng(42) inside the callee gave every
+        # class identical augmentation draws; deriving from [seed, idx] keeps runs
+        # reproducible while decorrelating classes.
+        class_rng = np.random.default_rng([random_state, idx])
         augmented = augment_motion_sequences(
-            [s.tolist() for s in train_seqs], target_count=target
+            [s.tolist() for s in train_seqs], target_count=target, rng=class_rng
         )
         train_seqs_all = train_seqs + [np.array(a, dtype=np.float32) for a in augmented]
 
@@ -485,7 +608,16 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
     y_val   = np.array(y_val,   dtype=np.int32)
 
     print(f"Motion dataset — train: {X_train.shape}, val (real, unaugmented): {X_val.shape}, classes: {len(labels)}")
-    return X_train, y_train, X_val, y_val, label_map
+
+    # Real-vs-augmented counts per class. Printed because augmentation hides the
+    # true data imbalance in X_train's shape: a class with 3 real clips and one with
+    # 30 both look large after augmentation, so a collection gap is otherwise
+    # invisible at exactly the moment it matters.
+    weakest = sorted(real_train_counts.items(), key=lambda kv: kv[1])[:3]
+    print("[preprocessor] real train samples per class (pre-augmentation); "
+          f"lowest: {', '.join(f'{label_map[i]}={n}' for i, n in weakest)}")
+
+    return X_train, y_train, X_val, y_val, label_map, real_train_counts
 
 
 def save_label_map(label_map: dict, path: str) -> None:
@@ -522,21 +654,97 @@ def mirror_sequence(seq: np.ndarray) -> np.ndarray:
     return out
 
 
-def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:
+def rotate_sequence(seq: np.ndarray, radians: float) -> np.ndarray:
     """
-    Augment motion sequences with temporal speed variation, noise, and frame jitter.
+    Rotate an already-normalized motion sequence by `radians` in the xy-plane.
+
+    Operates on post-normalize_frame coordinates, where each present hand block is
+    wrist-centered and the pose block is shoulder-midpoint-centered — so the origin
+    IS the anatomical centre and a plain rotation about it is correct. z is left
+    untouched (it is a depth estimate on a different scale, and rotating it into x/y
+    would mix incompatible units).
+
+    Absent (all-zero) hand/pose blocks stay zero: rotating (0,0) yields (0,0), but
+    they are skipped explicitly so the absent-block sentinel can never be perturbed
+    by floating-point noise.
+    """
+    out = seq.copy()
+    cos_r, sin_r = float(np.cos(radians)), float(np.sin(radians))
+
+    for f in range(out.shape[0]):
+        frame = out[f]
+        for hand in range(2):
+            base = hand * 63
+            if not np.any(frame[base:base + 63]):
+                continue
+            for j in range(21):
+                x, y = frame[base + j * 3], frame[base + j * 3 + 1]
+                frame[base + j * 3]     = x * cos_r - y * sin_r
+                frame[base + j * 3 + 1] = x * sin_r + y * cos_r
+        if np.any(frame[_POSE_BASE:_POSE_BASE + 21]):
+            for k in range(7):
+                x, y = frame[_POSE_BASE + k * 3], frame[_POSE_BASE + k * 3 + 1]
+                frame[_POSE_BASE + k * 3]     = x * cos_r - y * sin_r
+                frame[_POSE_BASE + k * 3 + 1] = x * sin_r + y * cos_r
+    return out
+
+
+def truncated_prefix_sequence(seq: np.ndarray, keep_fraction: float) -> np.ndarray:
+    """
+    Keep the first `keep_fraction` of the sequence, then right-pad by repeating the
+    last kept frame back up to SEQUENCE_LENGTH.
+
+    This reproduces EXACTLY what live inference feeds the model mid-gesture:
+    PredictionService runs on a growing buffer and pads a short buffer by repeating
+    its last frame (see extractMotionWindow / the `while (window.size < SEQUENCE_LENGTH)`
+    loop in PredictionService.kt, mirrored by center_on_peak_velocity's padding here).
+
+    Without this, the model is trained only on complete, peak-centered gestures but
+    is asked to classify partial ones on every early fire.
+    """
+    n = len(seq)
+    keep = int(round(n * keep_fraction))
+    keep = max(1, min(keep, n))
+
+    window = [seq[i] for i in range(keep)]
+    while len(window) < SEQUENCE_LENGTH:
+        window.append(window[-1])
+    return np.array(window[:SEQUENCE_LENGTH], dtype=np.float32)
+
+
+def augment_motion_sequences(sequences: list, target_count: int = 100,
+                             rng: np.random.Generator | None = None) -> list:
+    """
+    Augment motion sequences with temporal speed variation, noise, frame jitter, and
+    (when enabled) in-plane rotation and truncated prefixes.
+
+    `rng` should be supplied by the caller, seeded per class. It used to be created
+    here as an unconditional default_rng(42) — but this function is called once per
+    class, so every class received the identical sequence of augmentation types and
+    the identical noise/stretch draws. That is correlated noise across classes rather
+    than independent augmentation, and it can introduce a spurious shared signal.
     """
     augmented = []
     if not sequences:
         return augmented
 
-    rng = np.random.default_rng(42)
+    if rng is None:
+        rng = np.random.default_rng(42)
+
+    # Build the enabled augmentation menu. Rotation and prefix are togglable so each
+    # can be A/B'd independently against cv_baseline.json.
+    aug_types = [0, 1, 2]
+    if ROTATION_AUGMENTATION_ENABLED:
+        aug_types.append(3)
+    if PREFIX_AUGMENTATION_ENABLED:
+        aug_types.append(4)
+
     needed = target_count - len(sequences)
 
     while len(augmented) < needed:
         base = np.array(sequences[rng.integers(len(sequences))], dtype=np.float32)
 
-        aug_type = rng.integers(3)
+        aug_type = aug_types[rng.integers(len(aug_types))]
         if aug_type == 0:
             # Temporal speed variation (±20%)
             stretch = rng.uniform(0.80, 1.20)
@@ -546,20 +754,33 @@ def augment_motion_sequences(sequences: list, target_count: int = 100) -> list:
                 np.interp(indices, np.arange(SEQUENCE_LENGTH), base[:, i])
                 for i in range(base.shape[1])
             ]).T
-            # Re-center on peak velocity after stretching
-            result = center_on_peak_velocity(stretched)
+            # Re-center on peak velocity after stretching. force=True because a
+            # stretch factor near 1.0 can land new_len on exactly SEQUENCE_LENGTH,
+            # which would hit the `n == SEQUENCE_LENGTH` shortcut and make this
+            # augmentation a partial no-op (the interpolation would survive but the
+            # re-centering would silently not happen).
+            result = center_on_peak_velocity(stretched, force=True)
         elif aug_type == 1:
             # Per-frame Gaussian noise. No [0,1] clip: coordinates are wrist-relative
             # after normalize_frame and legitimately fall outside [0,1].
             noise = rng.normal(0, 0.010, base.shape)
             result = base + noise
-        else:
+        elif aug_type == 2:
             # Random frame dropout — replace up to 4 frames with adjacent frame
             result = base.copy()
             n_drop = rng.integers(1, 5)
             drop_indices = rng.choice(SEQUENCE_LENGTH - 1, size=n_drop, replace=False)
             for idx in drop_indices:
                 result[idx] = result[idx + 1]
+        elif aug_type == 3:
+            # In-plane rotation (camera tilt / signer lean). Normalization removes
+            # translation and scale but leaves orientation unmodelled.
+            degrees = rng.uniform(-ROTATION_MAX_DEGREES, ROTATION_MAX_DEGREES)
+            result = rotate_sequence(base, float(np.radians(degrees)))
+        else:
+            # Truncated prefix — a partial gesture padded the way inference pads it.
+            keep = rng.uniform(PREFIX_KEEP_MIN, PREFIX_KEEP_MAX)
+            result = truncated_prefix_sequence(base, float(keep))
 
         augmented.append(result.tolist())
 

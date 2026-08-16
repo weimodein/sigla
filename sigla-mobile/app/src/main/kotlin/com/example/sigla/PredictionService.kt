@@ -18,10 +18,19 @@ private const val TAG                    = "PredictionService"
 private const val SEQUENCE_LENGTH        = 30    // LSTM input length
 // FEATURE_SIZE (147) comes from HandLandmarkHelper.kt — the file that actually
 // builds the vector. Declaring a second copy here would let the two drift apart.
-private const val MIN_MOTION_FRAMES      = 8      // begin inference once this many frames buffered
+// Minimum real frames before inference runs. extractMotionWindow pads a short buffer by
+// repeating its last frame, so this directly sets how much of the model's 30-frame input
+// may be frozen padding: at 8 real frames, 22 of 30 (73%) were one repeated frame — far
+// outside anything the model was trained on, yet still able to fire.
+//
+// 12 matches the training-side truncated-prefix augmentation floor
+// (PREFIX_KEEP_MIN = 0.40 of 30 frames = 12), so the shortest buffer inference accepts is
+// the shortest prefix training actually saw. Raising it further would delay fast signs;
+// this is the point where the two sides agree.
+private const val MIN_MOTION_FRAMES      = 12     // begin inference once this many frames buffered
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
-private const val MOTION_THRESHOLD       = 0.60f  // min confidence to accept a prediction
-private const val MOTION_EARLY_CONF      = 0.60f  // confidence for early-exit streak counting
+private const val MOTION_THRESHOLD       = 0.70f  // min confidence to accept a prediction
+private const val MOTION_EARLY_CONF      = 0.70f  // confidence for early-exit streak counting
 // Raised from 5/6 to 10/10 (2026-07-19) after simulating the live streak/early-exit logic
 // against every real stored sample: at the old values, several signs that share an opening
 // movement with another sign (GOOD EVENING/GOOD AFTERNOON, GOOD MORNING/HELLO, YES/YESTERDAY,
@@ -32,13 +41,29 @@ private const val MOTION_EARLY_CONF      = 0.60f  // confidence for early-exit s
 // no regression on any word that was already firing correctly. See PredictionService's
 // runAndMaybeFire() for how this streak is counted.
 private const val MOTION_EARLY_STREAK    = 10     // consistent frames before firing early
-private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence fires immediately
-private const val EARLY_EXIT_STREAK      = 10
+private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence fires sooner
+// Shorter than MOTION_EARLY_STREAK on purpose — this tier only exists to fire FASTER
+// when the model is very confident.
+//
+// It used to equal MOTION_EARLY_STREAK (both 10), which made the tier unreachable: the
+// streak resets whenever confidence drops below MOTION_EARLY_CONF, so any run of 10
+// consecutive >=0.95 frames necessarily also satisfied the 10-frame low-confidence tier
+// that is checked in the same pass. The high-confidence branch therefore never fired on
+// its own merit — only via `force`. 4 keeps a real consistency requirement (4 agreeing
+// inferences at >=0.95) while actually arriving sooner than the normal path.
+private const val EARLY_EXIT_STREAK      = 4
 private const val VELOCITY_WINDOW        = 8
 private const val BUFFER_CAPACITY        = 90     // rolling frame buffer size
 private const val NO_HAND_TIMEOUT        = 6      // frames with no hands before firing onNoHands
 private const val BUFFER_FILL_MS         = 1500L  // run inference on the full window after this long
 private const val DETECTION_COOLDOWN_MS  = 2000L  // wait before accepting the next gesture
+
+// Latency instrumentation. Tied to BuildConfig.DEBUG so release builds skip the timing
+// calls entirely. (`val`, not `const val` — BuildConfig.DEBUG is a generated field, not
+// a compile-time constant.)
+private val LATENCY_LOGGING         = BuildConfig.DEBUG
+private const val LATENCY_WINDOW    = 100   // rolling samples kept for percentiles
+private const val LATENCY_LOG_EVERY = 50    // emit a summary every N inferences
 
 // ── Velocity signal for temporal window selection ────────────────────────────
 //
@@ -192,6 +217,20 @@ data class PredictionResult(
  */
 private data class PendingFire(val result: PredictionResult)
 
+/**
+ * Why a forced inference was requested. The two cases must not behave the same.
+ *
+ * [NONE]           — normal sliding-window run; all streak requirements apply.
+ * [TIMER]          — BUFFER_FILL_MS elapsed while the signer is STILL SIGNING. The
+ *                    gesture is incomplete, so this must not bypass the streak: doing so
+ *                    lets a single high-confidence frame fire on a shared opening
+ *                    movement, which is exactly what raising the streak to 10 fixed.
+ * [END_OF_GESTURE] — hands left the frame. The gesture is over and this is the last
+ *                    chance to classify it, so bypassing the streak is correct here;
+ *                    the alternative is dropping a completed fast sign entirely.
+ */
+private enum class ForceReason { NONE, TIMER, END_OF_GESTURE }
+
 data class CollectingState(
     val progress: Float,
     val frames: Int,
@@ -246,7 +285,17 @@ class PredictionService(private val context: Context) {
     // Cooldown between detections
     private var lastDetectionTime = 0L
 
-    // Pre-allocated output array (resized once labels are known)
+    // Pre-allocated output array, sized from the MODEL's class count in init().
+    //
+    // Written once in init() without holding `lock`, then read/written by
+    // runMotionInference under the lock. That is safe only because of publication
+    // ordering: it is assigned BEFORE the `isReady = true` volatile write, and
+    // processFrame returns early unless it observes isReady == true. A volatile write
+    // publishes every preceding write, so any thread that sees isReady also sees the
+    // correctly-sized array.
+    //
+    // Keep the assignment before `isReady = true`. Moving it after would leave the
+    // 1-element placeholder visible to an in-flight frame and overflow on interp.run().
     private var motionOutputArr: Array<FloatArray> = arrayOf(FloatArray(1))
 
     // ── Init ──────────────────────────────────────────────────────────────────
@@ -418,7 +467,9 @@ class PredictionService(private val context: Context) {
                     if (frameBuffer.size >= MIN_MOTION_FRAMES &&
                         System.currentTimeMillis() - lastDetectionTime >= DETECTION_COOLDOWN_MS
                     ) {
-                        pending = runAndMaybeFire(System.currentTimeMillis(), force = true)
+                        pending = runAndMaybeFire(
+                            System.currentTimeMillis(), force = ForceReason.END_OF_GESTURE
+                        )
                     }
                     if (frameBuffer.isNotEmpty() || collecting) {
                         notifyNoHands = true
@@ -461,7 +512,7 @@ class PredictionService(private val context: Context) {
                            framesSinceMotionRun >= MOTION_SLIDE_INTERVAL
             if (forceRun) {
                 framesSinceMotionRun = 0
-                pending = runAndMaybeFire(now, force = true)
+                pending = runAndMaybeFire(now, force = ForceReason.TIMER)
             } else if (slideRun) {
                 framesSinceMotionRun = 0
                 pending = runAndMaybeFire(now)
@@ -480,14 +531,14 @@ class PredictionService(private val context: Context) {
      * Returns the result to deliver, or null if nothing should fire. The caller
      * invokes onResult outside the lock — see processFrame.
      */
-    private fun runAndMaybeFire(now: Long, force: Boolean = false): PendingFire? {
+    private fun runAndMaybeFire(now: Long, force: ForceReason = ForceReason.NONE): PendingFire? {
         val result = runMotionInference(frameBuffer.toList()) ?: return null
         val (idx, conf) = result
         val label = motionLabels.getOrNull(idx) ?: return null
 
         // Count the streak EXACTLY ONCE per inference. The two confidence tiers below
         // must stay mutually exclusive: EARLY_EXIT_THRESHOLD (0.95) is above
-        // MOTION_EARLY_CONF (0.60), so a frame clearing the high bar also clears the
+        // MOTION_EARLY_CONF (0.70), so a frame clearing the high bar also clears the
         // low one. Incrementing in both branches (the pre-2026-07-27 shape) advanced
         // the streak twice per inference for exactly the high-confidence frames the
         // streak exists to slow down, so MOTION_EARLY_STREAK=10 was really reached in
@@ -500,9 +551,14 @@ class PredictionService(private val context: Context) {
             motionEarlyLabel  = -1
         }
 
-        // Immediate fire on very high confidence.
+        // Only the end-of-gesture flush may bypass the streak — see ForceReason. A TIMER
+        // force fires mid-gesture, so letting one frame through there re-opens the
+        // "fires on a shared opening movement" failure the 10-frame streak fixed.
+        val mayBypassStreak = force == ForceReason.END_OF_GESTURE
+
+        // Very high confidence: fires on a SHORTER streak than the normal path.
         if (conf >= EARLY_EXIT_THRESHOLD) {
-            if (motionEarlyStreak >= EARLY_EXIT_STREAK || force) {
+            if (motionEarlyStreak >= EARLY_EXIT_STREAK || mayBypassStreak) {
                 return fire(label, conf, earlyExit = true, now)
             }
         } else if (conf >= MOTION_EARLY_CONF) {
@@ -512,9 +568,18 @@ class PredictionService(private val context: Context) {
             }
         }
 
-        // Forced (time-based) run: accept the top prediction if it clears the threshold.
-        if (force && conf >= MOTION_THRESHOLD) {
-            return fire(label, conf, earlyExit = false, now)
+        // Forced run: accept the top prediction if it clears the acceptance threshold.
+        //
+        // END_OF_GESTURE accepts immediately (last chance to classify a finished sign).
+        // TIMER still requires the streak, so a mid-gesture timer cannot short-circuit
+        // the consistency check — it only guarantees an inference happens, not a fire.
+        if (conf >= MOTION_THRESHOLD) {
+            if (mayBypassStreak) {
+                return fire(label, conf, earlyExit = false, now)
+            }
+            if (force == ForceReason.TIMER && motionEarlyStreak >= MOTION_EARLY_STREAK) {
+                return fire(label, conf, earlyExit = false, now)
+            }
         }
         return null
     }
@@ -540,12 +605,38 @@ class PredictionService(private val context: Context) {
             return null
         }
         val input = Array(1) { Array(SEQUENCE_LENGTH) { i -> seq[i] } }
+        val startNs = if (LATENCY_LOGGING) System.nanoTime() else 0L
         return try {
             interp.run(input, motionOutputArr)
+            if (LATENCY_LOGGING) recordLatency((System.nanoTime() - startNs) / 1_000_000.0)
             val probs = motionOutputArr[0]
             val idx   = probs.indices.maxByOrNull { probs[it] } ?: return null
             Pair(idx, probs[idx])
         } catch (_: Exception) { null }
+    }
+
+    // ── Latency instrumentation ───────────────────────────────────────────────
+    //
+    // The firing constants (MOTION_SLIDE_INTERVAL, the streak lengths) and the
+    // camera-side frame skip were all tuned without a single measurement of how long
+    // an inference actually takes. Every LSTM pass runs on MediaPipe's callback thread
+    // while holding `lock`, so a slow pass delays the next frame AND blocks
+    // reset()/close() from the UI thread — but nothing here reported it.
+    //
+    // Caller must hold [lock] (called from runMotionInference).
+    private val latencySamples = ArrayDeque<Double>()
+    private var latencyLogged  = 0
+
+    private fun recordLatency(ms: Double) {
+        latencySamples.addLast(ms)
+        while (latencySamples.size > LATENCY_WINDOW) latencySamples.removeFirst()
+
+        if (++latencyLogged % LATENCY_LOG_EVERY != 0 || latencySamples.size < 10) return
+        val sorted = latencySamples.sorted()
+        val p50 = sorted[sorted.size / 2]
+        val p95 = sorted[(sorted.size * 95) / 100]
+        Log.d(TAG, "inference latency over last ${sorted.size}: " +
+            "p50=%.1fms p95=%.1fms max=%.1fms".format(p50, p95, sorted.last()))
     }
 
     // Centre a 30-frame window on the peak-velocity frame — mirrors the training-time

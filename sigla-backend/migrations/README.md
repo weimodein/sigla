@@ -16,3 +16,16 @@ psql "$PG_URI" -f migrations/001_model_versions_trained_word_ids.sql
 | File | Applied to dev | Purpose |
 |---|---|---|
 | `001_model_versions_trained_word_ids.sql` | yes — 2026-07-29 | Word bank follows the deployed model |
+| `002_gesture_samples_session_id.sql` | yes — 2026-08-17 | Signer grouping for cross-validation |
+
+`psql` is not always on PATH, and the database is Supabase-hosted. Two alternatives that
+need no extra tooling: paste the file into the **Supabase SQL Editor**, or run it through
+the connection the app already uses:
+
+```js
+// from sigla-backend/, with the file contents in `sql`
+require("dotenv").config();
+const { Sequelize } = require("sequelize");
+const s = new Sequelize(process.env.PG_URI, { dialect: "postgres", logging: false });
+await s.query(sql);
+```
