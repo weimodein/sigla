@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
+import Button from "../../components/Button.jsx";
+import { useModalKeys } from "../../components/useModalKeys.js";
 import {
   requestEmailCode,
   verifyEmailCode,
@@ -61,6 +63,9 @@ const Onboarding = () => {
   // Set when the address is well formed but its domain is unfamiliar — the user
   // confirms before a code is sent to a possibly mistyped address.
   const [confirmEmail, setConfirmEmail] = useState(false);
+  // Lets the keyboard hook above the early returns reach sendEmailCode, which is
+  // declared further down the body.
+  const sendEmailCodeRef = useRef(null);
 
   // Credentials flow. Username is seeded from the account: an administrator
   // who is only here because their password was reset should not have to
@@ -92,6 +97,16 @@ const Onboarding = () => {
   useEffect(() => () => {
     if (cooldownRef.current) clearInterval(cooldownRef.current);
   }, []);
+
+  // Hand-rolled overlay, not an AppModal — wire the keyboard contract explicitly.
+  // Must sit above the early returns below to keep hook order stable; sendEmailCode
+  // is declared later in the body, so it is reached through a lazy call that only
+  // ever runs from a keypress.
+  useModalKeys({
+    onEscape: () => setConfirmEmail(false),
+    onEnter: () => sendEmailCodeRef.current?.(),
+    enabled: () => confirmEmail,
+  });
 
   if (loading) {
     return (
@@ -134,6 +149,7 @@ const Onboarding = () => {
       setEmailLoading(false);
     }
   };
+  sendEmailCodeRef.current = sendEmailCode;
 
   const handleResend = async () => {
     if (cooldown > 0) return;
@@ -467,38 +483,10 @@ const Onboarding = () => {
               cannot be sent for 1 minute.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setConfirmEmail(false)}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: 8,
-                  border: `1px solid ${C.border}`,
-                  background: "white",
-                  color: "#374151",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
+              <Button variant="secondary" onClick={() => setConfirmEmail(false)}>
                 Go back and edit
-              </button>
-              <button
-                onClick={sendEmailCode}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: C.primary,
-                  color: "white",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                Send code
-              </button>
+              </Button>
+              <Button onClick={sendEmailCode}>Send code</Button>
             </div>
           </div>
         </div>

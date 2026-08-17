@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
 import {
   getAllModels,
   getModelStats,
@@ -1089,7 +1090,26 @@ const ManageModel = () => {
 
       {/* Train Modal */}
       {trainModal && (
-        <AppModal title="Train New Model" onClose={() => setTrainModal(false)}>
+        <AppModal
+          title="Train New Model"
+          onClose={() => setTrainModal(false)}
+          onEnter={() => { if (!actionLoading) handleTrain(); }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setTrainModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleTrain} loading={actionLoading}>
+                {actionLoading
+                  ? "Training... (this may take a while)"
+                  : "Start Training"}
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
               This will fetch all approved gesture samples from Supabase and
@@ -1126,23 +1146,6 @@ const ManageModel = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleTrain}
-                disabled={actionLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading
-                  ? "Training... (this may take a while)"
-                  : "Start Training"}
-              </button>
-              <button
-                onClick={() => setTrainModal(false)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1152,27 +1155,23 @@ const ManageModel = () => {
         <AppModal
           title={`Test Model: ${testModal.version_number}`}
           onClose={() => setTestModal(null)}
+          onEnter={() => { if (!actionLoading) handleTest(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setTestModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleTest} loading={actionLoading}>
+                {actionLoading ? "Evaluating..." : "Run Evaluation"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
               This will evaluate <strong>{testModal.version_number}</strong>{" "}
               against the approved dataset and return accuracy metrics.
             </p>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleTest}
-                disabled={actionLoading}
-                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Evaluating..." : "Run Evaluation"}
-              </button>
-              <button
-                onClick={() => setTestModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1182,6 +1181,17 @@ const ManageModel = () => {
         <AppModal
           title={`Deploy Model: ${deployModal.version_number}`}
           onClose={() => setDeployModal(null)}
+          onEnter={() => { if (!actionLoading) handleDeploy(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeployModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleDeploy} loading={actionLoading}>
+                {actionLoading ? "Deploying..." : "Confirm Deploy"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
@@ -1217,21 +1227,6 @@ const ManageModel = () => {
                 </>
               )}
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleDeploy}
-                disabled={actionLoading}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Deploying..." : "Confirm Deploy"}
-              </button>
-              <button
-                onClick={() => setDeployModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1241,6 +1236,17 @@ const ManageModel = () => {
         <AppModal
           title={`Revert to: ${revertModal.version_number}`}
           onClose={() => setRevertModal(null)}
+          onEnter={() => { if (!actionLoading) handleRevert(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setRevertModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRevert} loading={actionLoading}>
+                {actionLoading ? "Reverting..." : "Confirm Revert"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
@@ -1248,28 +1254,21 @@ const ManageModel = () => {
               <strong>{revertModal.version_number}</strong>. The current
               deployed model will become inactive.
             </p>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleRevert}
-                disabled={actionLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Reverting..." : "Confirm Revert"}
-              </button>
-              <button
-                onClick={() => setRevertModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
 
       {/* Results Modal */}
       {resultModal && (
-        <AppModal title={resultModal.title} onClose={() => setResultModal(null)}>
+        <AppModal
+          title={resultModal.title}
+          onClose={() => setResultModal(null)}
+          onEnter={() => setResultModal(null)}
+          footer={
+            /* Lone button — ModalFooter promotes it to primary. */
+            <Button onClick={() => setResultModal(null)}>Close</Button>
+          }
+        >
           <div className="space-y-3 text-sm">
             {resultModal.message && (
               <p className="text-gray-700 leading-relaxed">
@@ -1302,12 +1301,6 @@ const ManageModel = () => {
                 Version <strong>{resultModal.versionNumber}</strong>
               </p>
             )}
-            <button
-              onClick={() => setResultModal(null)}
-              className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition mt-2"
-            >
-              Close
-            </button>
           </div>
         </AppModal>
       )}

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import Sidebar from "./Sidebar.jsx";
+import Button from "./Button.jsx";
+import { useModalKeys } from "./useModalKeys.js";
 import { getSidebarCollapsed } from "./sidebarState.js";
 import { X } from "lucide-react";
 
@@ -49,6 +51,15 @@ const Layout = ({ children }) => {
     logout();
     navigate("/login");
   };
+
+  // This overlay is hand-rolled rather than an AppModal, so it needs the keyboard
+  // contract wired explicitly. `enabled` gates on the open state since the hook
+  // has to be called unconditionally.
+  useModalKeys({
+    onEscape: () => setShowLogoutModal(false),
+    onEnter: confirmLogout,
+    enabled: () => showLogoutModal,
+  });
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
@@ -116,38 +127,10 @@ const Layout = ({ children }) => {
               Are you sure you want to sign out? Any unsaved changes will be lost.
             </p>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowLogoutModal(false)}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: "8px",
-                  border: "1px solid #e5e7eb",
-                  background: "white",
-                  color: "#374151",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
+              <Button variant="secondary" onClick={() => setShowLogoutModal(false)}>
                 Cancel
-              </button>
-              <button
-                onClick={confirmLogout}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "#1e3a8a",
-                  color: "white",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                Sign Out
-              </button>
+              </Button>
+              <Button onClick={confirmLogout}>Sign Out</Button>
             </div>
           </div>
         </div>

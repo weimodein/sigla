@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
+import Button from "../../components/Button.jsx";
+import { useModalKeys } from "../../components/useModalKeys.js";
 import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
 import {
   Mail,
@@ -201,6 +203,13 @@ const AdministratorAccount = () => {
       setEmailLoading(false);
     }
   };
+
+  // Hand-rolled overlay, not an AppModal — wire the keyboard contract explicitly.
+  useModalKeys({
+    onEscape: () => setConfirmEmail(false),
+    onEnter: sendEmailCode,
+    enabled: () => confirmEmail,
+  });
 
   const handleResendEmailCode = async () => {
     if (emailCooldown > 0) return;
@@ -1021,38 +1030,10 @@ const AdministratorAccount = () => {
               cannot be sent for 1 minute.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setConfirmEmail(false)}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: 8,
-                  border: `1px solid ${C.border}`,
-                  background: "white",
-                  color: "#374151",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
+              <Button variant="secondary" onClick={() => setConfirmEmail(false)}>
                 Go back and edit
-              </button>
-              <button
-                onClick={sendEmailCode}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: C.primary,
-                  color: "white",
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                Send code
-              </button>
+              </Button>
+              <Button onClick={sendEmailCode}>Send code</Button>
             </div>
           </div>
         </div>

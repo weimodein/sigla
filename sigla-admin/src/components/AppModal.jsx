@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, Children, cloneElement, isValidElement } from "react";
 import { X } from "lucide-react";
+import { useModalKeys } from "./useModalKeys.js";
 
 const FOCUSABLE = [
   "a[href]",
@@ -10,11 +11,53 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(", ");
 
-const AppModal = ({ title, onClose, children, wide = false }) => {
+/* Standard footer geometry: right-aligned, natural-width buttons, Cancel first.
+   Exported so the few overlays that don't use AppModal can match it. */
+export const ModalFooter = ({ children, className = "" }) => {
+  // A footer with one button has nothing to cancel — that button IS the confirm,
+  // so it renders blue rather than as a grey secondary. Children.toArray flattens
+  // fragments and drops `false`/null, so a conditionally-rendered second button
+  // (ManageWord's upload primary, which unmounts once results arrive) correctly
+  // leaves an array of one. A lone destructive action stays red.
+  const items = Children.toArray(children);
+  const lone = items.length === 1 && isValidElement(items[0]);
+  const content =
+    lone && items[0].props.variant !== "danger"
+      ? cloneElement(items[0], { variant: "primary" })
+      : children;
+
+  return (
+    <div
+      className={`flex justify-end gap-2.5 px-6 py-4 ${className}`}
+      style={{ borderTop: "1px solid #f0f0f0" }}
+    >
+      {content}
+    </div>
+  );
+};
+
+const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) => {
   const panelRef   = useRef(null);
   const closingRef = useRef(false);
   const triggerRef = useRef(document.activeElement);
   const titleId    = useRef(`modal-title-${Math.random().toString(36).slice(2)}`);
+
+  // The keydown listener is on `window`, so with stacked modals (Reset Password
+  // under Confirm Reset, a delete confirm over a form) every mounted instance
+  // hears the same keypress. React appends later modals after earlier ones, so
+  // the last backdrop in the DOM is the topmost modal — only it should react.
+  // Without this, one Enter would fire both modals' primary actions.
+  // A closing modal keeps its backdrop mounted for the ~150ms exit animation, so
+  // it is excluded here — otherwise a quick second keypress would hit the modal
+  // on its way out instead of the one being revealed underneath.
+  const isTopmost = () => {
+    if (closingRef.current) return false;
+    const backdrops = Array.from(
+      document.querySelectorAll("[data-modal-backdrop]:not(.modal-backdrop-out)"),
+    );
+    const top = backdrops[backdrops.length - 1];
+    return !!top && !!panelRef.current && top.contains(panelRef.current);
+  };
 
   const startClose = () => {
     if (closingRef.current) return;
@@ -76,10 +119,14 @@ const AppModal = ({ title, onClose, children, wide = false }) => {
     };
   }, []);
 
-  // Keyboard: Escape closes; Tab traps focus inside
+  // Escape closes, Enter confirms — topmost modal only, so Escape on a
+  // confirmation dialog steps back to the form underneath rather than dismissing
+  // the whole stack, and one Enter never fires two modals' primary actions.
+  useModalKeys({ onEscape: startClose, onEnter, enabled: isTopmost });
+
+  // Tab traps focus inside the panel
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (e.key === "Escape") { startClose(); return; }
       if (e.key !== "Tab" || !panelRef.current) return;
       const focusable = Array.from(panelRef.current.querySelectorAll(FOCUSABLE));
       if (!focusable.length) return;
@@ -137,6 +184,7 @@ const AppModal = ({ title, onClose, children, wide = false }) => {
           </button>
         </div>
         <div className="px-6 py-5">{children}</div>
+        {footer && <ModalFooter>{footer}</ModalFooter>}
       </div>
     </div>
   );

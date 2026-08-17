@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
 import {
   getAllAdministrators,
   getDeactivatedAdministrators,
@@ -891,7 +892,21 @@ const ManageAdministrators = () => {
 
       {/* Edit Administrator Modal */}
       {editModal && (
-        <AppModal title="Administrator Details" onClose={() => setEditModal(null)}>
+        <AppModal
+          title="Administrator Details"
+          onClose={() => setEditModal(null)}
+          onEnter={() => { if (!actionLoading) handleEditSave(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setEditModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleEditSave} loading={actionLoading}>
+                {actionLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <div>
               <label
@@ -973,30 +988,27 @@ const ManageAdministrators = () => {
                 </button>
               </div>
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleEditSave}
-                disabled={actionLoading}
-                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ background: C.primary, color: "#fff" }}
-              >
-                {actionLoading ? "Saving..." : "Save Changes"}
-              </button>
-              <button
-                onClick={() => setEditModal(null)}
-                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
-                style={{ borderColor: C.border, color: "#4b5563" }}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
 
       {/* Create Administrator Modal */}
       {createModal && (
-        <AppModal title="Create Administrator" onClose={() => setCreateModal(false)}>
+        <AppModal
+          title="Create Administrator"
+          onClose={() => setCreateModal(false)}
+          onEnter={() => { if (!actionLoading) handleCreateAdmin(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setCreateModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateAdmin} loading={actionLoading}>
+                Create
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
               Create an administrator account with a username and password. The
@@ -1068,23 +1080,6 @@ const ManageAdministrators = () => {
                 }}
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleCreateAdmin}
-                disabled={actionLoading}
-                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ background: C.primary, color: "#fff" }}
-              >
-                Create
-              </button>
-              <button
-                onClick={() => setCreateModal(false)}
-                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
-                style={{ borderColor: C.border, color: "#4b5563" }}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1094,6 +1089,21 @@ const ManageAdministrators = () => {
         <AppModal
           title="Confirm Administrator Creation"
           onClose={() => setConfirmCreate(false)}
+          onEnter={() => { if (!actionLoading) confirmCreateAdmin(); }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmCreate(false)}
+                disabled={actionLoading}
+              >
+                Cancel
+              </Button>
+              <Button onClick={confirmCreateAdmin} loading={actionLoading}>
+                {actionLoading ? "Creating..." : "Confirm & Create"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-4">
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
@@ -1104,24 +1114,6 @@ const ManageAdministrators = () => {
               ? The assigned person can log in with these credentials and will
               be asked to link an email on first login.
             </p>
-            <div className="flex gap-2">
-              <button
-                onClick={confirmCreateAdmin}
-                disabled={actionLoading}
-                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ background: C.primary, color: "#fff" }}
-              >
-                {actionLoading ? "Creating..." : "Confirm & Create"}
-              </button>
-              <button
-                onClick={() => setConfirmCreate(false)}
-                disabled={actionLoading}
-                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ borderColor: C.border, color: "#4b5563" }}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1131,6 +1123,17 @@ const ManageAdministrators = () => {
         <AppModal
           title="Reset Password"
           onClose={() => setResetModal(null)}
+          onEnter={() => { if (!actionLoading) handleResetSubmit(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setResetModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleResetSubmit} loading={actionLoading}>
+                Reset Password
+              </Button>
+            </>
+          }
         >
           <div className="space-y-3">
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
@@ -1184,23 +1187,6 @@ const ManageAdministrators = () => {
                 }}
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleResetSubmit}
-                disabled={actionLoading}
-                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ background: C.orange, color: "#fff" }}
-              >
-                Reset Password
-              </button>
-              <button
-                onClick={() => setResetModal(null)}
-                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition"
-                style={{ borderColor: C.border, color: "#4b5563" }}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1210,6 +1196,23 @@ const ManageAdministrators = () => {
         <AppModal
           title="Confirm Password Reset"
           onClose={() => setConfirmReset(false)}
+          onEnter={() => { if (!actionLoading) confirmResetPassword(); }}
+          footer={
+            <>
+              {/* "Back" rather than "Cancel" — this steps back to the password
+                  form, it does not dismiss the whole flow. */}
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmReset(false)}
+                disabled={actionLoading}
+              >
+                Back
+              </Button>
+              <Button onClick={confirmResetPassword} loading={actionLoading}>
+                {actionLoading ? "Resetting..." : "Confirm Reset"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-4">
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
@@ -1228,24 +1231,6 @@ const ManageAdministrators = () => {
                 give it to them yourself.
               </p>
             )}
-            <div className="flex gap-2">
-              <button
-                onClick={confirmResetPassword}
-                disabled={actionLoading}
-                className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ background: C.orange, color: "#fff" }}
-              >
-                {actionLoading ? "Resetting..." : "Confirm Reset"}
-              </button>
-              <button
-                onClick={() => setConfirmReset(false)}
-                disabled={actionLoading}
-                className="flex-1 border text-sm font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
-                style={{ borderColor: C.border, color: "#4b5563" }}
-              >
-                Back
-              </button>
-            </div>
           </div>
         </AppModal>
       )}

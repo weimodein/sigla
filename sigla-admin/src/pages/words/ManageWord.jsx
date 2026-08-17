@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
 import {
   getAllWords,
   getWordStats,
@@ -124,21 +125,28 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
   if (!open) return null;
 
   return (
-    <AppModal title={isEdit ? `Edit Word — ${word?.label}` : "Add New Word"} onClose={onClose}>
+    <AppModal
+      title={isEdit ? `Edit Word — ${word?.label}` : "Add New Word"}
+      onClose={onClose}
+      onEnter={() => { if (!saving && form.label) handleSubmit(); }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit} loading={saving} disabled={!form.label}>
+            {isEdit ? "Save Changes" : "Add Word"}
+          </Button>
+        </>
+      }
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
         <div>
           <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Label *</label>
-          {/* Enter submits, and maxLength matches Word.label's VARCHAR(100) — an
-              over-long paste previously reached Postgres and returned a bare 500. */}
+          {/* maxLength matches Word.label's VARCHAR(100) — an over-long paste
+              previously reached Postgres and returned a bare 500. Enter-to-submit
+              is handled modal-wide by AppModal's onEnter. */}
           <input
             value={form.label}
             onChange={e => setForm(f => ({ ...f, label: e.target.value.toUpperCase() }))}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !saving && form.label) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
             maxLength={100}
             placeholder="e.g. HELLO, BANANA, GOOD MORNING"
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
@@ -185,15 +193,6 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
           />
         </div>
       </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-        <button onClick={handleSubmit} disabled={saving || !form.label}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: saving || !form.label ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: saving || !form.label ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-          {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-          {isEdit ? "Save Changes" : "Add Word"}
-        </button>
-      </div>
     </AppModal>
   );
 };
@@ -233,7 +232,32 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
   if (!open) return null;
 
   return (
-    <AppModal title={`Upload Files — ${word?.label}`} onClose={onClose}>
+    <AppModal
+      title={`Upload Files — ${word?.label}`}
+      onClose={onClose}
+      onEnter={() => {
+        if (results) { onClose(); return; }
+        if (!uploading && files.length) handleUpload();
+      }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {results ? "Close" : "Cancel"}
+          </Button>
+          {/* Once results are in, the upload is done and only Close remains —
+              ModalFooter then promotes that lone button to primary. */}
+          {!results && (
+            <Button
+              onClick={handleUpload}
+              loading={uploading}
+              disabled={!files.length}
+            >
+              Upload &amp; Extract
+            </Button>
+          )}
+        </>
+      }
+    >
       <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
         Upload video clips (.MOV, .MP4). Landmarks are extracted automatically with MediaPipe.
       </p>
@@ -283,7 +307,7 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
             // Phase 2: upload done — the server is now extracting landmarks (MediaPipe,
             // ~a few seconds per clip). This has no measurable %, so show an indeterminate state.
             <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", color: "#6b7280" }}>
-              <Loader2 size={14} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
+              <Loader2 size={14} className="animate-spin" style={{ flexShrink: 0 }} />
               <span>Extracting landmarks on server… this can take a moment for many clips.</span>
             </div>
           )}
@@ -323,18 +347,6 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>
-          {results ? "Close" : "Cancel"}
-        </button>
-        {!results && (
-          <button onClick={handleUpload} disabled={!files.length || uploading}
-            style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: !files.length || uploading ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: !files.length || uploading ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-            {uploading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-            Upload & Extract
-          </button>
-        )}
-      </div>
     </AppModal>
   );
 };
@@ -440,7 +452,25 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
   const selectedExt = file?.name.split(".").pop()?.toLowerCase();
 
   return (
-    <AppModal title={`Demo Video — ${word?.label}`} onClose={onClose}>
+    <AppModal
+      title={`Demo Video — ${word?.label}`}
+      onClose={onClose}
+      onEnter={() => { if (!uploading && file) handleUpload(); }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={uploading}>
+            Cancel
+          </Button>
+          <Button onClick={handleUpload} loading={uploading} disabled={!file}>
+            {uploading
+              ? "Uploading…"
+              : word?.video_url
+                ? "Replace Video"
+                : "Upload Video"}
+          </Button>
+        </>
+      }
+    >
       {/* Current clip. Plays inline — this used to be a link to the storage URL,
           which the browser downloaded instead of playing. */}
       {currentUrl && (
@@ -581,28 +611,6 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button
-          onClick={onClose}
-          disabled={uploading}
-          style={{
-            padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`,
-            background: "white", cursor: uploading ? "not-allowed" : "pointer",
-            fontSize: "0.875rem", opacity: uploading ? 0.6 : 1,
-          }}
-        >
-          Cancel
-        </button>
-        <button onClick={handleUpload} disabled={!file || uploading}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: !file || uploading ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: !file || uploading ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-          {uploading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-          {uploading
-            ? "Uploading…"
-            : word?.video_url
-              ? "Replace Video"
-              : "Upload Video"}
-        </button>
-      </div>
     </AppModal>
   );
 };
@@ -984,17 +992,24 @@ const ManageWord = () => {
       )}
 
       {deleteConfirm && (
-        <AppModal title="Delete Word" onClose={() => setDeleteConfirm(null)}>
-          <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "24px" }}>
+        <AppModal
+          title="Delete Word"
+          onClose={() => setDeleteConfirm(null)}
+          onEnter={() => handleDelete(deleteConfirm)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => handleDelete(deleteConfirm)}>
+                Delete
+              </Button>
+            </>
+          }
+        >
+          <p style={{ fontSize: "0.9rem", color: "#374151" }}>
             Are you sure you want to delete <strong>"{deleteConfirm.label}"</strong>? This will also remove all its gesture samples.
           </p>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-            <button onClick={() => setDeleteConfirm(null)} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-            <button onClick={() => handleDelete(deleteConfirm)}
-              style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.red, color: "white", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600 }}>
-              Delete
-            </button>
-          </div>
         </AppModal>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
 import {
   getCategories,
   createCategory,
@@ -11,7 +12,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Loader2,
   Tag,
   Check,
   AlertCircle,
@@ -71,22 +71,32 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
   };
 
   return (
-    <AppModal title={title} onClose={onClose}>
+    <AppModal
+      title={title}
+      onClose={onClose}
+      onEnter={() => { if (!saving && form.name.trim()) handleSubmit(); }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            loading={saving}
+            disabled={!form.name.trim()}
+          >
+            {submitLabel}
+          </Button>
+        </>
+      }
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
         <div>
           <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Name *</label>
-          {/* Enter submits — for a two-field dialog that is the expected gesture,
-              and it did nothing before. maxLength matches Category.name's
-              VARCHAR(50) so the limit is visible instead of arriving as a 500. */}
+          {/* maxLength matches Category.name's VARCHAR(50) so the limit is visible
+              instead of arriving as a 500. Enter-to-submit is handled modal-wide by
+              AppModal's onEnter. */}
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !saving && form.name.trim()) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
             maxLength={50}
             placeholder="e.g. greeting, food, color"
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
@@ -101,14 +111,6 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", resize: "vertical", boxSizing: "border-box" }}
           />
         </div>
-      </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-        <button onClick={handleSubmit} disabled={saving || !form.name.trim()}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: saving || !form.name.trim() ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: saving || !form.name.trim() ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-          {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-          {submitLabel}
-        </button>
       </div>
     </AppModal>
   );
@@ -360,7 +362,35 @@ const ManageCategories = () => {
       />
 
       {deleteTarget && (
-        <AppModal title="Delete Category" onClose={() => setDeleteTarget(null)}>
+        <AppModal
+          title="Delete Category"
+          onClose={() => setDeleteTarget(null)}
+          onEnter={() => {
+            // Mirrors the Delete button's disabled state — a category still in
+            // use cannot be deleted.
+            if (!deleting && !(deleteTarget.word_count > 0)) handleDelete();
+          }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDelete}
+                loading={deleting}
+                disabled={deleteTarget.word_count > 0}
+                title={deleteTarget.word_count > 0 ? "This category is still in use" : undefined}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </Button>
+            </>
+          }
+        >
           <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "12px" }}>
             Delete category <strong>"{deleteTarget.name}"</strong>?
           </p>
@@ -370,28 +400,11 @@ const ManageCategories = () => {
               clickable). The rule is enforced server-side in
               categoryController.deleteCategory. */}
           {deleteTarget.word_count > 0 && (
-            <p style={{ fontSize: "0.85rem", color: C.red, marginBottom: "20px" }}>
+            <p style={{ fontSize: "0.85rem", color: C.red }}>
               ⚠ This category is used by {deleteTarget.word_count} word(s). Move
               those words to another category, or delete them first.
             </p>
           )}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-            <button onClick={() => setDeleteTarget(null)} disabled={deleting} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: deleting ? "not-allowed" : "pointer", fontSize: "0.875rem", opacity: deleting ? 0.6 : 1 }}>Cancel</button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting || deleteTarget.word_count > 0}
-              title={deleteTarget.word_count > 0 ? "This category is still in use" : undefined}
-              style={{
-                padding: "8px 16px", borderRadius: "8px", border: "none",
-                background: C.red, color: "white",
-                cursor: deleting || deleteTarget.word_count > 0 ? "not-allowed" : "pointer",
-                fontSize: "0.875rem", fontWeight: 600,
-                opacity: deleting || deleteTarget.word_count > 0 ? 0.5 : 1,
-              }}
-            >
-              {deleting ? "Deleting..." : "Delete"}
-            </button>
-          </div>
         </AppModal>
       )}
     </div>
