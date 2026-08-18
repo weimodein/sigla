@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { listStagger } from "../../utils/motion.js";
 import {
   Search,
   ChevronsLeft,
@@ -396,11 +397,11 @@ const ActivityLogs = () => {
                   </td>
                 </tr>
               ) : (
-                logs.map((log) => (
+                logs.map((log, i) => (
                   <tr
                     key={log.id}
-                    className="text-sm"
-                    style={{ borderTop: `1px solid ${C.border}` }}
+                    className="row-interactive list-item-in text-sm"
+                    style={{ borderTop: `1px solid ${C.border}`, ...listStagger(i) }}
                   >
                     <td className="px-5 py-3.5 font-semibold" style={{ color: C.text }}>
                       {log.administrator?.username || "System"}

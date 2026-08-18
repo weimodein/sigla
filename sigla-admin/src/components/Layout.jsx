@@ -28,24 +28,12 @@ const Layout = ({ children }) => {
     );
   }, [sidebarCollapsed]);
 
-  // Tracked so rapid toggling cannot stack timeouts — an earlier one would
-  // otherwise strip the transitioning class while a later transition is still
-  // running — and so an unmount mid-transition does not leave the class behind.
-  const transitionTimerRef = useRef(null);
-
-  useEffect(() => () => {
-    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-  }, []);
-
+  // This used to also toggle a `sidebar-transitioning` class on <body> for 250ms,
+  // with a timer and cleanup effect to manage it. No CSS rule anywhere in the app
+  // ever matched that class, so the whole mechanism was removed.
   const handleToggle = (collapsed) => {
-    document.body.classList.add("sidebar-transitioning");
     // --sidebar-width is updated by the effect above, which reacts to this state.
     setSidebarCollapsed(collapsed);
-    if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
-    transitionTimerRef.current = setTimeout(() => {
-      document.body.classList.remove("sidebar-transitioning");
-      transitionTimerRef.current = null;
-    }, 250);
   };
 
   // Exit animation state. The panel has to stay mounted while it animates out,
@@ -103,7 +91,7 @@ const Layout = ({ children }) => {
       <div
         style={{
           marginLeft: sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
-          transition: "margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "margin-left var(--dur-base) var(--ease-standard)",
           willChange: "margin-left",
           minHeight: "100vh",
           display: "flex",

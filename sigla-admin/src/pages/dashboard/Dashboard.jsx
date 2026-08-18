@@ -8,6 +8,8 @@ import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { takeAuthMessage } from "../../utils/authMessage.js";
+import { listStagger } from "../../utils/motion.js";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import {
   Users,
   BookOpen,
@@ -44,35 +46,6 @@ const formatDate = (dateStr) =>
         day: "numeric",
       })
     : "—";
-
-// ── Stat Card ── colored icon circle (left) + label + value, matching the
-// Manage Administrators cards.
-const StatCard = ({ title, value, icon: Icon, color, onClick }) => (
-  <div
-    className="dash-stat-card flex items-center gap-4 min-w-0"
-    onClick={onClick}
-    style={onClick ? { cursor: "pointer" } : undefined}
-  >
-    <div className={`p-3 rounded-full shrink-0 ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div className="min-w-0">
-      <p className="text-xs text-gray-500 truncate">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
-
-// ── Skeleton Card ──
-const SkeletonCard = () => (
-  <div className="dash-stat-card flex items-center gap-4" style={{ opacity: 0.6 }}>
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse shrink-0" />
-    <div className="space-y-2 flex-1 min-w-0">
-      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-    </div>
-  </div>
-);
 
 // ── Activity badge ── colour-coded by the audit action's intent
 const ActivityBadge = ({ action }) => {
@@ -149,11 +122,14 @@ const Dashboard = () => {
         </div>
         {/* Stat cards skeleton — 3-col spanning grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 280px", gridTemplateRows: "auto auto", gap: "24px" }}>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <div style={{ gridColumn: "3", gridRow: "1 / 3" }} className="dash-stat-card animate-pulse" />
+          <SkeletonCard index={0} />
+          <SkeletonCard index={1} />
+          <SkeletonCard index={2} />
+          <SkeletonCard index={3} />
+          <div
+            style={{ gridColumn: "3", gridRow: "1 / 3", ...listStagger(4) }}
+            className="dash-stat-card list-item-in animate-pulse"
+          />
         </div>
         {/* Chart skeleton */}
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
@@ -213,10 +189,14 @@ const Dashboard = () => {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 280px", gridTemplateRows: "auto auto", gap: "24px" }}>
         {/* Col 3, rows 1–2 — placed first so auto-placement fills cols 1–2 correctly */}
         <div style={{ gridColumn: "3", gridRow: "1 / 3" }}>
+          {/* Hand-rolled rather than a StatCard: it spans both rows and centres
+              its content. It still takes the shared entrance, with an index that
+              continues the sequence of the four cards beside it so the grid
+              reads as one animation instead of four-plus-one. */}
           <div
-            className="dash-stat-card h-full flex flex-col items-center justify-center gap-3"
+            className="dash-stat-card list-item-in h-full flex flex-col items-center justify-center gap-3"
             onClick={() => navigate("/model")}
-            style={{ cursor: "pointer" }}
+            style={{ ...listStagger(4), cursor: "pointer" }}
           >
             <div className="p-4 rounded-full bg-green-600 shrink-0">
               <Cpu size={24} className="text-white" />
@@ -232,13 +212,13 @@ const Dashboard = () => {
         {/* 4 auto-placed cards — fill cols 1 & 2, rows 1 & 2 */}
         {/* First card differs by account type (scope): super → total admins, admin → own account creation date */}
         {isSuper ? (
-          <StatCard title="Total Administrators" value={userStats?.total} icon={Users} color="bg-blue-900" onClick={() => navigate("/administrators")} />
+          <StatCard index={0} title="Total Administrators" value={userStats?.total} icon={Users} color="bg-blue-900" onClick={() => navigate("/administrators")} />
         ) : (
-          <StatCard title="Account Created" value={formatDate(user?.created_at)} icon={CalendarDays} color="bg-blue-900" />
+          <StatCard index={0} title="Account Created" value={formatDate(user?.created_at)} icon={CalendarDays} color="bg-blue-900" />
         )}
-        <StatCard title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800"   onClick={() => navigate("/dataset")} />
-        <StatCard title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700"   onClick={() => navigate("/dataset")} />
-        <StatCard title="Total Categories"    value={categoryCount}            icon={Tag}           color="bg-yellow-500" onClick={() => navigate("/categories")} />
+        <StatCard index={1} title="Total Words"         value={wordStats?.total}         icon={BookOpen}      color="bg-blue-800"   onClick={() => navigate("/dataset")} />
+        <StatCard index={2} title="Gesture Samples"     value={wordStats?.total_samples} icon={Database}      color="bg-blue-700"   onClick={() => navigate("/dataset")} />
+        <StatCard index={3} title="Total Categories"    value={categoryCount}            icon={Tag}           color="bg-yellow-500" onClick={() => navigate("/categories")} />
       </div>
 
       {/* ── Model accuracy by version ── */}
@@ -295,8 +275,8 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {recentActivity.map((item) => (
-                <div key={item.id} className="dash-request-item">
+              {recentActivity.map((item, i) => (
+                <div key={item.id} className="dash-request-item list-item-in" style={listStagger(i)}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3 mb-0.5">
                       <h4 className="text-sm font-semibold text-gray-800 truncate">{item.label}</h4>

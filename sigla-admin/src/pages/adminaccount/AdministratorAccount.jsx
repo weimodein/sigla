@@ -565,12 +565,20 @@ const AdministratorAccount = () => {
 
             <DetailRow icon={ShieldCheck} label="Account status">
               <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                {/* Three states, not two. A two-way ternary painted a MISSING
+                    status red, so an account whose status had not loaded looked
+                    deactivated. Grey means "unknown", red means genuinely not
+                    active. */}
                 <span
                   style={{
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: user?.status === "active" ? "#22c55e" : "#ef4444",
+                    background: !user?.status
+                      ? "#9ca3af"
+                      : user.status === "active"
+                        ? "#22c55e"
+                        : "#ef4444",
                     flexShrink: 0,
                   }}
                 />

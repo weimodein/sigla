@@ -7,10 +7,11 @@ export const getAllAdministrators = async (params) => {
   return response.data;
 };
 
-export const getAdministratorStats = async () => {
-  const response = await api.get("/administrators/stats");
-  return response.data;
-};
+import { cachedFetch } from "../utils/apiCache.js";
+import { CACHE_KEYS, withInvalidation } from "./cacheKeys.js";
+
+export const getAdministratorStats = (opts) =>
+  cachedFetch(CACHE_KEYS.adminStats, async () => (await api.get("/administrators/stats")).data, opts);
 
 export const getDeactivatedAdministrators = async () => {
   const response = await api.get("/administrators/deactivated");
@@ -27,30 +28,30 @@ export const getAdministratorById = async (id) => {
   return response.data;
 };
 
-export const deactivateAdministrator = async (id, data) => {
+export const deactivateAdministrator = withInvalidation(async (id, data) => {
   const response = await api.patch(`/administrators/${id}/deactivate`, data);
   return response.data;
-};
+}, "administrator");
 
-export const reactivateAdministrator = async (id) => {
+export const reactivateAdministrator = withInvalidation(async (id) => {
   const response = await api.patch(`/administrators/${id}/reactivate`);
   return response.data;
-};
+}, "administrator");
 
-export const deleteAdministrator = async (id, data) => {
+export const deleteAdministrator = withInvalidation(async (id, data) => {
   const response = await api.delete(`/administrators/${id}`, { data });
   return response.data;
-};
+}, "administrator");
 
-export const updateAdministrator = async (id, data) => {
+export const updateAdministrator = withInvalidation(async (id, data) => {
   const response = await api.put(`/administrators/${id}`, data);
   return response.data;
-};
+}, "administrator");
 
-export const createAdministrator = async (data) => {
+export const createAdministrator = withInvalidation(async (data) => {
   const response = await api.post("/administrators", data);
   return response.data;
-};
+}, "administrator");
 
 // Sets a TEMPORARY password on another administrator's account. They are forced
 // through onboarding at next login to choose their own credentials, so this

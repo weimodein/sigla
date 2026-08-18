@@ -27,19 +27,37 @@ const ICON_COLORS = {
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((message, type = "info", duration = 4000) => {
-    const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    if (duration > 0) {
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, duration);
-    }
+  // Both removal paths mark the toast `leaving` rather than dropping it, so the
+  // exit animation can play; the node really unmounts on animationend. Toasts
+  // used to slide in and then vanish in a single frame, and the ones below would
+  // teleport upward to fill the gap.
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)),
+    );
   }, []);
 
-  const removeToast = useCallback((id) => {
+  // Called from onAnimationEnd. Also the safety net if the animation never fires
+  // (a background tab, for instance) — see the timeout in addToast.
+  const dropToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const addToast = useCallback((message, type = "info", duration = 4000) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type, leaving: false }]);
+    if (duration > 0) {
+      setTimeout(() => {
+        dismissToast(id);
+        // animationend does not fire in a backgrounded tab, which would strand
+        // the toast on screen forever. Drop it unconditionally once the exit has
+        // had time to play; dropToast is a no-op if it already unmounted.
+        setTimeout(() => dropToast(id), 400);
+      }, duration);
+    }
+  }, [dismissToast, dropToast]);
+
+  const removeToast = useCallback((id) => dismissToast(id), [dismissToast]);
 
   const success = useCallback((msg, dur) => addToast(msg, "success", dur), [addToast]);
   const error = useCallback((err, dur) => addToast(err, "error", dur), [addToast]);
@@ -67,13 +85,18 @@ export const ToastProvider = ({ children }) => {
           return (
             <div
               key={toast.id}
-              className={`border rounded-lg px-4 py-3 shadow-lg flex items-start gap-3 animate-slide-in ${COLORS[toast.type]}`}
+              className={`border rounded-lg px-4 py-3 shadow-lg flex items-start gap-3 ${
+                toast.leaving ? "toast-out" : "animate-slide-in"
+              } ${COLORS[toast.type]}`}
+              onAnimationEnd={(e) => {
+                if (e.animationName === "toast-out") dropToast(toast.id);
+              }}
             >
               <Icon size={18} className={`mt-0.5 shrink-0 ${ICON_COLORS[toast.type]}`} />
               <p className="text-sm leading-snug flex-1">{toast.message}</p>
               <button
                 onClick={() => removeToast(toast.id)}
-                className="shrink-0 opacity-50 hover:opacity-100 transition"
+                className="interactive shrink-0 opacity-50 hover:opacity-100"
                 aria-label="Dismiss notification"
               >
                 <X size={16} />

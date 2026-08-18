@@ -33,7 +33,11 @@ const Sidebar = ({ onToggle, onLogout }) => {
     if (onToggle) onToggle(next);
   };
 
-  const transitionStyle = "all 0.2s ease";
+  // Explicit properties rather than `all`. These elements also change padding,
+  // gap and justifyContent on collapse, so `all` meant every nav item animated
+  // its own layout alongside the container — and at a different duration.
+  const transitionStyle =
+    "background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard)";
 
   // Toggle button hover (light)
   const toggleHoverIn = (e) => { e.currentTarget.style.background = HOVER; };
@@ -46,7 +50,9 @@ const Sidebar = ({ onToggle, onLogout }) => {
         background: SURFACE,
         display: "flex",
         flexDirection: "column",
-        transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+        /* Matches the content wrapper's margin-left in Layout.jsx — the two
+           halves of one interaction previously ran at different durations. */
+        transition: "width var(--dur-base) var(--ease-standard)",
         borderRight: `1px solid ${BORDER}`,
         boxShadow: "1px 0 2px rgba(0, 0, 0, 0.03)",
         zIndex: 1000,
@@ -215,6 +221,10 @@ const Sidebar = ({ onToggle, onLogout }) => {
             key={path}
             to={path}
             title={collapsed ? label : undefined}
+            /* The `active` class is what .nav-item:hover:not(.active) keys off.
+               NavLink only adds it automatically when className is a string, and
+               this one is a function, so it is applied explicitly here. */
+            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
             style={({ isActive }) => ({
               display: "flex",
               alignItems: "center",
@@ -222,7 +232,6 @@ const Sidebar = ({ onToggle, onLogout }) => {
               gap: collapsed ? 0 : "12px",
               padding: collapsed ? "0" : "0 12px",
               textDecoration: "none",
-              transition: transitionStyle,
               height: "42px",
               borderRadius: "8px",
               whiteSpace: "nowrap",
@@ -230,18 +239,6 @@ const Sidebar = ({ onToggle, onLogout }) => {
               color: isActive ? "#ffffff" : MUTED,
               fontWeight: isActive ? 600 : 500,
             })}
-            onMouseEnter={(e) => {
-              if (!e.currentTarget.classList.contains("active")) {
-                e.currentTarget.style.background = HOVER;
-                e.currentTarget.style.color = TEXT;
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!e.currentTarget.classList.contains("active")) {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = MUTED;
-              }
-            }}
           >
             <Icon size={20} style={{ flexShrink: 0 }} />
             {!collapsed && (

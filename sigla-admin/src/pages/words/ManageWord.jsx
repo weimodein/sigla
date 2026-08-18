@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { listStagger } from "../../utils/motion.js";
+import { invalidate } from "../../utils/apiCache.js";
 import {
   getAllWords,
   getWordStats,
@@ -43,27 +46,7 @@ const C = {
 const PAGE_SIZE = 10;
 
 // ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
 
-const SkeletonCard = () => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
-      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-    </div>
-  </div>
-);
 
 // ── Word Form Modal (Add or Edit) ─────────────────────────────
 const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
@@ -780,6 +763,10 @@ const ManageWord = () => {
             `${job.success_count} clip(s) stored${job.fail_count ? `, ${job.fail_count} failed/skipped` : ""}`,
           );
           setUploadResults(job);
+          // The sample counts changed on the SERVER, so no mutation call ran on
+          // this client to clear them. Without this, fetchWords would re-serve
+          // the pre-upload numbers from cache.
+          invalidate("words:");
           fetchWords();
         } else if (job.status === "failed") {
           clearInterval(uploadPollRef.current);
@@ -787,6 +774,7 @@ const ManageWord = () => {
           errorToast(`Upload failed: ${job.error || "Unknown error"}`);
           // Partial results still matter — those clips really were stored.
           if (job.results?.length) setUploadResults(job);
+          invalidate("words:");
           fetchWords();
         } else {
           // Still processing — advance the banner's count.
@@ -835,8 +823,6 @@ const ManageWord = () => {
 
   return (
     <div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -913,30 +899,30 @@ const ManageWord = () => {
       {!stats ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard
+          <StatCard index={0}
             title="Total Words"
             value={stats.total}
             icon={Database}
             color="bg-blue-900"
           />
-          <StatCard
+          <StatCard index={1}
             title="Active"
             value={stats.active}
             icon={Check}
             color="bg-green-500"
           />
-          <StatCard
+          <StatCard index={2}
             title="Ready to Activate"
             value={stats.ready_to_activate}
             icon={Clock}
             color="bg-yellow-500"
           />
-          <StatCard
+          <StatCard index={3}
             title="Gesture Samples"
             value={stats.total_samples}
             icon={Film}
@@ -1013,8 +999,12 @@ const ManageWord = () => {
                     No words found. Add your first word using the button above.
                   </td>
                 </tr>
-              ) : words.map(word => (
-                <tr key={word.id} style={{ borderTop: `1px solid ${C.border}` }}>
+              ) : words.map((word, i) => (
+                <tr
+                  key={word.id}
+                  className="row-interactive list-item-in"
+                  style={{ borderTop: `1px solid ${C.border}`, ...listStagger(i) }}
+                >
                   <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937" }}>{word.label}</td>
                   <td className="px-5 py-3" style={{ color: "#6b7280", textTransform: "capitalize" }}>{word.category || "—"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>{word.approved_sample_count ?? 0}</td>

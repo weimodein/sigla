@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { login as loginApi, getMe, SESSION_EXPIRED_EVENT } from "../api/authApi.js";
 import { setAuthMessage } from "../utils/authMessage.js";
+import { clearCache } from "../utils/apiCache.js";
 
 const AuthContext = createContext(null);
 
@@ -59,6 +60,7 @@ export const AuthProvider = ({ children }) => {
       storage.remove("token");
       storage.remove("user");
       setUser(null);
+      clearCache();
       // Say why. ProtectedRoute redirects to /login on the next render, and
       // without this the admin is dropped there mid-task with no explanation.
       // Parked rather than toasted directly: this provider wraps ToastProvider,
@@ -98,6 +100,9 @@ export const AuthProvider = ({ children }) => {
     storage.remove("token");
     storage.remove("user");
     setUser(null);
+    // Otherwise the next admin to sign in on this browser is served the previous
+    // one's cached data.
+    clearCache();
   };
 
   // ── Helpers ───────────────────────────────────────────────

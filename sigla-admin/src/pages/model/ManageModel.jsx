@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { listStagger } from "../../utils/motion.js";
+import { invalidate } from "../../utils/apiCache.js";
 import {
   getAllModels,
   getModelStats,
@@ -39,28 +42,8 @@ const C = {
 };
 
 // ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
 
 // ── Skeleton Components ───────────────────────────────────────
-const SkeletonCard = () => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
-      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-    </div>
-  </div>
-);
 
 // ── Badge ─────────────────────────────────────────────────────
 const Badge = ({ value }) => {
@@ -97,7 +80,7 @@ const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
   const active = sortField === sortKey;
   return (
     <th
-      className="px-4 py-3 cursor-pointer select-none hover:bg-gray-100"
+      className="interactive px-4 py-3 cursor-pointer select-none hover:bg-gray-100"
       style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280" }}
       onClick={() => onSort && onSort(sortKey)}
     >
@@ -158,7 +141,11 @@ const ManageModel = () => {
     try {
       const [statsData, modelsData, wordStatsData] = await Promise.all([
         getModelStats(),
-        getAllModels(),
+        // force: this page reads status === "training" from the list below to
+        // re-adopt a run already in flight. A cached copy would show no banner,
+        // re-enable the Train button, and leave the run looking stuck forever —
+        // exactly the bug the re-adoption logic was written to fix.
+        getAllModels({ force: true }),
         getWordStats(),
       ]);
       setStats(statsData);
@@ -238,12 +225,17 @@ const ManageModel = () => {
             totalClasses: model.total_classes ?? null,
             versionNumber: model.version_number,
           });
+          // Training completed on the SERVER, so no mutation ran on this client
+          // to clear the model caches. getAllModels is already forced below, but
+          // getModelStats is not and it carries current_model.
+          invalidate("models:");
           fetchData();
         } else if (model.status === "failed") {
           clearInterval(pollingRef.current);
           setTrainingModelId(null);
           setTrainingVersion("");
           showError(`Training failed: ${model.training_error || "Unknown error"}`);
+          invalidate("models:");
           fetchData();
         }
       } catch (err) {
@@ -510,24 +502,24 @@ const ManageModel = () => {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard
+          <StatCard index={1}
             title="Total Versions"
             value={stats?.total}
             icon={Cpu}
             color="bg-blue-900"
           />
-          <StatCard
+          <StatCard index={2}
             title="Deployed"
             value={stats?.deployed}
             icon={CheckCircle}
             color="bg-green-500"
           />
-          <StatCard
+          <StatCard index={3}
             title="Trained (pending)"
             value={stats?.trained}
             icon={Clock}
@@ -538,13 +530,17 @@ const ManageModel = () => {
 
       {/* Current Deployed Model */}
       {stats?.current_model && (
+        /* Not a StatCard — a full-width gradient banner — but it takes the same
+           entrance so it does not sit static above cards that animate. */
         <div
+          className="list-item-in"
           style={{
             background: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`,
             borderRadius: "12px",
             padding: "20px 24px",
             marginBottom: "20px",
             color: "#fff",
+            ...listStagger(0),
           }}
         >
           <p
@@ -730,7 +726,7 @@ const ManageModel = () => {
                     </td>
                   </tr>
                 ) : (
-                  paginatedModels.map((model) => (
+                  paginatedModels.map((model, i) => (
                     // Keyed on the FRAGMENT. The key used to sit on the inner
                     // <tr>, where React never sees it, so this list reconciled by
                     // index: with a row expanded, a re-sort or refetch could
@@ -738,9 +734,10 @@ const ManageModel = () => {
                     <Fragment key={model.id}>
                       {/* Main row */}
                       <tr
-                        className="border-t hover:bg-gray-50 text-sm"
+                        className="border-t row-interactive list-item-in text-sm"
                         style={{
                           cursor: "pointer",
+                          ...listStagger(i),
                         }}
                         onClick={() =>
                           setExpandedRow(
@@ -1068,7 +1065,7 @@ const ManageModel = () => {
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="interactive p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Previous page"
                   >
                     <ChevronLeft size={16} />
@@ -1076,7 +1073,7 @@ const ManageModel = () => {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="interactive p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Next page"
                   >
                     <ChevronRight size={16} />

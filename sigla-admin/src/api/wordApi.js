@@ -1,15 +1,21 @@
 import api from "./authApi.js";
 import axios from "axios";
+import { cachedFetch } from "../utils/apiCache.js";
+import { CACHE_KEYS, withInvalidation } from "./cacheKeys.js";
 
 export const getAllWords = async (params) => {
   const response = await api.get("/words", { params });
   return response.data;
 };
 
-export const getWordStats = async () => {
-  const response = await api.get("/words/stats");
-  return response.data;
-};
+// Cached: four pages call this, and the backend runs 7 aggregate queries per
+// call. `force` is available for callers that must read live state.
+export const getWordStats = (opts) =>
+  cachedFetch(
+    CACHE_KEYS.wordStats,
+    async () => (await api.get("/words/stats")).data,
+    opts,
+  );
 
 export const getWordById = async (id) => {
   const response = await api.get(`/words/${id}`);
@@ -26,15 +32,9 @@ export const rejectWord = async (id, reason) => {
   return response.data;
 };
 
-export const updateWord = async (id, data) => {
-  const response = await api.put(`/words/${id}`, data);
-  return response.data;
-};
+export const updateWord = withInvalidation(async (id, data) => (await api.put(`/words/${id}`, data)).data, "word");
 
-export const deleteWord = async (id) => {
-  const response = await api.delete(`/words/${id}`);
-  return response.data;
-};
+export const deleteWord = withInvalidation(async (id) => (await api.delete(`/words/${id}`)).data, "word");
 
 export const getWordSamples = async (id) => {
   const response = await api.get(`/words/${id}/samples`);
@@ -79,10 +79,7 @@ export const getUserSampleCount = async (wordId) => {
   return response.data;
 };
 
-export const adminAddWord = async (data) => {
-  const response = await api.post("/words/admin-add", data);
-  return response.data;
-};
+export const adminAddWord = withInvalidation(async (data) => (await api.post("/words/admin-add", data)).data, "word");
 
 export const adminUploadSamples = async (wordId, data) => {
   const response = await api.post(`/words/${wordId}/admin-samples`, data);

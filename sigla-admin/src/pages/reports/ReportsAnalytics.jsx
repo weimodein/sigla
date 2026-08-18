@@ -10,6 +10,8 @@ import {
 import { getWordStats, getAllWords } from "../../api/wordApi.js";
 import { getModelVersions } from "../../api/modelApi.js";
 import { getCategories } from "../../api/categoryApi.js";
+import { listStagger } from "../../utils/motion.js";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
@@ -33,21 +35,6 @@ import {
 } from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color, onClick }) => (
-  <div
-    className="dash-stat-card flex items-center gap-4"
-    onClick={onClick}
-    style={onClick ? { cursor: "pointer" } : undefined}
-  >
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
 
 // ── Section Header ────────────────────────────────────────────
 const SectionHeader = ({ title, count }) => (
@@ -86,7 +73,11 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
           </tr>
         ) : (
           rows.map((row, i) => (
-            <tr key={i} className="border-t hover:bg-gray-50">
+            <tr
+              key={i}
+              className="border-t row-interactive list-item-in"
+              style={listStagger(i)}
+            >
               {row.map((cell, j) => (
                 <td key={j} className="px-4 py-3 text-gray-700">
                   {cell}
@@ -104,6 +95,41 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 // The words endpoint is paginated; this page pulls one large page and derives its
 // charts from it. Kept as a named constant so the truncation notice and the fetch
 // can never disagree.
+// ── Skeletons ──
+// Module scope on purpose. These used to be declared inside ReportsAnalytics, so
+// React saw a new component type on every render and remounted them — which
+// restarted `animate-pulse` from frame 0 and made the skeletons visibly stutter
+// while data loaded.
+
+const SkeletonChart = () => (
+  <div className="dash-card animate-pulse">
+    <div className="dash-card-header">
+      <div className="h-4 w-32 bg-gray-200 rounded" />
+    </div>
+    <div className="dash-card-body">
+      <div className="h-[220px] bg-gray-100 rounded" />
+    </div>
+  </div>
+);
+
+const SkeletonTable = () => (
+  <div className="dash-card animate-pulse">
+    <div className="dash-card-header">
+      <div className="h-4 w-28 bg-gray-200 rounded" />
+    </div>
+    <div className="rounded-lg border border-gray-200 overflow-hidden mx-6 mb-6">
+      <div className="h-10 bg-gray-50" />
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-12 border-t px-4 py-3 flex gap-4">
+          <div className="h-4 flex-1 bg-gray-100 rounded" />
+          <div className="h-4 flex-1 bg-gray-100 rounded" />
+          <div className="h-4 w-12 bg-gray-100 rounded" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 const WORD_FETCH_LIMIT = 500;
 
 // Start of the window for each range option, or null for "all time".
@@ -207,11 +233,20 @@ const ReportsAnalytics = () => {
     }
   };
 
+  // `filter` is deliberately NOT a dependency. The week/month/year range is
+  // applied entirely client-side by the wordsInRange memo below, and none of
+  // these endpoints take a date parameter — so refetching on a range change
+  // re-requested all seven (including up to 500 words) for identical data.
+  // isSuper stays: it genuinely changes which endpoints are called.
   useEffect(() => {
     fetchAll();
+  }, [isSuper]);
+
+  // Range changes only reset pagination.
+  useEffect(() => {
     setDeactivatedPage(1);
     setDeletedPage(1);
-  }, [filter, isSuper]);
+  }, [filter]);
 
   // ── Chart data helpers ──────────────────────────────────────
   // Words submitted inside the selected range. The range used to be cosmetic —
@@ -428,45 +463,6 @@ const ReportsAnalytics = () => {
     }
   };
 
-  // ── Skeleton components ───────────────────────────────────
-  const SkeletonCard = () => (
-    <div className="dash-stat-card flex items-center gap-4 animate-pulse">
-      <div className="w-10 h-10 rounded-full bg-gray-200" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3 w-20 bg-gray-200 rounded" />
-        <div className="h-7 w-16 bg-gray-200 rounded" />
-      </div>
-    </div>
-  );
-
-  const SkeletonChart = () => (
-    <div className="dash-card animate-pulse">
-      <div className="dash-card-header">
-        <div className="h-4 w-32 bg-gray-200 rounded" />
-      </div>
-      <div className="dash-card-body">
-        <div className="h-[220px] bg-gray-100 rounded" />
-      </div>
-    </div>
-  );
-
-  const SkeletonTable = () => (
-    <div className="dash-card animate-pulse">
-      <div className="dash-card-header">
-        <div className="h-4 w-28 bg-gray-200 rounded" />
-      </div>
-      <div className="rounded-lg border border-gray-200 overflow-hidden mx-6 mb-6">
-        <div className="h-10 bg-gray-50" />
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-12 border-t px-4 py-3 flex gap-4">
-            <div className="h-4 flex-1 bg-gray-100 rounded" />
-            <div className="h-4 flex-1 bg-gray-100 rounded" />
-            <div className="h-4 w-12 bg-gray-100 rounded" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 
   // ── JSX ───────────────────────────────────────────────────
   if (loading) {
@@ -488,7 +484,7 @@ const ReportsAnalytics = () => {
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <SkeletonCard index={i} key={i} />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -534,7 +530,7 @@ const ReportsAnalytics = () => {
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition capitalize ${
                 filter === f
                   ? "bg-white text-blue-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  : "interactive text-gray-500 hover:text-gray-700"
               }`}
             >
               {f}
@@ -545,28 +541,28 @@ const ReportsAnalytics = () => {
 
       {/* Summary Cards (scope §20): words, gesture samples, categories, model accuracy */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
+        <StatCard index={0}
           title="Total Words"
           value={wordStats?.total}
           icon={BookOpen}
           color="bg-blue-900"
           onClick={() => navigate("/dataset")}
         />
-        <StatCard
+        <StatCard index={1}
           title="Gesture Samples"
           value={wordStats?.total_samples}
           icon={Database}
           color="bg-blue-700"
           onClick={() => navigate("/dataset")}
         />
-        <StatCard
+        <StatCard index={2}
           title="Total Categories"
           value={categoryCount}
           icon={Tag}
           color="bg-green-600"
           onClick={() => navigate("/categories")}
         />
-        <StatCard
+        <StatCard index={3}
           title="Current Model Accuracy"
           value={currentModelAccuracy}
           icon={Cpu}
@@ -709,7 +705,7 @@ const ReportsAnalytics = () => {
                       setDeactivatedPage((p) => Math.max(1, p - 1))
                     }
                     disabled={deactivatedPage === 1}
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                    className="interactive px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
                   >
                     Prev
                   </button>
@@ -726,7 +722,7 @@ const ReportsAnalytics = () => {
                       deactivatedPage >=
                       Math.ceil(deactivatedUsers.length / PAGE_SIZE)
                     }
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                    className="interactive px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
                   >
                     Next
                   </button>
@@ -760,7 +756,7 @@ const ReportsAnalytics = () => {
                   <button
                     onClick={() => setDeletedPage((p) => Math.max(1, p - 1))}
                     disabled={deletedPage === 1}
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                    className="interactive px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
                   >
                     Prev
                   </button>
@@ -777,7 +773,7 @@ const ReportsAnalytics = () => {
                       deletedPage >=
                       Math.ceil(deletedUsers.length / PAGE_SIZE)
                     }
-                    className="px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
+                    className="interactive px-2 py-1 rounded border disabled:opacity-40 hover:bg-gray-50"
                   >
                     Next
                   </button>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { listStagger } from "../../utils/motion.js";
 import {
   getAllAdministrators,
   getDeactivatedAdministrators,
@@ -47,28 +49,10 @@ const C = {
   surface: "#ffffff",
 };
 
-// ── Dashboard card styles ──
-const injectCardStyles = () => {
-  if (document.getElementById("manage-admins-card-styles")) return;
-  const s = document.createElement("style");
-  s.id = "manage-admins-card-styles";
-  s.textContent = `
-    .mv-stat-card {
-      background: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      border: 1px solid #f0f0f0;
-      transition: all 0.3s ease;
-      position: relative;
-    }
-    .mv-stat-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-    }
-  `;
-  document.head.appendChild(s);
-};
+// This page used to inject its own `.mv-stat-card` at runtime — a near-duplicate
+// of `.dash-stat-card` in index.css with a different duration and hover lift, so
+// its stat cards behaved unlike the other five pages'. Removed in favour of the
+// shared class.
 
 const chipStyle = (bg) => ({
   display: "inline-block",
@@ -81,28 +65,8 @@ const chipStyle = (bg) => ({
 });
 
 // ── Stat Card ────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="mv-stat-card flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
 
 // ── Skeleton ─────────────────────────────────────────────────
-const SkeletonCard = () => (
-  <div className="mv-stat-card flex items-center gap-4" style={{ opacity: 0.6 }}>
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
-      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-    </div>
-  </div>
-);
 
 const SkeletonRows = ({ rows = 5, cols = 6 }) =>
   Array.from({ length: rows }).map((_, i) => (
@@ -359,7 +323,6 @@ const ManageAdministrators = () => {
   };
 
   useEffect(() => {
-    injectCardStyles();
     fetchStats();
   }, []);
   useEffect(() => {
@@ -624,13 +587,13 @@ const ManageAdministrators = () => {
       );
     }
 
-    return paginatedAdmins.map((u) => (
+    return paginatedAdmins.map((u, i) => (
       <tr
         key={u.id}
-        className="border-t hover:bg-gray-50 text-sm"
+        className="border-t row-interactive list-item-in text-sm"
         style={{
           borderTop: `1px solid ${C.border}`,
-          transition: "background .15s",
+          ...listStagger(i),
         }}
       >
         <td
@@ -735,7 +698,7 @@ const ManageAdministrators = () => {
       {loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : statsError ? (
@@ -756,25 +719,25 @@ const ManageAdministrators = () => {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard
+          <StatCard index={0}
             title="Total Administrators"
             value={stats?.total}
             icon={Users}
             color="bg-blue-900"
           />
-          <StatCard
+          <StatCard index={1}
             title="Active"
             value={stats?.active}
             icon={Check}
             color="bg-green-500"
           />
-          <StatCard
+          <StatCard index={2}
             title="Deactivated"
             value={stats?.deactivated}
             icon={UserX}
             color="bg-red-500"
           />
-          <StatCard
+          <StatCard index={3}
             title="Deleted"
             value={stats?.deleted}
             icon={Trash2}
