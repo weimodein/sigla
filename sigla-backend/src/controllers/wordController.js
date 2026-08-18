@@ -7,6 +7,7 @@ const {
   GestureSample,
   Administrator,
   Category,
+  UploadJob,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
 const { validateWordLabel } = require("../utils/validators.js");
@@ -1626,64 +1627,156 @@ const uploadVideos = async (req, res) => {
       (req.body?.session_id || "").trim() ||
       `upload_${req.user.id}_${Date.now()}`;
 
-    const results = [];
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const file of files) {
-      const result = await extractAndStoreSample(
-        word,
-        file.buffer,
-        file.originalname,
-        file.mimetype,
-        req.user.id,
-        null,
-        sessionId,
-      );
-      results.push(result);
-      if (result.status === "ok") successCount++;
-      else failCount++;
+    // Refuse a second concurrent batch for the same word. The UI disables its
+    // upload button while a job is live, but the server cannot rely on that —
+    // two batches would race on the same counters below.
+    const live = await UploadJob.findOne({
+      where: { word_id: word.id, status: "processing" },
+    });
+    if (live) {
+      return res.status(409).json({
+        message: "An upload is already in progress for this word.",
+        job: live,
+      });
     }
 
-    // Surface the outcome server-side. The response is HTTP 207 either way, so a
-    // wholly-failed batch is otherwise indistinguishable from a successful one in
-    // the terminal — and the admin UI shows the same "processed" wording.
-    if (failCount > 0) {
-      console.warn(
-        `[uploadVideos] "${word.label}": ${successCount} stored, ${failCount} FAILED ` +
-          `(per-clip reasons logged above)`,
-      );
-    } else {
-      console.log(`[uploadVideos] "${word.label}": ${successCount} stored`);
-    }
-
-    // Update word counters
-    const newApproved = await getApprovedSampleCount(word.id);
-    await word.update({
-      total_samples: (word.total_samples || 0) + successCount,
-      approved_sample_count: newApproved,
-    });
-    await word.reload();
-    await checkAndActivateWord(word, req.user.id);
-
-    await logActivity({
-      administrator_id: req.user.id,
-      action: "uploaded_samples",
-      target_type: "word",
-      target_id: word.id,
-      details: `Uploaded gesture samples for word: ${word.label} — ${successCount} processed, ${failCount} failed/skipped`,
-    });
-
-    return res.status(207).json({
-      message: `${successCount} file(s) processed, ${failCount} failed/skipped`,
-      results,
-      approved_sample_count: newApproved,
-      // Returned so a caller uploading one signer's clips across several batches can
-      // pass it back as `session_id` and keep the grouping intact.
+    const job = await UploadJob.create({
+      word_id: word.id,
+      started_by: req.user.id,
       session_id: sessionId,
+      status: "processing",
+      total_count: files.length,
     });
+
+    // Answer before doing any extraction. 50 clips x 60s of MediaPipe is up to 50
+    // minutes, and Render's proxy closes the request at ~30 seconds — the same wall
+    // trainModel returns 202 to avoid. The client polls the job row instead, so the
+    // batch also survives the admin closing the modal or reloading the page.
+    res.status(202).json({
+      message: "Upload started. Poll /api/words/upload-jobs/:jobId for progress.",
+      job,
+    });
+
+    // Detached: the response is already sent, so nothing here may touch `res`.
+    //
+    // Holds every multer buffer (memory storage, up to 50 x 100MB) alive for the
+    // life of the batch. Acceptable at current single-admin usage; moving to disk
+    // storage or a real queue is the fix if batches grow.
+    (async () => {
+      const results = [];
+      let successCount = 0;
+      let failCount = 0;
+
+      try {
+        for (const file of files) {
+          const result = await extractAndStoreSample(
+            word,
+            file.buffer,
+            file.originalname,
+            file.mimetype,
+            req.user.id,
+            null,
+            sessionId,
+          );
+          results.push(result);
+          if (result.status === "ok") successCount++;
+          else failCount++;
+
+          // Per-clip so the client shows real progress. Best-effort: a failed
+          // progress write must not abort a batch that is otherwise fine.
+          await job
+            .update({
+              processed_count: results.length,
+              success_count: successCount,
+              fail_count: failCount,
+            })
+            .catch(() => {});
+        }
+
+        // Surface the outcome server-side. A wholly-failed batch is otherwise
+        // indistinguishable from a successful one in the terminal.
+        if (failCount > 0) {
+          console.warn(
+            `[uploadVideos] "${word.label}": ${successCount} stored, ${failCount} FAILED ` +
+              `(per-clip reasons logged above)`,
+          );
+        } else {
+          console.log(`[uploadVideos] "${word.label}": ${successCount} stored`);
+        }
+
+        // Update word counters
+        const newApproved = await getApprovedSampleCount(word.id);
+        await word.update({
+          total_samples: (word.total_samples || 0) + successCount,
+          approved_sample_count: newApproved,
+        });
+        await word.reload();
+        await checkAndActivateWord(word, req.user.id);
+
+        await logActivity({
+          administrator_id: req.user.id,
+          action: "uploaded_samples",
+          target_type: "word",
+          target_id: word.id,
+          details: `Uploaded gesture samples for word: ${word.label} — ${successCount} processed, ${failCount} failed/skipped`,
+        });
+
+        await job.update({
+          status: "completed",
+          results,
+          processed_count: results.length,
+          success_count: successCount,
+          fail_count: failCount,
+          finished_at: new Date(),
+        });
+      } catch (err) {
+        // Only a batch-level failure lands here — an unreachable ML service, a DB
+        // error. Individual clip failures are recorded per-clip and still complete
+        // the job. Partial results are kept: those clips really were stored.
+        console.error(`[uploadVideos] job ${job.id} FAILED:`, err);
+        await job
+          .update({
+            status: "failed",
+            error: err.message || "Unknown upload error",
+            results,
+            finished_at: new Date(),
+          })
+          .catch(() => {});
+      }
+    })();
   } catch (err) {
     console.error("Upload videos error:", err);
+    // The 202 may already have been sent, in which case the failure belongs on the
+    // job row (handled above) and the headers are gone.
+    if (res.headersSent) return;
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Poll target for a single upload batch. Mirrors modelController.getModelStatus.
+const getUploadJob = async (req, res) => {
+  try {
+    const job = await UploadJob.findByPk(req.params.jobId);
+    if (!job) return res.status(404).json({ message: "Upload job not found" });
+    return res.json({ job });
+  } catch (err) {
+    console.error("Get upload job error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// The live batch for a word, if any. Lets the admin UI re-adopt a job that is
+// still running after a reload or navigating back to the page — component state
+// does not survive either, but this row does.
+const getActiveUploadJob = async (req, res) => {
+  try {
+    const job = await UploadJob.findOne({
+      where: { word_id: req.params.id, status: "processing" },
+      order: [["created_at", "DESC"]],
+    });
+    return res.json({ job: job || null });
+  } catch (err) {
+    console.error("Get active upload job error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -1716,6 +1809,8 @@ module.exports = {
   setThumbnail,
   setVideo,
   uploadVideos,
+  getUploadJob,
+  getActiveUploadJob,
   // Shared helpers reused by the FSL-105 bulk importer
   extractAndStoreSample,
   normalizeLabel,

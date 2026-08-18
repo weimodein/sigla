@@ -116,6 +116,9 @@ export const generateVideoFromSequence = async (wordId, sequenceIds) => {
   return response.data;
 };
 
+// Returns 202 with { job } — the clips are uploaded synchronously, but landmark
+// extraction runs in a background job on the server. Poll getUploadJob for
+// progress; onProgress only covers the byte transfer.
 export const uploadVideos = async (wordId, files, onProgress) => {
   const formData = new FormData();
   for (const file of files) formData.append("videos", file);
@@ -128,5 +131,17 @@ export const uploadVideos = async (wordId, files, onProgress) => {
     },
     onUploadProgress: onProgress,
   });
+  return response.data;
+};
+
+export const getUploadJob = async (jobId) => {
+  const response = await api.get(`/words/upload-jobs/${jobId}`);
+  return response.data;
+};
+
+// The live batch for a word, or { job: null } — lets the page re-adopt a job that
+// is still running after a reload or navigating back.
+export const getActiveUploadJob = async (wordId) => {
+  const response = await api.get(`/words/${wordId}/upload-jobs/active`);
   return response.data;
 };

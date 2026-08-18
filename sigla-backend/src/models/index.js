@@ -5,6 +5,7 @@ const GestureSample = require("./GestureSample.js");
 const ModelVersion = require("./ModelVersion.js");
 const Category = require("./Category.js");
 const ActivityLog = require("./ActivityLog.js");
+const UploadJob = require("./UploadJob.js");
 
 // ── Associations ──────────────────────────────────────────────
 
@@ -33,6 +34,10 @@ ModelVersion.belongsTo(Administrator, { foreignKey: "trained_by", as: "trainer" 
 ActivityLog.belongsTo(Administrator, { foreignKey: "administrator_id", as: "administrator" });
 Administrator.hasMany(ActivityLog, { foreignKey: "administrator_id", as: "logs" });
 
+// UploadJob belongs to Word and Administrator (started_by)
+UploadJob.belongsTo(Word, { foreignKey: "word_id", as: "word" });
+UploadJob.belongsTo(Administrator, { foreignKey: "started_by", as: "starter" });
+
 module.exports = {
   Administrator,
   EmailVerification,
@@ -41,4 +46,5 @@ module.exports = {
   ModelVersion,
   Category,
   ActivityLog,
+  UploadJob,
 };
