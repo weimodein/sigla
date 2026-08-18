@@ -7,6 +7,7 @@ import { getCategories } from "../../api/categoryApi.js";
 import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { takeAuthMessage } from "../../utils/authMessage.js";
 import {
   Users,
   BookOpen,
@@ -103,6 +104,14 @@ const Dashboard = () => {
   const [myActivity, setMyActivity] = useState([]);
   const [categoryCount, setCategoryCount] = useState(null);
   const [loading, setLoading]       = useState(true);
+
+  // The welcome greeting is parked by Login, which unmounts on navigate and so
+  // cannot show it itself. Read-once, so a later visit here stays quiet.
+  useEffect(() => {
+    const message = takeAuthMessage();
+    if (message) toast[message.type]?.(message.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const fetchAll = async () => {

@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import Sidebar from "./Sidebar.jsx";
 import Button from "./Button.jsx";
 import { useModalKeys } from "./useModalKeys.js";
+import { setAuthMessage } from "../utils/authMessage.js";
 import { getSidebarCollapsed } from "./sidebarState.js";
 import { X } from "lucide-react";
 
@@ -47,16 +48,51 @@ const Layout = ({ children }) => {
     }, 250);
   };
 
+  // Exit animation state. The panel has to stay mounted while it animates out,
+  // so closing sets `closingModal` and the real unmount waits for animationend —
+  // the same deferral AppModal uses.
+  const [closingModal, setClosingModal] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  // Guards the whole close/confirm sequence. Without it, holding Enter fires
+  // confirmLogout repeatedly while the exit animation plays.
+  const closingRef = useRef(false);
+  const logoutTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+  }, []);
+
+  const dismissLogoutModal = () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosingModal(true);
+  };
+
+  // Runs when the exit animation ends — the point where the panel really goes.
+  const finishClose = () => {
+    setShowLogoutModal(false);
+    setClosingModal(false);
+    closingRef.current = false;
+  };
+
   const confirmLogout = () => {
-    logout();
-    navigate("/login");
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setSigningOut(true);
+    // Let the dialog leave, hold briefly on "Signing out…", then go. The message
+    // is parked for the login page, which is what actually mounts next.
+    logoutTimerRef.current = setTimeout(() => {
+      setAuthMessage("info", "You've been signed out.");
+      logout();
+      navigate("/login");
+    }, 620);
   };
 
   // This overlay is hand-rolled rather than an AppModal, so it needs the keyboard
   // contract wired explicitly. `enabled` gates on the open state since the hook
   // has to be called unconditionally.
   useModalKeys({
-    onEscape: () => setShowLogoutModal(false),
+    onEscape: dismissLogoutModal,
     onEnter: confirmLogout,
     enabled: () => showLogoutModal,
   });
@@ -89,6 +125,7 @@ const Layout = ({ children }) => {
       {/* Logout confirmation — triggered from the sidebar */}
       {showLogoutModal && (
         <div
+          className={closingModal || signingOut ? "modal-backdrop-out" : "modal-backdrop-in"}
           style={{
             position: "fixed",
             inset: 0,
@@ -99,9 +136,10 @@ const Layout = ({ children }) => {
             padding: "16px",
             background: "rgba(0,0,0,0.4)",
           }}
-          onClick={() => setShowLogoutModal(false)}
+          onClick={dismissLogoutModal}
         >
           <div
+            className={closingModal || signingOut ? "modal-panel-out" : "modal-panel-in"}
             style={{
               background: "white",
               borderRadius: "16px",
@@ -111,14 +149,21 @@ const Layout = ({ children }) => {
               padding: "24px",
             }}
             onClick={(e) => e.stopPropagation()}
+            onAnimationEnd={(e) => {
+              // Only a dismissal unmounts here. When signing out the panel stays
+              // put until navigation, so the backdrop does not flash away and
+              // reveal the dashboard mid-sign-out.
+              if (closingModal && e.animationName === "modal-panel-out") finishClose();
+            }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
               <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
                 Sign Out
               </h3>
               <button
-                onClick={() => setShowLogoutModal(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: "4px", borderRadius: "6px", display: "flex" }}
+                onClick={dismissLogoutModal}
+                disabled={signingOut}
+                style={{ background: "none", border: "none", cursor: signingOut ? "default" : "pointer", color: "#9ca3af", padding: "4px", borderRadius: "6px", display: "flex" }}
               >
                 <X size={18} />
               </button>
@@ -127,10 +172,12 @@ const Layout = ({ children }) => {
               Are you sure you want to sign out? Any unsaved changes will be lost.
             </p>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              <Button variant="secondary" onClick={() => setShowLogoutModal(false)}>
+              <Button variant="secondary" onClick={dismissLogoutModal} disabled={signingOut}>
                 Cancel
               </Button>
-              <Button onClick={confirmLogout}>Sign Out</Button>
+              <Button onClick={confirmLogout} loading={signingOut}>
+                {signingOut ? "Signing out…" : "Sign Out"}
+              </Button>
             </div>
           </div>
         </div>
