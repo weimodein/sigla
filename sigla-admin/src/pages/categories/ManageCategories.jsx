@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { listStagger } from "../../utils/motion.js";
 import {
   getCategories,
   createCategory,
@@ -11,7 +14,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Loader2,
   Tag,
   Check,
   AlertCircle,
@@ -26,27 +28,7 @@ const C = {
 };
 
 // ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
 
-const SkeletonCard = () => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
-      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-    </div>
-  </div>
-);
 
 const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabel }) => {
   const [form, setForm] = useState({ name: "", description: "" });
@@ -71,22 +53,32 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
   };
 
   return (
-    <AppModal title={title} onClose={onClose}>
+    <AppModal
+      title={title}
+      onClose={onClose}
+      onEnter={() => { if (!saving && form.name.trim()) handleSubmit(); }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            loading={saving}
+            disabled={!form.name.trim()}
+          >
+            {submitLabel}
+          </Button>
+        </>
+      }
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
         <div>
           <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Name *</label>
-          {/* Enter submits — for a two-field dialog that is the expected gesture,
-              and it did nothing before. maxLength matches Category.name's
-              VARCHAR(50) so the limit is visible instead of arriving as a 500. */}
+          {/* maxLength matches Category.name's VARCHAR(50) so the limit is visible
+              instead of arriving as a 500. Enter-to-submit is handled modal-wide by
+              AppModal's onEnter. */}
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !saving && form.name.trim()) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
             maxLength={50}
             placeholder="e.g. greeting, food, color"
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
@@ -101,14 +93,6 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", resize: "vertical", boxSizing: "border-box" }}
           />
         </div>
-      </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-        <button onClick={handleSubmit} disabled={saving || !form.name.trim()}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: saving || !form.name.trim() ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: saving || !form.name.trim() ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-          {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-          {submitLabel}
-        </button>
       </div>
     </AppModal>
   );
@@ -197,8 +181,6 @@ const ManageCategories = () => {
 
   return (
     <div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -227,24 +209,24 @@ const ManageCategories = () => {
       {loading ? (
         <div className="grid grid-cols-3 gap-4 mb-6">
           {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <StatCard
+          <StatCard index={0}
             title="Total Categories"
             value={categories.length}
             icon={Tag}
             color="bg-blue-900"
           />
-          <StatCard
+          <StatCard index={1}
             title="In Use"
             value={inUseCount}
             icon={Check}
             color="bg-green-500"
           />
-          <StatCard
+          <StatCard index={2}
             title="Empty"
             value={emptyCount}
             icon={AlertCircle}
@@ -275,11 +257,26 @@ const ManageCategories = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={4} style={{ textAlign: "center", padding: "40px", color: C.muted }}>Loading...</td></tr>
+                /* Skeleton rows rather than the word "Loading..." — this page
+                   already renders animated skeletons for its stat tiles above,
+                   so a bare text cell here was inconsistent within one screen. */
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                    {Array.from({ length: 4 }).map((__, j) => (
+                      <td key={j} className="px-5 py-3">
+                        <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
               ) : categories.length === 0 ? (
                 <tr><td colSpan={4} style={{ textAlign: "center", padding: "40px", color: C.muted }}>No categories yet. Add your first one.</td></tr>
-              ) : paginatedCategories.map(cat => (
-                <tr key={cat.id} style={{ borderTop: `1px solid ${C.border}` }}>
+              ) : paginatedCategories.map((cat, i) => (
+                <tr
+                  key={cat.id}
+                  className="row-interactive list-item-in"
+                  style={{ borderTop: `1px solid ${C.border}`, ...listStagger(i) }}
+                >
                   <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937", textTransform: "capitalize" }}>{cat.name}</td>
                   <td className="px-5 py-3" style={{ color: "#6b7280" }}>{cat.description || "—"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>
@@ -360,7 +357,35 @@ const ManageCategories = () => {
       />
 
       {deleteTarget && (
-        <AppModal title="Delete Category" onClose={() => setDeleteTarget(null)}>
+        <AppModal
+          title="Delete Category"
+          onClose={() => setDeleteTarget(null)}
+          onEnter={() => {
+            // Mirrors the Delete button's disabled state — a category still in
+            // use cannot be deleted.
+            if (!deleting && !(deleteTarget.word_count > 0)) handleDelete();
+          }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDelete}
+                loading={deleting}
+                disabled={deleteTarget.word_count > 0}
+                title={deleteTarget.word_count > 0 ? "This category is still in use" : undefined}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </Button>
+            </>
+          }
+        >
           <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "12px" }}>
             Delete category <strong>"{deleteTarget.name}"</strong>?
           </p>
@@ -370,28 +395,11 @@ const ManageCategories = () => {
               clickable). The rule is enforced server-side in
               categoryController.deleteCategory. */}
           {deleteTarget.word_count > 0 && (
-            <p style={{ fontSize: "0.85rem", color: C.red, marginBottom: "20px" }}>
+            <p style={{ fontSize: "0.85rem", color: C.red }}>
               ⚠ This category is used by {deleteTarget.word_count} word(s). Move
               those words to another category, or delete them first.
             </p>
           )}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-            <button onClick={() => setDeleteTarget(null)} disabled={deleting} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: deleting ? "not-allowed" : "pointer", fontSize: "0.875rem", opacity: deleting ? 0.6 : 1 }}>Cancel</button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting || deleteTarget.word_count > 0}
-              title={deleteTarget.word_count > 0 ? "This category is still in use" : undefined}
-              style={{
-                padding: "8px 16px", borderRadius: "8px", border: "none",
-                background: C.red, color: "white",
-                cursor: deleting || deleteTarget.word_count > 0 ? "not-allowed" : "pointer",
-                fontSize: "0.875rem", fontWeight: 600,
-                opacity: deleting || deleteTarget.word_count > 0 ? 0.5 : 1,
-              }}
-            >
-              {deleting ? "Deleting..." : "Delete"}
-            </button>
-          </div>
         </AppModal>
       )}
     </div>

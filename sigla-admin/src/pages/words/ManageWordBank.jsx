@@ -26,6 +26,7 @@ import {
 } from "../../api/wordApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
 import {
   BookOpen,
   CheckCircle,
@@ -1379,7 +1380,27 @@ const ManageWordBank = () => {
 
       {/* ── Add Word Modal ─────────────────────────────────────── */}
       {addModal && (
-        <AppModal title="Add Word" onClose={closeModal}>
+        <AppModal
+          title="Add Word"
+          onClose={closeModal}
+          onEnter={() => {
+            if (!actionLoading && addForm.label.trim()) handleAddWord();
+          }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddWord}
+                loading={actionLoading}
+                disabled={!addForm.label.trim()}
+              >
+                {actionLoading ? "Adding..." : "Add Word"}
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Label *</label>
@@ -1428,28 +1449,33 @@ const ManageWordBank = () => {
             <p className="text-xs text-gray-400 bg-blue-50 rounded-lg px-3 py-2">
               The word will be added as <strong>approved but inactive</strong>. Upload gesture samples afterwards to activate it in the mobile app.
             </p>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleAddWord}
-                disabled={actionLoading || !addForm.label.trim()}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Adding..." : "Add Word"}
-              </button>
-              <button
-                onClick={closeModal}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
 
       {/* ── Admin Upload Samples Modal ─────────────────────────── */}
       {uploadModal && (
-        <AppModal title={`Upload Samples — ${uploadModal.label}`} onClose={closeModal}>
+        <AppModal
+          title={`Upload Samples — ${uploadModal.label}`}
+          onClose={closeModal}
+          onEnter={() => {
+            if (!actionLoading && uploadForm.files.length) handleAdminUpload();
+          }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAdminUpload}
+                loading={actionLoading}
+                disabled={!uploadForm.files.length}
+              >
+                {actionLoading ? "Uploading..." : "Upload Samples"}
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <p className="text-xs text-gray-500">
               Select gesture images from your device. The system will automatically extract hand landmark
@@ -1472,28 +1498,27 @@ const ManageWordBank = () => {
                 </p>
               )}
             </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleAdminUpload}
-                disabled={actionLoading || !uploadForm.files.length}
-                className="flex-1 bg-purple-700 hover:bg-purple-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Uploading..." : "Upload Samples"}
-              </button>
-              <button
-                onClick={closeModal}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
 
       {/* ── Edit Modal ─────────────────────────────────────────── */}
       {editModal && (
-        <AppModal title="Edit Word" onClose={closeModal}>
+        <AppModal
+          title="Edit Word"
+          onClose={closeModal}
+          onEnter={() => { if (!actionLoading) handleEditSave(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button onClick={handleEditSave} loading={actionLoading}>
+                {actionLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Label</label>
@@ -1537,28 +1562,31 @@ const ManageWordBank = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleEditSave}
-                disabled={actionLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Saving..." : "Save Changes"}
-              </button>
-              <button
-                onClick={closeModal}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
 
       {/* ── Reject Word Modal ──────────────────────────────────── */}
       {rejectModal && (
-        <AppModal title="Reject Word" onClose={closeModal}>
+        <AppModal
+          title="Reject Word"
+          onClose={closeModal}
+          onEnter={() => { if (!actionLoading) handleRejectConfirm(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleRejectConfirm}
+                loading={actionLoading}
+              >
+                {actionLoading ? "Rejecting..." : "Confirm Reject"}
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <p className="text-sm text-gray-600">
               Rejecting <strong>{rejectModal.label}</strong>. Optionally provide a reason:
@@ -1570,21 +1598,6 @@ const ManageWordBank = () => {
               placeholder="Reason for rejection (optional)"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
             />
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleRejectConfirm}
-                disabled={actionLoading}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Rejecting..." : "Confirm Reject"}
-              </button>
-              <button
-                onClick={closeModal}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}

@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { listStagger } from "../../utils/motion.js";
+import { invalidate } from "../../utils/apiCache.js";
 import {
   getAllModels,
   getModelStats,
@@ -38,28 +42,8 @@ const C = {
 };
 
 // ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
 
 // ── Skeleton Components ───────────────────────────────────────
-const SkeletonCard = () => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
-      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-    </div>
-  </div>
-);
 
 // ── Badge ─────────────────────────────────────────────────────
 const Badge = ({ value }) => {
@@ -96,7 +80,7 @@ const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
   const active = sortField === sortKey;
   return (
     <th
-      className="px-4 py-3 cursor-pointer select-none hover:bg-gray-100"
+      className="interactive px-4 py-3 cursor-pointer select-none hover:bg-gray-100"
       style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280" }}
       onClick={() => onSort && onSort(sortKey)}
     >
@@ -157,7 +141,11 @@ const ManageModel = () => {
     try {
       const [statsData, modelsData, wordStatsData] = await Promise.all([
         getModelStats(),
-        getAllModels(),
+        // force: this page reads status === "training" from the list below to
+        // re-adopt a run already in flight. A cached copy would show no banner,
+        // re-enable the Train button, and leave the run looking stuck forever —
+        // exactly the bug the re-adoption logic was written to fix.
+        getAllModels({ force: true }),
         getWordStats(),
       ]);
       setStats(statsData);
@@ -237,12 +225,17 @@ const ManageModel = () => {
             totalClasses: model.total_classes ?? null,
             versionNumber: model.version_number,
           });
+          // Training completed on the SERVER, so no mutation ran on this client
+          // to clear the model caches. getAllModels is already forced below, but
+          // getModelStats is not and it carries current_model.
+          invalidate("models:");
           fetchData();
         } else if (model.status === "failed") {
           clearInterval(pollingRef.current);
           setTrainingModelId(null);
           setTrainingVersion("");
           showError(`Training failed: ${model.training_error || "Unknown error"}`);
+          invalidate("models:");
           fetchData();
         }
       } catch (err) {
@@ -509,24 +502,24 @@ const ManageModel = () => {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <StatCard
+          <StatCard index={1}
             title="Total Versions"
             value={stats?.total}
             icon={Cpu}
             color="bg-blue-900"
           />
-          <StatCard
+          <StatCard index={2}
             title="Deployed"
             value={stats?.deployed}
             icon={CheckCircle}
             color="bg-green-500"
           />
-          <StatCard
+          <StatCard index={3}
             title="Trained (pending)"
             value={stats?.trained}
             icon={Clock}
@@ -537,13 +530,17 @@ const ManageModel = () => {
 
       {/* Current Deployed Model */}
       {stats?.current_model && (
+        /* Not a StatCard — a full-width gradient banner — but it takes the same
+           entrance so it does not sit static above cards that animate. */
         <div
+          className="list-item-in"
           style={{
             background: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`,
             borderRadius: "12px",
             padding: "20px 24px",
             marginBottom: "20px",
             color: "#fff",
+            ...listStagger(0),
           }}
         >
           <p
@@ -729,7 +726,7 @@ const ManageModel = () => {
                     </td>
                   </tr>
                 ) : (
-                  paginatedModels.map((model) => (
+                  paginatedModels.map((model, i) => (
                     // Keyed on the FRAGMENT. The key used to sit on the inner
                     // <tr>, where React never sees it, so this list reconciled by
                     // index: with a row expanded, a re-sort or refetch could
@@ -737,9 +734,10 @@ const ManageModel = () => {
                     <Fragment key={model.id}>
                       {/* Main row */}
                       <tr
-                        className="border-t hover:bg-gray-50 text-sm"
+                        className="border-t row-interactive list-item-in text-sm"
                         style={{
                           cursor: "pointer",
+                          ...listStagger(i),
                         }}
                         onClick={() =>
                           setExpandedRow(
@@ -879,6 +877,28 @@ const ManageModel = () => {
                                   Delete
                                 </button>
                               </>
+                            )}
+                            {/* A failed run produced no artifacts, so Revert is
+                                meaningless — but it still occupies a row, and
+                                without Delete those rows accumulate forever. */}
+                            {model.status === "failed" && (
+                              <button
+                                onClick={() => handleDelete(model)}
+                                disabled={actionLoading}
+                                className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                  background: "#fecaca",
+                                  color: "#991b1b",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.background = "#fca5a5")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background = "#fecaca")
+                                }
+                              >
+                                Delete
+                              </button>
                             )}
                             {model.status === "deployed" && (
                               <span
@@ -1045,7 +1065,7 @@ const ManageModel = () => {
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="interactive p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Previous page"
                   >
                     <ChevronLeft size={16} />
@@ -1053,7 +1073,7 @@ const ManageModel = () => {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="interactive p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Next page"
                   >
                     <ChevronRight size={16} />
@@ -1067,7 +1087,26 @@ const ManageModel = () => {
 
       {/* Train Modal */}
       {trainModal && (
-        <AppModal title="Train New Model" onClose={() => setTrainModal(false)}>
+        <AppModal
+          title="Train New Model"
+          onClose={() => setTrainModal(false)}
+          onEnter={() => { if (!actionLoading) handleTrain(); }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setTrainModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleTrain} loading={actionLoading}>
+                {actionLoading
+                  ? "Training... (this may take a while)"
+                  : "Start Training"}
+              </Button>
+            </>
+          }
+        >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
               This will fetch all approved gesture samples from Supabase and
@@ -1104,23 +1143,6 @@ const ManageModel = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleTrain}
-                disabled={actionLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading
-                  ? "Training... (this may take a while)"
-                  : "Start Training"}
-              </button>
-              <button
-                onClick={() => setTrainModal(false)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1130,27 +1152,23 @@ const ManageModel = () => {
         <AppModal
           title={`Test Model: ${testModal.version_number}`}
           onClose={() => setTestModal(null)}
+          onEnter={() => { if (!actionLoading) handleTest(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setTestModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleTest} loading={actionLoading}>
+                {actionLoading ? "Evaluating..." : "Run Evaluation"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
               This will evaluate <strong>{testModal.version_number}</strong>{" "}
               against the approved dataset and return accuracy metrics.
             </p>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleTest}
-                disabled={actionLoading}
-                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Evaluating..." : "Run Evaluation"}
-              </button>
-              <button
-                onClick={() => setTestModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1160,6 +1178,17 @@ const ManageModel = () => {
         <AppModal
           title={`Deploy Model: ${deployModal.version_number}`}
           onClose={() => setDeployModal(null)}
+          onEnter={() => { if (!actionLoading) handleDeploy(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeployModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleDeploy} loading={actionLoading}>
+                {actionLoading ? "Deploying..." : "Confirm Deploy"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
@@ -1195,21 +1224,6 @@ const ManageModel = () => {
                 </>
               )}
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleDeploy}
-                disabled={actionLoading}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Deploying..." : "Confirm Deploy"}
-              </button>
-              <button
-                onClick={() => setDeployModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
@@ -1219,6 +1233,17 @@ const ManageModel = () => {
         <AppModal
           title={`Revert to: ${revertModal.version_number}`}
           onClose={() => setRevertModal(null)}
+          onEnter={() => { if (!actionLoading) handleRevert(); }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setRevertModal(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRevert} loading={actionLoading}>
+                {actionLoading ? "Reverting..." : "Confirm Revert"}
+              </Button>
+            </>
+          }
         >
           <div className="space-y-3">
             <p className="text-sm text-gray-500">
@@ -1226,28 +1251,21 @@ const ManageModel = () => {
               <strong>{revertModal.version_number}</strong>. The current
               deployed model will become inactive.
             </p>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleRevert}
-                disabled={actionLoading}
-                className="flex-1 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading ? "Reverting..." : "Confirm Revert"}
-              </button>
-              <button
-                onClick={() => setRevertModal(null)}
-                className="flex-1 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         </AppModal>
       )}
 
       {/* Results Modal */}
       {resultModal && (
-        <AppModal title={resultModal.title} onClose={() => setResultModal(null)}>
+        <AppModal
+          title={resultModal.title}
+          onClose={() => setResultModal(null)}
+          onEnter={() => setResultModal(null)}
+          footer={
+            /* Lone button — ModalFooter promotes it to primary. */
+            <Button onClick={() => setResultModal(null)}>Close</Button>
+          }
+        >
           <div className="space-y-3 text-sm">
             {resultModal.message && (
               <p className="text-gray-700 leading-relaxed">
@@ -1280,12 +1298,6 @@ const ManageModel = () => {
                 Version <strong>{resultModal.versionNumber}</strong>
               </p>
             )}
-            <button
-              onClick={() => setResultModal(null)}
-              className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition mt-2"
-            >
-              Close
-            </button>
           </div>
         </AppModal>
       )}

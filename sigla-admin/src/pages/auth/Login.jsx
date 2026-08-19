@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { setAuthMessage, takeAuthMessage } from "../../utils/authMessage.js";
+import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
 
 const C = {
   text: "#1f2937",
@@ -13,9 +14,12 @@ const C = {
 };
 
 const FloatingInput = ({
-  id, type, value, onChange, label, autoComplete, icon,
+  id, type, value, onChange, label, autoComplete, icon, delay,
 }) => (
-  <div style={S.inputGroup}>
+  <div
+    className="auth-field-in"
+    style={{ ...S.inputGroup, "--stagger-delay": delay }}
+  >
     <input
       id={id} type={type} value={value} onChange={onChange}
       required autoComplete={autoComplete}
@@ -27,21 +31,28 @@ const FloatingInput = ({
   </div>
 );
 
-const Button = ({ disabled, loading, children }) => {
-  const isDisabled = loading || disabled;
+const Button = ({ disabled, loading, succeeded, children }) => {
+  const isDisabled = loading || succeeded || disabled;
   return (
     <button
       type="submit"
       disabled={isDisabled}
-      style={{ ...S.btn, ...(isDisabled ? { opacity: 0.7, cursor: "not-allowed" } : {}) }}
+      style={{
+        ...S.btn,
+        // Hold on a check so a successful sign-in is acknowledged before the card
+        // leaves, rather than the page simply vanishing. Keeps the brand blue from
+        // S.btn; opacity/cursor are reset because the button is disabled during
+        // the hold and would otherwise dim mid-acknowledgement.
+        ...(succeeded ? { opacity: 1, cursor: "default" } : {}),
+        ...(isDisabled && !succeeded ? { opacity: 0.7, cursor: "not-allowed" } : {}),
+      }}
     >
-      {loading && (
-        <Loader2
-          size={16}
-          style={{ display: "inline-block", animation: "sigla-spin 0.8s ease-in-out infinite" }}
-        />
+      {succeeded ? (
+        <Check size={16} style={{ display: "inline-block" }} />
+      ) : (
+        loading && <Loader2 size={16} className="animate-spin" style={{ display: "inline-block" }} />
       )}
-      {children}
+      {succeeded ? "Signed in" : children}
     </button>
   );
 };
@@ -64,6 +75,26 @@ const Login = () => {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
+  // Separate from `loading` on purpose — see handleLogin.
+  const [succeeded, setSucceeded] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const [shake, setShake] = useState(false);
+  // Cleared on unmount so a navigation mid-sequence cannot fire setState on a
+  // dead component.
+  const timersRef = useRef([]);
+
+  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
+
+  // Why the admin is back at this screen — parked by whoever navigated here
+  // (a deliberate sign-out, or the session-expiry handler in AuthContext).
+  // Read-once, so returning to /login later does not replay it.
+  useEffect(() => {
+    const message = takeAuthMessage();
+    if (message) toast[message.type]?.(message.text);
+    // toast is memoised in ToastContext; listing it would still re-run this on
+    // any provider re-render and could replay a message collected elsewhere.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (document.getElementById("login-dynamic-styles")) return;
@@ -86,7 +117,6 @@ const Login = () => {
       .sigla-input[type="password"]::-ms-clear { display: none; }
       .sigla-input::-webkit-credentials-auto-fill-button,
       .sigla-input::-webkit-password-toggle { display: none; }
-      @keyframes sigla-spin { to { transform: rotate(360deg); } }
       @media (max-width: 768px) {
         .sigla-login-container { flex-direction: column !important; width: 90% !important; max-height: none !important; }
         .sigla-left-panel { width: 100% !important; padding: 30px 20px !important; min-height: 140px !important; }
@@ -102,19 +132,52 @@ const Login = () => {
 
   const handleLogin = useCallback(async (e) => {
     e.preventDefault();
+    if (loading || succeeded) return;
     setLoading(true);
     try {
       const data = await login(identifier, password);
-      navigate(data?.administrator?.must_complete_setup ? "/onboarding" : "/dashboard");
+      const admin = data?.administrator;
+
+      // NOTE: `loading` is deliberately NOT reset here, and there is no finally
+      // block. This used to reset in `finally`, which runs on the success path
+      // too — it would clear the success state before it could be seen.
+      setSucceeded(true);
+
+      // The welcome belongs on the page being navigated TO; this component
+      // unmounts before a toast fired here could render.
+      // Administrator has no name fields — username is the only human label.
+      setAuthMessage(
+        "success",
+        admin?.username ? `Welcome back, ${admin.username}` : "Welcome back",
+      );
+
+      // Hold on the check, then let the card leave before the route changes.
+      timersRef.current.push(
+        setTimeout(() => setExiting(true), 400),
+        setTimeout(() => {
+          navigate(admin?.must_complete_setup ? "/onboarding" : "/dashboard");
+        }, 620),
+      );
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || "Login failed");
-    } finally { setLoading(false); }
-  }, [identifier, password, login, navigate, toast]);
+      setShake(true);
+      setLoading(false);
+    }
+  }, [identifier, password, login, navigate, toast, loading, succeeded]);
 
   return (
     <div style={S.pageWrapper}>
       <div style={S.background} />
-      <div className="sigla-login-container" style={S.loginContainer}>
+      {/* Entrance on mount, exit once the sign-in is acknowledged. The shake
+          class is removed on animationend so a second failed attempt replays it —
+          a class left applied will not re-trigger. */}
+      <div
+        className={`sigla-login-container ${exiting ? "auth-card-out" : "auth-card-in"} ${shake ? "auth-shake" : ""}`}
+        style={S.loginContainer}
+        onAnimationEnd={(e) => {
+          if (e.animationName === "auth-shake") setShake(false);
+        }}
+      >
 
         {/* Left panel */}
         <div className="sigla-left-panel" style={S.leftPanel}>
@@ -124,23 +187,30 @@ const Login = () => {
         {/* Right panel */}
         <div className="sigla-right-panel" style={S.rightPanel}>
           <form onSubmit={handleLogin}>
-            <h2 style={S.heading}>Login Portal</h2>
+            <h2 className="auth-field-in" style={{ ...S.heading, "--stagger-delay": "120ms" }}>
+              Login Portal
+            </h2>
 
             <div style={S.fields}>
               <FloatingInput
                 id="identifier" type="text" value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 label="Username or Email" autoComplete="username"
+                delay="180ms"
               />
               <FloatingInput
                 id="password" type={showPass ? "text" : "password"}
                 value={password} onChange={(e) => setPassword(e.target.value)}
                 label="Password" autoComplete="current-password"
                 icon={<PasswordToggleIcon showPass={showPass} onToggle={() => setShowPass(s => !s)} />}
+                delay="240ms"
               />
             </div>
 
-            <label style={S.showPassLabel}>
+            <label
+              className="auth-field-in"
+              style={{ ...S.showPassLabel, "--stagger-delay": "300ms" }}
+            >
               <input
                 type="checkbox" checked={showPass}
                 onChange={() => setShowPass(s => !s)} style={S.checkbox}
@@ -148,11 +218,13 @@ const Login = () => {
               Show Password
             </label>
 
-            <Button disabled={loading} loading={loading}>
-              {loading ? "Logging in..." : "Login"}
-            </Button>
+            <div className="auth-field-in" style={{ "--stagger-delay": "300ms" }}>
+              <Button disabled={loading} loading={loading} succeeded={succeeded}>
+                {loading ? "Logging in..." : "Login"}
+              </Button>
+            </div>
 
-            <div style={S.footer}>
+            <div className="auth-field-in" style={{ ...S.footer, "--stagger-delay": "380ms" }}>
               <p style={S.footerP}>Forgot your password?</p>
               <button
                 type="button"

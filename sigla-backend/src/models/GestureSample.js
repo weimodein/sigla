@@ -24,6 +24,23 @@ const GestureSample = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Which signer (and sitting) produced this sample.
+    //
+    // submitted_by cannot serve this purpose — it is the admin account that ran the
+    // upload, identical across every signer. Without a real grouping key,
+    // cross-validation puts the same signer on both sides of a fold and the reported
+    // accuracy overstates performance for a new user.
+    //
+    // NULL = unknown provenance (everything uploaded before this column existed).
+    // Treat each NULL as its own group; never merge them.
+    //
+    // Requires migration 002_gesture_samples_session_id.sql to be applied first —
+    // Sequelize selects every declared column, so declaring this against a table
+    // that lacks it breaks GET /api/ml/dataset with Postgres 42703.
+    session_id: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     // Number of images in this submission batch
     sample_count: {
       type: DataTypes.INTEGER,

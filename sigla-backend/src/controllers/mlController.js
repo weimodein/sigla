@@ -54,11 +54,15 @@ const getApprovedDataset = async (req, res) => {
         // even in principle. submitted_by is included for the same reason: it is
         // the grouping key a StratifiedGroupKFold will need once a second signer
         // contributes. Consumers ignore unknown keys, so this is additive.
+        // session_id is the grouping key that comment anticipates. submitted_by turned
+        // out to be useless for it in practice — it records the uploading ADMIN, so it
+        // is 1 for 1664 of 1726 samples across all four signers.
         dataset[label].push({
           sequence: sample.sequence,
           sample_id: sample.id,
           file_url: sample.file_url,
           submitted_by: sample.submitted_by,
+          session_id: sample.session_id,
         });
       } else {
         console.warn(`Sample ${sample.id} has no embedded sequence, skipping`);

@@ -31,6 +31,8 @@ const {
   setThumbnail,
   setVideo,
   uploadVideos,
+  getUploadJob,
+  getActiveUploadJob,
 } = require("../controllers/wordController.js");
 const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
@@ -103,6 +105,11 @@ router.get("/stats", roleMiddleware("admin"), getWordStats);
 // IMPORTANT: must come before /:id wildcard routes
 router.post("/admin-add", roleMiddleware("admin"), adminAddWord);
 
+// ── Upload job status ─────────────────────────────────────────
+// IMPORTANT: must come before the /:id wildcard below, or "upload-jobs" is
+// swallowed as a word id and getWordById answers with a 404 instead.
+router.get("/upload-jobs/:jobId", roleMiddleware("admin"), getUploadJob);
+
 
 // ── List ──────────────────────────────────────────────────────
 router.get("/", roleMiddleware("admin"), getAllWords);
@@ -112,7 +119,12 @@ router.get("/:id", roleMiddleware("admin"), getWordById);
 router.post("/:id/admin-samples", roleMiddleware("admin"), adminUploadSamples);
 
 // ── Admin video upload → ML landmark extraction ───────────────
+// Returns 202 with an upload_jobs row; extraction runs in the background.
 router.post("/:id/upload-videos", roleMiddleware("admin"), videoUpload.array("videos", 50), uploadVideos);
+
+// The live batch for this word, so the UI can re-adopt a job in flight after a
+// reload or navigating back.
+router.get("/:id/upload-jobs/active", roleMiddleware("admin"), getActiveUploadJob);
 
 // ── Samples ───────────────────────────────────────────────────
 router.get("/:id/samples", roleMiddleware("admin"), getSamples);

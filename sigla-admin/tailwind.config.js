@@ -20,6 +20,18 @@ export default {
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"],
       },
+      // Mirrors the motion tokens in index.css so utility classes and
+      // hand-written CSS draw from one scale. Use duration-fast / duration-base
+      // / duration-slow rather than Tailwind's numeric durations.
+      transitionDuration: {
+        fast: "120ms",
+        base: "200ms",
+        slow: "320ms",
+      },
+      transitionTimingFunction: {
+        standard: "cubic-bezier(0.4, 0, 0.2, 1)",
+        spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      },
     },
   },
   plugins: [],

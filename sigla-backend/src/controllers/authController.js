@@ -19,6 +19,28 @@ const generateCode = () =>
 // and getMe() so both return the same role string for a given role_id.
 const ROLE_MAP = { 0: "super_admin", 1: "admin" };
 
+// The administrator object sent to the client, built in one place so login() and
+// getMe() cannot disagree.
+//
+// They used to disagree: login() listed its fields by hand and omitted `status`,
+// while getMe() spread the whole row. The admin UI reads `status` for the Account
+// Status field, so it rendered blank right after signing in and only filled in
+// after a page refresh happened to call getMe().
+//
+// An explicit allow-list rather than a spread — getMe() previously leaked
+// failed_login_attempts, lockout_until and lockout_count to the browser, where
+// AuthContext writes them into localStorage. Those are internal security state,
+// and nothing in the client reads them.
+const toAdministratorDTO = (admin, roleName) => ({
+  id: admin.id,
+  username: admin.username,
+  email: admin.email,
+  role: roleName ?? ROLE_MAP[admin.role_id],
+  status: admin.status,
+  created_at: admin.created_at,
+  must_complete_setup: admin.must_complete_setup,
+});
+
 // How long a VERIFIED reset code stays spendable. Long enough to choose and
 // confirm a password, short enough that a leaked/abandoned grant is not a
 // standing takeover path.
@@ -220,14 +242,7 @@ const login = async (req, res) => {
     return res.status(200).json({
       message: "Login successful",
       token,
-      administrator: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: roleName,
-        created_at: user.created_at,
-        must_complete_setup: user.must_complete_setup,
-      },
+      administrator: toAdministratorDTO(user, roleName),
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -465,13 +480,11 @@ const getMe = async (req, res) => {
       return res.status(404).json({ message: "Administrator not found" });
     }
 
-    // The raw row carries role_id only. Map it to the same role string login()
-    // returns, so a session restored via getMe() keeps its role (and isSuper).
+    // The raw row carries role_id only; the DTO maps it to the same role string
+    // login() returns, so a session restored via getMe() keeps its role (and
+    // isSuper). It also trims the row to the fields the client actually uses.
     return res.status(200).json({
-      administrator: {
-        ...administrator.toJSON(),
-        role: ROLE_MAP[administrator.role_id],
-      },
+      administrator: toAdministratorDTO(administrator),
     });
   } catch (err) {
     console.error("Get me error:", err);

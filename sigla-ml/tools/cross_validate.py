@@ -52,27 +52,40 @@ from app.utils.preprocessor import (  # noqa: E402
 )
 
 
-def run_fold(motion_dataset, fold, n_splits, seed, epochs, quiet=True):
+def run_fold(motion_dataset, fold, n_splits, seed, epochs, quiet=True,
+             group_by_session=False):
     """Train one fold from scratch; return (y_true, y_pred, label_map)."""
     from tensorflow import keras
-    from app.services.train import build_motion_model
+    from app.services.train import build_motion_model, set_global_seed
     from sklearn.utils.class_weight import compute_class_weight
 
-    X_tr, y_tr, X_va, y_va, label_map = prepare_motion_dataset(
-        motion_dataset, fold=fold, n_splits=n_splits, random_state=seed
+    # Seed per fold so the whole run is reproducible while folds stay independent.
+    # Without this, weight init varied run to run and a re-run of the SAME config
+    # could differ by as much as a real improvement would.
+    set_global_seed(seed * 1000 + fold)
+
+    X_tr, y_tr, X_va, y_va, label_map, real_counts = prepare_motion_dataset(
+        motion_dataset, fold=fold, n_splits=n_splits, random_state=seed,
+        group_by_session=group_by_session,
     )
     if len(X_va) == 0:
         return None, None, label_map
 
     model = build_motion_model(len(label_map))
-    cw = compute_class_weight("balanced", classes=np.unique(y_tr), y=y_tr)
+
+    # Match train.py: weight from real pre-augmentation counts, not augmented labels.
+    classes_present = np.array(sorted(real_counts.keys()), dtype=np.int64)
+    real_labels = np.concatenate([
+        np.full(real_counts[c], c, dtype=np.int64) for c in classes_present
+    ])
+    cw = compute_class_weight("balanced", classes=classes_present, y=real_labels)
 
     model.fit(
         X_tr, y_tr,
         validation_data=(X_va, y_va),
         epochs=epochs,
         batch_size=32,
-        class_weight=dict(enumerate(cw)),
+        class_weight={int(c): float(w) for c, w in zip(classes_present, cw)},
         callbacks=[keras.callbacks.EarlyStopping(
             monitor="val_accuracy", patience=20, restore_best_weights=True)],
         verbose=0 if quiet else 1,
@@ -89,6 +102,11 @@ def main() -> int:
                     help="repeat the whole K-fold with a different seed each time")
     ap.add_argument("--epochs", type=int, default=200)
     ap.add_argument("--out", default=None, help="write results as JSON")
+    ap.add_argument("--group-by-session", action="store_true",
+                    help="hold out whole signers per fold (leave-one-signer-out) using "
+                         "gesture_samples.session_id. This is the number that reflects "
+                         "how the model performs for a NEW signer; the ungrouped "
+                         "default overstates it.")
     args = ap.parse_args()
 
     dataset = fetch_approved_samples()
@@ -113,7 +131,8 @@ def main() -> int:
             print(f"[cv] fold {done}/{total} (repeat {rep + 1}, fold {fold}) ...",
                   flush=True)
             y_true, y_pred, label_map = run_fold(
-                motion_dataset, fold, args.folds, seed, args.epochs
+                motion_dataset, fold, args.folds, seed, args.epochs,
+                group_by_session=args.group_by_session,
             )
             if y_true is None:
                 print("[cv]   skipped - no validation samples in this fold")
@@ -158,8 +177,14 @@ def main() -> int:
             print(f"  {n:>3}x  {t} -> {p}")
 
     print()
-    print("NOTE: single signer, single session -- this is 'accuracy for this signer'")
-    print("      and overstates performance for other users.")
+    if args.group_by_session:
+        print("NOTE: SIGNER-GROUPED folds -- each fold held out a whole signer, so this")
+        print("      estimates accuracy for a NEW signer. Expect it BELOW the ungrouped")
+        print("      number; that gap is the real generalization cost, not a regression.")
+    else:
+        print("NOTE: ungrouped folds -- the same signer appears in both train and test,")
+        print("      so this overstates performance for a new user. Re-run with")
+        print("      --group-by-session for a generalization estimate.")
 
     if args.out:
         with open(args.out, "w") as f:

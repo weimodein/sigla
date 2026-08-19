@@ -123,13 +123,9 @@ class MainActivity : AppCompatActivity() {
     private var latchedSwapSlots: Boolean? = null      // decision from best frame so far
     private var bestSlotSep = -1f                      // largest |cz0|+|cz1| seen this gesture
 
-    // ── TEMP: diagnose NO/BREAD misrecognition — remove once resolved ───────────
-    private var maxHandsSeenThisGesture = 0
-
     // ── UI state ──────────────────────────────────────────────────────────────
     private var showFilipino       = true
     private var emergencyHoldStart = 0L
-    private var frameSkipCounter   = 0
 
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
@@ -229,10 +225,6 @@ class MainActivity : AppCompatActivity() {
                 // Activity — a late-finishing build must not retain a destroyed
                 // Activity.
                 val helper = HandLandmarkHelper(applicationContext) { result ->
-                    // TEMP: track whether this gesture ever showed 2 hands (diagnosing whether
-                    // NO/BREAD are being signed/trained as one- or two-handed).
-                    if (result.handsDetected > maxHandsSeenThisGesture) maxHandsSeenThisGesture = result.handsDetected
-
                     // Canonical slot order FIRST (RIGHT→slot0, LEFT→slot1)
                     val ordered = canonicalizeSlots(result.features, result.handedness, result.handsDetected)
                     val features = canonicalizeHandedness(
@@ -472,7 +464,6 @@ class MainActivity : AppCompatActivity() {
         val predictor = this.predictor ?: return
 
         predictor.onResult = { result ->
-            maxHandsSeenThisGesture = 0
             runOnUiThread {
                 // Confidence is no longer shown to the user, but it is still recorded
                 // with each history entry (see historyManager.add below).
@@ -735,15 +726,22 @@ private fun setActiveNavItem(activeId: Int) {
                 return@setAnalyzer
             }
             frameCounter++
-            // Skip every 2nd frame to reduce processing
+            // Skip every 2nd frame: MediaPipe runs on half the camera frames.
+            //
+            // Combined with PredictionService.MOTION_SLIDE_INTERVAL = 2, an LSTM pass
+            // therefore happens on every 4th CAMERA frame — roughly 7.5 Hz at 30 fps.
+            // That is the cadence the firing constants were tuned against
+            // (MOTION_EARLY_STREAK = 10 ≈ 40 camera frames ≈ 1.3 s of held sign), so
+            // changing this skip silently retunes MOTION_EARLY_STREAK / EARLY_EXIT_STREAK
+            // in wall-clock terms. Re-run sigla-ml/tools/simulate_early_fire.py before
+            // altering it.
+            //
+            // STRATEGY_KEEP_ONLY_LATEST means CameraX drops stale frames if MediaPipe
+            // falls behind, so the real rate self-limits to what the device sustains.
             if (frameCounter % 2 == 0) {
                 imageProxy.close()
                 return@setAnalyzer
             }
-            // Process every frame so quick signs keep up. STRATEGY_KEEP_ONLY_LATEST means
-            // CameraX drops stale frames if MediaPipe falls behind, so this self-limits to
-            // what the device can sustain. (If quick-sign lag returns under sustained load,
-            // reinstate a light skip, e.g. `if (frameSkipCounter++ % 3 != 0)`.)
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)

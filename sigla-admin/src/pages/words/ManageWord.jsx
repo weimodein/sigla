@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
+import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { listStagger } from "../../utils/motion.js";
+import { invalidate } from "../../utils/apiCache.js";
 import {
   getAllWords,
   getWordStats,
@@ -8,6 +12,8 @@ import {
   updateWord,
   deleteWord,
   uploadVideos,
+  getUploadJob,
+  getActiveUploadJob,
   setWordVideo,
 } from "../../api/wordApi.js";
 import { getCategories } from "../../api/categoryApi.js";
@@ -40,27 +46,7 @@ const C = {
 const PAGE_SIZE = 10;
 
 // ── Stat Card ─────────────────────────────────────────────────
-const StatCard = ({ title, value, icon: Icon, color }) => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className={`p-3 rounded-full ${color}`}>
-      <Icon size={20} className="text-white" />
-    </div>
-    <div>
-      <p className="text-xs text-gray-500">{title}</p>
-      <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
-    </div>
-  </div>
-);
 
-const SkeletonCard = () => (
-  <div className="dash-stat-card flex items-center gap-4">
-    <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-    <div className="space-y-2 flex-1">
-      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-      <div className="h-7 w-10 bg-gray-200 rounded animate-pulse" />
-    </div>
-  </div>
-);
 
 // ── Word Form Modal (Add or Edit) ─────────────────────────────
 const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
@@ -124,21 +110,28 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
   if (!open) return null;
 
   return (
-    <AppModal title={isEdit ? `Edit Word — ${word?.label}` : "Add New Word"} onClose={onClose}>
+    <AppModal
+      title={isEdit ? `Edit Word — ${word?.label}` : "Add New Word"}
+      onClose={onClose}
+      onEnter={() => { if (!saving && form.label) handleSubmit(); }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit} loading={saving} disabled={!form.label}>
+            {isEdit ? "Save Changes" : "Add Word"}
+          </Button>
+        </>
+      }
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
         <div>
           <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Label *</label>
-          {/* Enter submits, and maxLength matches Word.label's VARCHAR(100) — an
-              over-long paste previously reached Postgres and returned a bare 500. */}
+          {/* maxLength matches Word.label's VARCHAR(100) — an over-long paste
+              previously reached Postgres and returned a bare 500. Enter-to-submit
+              is handled modal-wide by AppModal's onEnter. */}
           <input
             value={form.label}
             onChange={e => setForm(f => ({ ...f, label: e.target.value.toUpperCase() }))}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !saving && form.label) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
             maxLength={100}
             placeholder="e.g. HELLO, BANANA, GOOD MORNING"
             style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
@@ -185,55 +178,95 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
           />
         </div>
       </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-        <button onClick={handleSubmit} disabled={saving || !form.label}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: saving || !form.label ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: saving || !form.label ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-          {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-          {isEdit ? "Save Changes" : "Add Word"}
-        </button>
-      </div>
     </AppModal>
   );
 };
 
 // ── Upload Videos Modal ───────────────────────────────────────
-const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
-  const { success, error: errorToast } = useToast();
+// Per-clip outcomes from a finished batch. Shared by the upload modal and the
+// page-level results modal, which is what the admin sees when a batch finishes
+// after they already closed the upload modal.
+const ClipResultsList = ({ results }) => (
+  <div style={{ maxHeight: "260px", overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: "8px" }}>
+    {results.map((r, i) => {
+      const statusColor =
+        r.status === "ok" ? C.green : r.status === "skipped" ? "#d97706" : C.red;
+      const statusLabel =
+        r.status === "ok" ? "OK" : r.status === "skipped" ? "Skipped" : "Failed";
+      return (
+        <div key={i} style={{ padding: "6px 12px", borderBottom: `1px solid ${C.border}`, fontSize: "0.8rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+            <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+              {r.file}
+            </span>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
+              {r.type && r.type !== "unknown" && (
+                <span style={{ padding: "1px 6px", borderRadius: "8px", fontSize: "0.65rem", fontWeight: 600, background: r.type === "image" ? "#fef3c7" : "#eff6ff", color: r.type === "image" ? "#92400e" : "#1e40af", textTransform: "uppercase" }}>
+                  {r.type}
+                </span>
+              )}
+              <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
+            </div>
+          </div>
+          {(r.reason || r.error) && (
+            <p style={{ marginTop: "2px", fontSize: "0.7rem", color: C.muted }}>
+              {r.reason || r.error}
+            </p>
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
+
+const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
+  const { error: errorToast } = useToast();
   const fileRef = useRef();
   const [files, setFiles] = useState([]);
-  const [uploading, setUploading] = useState(false);
+  const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [results, setResults] = useState(null);
 
   const handleFiles = (e) => {
     setFiles(Array.from(e.target.files));
-    setResults(null);
   };
 
+  // Only sends the clips. Extraction is a background job on the server, so this
+  // hands the job row to the page and closes — the page owns progress from here,
+  // which is why closing the modal no longer loses the batch.
   const handleUpload = async () => {
     if (!files.length) return;
-    setUploading(true);
+    setSending(true);
     setProgress(0);
     try {
       const data = await uploadVideos(word.id, files, (e) => {
         if (e.total) setProgress(Math.round((e.loaded / e.total) * 100));
       });
-      setResults(data.results);
-      success(`${files.length} file(s) processed`);
-      onSuccess();
+      onStarted(data.job);
+      onClose();
     } catch (err) {
       errorToast(err.response?.data?.message || "Upload failed");
-    } finally {
-      setUploading(false);
+      setSending(false);
     }
   };
 
   if (!open) return null;
 
   return (
-    <AppModal title={`Upload Files — ${word?.label}`} onClose={onClose}>
+    <AppModal
+      title={`Upload Files — ${word?.label}`}
+      onClose={onClose}
+      onEnter={() => { if (!sending && files.length) handleUpload(); }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={sending}>
+            Cancel
+          </Button>
+          <Button onClick={handleUpload} loading={sending} disabled={!files.length}>
+            Upload &amp; Extract
+          </Button>
+        </>
+      }
+    >
       <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
         Upload video clips (.MOV, .MP4). Landmarks are extracted automatically with MediaPipe.
       </p>
@@ -260,81 +293,27 @@ const UploadVideosModal = ({ word, open, onClose, onSuccess }) => {
         />
       </div>
 
-      {files.length > 0 && !results && (
+      {files.length > 0 && (
         <p style={{ fontSize: "0.875rem", color: "#374151", marginBottom: "12px" }}>
           {files.length} file(s) selected
         </p>
       )}
 
-      {uploading && (
+      {/* Byte transfer only. Once this reaches 100% the server has the clips and
+          the modal closes — extraction progress is reported by the page banner,
+          which reads the job row rather than guessing. */}
+      {sending && (
         <div style={{ marginBottom: "16px" }}>
-          {progress < 100 ? (
-            // Phase 1: browser is uploading the video bytes — show real % progress.
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#6b7280", marginBottom: "4px" }}>
-                <span>Uploading files...</span>
-                <span>{progress}%</span>
-              </div>
-              <div style={{ background: C.border, borderRadius: "4px", height: "6px" }}>
-                <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${progress}%`, transition: "width 0.2s" }} />
-              </div>
-            </>
-          ) : (
-            // Phase 2: upload done — the server is now extracting landmarks (MediaPipe,
-            // ~a few seconds per clip). This has no measurable %, so show an indeterminate state.
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.8rem", color: "#6b7280" }}>
-              <Loader2 size={14} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-              <span>Extracting landmarks on server… this can take a moment for many clips.</span>
-            </div>
-          )}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#6b7280", marginBottom: "4px" }}>
+            <span>Uploading files...</span>
+            <span>{progress}%</span>
+          </div>
+          <div style={{ background: C.border, borderRadius: "4px", height: "6px" }}>
+            <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${progress}%`, transition: "width 0.2s" }} />
+          </div>
         </div>
       )}
 
-      {results && (
-        <div style={{ maxHeight: "200px", overflowY: "auto", marginBottom: "16px", border: `1px solid ${C.border}`, borderRadius: "8px" }}>
-          {results.map((r, i) => {
-            const statusColor =
-              r.status === "ok" ? C.green : r.status === "skipped" ? "#d97706" : C.red;
-            const statusLabel =
-              r.status === "ok" ? "OK" : r.status === "skipped" ? "Skipped" : "Failed";
-            return (
-              <div key={i} style={{ padding: "6px 12px", borderBottom: `1px solid ${C.border}`, fontSize: "0.8rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-                    {r.file}
-                  </span>
-                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
-                    {r.type && r.type !== "unknown" && (
-                      <span style={{ padding: "1px 6px", borderRadius: "8px", fontSize: "0.65rem", fontWeight: 600, background: r.type === "image" ? "#fef3c7" : "#eff6ff", color: r.type === "image" ? "#92400e" : "#1e40af", textTransform: "uppercase" }}>
-                        {r.type}
-                      </span>
-                    )}
-                    <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
-                  </div>
-                </div>
-                {(r.reason || r.error) && (
-                  <p style={{ marginTop: "2px", fontSize: "0.7rem", color: C.muted }}>
-                    {r.reason || r.error}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>
-          {results ? "Close" : "Cancel"}
-        </button>
-        {!results && (
-          <button onClick={handleUpload} disabled={!files.length || uploading}
-            style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: !files.length || uploading ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: !files.length || uploading ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-            {uploading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-            Upload & Extract
-          </button>
-        )}
-      </div>
     </AppModal>
   );
 };
@@ -440,7 +419,25 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
   const selectedExt = file?.name.split(".").pop()?.toLowerCase();
 
   return (
-    <AppModal title={`Demo Video — ${word?.label}`} onClose={onClose}>
+    <AppModal
+      title={`Demo Video — ${word?.label}`}
+      onClose={onClose}
+      onEnter={() => { if (!uploading && file) handleUpload(); }}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={uploading}>
+            Cancel
+          </Button>
+          <Button onClick={handleUpload} loading={uploading} disabled={!file}>
+            {uploading
+              ? "Uploading…"
+              : word?.video_url
+                ? "Replace Video"
+                : "Upload Video"}
+          </Button>
+        </>
+      }
+    >
       {/* Current clip. Plays inline — this used to be a link to the storage URL,
           which the browser downloaded instead of playing. */}
       {currentUrl && (
@@ -581,28 +578,6 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-        <button
-          onClick={onClose}
-          disabled={uploading}
-          style={{
-            padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`,
-            background: "white", cursor: uploading ? "not-allowed" : "pointer",
-            fontSize: "0.875rem", opacity: uploading ? 0.6 : 1,
-          }}
-        >
-          Cancel
-        </button>
-        <button onClick={handleUpload} disabled={!file || uploading}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.primary, color: "white", cursor: !file || uploading ? "not-allowed" : "pointer", fontSize: "0.875rem", fontWeight: 600, opacity: !file || uploading ? 0.7 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
-          {uploading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-          {uploading
-            ? "Uploading…"
-            : word?.video_url
-              ? "Replace Video"
-              : "Upload Video"}
-        </button>
-      </div>
     </AppModal>
   );
 };
@@ -626,6 +601,14 @@ const ManageWord = () => {
   const [demoVideoWord, setDemoVideoWord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [stats, setStats] = useState(null);
+  // The in-flight clip-extraction batch, held at PAGE level so it survives the
+  // upload modal closing. Seeded from the 202 response and re-adopted from the
+  // server on mount, so a reload or navigating away does not lose the batch.
+  const [uploadJob, setUploadJob] = useState(null);
+  // Per-clip breakdown of a finished batch, shown even if the upload modal was
+  // already closed — losing this silently is the bug this flow fixes.
+  const [uploadResults, setUploadResults] = useState(null);
+  const uploadPollRef = useRef(null);
   // Full category list for the filter dropdown. Derived from the words on the
   // current page it could only ever offer the ~10 categories visible, and
   // selecting one narrowed `words`, which then dropped the selected value from
@@ -647,6 +630,34 @@ const ManageWord = () => {
     }
   };
 
+  // Re-adopt a clip-extraction batch that is still running on the server.
+  // Extraction happens in a background job, so it survives the admin closing the
+  // modal, navigating away, or reloading — but uploadJob is component state and
+  // does not. Without this, coming back to the page showed no banner and the
+  // batch's results appeared out of nowhere.
+  //
+  // Only the words on the current page are checked: the endpoint is per-word and
+  // scanning every word would be a request per row. In practice the admin is
+  // looking at the word they just uploaded to.
+  const adoptActiveUploadJob = async (visibleWords) => {
+    if (uploadJob) return; // already tracking one
+    try {
+      const found = await Promise.all(
+        visibleWords.slice(0, PAGE_SIZE).map((w) =>
+          getActiveUploadJob(w.id)
+            .then((d) => d.job)
+            .catch(() => null),
+        ),
+      );
+      const live = found.find(Boolean);
+      // Leave a job set moments ago by the modal alone — the fetch that started
+      // before it may only now be landing.
+      if (live) setUploadJob((current) => current || live);
+    } catch {
+      // Non-blocking: the table still renders without the banner.
+    }
+  };
+
   const fetchWords = async () => {
     const requestId = ++fetchIdRef.current;
     setLoading(true);
@@ -660,6 +671,7 @@ const ManageWord = () => {
       setWords(data.words || []);
       setTotal(data.total || 0);
       fetchStats();
+      adoptActiveUploadJob(data.words || []);
     } catch {
       if (requestId !== fetchIdRef.current) return;
       errorToast("Failed to load words");
@@ -717,6 +729,71 @@ const ManageWord = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Poll the clip-extraction batch every 5 seconds while one is in flight.
+  //
+  // The interval is cleared on unmount and whenever the job id changes, and
+  // fetchWords re-adopts a live job on mount, so navigating away and back resumes
+  // tracking rather than losing the batch.
+  useEffect(() => {
+    if (!uploadJob?.id) return;
+
+    // A row stranded at "processing" (backend restarted mid-run, so nothing will
+    // ever finish it) would otherwise poll for the whole session and keep the
+    // upload button disabled forever. Give up after 30 minutes and say so.
+    const startedAt = Date.now();
+    const POLL_TIMEOUT_MS = 30 * 60 * 1000;
+    const jobId = uploadJob.id;
+
+    uploadPollRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        clearInterval(uploadPollRef.current);
+        setUploadJob(null);
+        errorToast(
+          "Stopped tracking this upload — it has not reported back. Reload to check its status.",
+        );
+        fetchWords();
+        return;
+      }
+      try {
+        const { job } = await getUploadJob(jobId);
+        if (job.status === "completed") {
+          clearInterval(uploadPollRef.current);
+          setUploadJob(null);
+          success(
+            `${job.success_count} clip(s) stored${job.fail_count ? `, ${job.fail_count} failed/skipped` : ""}`,
+          );
+          setUploadResults(job);
+          // The sample counts changed on the SERVER, so no mutation call ran on
+          // this client to clear them. Without this, fetchWords would re-serve
+          // the pre-upload numbers from cache.
+          invalidate("words:");
+          fetchWords();
+        } else if (job.status === "failed") {
+          clearInterval(uploadPollRef.current);
+          setUploadJob(null);
+          errorToast(`Upload failed: ${job.error || "Unknown error"}`);
+          // Partial results still matter — those clips really were stored.
+          if (job.results?.length) setUploadResults(job);
+          invalidate("words:");
+          fetchWords();
+        } else {
+          // Still processing — advance the banner's count.
+          setUploadJob(job);
+        }
+      } catch (err) {
+        // A missing or forbidden job will never resolve — stop rather than
+        // hammering the endpoint. Network hiccups keep polling.
+        const status = err.response?.status;
+        if (status === 404 || status === 403 || status === 401) {
+          clearInterval(uploadPollRef.current);
+          setUploadJob(null);
+          fetchWords();
+        }
+      }
+    }, 5000);
+    return () => clearInterval(uploadPollRef.current);
+  }, [uploadJob?.id]);
+
   const handleDelete = async (word) => {
     try {
       await deleteWord(word.id);
@@ -746,8 +823,6 @@ const ManageWord = () => {
 
   return (
     <div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -786,34 +861,68 @@ const ManageWord = () => {
         </div>
       </div>
 
+      {/* ── Clip extraction in progress ──
+          Lives here rather than in the upload modal so it survives the modal
+          closing, and is re-adopted from the server after a reload. */}
+      {uploadJob && (
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4">
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent shrink-0" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p className="text-sm font-semibold text-blue-800">
+              Extracting landmarks
+              {(() => {
+                const label = words.find((w) => w.id === uploadJob.word_id)?.label;
+                return label ? <> for <span className="font-mono">{label}</span></> : null;
+              })()}
+              {" — "}
+              {uploadJob.processed_count} of {uploadJob.total_count} clip
+              {uploadJob.total_count === 1 ? "" : "s"}…
+            </p>
+            <div style={{ background: "#bfdbfe", borderRadius: "4px", height: "6px", margin: "6px 0 4px" }}>
+              <div
+                style={{
+                  height: "6px", borderRadius: "4px", background: C.primary,
+                  width: `${uploadJob.total_count ? Math.round((uploadJob.processed_count / uploadJob.total_count) * 100) : 0}%`,
+                  transition: "width 0.3s",
+                }}
+              />
+            </div>
+            <p className="text-xs text-blue-500">
+              This may take a few minutes. You can safely navigate away — this page
+              will update automatically.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Summary cards ── */}
       {!stats ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonCard key={i} />
+            <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard
+          <StatCard index={0}
             title="Total Words"
             value={stats.total}
             icon={Database}
             color="bg-blue-900"
           />
-          <StatCard
+          <StatCard index={1}
             title="Active"
             value={stats.active}
             icon={Check}
             color="bg-green-500"
           />
-          <StatCard
+          <StatCard index={2}
             title="Ready to Activate"
             value={stats.ready_to_activate}
             icon={Clock}
             color="bg-yellow-500"
           />
-          <StatCard
+          <StatCard index={3}
             title="Gesture Samples"
             value={stats.total_samples}
             icon={Film}
@@ -890,8 +999,12 @@ const ManageWord = () => {
                     No words found. Add your first word using the button above.
                   </td>
                 </tr>
-              ) : words.map(word => (
-                <tr key={word.id} style={{ borderTop: `1px solid ${C.border}` }}>
+              ) : words.map((word, i) => (
+                <tr
+                  key={word.id}
+                  className="row-interactive list-item-in"
+                  style={{ borderTop: `1px solid ${C.border}`, ...listStagger(i) }}
+                >
                   <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937" }}>{word.label}</td>
                   <td className="px-5 py-3" style={{ color: "#6b7280", textTransform: "capitalize" }}>{word.category || "—"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>{word.approved_sample_count ?? 0}</td>
@@ -904,8 +1017,14 @@ const ManageWord = () => {
                   </td>
                   <td className="px-5 py-3">
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <button title="Upload dataset clips for training" onClick={() => setUploadWord(word)}
-                        style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.8rem", color: "#374151" }}>
+                      {/* Disabled while a batch is extracting — the server also
+                          rejects a concurrent batch with 409, since two would race
+                          on the same sample counters. */}
+                      <button
+                        title={uploadJob ? "An upload is already in progress…" : "Upload dataset clips for training"}
+                        onClick={() => setUploadWord(word)}
+                        disabled={!!uploadJob}
+                        style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: uploadJob ? "not-allowed" : "pointer", fontSize: "0.8rem", color: "#374151", opacity: uploadJob ? 0.5 : 1 }}>
                         <Upload size={14} /> Dataset Clips
                       </button>
                       <button title="Set the single demonstration video shown in the mobile app" onClick={() => setDemoVideoWord(word)}
@@ -970,8 +1089,35 @@ const ManageWord = () => {
           word={uploadWord}
           open={!!uploadWord}
           onClose={() => setUploadWord(null)}
-          onSuccess={fetchWords}
+          onStarted={(job) => setUploadJob(job)}
         />
+      )}
+
+      {/* Per-clip breakdown, opened by the poller when a batch finishes — even if
+          the upload modal was closed or the admin was on another page. */}
+      {uploadResults && (
+        <AppModal
+          title={`Upload Results — ${uploadResults.word?.label || words.find((w) => w.id === uploadResults.word_id)?.label || "clips"}`}
+          onClose={() => setUploadResults(null)}
+          onEnter={() => setUploadResults(null)}
+          footer={<Button onClick={() => setUploadResults(null)}>Close</Button>}
+        >
+          <p style={{ fontSize: "0.875rem", color: "#374151", marginBottom: "12px" }}>
+            <strong>{uploadResults.success_count}</strong> clip(s) stored
+            {uploadResults.fail_count > 0 && (
+              <>, <strong>{uploadResults.fail_count}</strong> failed/skipped</>
+            )}
+            .
+          </p>
+          {uploadResults.status === "failed" && (
+            <p style={{ fontSize: "0.8rem", color: C.red, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", padding: "8px 10px", marginBottom: "12px" }}>
+              The batch stopped early: {uploadResults.error || "Unknown error"}
+            </p>
+          )}
+          {uploadResults.results?.length > 0 && (
+            <ClipResultsList results={uploadResults.results} />
+          )}
+        </AppModal>
       )}
 
       {demoVideoWord && (
@@ -984,17 +1130,24 @@ const ManageWord = () => {
       )}
 
       {deleteConfirm && (
-        <AppModal title="Delete Word" onClose={() => setDeleteConfirm(null)}>
-          <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "24px" }}>
+        <AppModal
+          title="Delete Word"
+          onClose={() => setDeleteConfirm(null)}
+          onEnter={() => handleDelete(deleteConfirm)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => handleDelete(deleteConfirm)}>
+                Delete
+              </Button>
+            </>
+          }
+        >
+          <p style={{ fontSize: "0.9rem", color: "#374151" }}>
             Are you sure you want to delete <strong>"{deleteConfirm.label}"</strong>? This will also remove all its gesture samples.
           </p>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-            <button onClick={() => setDeleteConfirm(null)} style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", fontSize: "0.875rem" }}>Cancel</button>
-            <button onClick={() => handleDelete(deleteConfirm)}
-              style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: C.red, color: "white", cursor: "pointer", fontSize: "0.875rem", fontWeight: 600 }}>
-              Delete
-            </button>
-          </div>
         </AppModal>
       )}
     </div>

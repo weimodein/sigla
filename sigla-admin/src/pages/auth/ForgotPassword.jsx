@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
+// Aliased — this file has its own local `Button` for the full-width form submit.
+import ModalButton from "../../components/Button.jsx";
+import { useModalKeys } from "../../components/useModalKeys.js";
 import {
   forgotPassword,
   verifyResetCode,
@@ -185,6 +188,15 @@ const ForgotPassword = () => {
     }
     sendResetCode();
   }, [email, toast, sendResetCode]);
+
+  // Hand-rolled overlay, not an AppModal — wire the keyboard contract explicitly.
+  // The overlay renders outside the page's <form> elements, and the hook calls
+  // preventDefault, so Enter here cannot also submit the form behind it.
+  useModalKeys({
+    onEscape: () => setConfirmEmail(false),
+    onEnter: sendResetCode,
+    enabled: () => confirmEmail,
+  });
 
   const handleVerify = useCallback(async (e) => {
     e.preventDefault();
@@ -410,28 +422,10 @@ const ForgotPassword = () => {
               cannot be sent for 1 minute.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setConfirmEmail(false)}
-                style={{
-                  padding: "8px 18px", borderRadius: 8,
-                  border: "1px solid #e5e7eb", background: "white",
-                  color: "#374151", fontSize: "0.875rem", fontWeight: 500,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}
-              >
+              <ModalButton variant="secondary" onClick={() => setConfirmEmail(false)}>
                 Go back and edit
-              </button>
-              <button
-                onClick={sendResetCode}
-                style={{
-                  padding: "8px 18px", borderRadius: 8, border: "none",
-                  background: C.primary, color: "white",
-                  fontSize: "0.875rem", fontWeight: 500,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}
-              >
-                Send code
-              </button>
+              </ModalButton>
+              <ModalButton onClick={sendResetCode}>Send code</ModalButton>
             </div>
           </div>
         </div>

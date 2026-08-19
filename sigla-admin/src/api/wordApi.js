@@ -1,15 +1,21 @@
 import api from "./authApi.js";
 import axios from "axios";
+import { cachedFetch } from "../utils/apiCache.js";
+import { CACHE_KEYS, withInvalidation } from "./cacheKeys.js";
 
 export const getAllWords = async (params) => {
   const response = await api.get("/words", { params });
   return response.data;
 };
 
-export const getWordStats = async () => {
-  const response = await api.get("/words/stats");
-  return response.data;
-};
+// Cached: four pages call this, and the backend runs 7 aggregate queries per
+// call. `force` is available for callers that must read live state.
+export const getWordStats = (opts) =>
+  cachedFetch(
+    CACHE_KEYS.wordStats,
+    async () => (await api.get("/words/stats")).data,
+    opts,
+  );
 
 export const getWordById = async (id) => {
   const response = await api.get(`/words/${id}`);
@@ -26,15 +32,9 @@ export const rejectWord = async (id, reason) => {
   return response.data;
 };
 
-export const updateWord = async (id, data) => {
-  const response = await api.put(`/words/${id}`, data);
-  return response.data;
-};
+export const updateWord = withInvalidation(async (id, data) => (await api.put(`/words/${id}`, data)).data, "word");
 
-export const deleteWord = async (id) => {
-  const response = await api.delete(`/words/${id}`);
-  return response.data;
-};
+export const deleteWord = withInvalidation(async (id) => (await api.delete(`/words/${id}`)).data, "word");
 
 export const getWordSamples = async (id) => {
   const response = await api.get(`/words/${id}/samples`);
@@ -79,10 +79,7 @@ export const getUserSampleCount = async (wordId) => {
   return response.data;
 };
 
-export const adminAddWord = async (data) => {
-  const response = await api.post("/words/admin-add", data);
-  return response.data;
-};
+export const adminAddWord = withInvalidation(async (data) => (await api.post("/words/admin-add", data)).data, "word");
 
 export const adminUploadSamples = async (wordId, data) => {
   const response = await api.post(`/words/${wordId}/admin-samples`, data);
@@ -116,6 +113,9 @@ export const generateVideoFromSequence = async (wordId, sequenceIds) => {
   return response.data;
 };
 
+// Returns 202 with { job } — the clips are uploaded synchronously, but landmark
+// extraction runs in a background job on the server. Poll getUploadJob for
+// progress; onProgress only covers the byte transfer.
 export const uploadVideos = async (wordId, files, onProgress) => {
   const formData = new FormData();
   for (const file of files) formData.append("videos", file);
@@ -128,5 +128,17 @@ export const uploadVideos = async (wordId, files, onProgress) => {
     },
     onUploadProgress: onProgress,
   });
+  return response.data;
+};
+
+export const getUploadJob = async (jobId) => {
+  const response = await api.get(`/words/upload-jobs/${jobId}`);
+  return response.data;
+};
+
+// The live batch for a word, or { job: null } — lets the page re-adopt a job that
+// is still running after a reload or navigating back.
+export const getActiveUploadJob = async (wordId) => {
+  const response = await api.get(`/words/${wordId}/upload-jobs/active`);
   return response.data;
 };

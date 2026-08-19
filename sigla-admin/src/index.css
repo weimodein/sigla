@@ -28,6 +28,19 @@
   --sidebar-surface: #ffffff;
   --nav-active: #1e3a8a;
   --nav-hover: #f3f4f6;
+
+  /* ── Motion ──────────────────────────────────────────────────
+     One vocabulary for the whole app. Motion had grown per-page into 7
+     durations and 4 easings, so the same interaction felt different depending
+     on which screen you were on. Everything animated should reference these.
+
+     Restrained on purpose: this is a tool used all day, so motion should be
+     felt rather than watched. */
+  --dur-fast: 120ms;   /* hover, press — must feel instant */
+  --dur-base: 200ms;   /* state changes; matches the existing modal timing */
+  --dur-slow: 320ms;   /* entrances and exits */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes slide-in {
@@ -63,11 +76,12 @@
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   border: 1px solid var(--card-border);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform var(--dur-base) var(--ease-standard),
+              box-shadow var(--dur-base) var(--ease-standard);
   position: relative;
 }
 .dash-stat-card:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-card-hover);
 }
 .dash-card {
@@ -128,52 +142,80 @@
   padding: 16px;
   border-radius: 8px;
   border: 1px solid #f0f0f0;
-  transition: all 0.2s ease;
+  /* Explicit properties, not `all` — `all` also transitions layout properties
+     and made every hover more expensive than it needed to be. */
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
 }
 .dash-request-item:hover {
   background: #f0f0f0;
   transform: translateX(4px);
 }
-.dash-quick-action {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 24px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-align: center;
-  background: none;
-  font: inherit;
-  color: inherit;
-}
-.dash-quick-action:hover {
-  border-color: #1e3a8a;
-  background: #1e3a8a;
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-}
-.dash-announcement-item {
-  display: flex;
-  gap: 16px;
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid #f0f0f0;
-  transition: all 0.2s ease;
-}
-.dash-announcement-item:hover {
-  background: #f0f0f0;
-}
+/* .dash-quick-action and .dash-announcement-item lived here with no call sites
+   anywhere in src/ — removed. */
 .badge-pending { background: #fff3cd; color: #856404; }
 .badge-processing { background: #cce7ff; color: #004085; }
 .badge-ready { background: #d1ecf1; color: #0c5460; }
 .badge-completed { background: #d4edda; color: #155724; }
 .badge-rejected { background: #f8d7da; color: #721c24; }
 .badge-approved { background: #d4edda; color: #155724; }
-@keyframes dash-spin { to { transform: rotate(360deg); } }
+
+/* ── Shared interaction primitives ──
+   Applied to buttons, rows and other controls instead of restating a transition
+   at each call site. Roughly 30 hover states across the app previously had no
+   transition at all and snapped between states. */
+
+.interactive {
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard),
+              opacity var(--dur-fast) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+}
+/* Press feedback. Nothing in the app had an :active state — controls stayed
+   visually inert from click until the network answered. */
+.interactive:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.98);
+}
+
+/* Sidebar nav item. Hover used to be two JS handlers that read
+   classList.contains("active") to decide whether to apply — visual state in an
+   inline style guarded by a class name. CSS expresses the same rule directly and
+   cannot fall out of sync with the active state. */
+.nav-item {
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard);
+}
+.nav-item:hover:not(.active) {
+  background-color: var(--nav-hover) !important;
+  color: var(--text) !important;
+}
+
+/* Table rows. Of seven tables, one transitioned its hover, three snapped and
+   three had no hover at all. */
+.row-interactive {
+  transition: background-color var(--dur-fast) var(--ease-standard);
+}
+.row-interactive:hover {
+  background-color: #f9fafb;
+}
+
+/* ── List entrance ──
+   Rows and cards used to replace their skeletons in a single frame. Uses the
+   same --stagger-delay mechanism as .auth-field-in; `backwards` keeps each item
+   hidden until its delay elapses instead of flashing in first.
+
+   Callers must cap the delay (see listStagger in utils/motion.js) — staggering
+   every row of a 50-row table reads as slow, not elegant. */
+@keyframes list-item-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.list-item-in {
+  animation: list-item-in var(--dur-base) var(--ease-standard) both;
+  animation-delay: var(--stagger-delay, 0ms);
+}
 
 /* ── Modal animations ── */
 @keyframes modal-backdrop-in {
@@ -196,4 +238,88 @@
 .modal-backdrop-out { animation: modal-backdrop-out 0.15s ease-in  forwards; }
 .modal-panel-in     { animation: modal-panel-in     0.20s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 .modal-panel-out    { animation: modal-panel-out    0.15s ease-in  forwards; }
+
+/* ── Auth screen motion ──
+   Lives here rather than in Login's runtime-injected <style> block so the
+   reduced-motion guard at the end of this file can reach it. */
+@keyframes auth-card-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+@keyframes auth-card-out {
+  from { opacity: 1; transform: translateY(0)     scale(1);    }
+  to   { opacity: 0; transform: translateY(-8px)  scale(0.98); }
+}
+@keyframes auth-field-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+/* Decaying oscillation — the familiar "wrong password" gesture. */
+@keyframes auth-shake {
+  10%, 90% { transform: translateX(-8px); }
+  20%, 80% { transform: translateX(8px);  }
+  30%, 50%, 70% { transform: translateX(-5px); }
+  40%, 60% { transform: translateX(5px);  }
+  100%     { transform: translateX(0);    }
+}
+
+/* Same springy curve as modal-panel-in, so the card reads as the same app. */
+.auth-card-in  { animation: auth-card-in  0.42s var(--ease-spring) both; }
+.auth-card-out { animation: auth-card-out var(--dur-base) ease-in forwards; }
+.auth-shake    { animation: auth-shake    0.40s ease-in-out; }
+
+/* ── Toast ──
+   Entrance was already animated; the exit was not, so toasts slid in and then
+   vanished in a single frame. Collapsing max-height/margin alongside the fade
+   keeps the toasts below from teleporting upward as one leaves. */
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+    max-height: 200px;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+    max-height: 0;
+    margin-bottom: -0.5rem; /* cancels the stack's space-y-2 gap */
+  }
+}
+.toast-out {
+  animation: toast-out var(--dur-base) var(--ease-standard) forwards;
+  overflow: hidden;
+}
+
+/* Staggered entrance. `backwards` matters: without it each element paints at
+   full opacity until its delay elapses, which flashes the whole form in before
+   the stagger starts. Delay is set per-element via the custom property. */
+.auth-field-in {
+  animation: auth-field-in 0.35s ease-out both;
+  animation-delay: var(--stagger-delay, 0ms);
+}
+
+/* ── Reduced motion ──
+   0.01ms rather than `none` on purpose: AppModal closes from an animationend
+   handler, so removing the animation outright would leave modals unclosable.
+   Everything still runs — it just arrives immediately. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Shortening the duration alone still lets the movement happen — it just
+     happens instantly, which is a jump rather than an animation and is worse
+     for a motion-sensitive user than not moving at all. Suppress the movement
+     itself; the colour change still communicates the state. */
+  .dash-stat-card:hover,
+  .dash-request-item:hover,
+  .interactive:active:not(:disabled) {
+    transform: none !important;
+  }
+}
 

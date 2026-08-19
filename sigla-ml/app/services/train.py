@@ -16,18 +16,86 @@ FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 MODELS_DIR      = "models"
 
+# Global training seed. Without this only the augmentation RNG and the sklearn
+# splits were seeded — TF weight init was not — so two runs on identical data
+# produced different models and every A/B comparison was confounded by init noise.
+# At ~2% cross-validation spread that noise is the same size as the effects being
+# measured, which made changes impossible to evaluate honestly.
+TRAIN_SEED = int(os.getenv("TRAIN_SEED", 42))
 
-def build_motion_model(num_classes: int):
+# Recurrent architecture. Defaults to the current plain LSTM so behaviour does not
+# change until an A/B justifies it (tools/cross_validate.py).
+#
+#   lstm        — LSTM 128/64/32 (current production model)
+#   bilstm_half — Bidirectional(LSTM 64/32/16). Bidirectional CONCATENATES the two
+#                 directions, so halved units reproduce the current layer widths
+#                 (64*2=128, 32*2=64, 16*2=32) at roughly the current parameter
+#                 count. This isolates *how* the sequence is read from *how much*
+#                 capacity the model has.
+#   bilstm_full — Bidirectional(LSTM 128/64/32). Doubles both width and capacity.
+#
+# Running half and full together disambiguates a win: if full beats half, the gain
+# came from capacity; if they tie, it came from bidirectionality. Either variant
+# alone cannot separate the two.
+#
+# Bidirectionality is legitimate here because inference is NOT streaming-causal —
+# PredictionService always evaluates a complete 30-frame window, so the "future"
+# frames a backward pass reads are already in hand.
+MODEL_ARCH = os.getenv("MODEL_ARCH", "lstm").strip().lower()
+_VALID_ARCHS = ("lstm", "bilstm_half", "bilstm_full")
+
+
+def set_global_seed(seed: int = TRAIN_SEED) -> None:
+    """
+    Seed Python's `random`, NumPy, and TensorFlow in one call, making weight init,
+    dropout masks, and shuffling reproducible.
+
+    Note this does NOT make training bit-exact on GPU: cuDNN kernel selection and
+    non-deterministic reductions still vary. It removes the dominant source of
+    run-to-run variance (initialization), which is what matters for A/B testing.
+    """
     from tensorflow import keras
+    keras.utils.set_random_seed(seed)
+
+
+def build_motion_model(num_classes: int, arch: str | None = None):
+    """
+    Build the motion classifier. `arch` defaults to the MODEL_ARCH env var (see above).
+
+    Everything except the three recurrent layers — Dense head, dropout rates, L2
+    regularization, optimizer, learning rate — is identical across variants, so an
+    A/B between them measures the recurrent change and nothing else.
+    """
+    from tensorflow import keras
+
+    arch = (arch or MODEL_ARCH).strip().lower()
+    if arch not in _VALID_ARCHS:
+        raise ValueError(
+            f"Unknown MODEL_ARCH '{arch}'. Expected one of: {', '.join(_VALID_ARCHS)}"
+        )
+
     reg = keras.regularizers.l2(2e-4)
-    # Reduced LSTM units (256→128→64 → 128→64→32) — prevents overfitting on limited sequences
+
+    # Reduced LSTM units (256→128→64 → 128→64→32) — prevents overfitting on limited
+    # sequences. bilstm_half keeps those effective widths after concatenation.
+    units = (64, 32, 16) if arch == "bilstm_half" else (128, 64, 32)
+
+    def recurrent(n_units: int, return_sequences: bool):
+        layer = keras.layers.LSTM(
+            n_units,
+            return_sequences=return_sequences,
+            kernel_regularizer=reg,
+            recurrent_regularizer=reg,
+        )
+        return layer if arch == "lstm" else keras.layers.Bidirectional(layer)
+
     model = keras.Sequential([
         keras.layers.Input(shape=(SEQUENCE_LENGTH, FEATURE_SIZE)),
-        keras.layers.LSTM(128, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg),
+        recurrent(units[0], True),
         keras.layers.Dropout(0.4),
-        keras.layers.LSTM(64, return_sequences=True, kernel_regularizer=reg, recurrent_regularizer=reg),
+        recurrent(units[1], True),
         keras.layers.Dropout(0.4),
-        keras.layers.LSTM(32, return_sequences=False, kernel_regularizer=reg, recurrent_regularizer=reg),
+        recurrent(units[2], False),
         keras.layers.Dropout(0.3),
         keras.layers.Dense(64, activation="relu", kernel_regularizer=reg),
         keras.layers.Dropout(0.2),
@@ -39,6 +107,10 @@ def build_motion_model(num_classes: int):
         loss="sparse_categorical_crossentropy",
         metrics=["accuracy"]
     )
+
+    effective = tuple(u * 2 for u in units) if arch != "lstm" else units
+    print(f"[train] architecture: {arch} — recurrent units {units}, "
+          f"effective widths {effective}, {model.count_params():,} params")
     return model
 
 
@@ -91,6 +163,9 @@ def upload_model_to_supabase(local_path: str, version_number: str, model_type: s
 def train(version_number: str, model_id: int) -> dict:
     from tensorflow import keras
 
+    # Seed before anything touches TF, so weight init is reproducible.
+    set_global_seed(TRAIN_SEED)
+
     # Strip any characters that are invalid in Supabase storage keys
     safe_version = re.sub(r"[^a-zA-Z0-9._\-]", "_", version_number)
     if safe_version != version_number:
@@ -127,12 +202,34 @@ def train(version_number: str, model_id: int) -> dict:
     # Split happens BEFORE augmentation inside prepare_motion_dataset, so X_val/y_val
     # is real, unaugmented data the model never trained on — a genuine holdout.
     print(f"\n--- Training Motion Model (LSTM) — {total_classes} classes ---")
-    X_train, y_train, X_val, y_val, motion_label_map = prepare_motion_dataset(motion_dataset)
+    X_train, y_train, X_val, y_val, motion_label_map, real_counts = prepare_motion_dataset(motion_dataset)
 
     model = build_motion_model(len(motion_label_map))
 
-    class_weights = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
-    class_weight_dict = dict(enumerate(class_weights))
+    # Class weights from REAL pre-augmentation counts, not from y_train.
+    #
+    # What actually broke weighting was the old `target = max(len*6, 150)` floor: it
+    # padded every class to exactly 150 samples, so compute_class_weight('balanced')
+    # on y_train returned exactly 1.0 for every class. The code looked like it
+    # handled imbalance while doing nothing at all. (Measured on a 9/2/6 split: 1.00x
+    # spread with the floor, 4.50x without it.)
+    #
+    # With the floor gone, augmentation scales every class by the same factor, so
+    # weighting on y_train and on real counts now agree exactly. Deriving from
+    # real_counts anyway is a guarantee rather than a behaviour change: it decouples
+    # weighting from the augmentation policy, so a future per-class factor — or a
+    # re-introduced floor — cannot silently flatten the weights again.
+    classes_present = np.array(sorted(real_counts.keys()), dtype=np.int64)
+    real_labels = np.concatenate([
+        np.full(real_counts[c], c, dtype=np.int64) for c in classes_present
+    ])
+    class_weights = compute_class_weight('balanced', classes=classes_present, y=real_labels)
+    class_weight_dict = {int(c): float(w) for c, w in zip(classes_present, class_weights)}
+
+    spread = max(class_weight_dict.values()) / max(min(class_weight_dict.values()), 1e-9)
+    print(f"[train] class weights from real counts (spread {spread:.2f}x): "
+          + ", ".join(f"{motion_label_map[c]}={class_weight_dict[c]:.2f}"
+                      for c in sorted(class_weight_dict, key=class_weight_dict.get, reverse=True)[:3]))
 
     callbacks = [
         keras.callbacks.EarlyStopping(
