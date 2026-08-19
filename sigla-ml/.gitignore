@@ -24,7 +24,7 @@ datasets/
 # The app/models/ dir is tracked for its README; only the .task binaries are ignored.
 !app/models/
 !app/models/README.md
-app/models/*.task
+# app/models/*.task
 
 # IDE
 .vscode/
