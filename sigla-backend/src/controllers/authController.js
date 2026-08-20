@@ -46,6 +46,30 @@ const toAdministratorDTO = (admin, roleName) => ({
 // standing takeover path.
 const RESET_GRANT_TTL_MS = 15 * 60 * 1000;
 
+// ── Credential-failure policy ─────────────────────────────────
+// One message and one status code for EVERY failed sign-in, whatever the real
+// reason — unknown identifier, wrong password, locked, deactivated, deleted.
+//
+// Any variation is a username-enumeration oracle: this endpoint used to append
+// "N attempt(s) remaining before the account is locked" only for identifiers
+// that existed, and to answer 429 instead of 401 once an account was locked.
+// Either difference lets an attacker run a wordlist, one guess per name, and
+// keep the hits — a confirmed list of admin accounts to spray or phish. The
+// countdown also disclosed the lockout threshold.
+//
+// forgotPassword() already follows this policy; login() now matches it.
+// The real reason is still logged server-side, it just never reaches the client.
+const INVALID_CREDENTIALS = "Invalid credentials";
+
+// Compared against when the identifier does not exist, so that path pays the
+// same bcrypt cost as a real one. Without it the response body can be identical
+// and the endpoint still enumerates accounts: a miss returns at DB speed while a
+// hit spends ~100ms hashing. The plaintext is a random 32-byte value that was
+// discarded at generation time — nothing can match this hash. Cost factor 10
+// matches the stored hashes (bcrypt.hash(password, 10) in administratorController).
+const DUMMY_PASSWORD_HASH =
+  "$2b$10$5PYEi7TsV/RjRjNphCApvuHfVtHzJ2q0JtNeMFmv9AtMzkSBylstC";
+
 // ── Helper: generate JWT ──────────────────────────────────────
 const generateToken = ({ id, role_name, status }) =>
   jwt.sign(
@@ -145,12 +169,6 @@ const login = async (req, res) => {
       },
     });
 
-    // Generic response for unknown accounts — no tracking possible, and avoids
-    // revealing whether an identifier exists.
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
     // ── Login lockout (scope §13) ──────────────────────────────
     // 5 consecutive failures → temporary lock; cooldown grows by 5 min each
     // additional 5-failure cycle. A successful login resets everything.
@@ -158,46 +176,56 @@ const login = async (req, res) => {
     const LOCK_STEP_MIN = 5;       // minutes added per lock cycle
     const now = new Date();
 
-    // Already locked? Block before checking the password.
-    if (user.lockout_until && now < new Date(user.lockout_until)) {
-      const minsLeft = Math.ceil((new Date(user.lockout_until) - now) / 60000);
-      return res.status(429).json({
-        message: `Account temporarily locked due to multiple failed login attempts. Try again in ${minsLeft} minute(s).`,
-      });
+    // Already locked? Reject before checking the password, and without counting
+    // the attempt — otherwise hammering a locked account would keep extending
+    // its own lock.
+    if (user && user.lockout_until && now < new Date(user.lockout_until)) {
+      console.warn(`Login blocked: account "${user.username}" is locked out`);
+      return res.status(401).json({ message: INVALID_CREDENTIALS });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      const attempts = (user.failed_login_attempts || 0) + 1;
+    // Deliberately NOT short-circuited when `user` is null — the dummy hash
+    // keeps the unknown-identifier path at the same cost. See
+    // DUMMY_PASSWORD_HASH above.
+    const isMatch = await bcrypt.compare(
+      password,
+      user ? user.password : DUMMY_PASSWORD_HASH,
+    );
 
-      // Every LOCK_THRESHOLD consecutive failures triggers a lock with an
-      // incrementing cooldown.
-      if (attempts % LOCK_THRESHOLD === 0) {
-        const lockCount = (user.lockout_count || 0) + 1;
-        const cooldownMin = LOCK_STEP_MIN * lockCount;
-        const until = new Date(now.getTime() + cooldownMin * 60000);
-        await user.update({
-          failed_login_attempts: attempts,
-          lockout_count: lockCount,
-          lockout_until: until,
-        });
-        return res.status(429).json({
-          message: `Account temporarily locked after ${LOCK_THRESHOLD} failed attempts. Try again in ${cooldownMin} minute(s).`,
-        });
+    if (!user || !isMatch) {
+      // Nothing to count for an identifier that does not exist.
+      if (user) {
+        const attempts = (user.failed_login_attempts || 0) + 1;
+
+        // Every LOCK_THRESHOLD consecutive failures triggers a lock with an
+        // incrementing cooldown.
+        if (attempts % LOCK_THRESHOLD === 0) {
+          const lockCount = (user.lockout_count || 0) + 1;
+          const cooldownMin = LOCK_STEP_MIN * lockCount;
+          const until = new Date(now.getTime() + cooldownMin * 60000);
+          await user.update({
+            failed_login_attempts: attempts,
+            lockout_count: lockCount,
+            lockout_until: until,
+          });
+          console.warn(
+            `Account "${user.username}" locked for ${cooldownMin} minute(s) after ${attempts} failed attempts`,
+          );
+        } else {
+          await user.update({ failed_login_attempts: attempts });
+        }
       }
 
-      await user.update({ failed_login_attempts: attempts });
-      const remaining = LOCK_THRESHOLD - (attempts % LOCK_THRESHOLD);
-      return res.status(401).json({
-        message: `Invalid credentials. ${remaining} attempt(s) remaining before the account is locked.`,
-      });
+      return res.status(401).json({ message: INVALID_CREDENTIALS });
     }
 
-    if (user.status === "deactivated") {
-      return res.status(403).json({ message: "Account has been deactivated" });
-    }
-    if (user.status === "deleted") {
-      return res.status(403).json({ message: "Account no longer exists" });
+    // Correct password, but the account may not be usable. Same generic
+    // response — the reason must not distinguish a real account from a miss.
+    if (user.status === "deactivated" || user.status === "deleted") {
+      console.warn(
+        `Login blocked: account "${user.username}" has status "${user.status}"`,
+      );
+      return res.status(401).json({ message: INVALID_CREDENTIALS });
     }
 
     // Successful auth — fully reset the lockout state.

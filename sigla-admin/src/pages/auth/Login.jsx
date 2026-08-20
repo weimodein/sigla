@@ -78,7 +78,7 @@ const Login = () => {
   // Separate from `loading` on purpose — see handleLogin.
   const [succeeded, setSucceeded] = useState(false);
   const [exiting, setExiting] = useState(false);
-  const [shake, setShake] = useState(false);
+  const [denied, setDenied] = useState(false);
   // Cleared on unmount so a navigation mid-sequence cannot fire setState on a
   // dead component.
   const timersRef = useRef([]);
@@ -160,7 +160,7 @@ const Login = () => {
       );
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || "Login failed");
-      setShake(true);
+      setDenied(true);
       setLoading(false);
     }
   }, [identifier, password, login, navigate, toast, loading, succeeded]);
@@ -168,16 +168,19 @@ const Login = () => {
   return (
     <div style={S.pageWrapper}>
       <div style={S.background} />
-      {/* Entrance on mount, exit once the sign-in is acknowledged. The shake
-          class is removed on animationend so a second failed attempt replays it —
-          a class left applied will not re-trigger. */}
+      {/* Entrance on mount, exit once the sign-in is acknowledged. */}
       <div
-        className={`sigla-login-container ${exiting ? "auth-card-out" : "auth-card-in"} ${shake ? "auth-shake" : ""}`}
+        className={`sigla-login-container ${exiting ? "auth-card-out" : "auth-card-in"}`}
         style={S.loginContainer}
-        onAnimationEnd={(e) => {
-          if (e.animationName === "auth-shake") setShake(false);
-        }}
       >
+        {/* Rejection cue. A separate element on purpose: a second `animation`
+            shorthand on the card would replace its entrance/exit animation
+            rather than stack with it. Class is dropped on animationend so a
+            repeat failure replays it — a class left applied will not re-trigger. */}
+        <div
+          className={`auth-deny-overlay ${denied ? "is-denied" : ""}`}
+          onAnimationEnd={() => setDenied(false)}
+        />
 
         {/* Left panel */}
         <div className="sigla-left-panel" style={S.leftPanel}>
@@ -259,6 +262,8 @@ const S = {
     zIndex: -1,
   },
   loginContainer: {
+    // Anchors the .auth-deny-overlay child, which positions off this box.
+    position: "relative",
     display: "flex",
     width: "700px",
     maxWidth: "95%",

@@ -1,4 +1,5 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware.js");
 const {
@@ -10,11 +11,34 @@ const {
   verifyResetCode,
 } = require("../controllers/authController.js");
 
+// Tighter per-IP budget for password guessing, inside the blanket authLimiter
+// that server.js applies to all of /api/auth.
+//
+// skipSuccessfulRequests means only FAILURES count, so an admin who signs in
+// correctly never spends this budget however often they log in.
+//
+// This also blunts a lockout denial-of-service: the account lockout is keyed on
+// the account, so without a per-IP cap anyone who knows an admin's username
+// could lock that admin out at will with five wrong passwords. Here the attacker
+// exhausts their own IP allowance first.
+//
+// The 429 is a pre-handler rejection keyed on IP, never on the account, so it
+// fires identically for real and non-existent identifiers and does not
+// reintroduce the enumeration oracle the controller just closed.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,                  // failed logins per IP per window
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many failed login attempts. Please try again later." },
+});
+
 // Public routes
 // NOTE: Public self-registration is disabled — accounts are created only by a
 // super administrator via the Manage Administrators module. The register /
 // verify-email / set-password self-signup endpoints have been removed.
-router.post("/login", login);
+router.post("/login", loginLimiter, login);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.post("/resend-code", resendCode); // Resend verification code (password reset / email link)
