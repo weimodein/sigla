@@ -79,7 +79,16 @@ export const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed top-4 right-4 z-50 space-y-2 w-80 max-h-screen overflow-y-auto">
+      {/* Fluid below sm: a hard w-80 (320px) plus right-4 overflowed a 320px
+          phone, clipping the toast off-screen. Above sm it returns to the fixed
+          320px column anchored right.
+          zIndex is inline because it must clear AppModal's 1100 and Layout's
+          logout overlay at 2000 — with Tailwind's z-50 toasts rendered BEHIND
+          any open modal, so errors raised from inside a dialog were invisible. */}
+      <div
+        className="fixed top-4 left-4 right-4 w-auto sm:left-auto sm:w-80 space-y-2 max-h-screen overflow-y-auto"
+        style={{ zIndex: 2100 }}
+      >
         {toasts.map((toast) => {
           const Icon = ICONS[toast.type];
           return (

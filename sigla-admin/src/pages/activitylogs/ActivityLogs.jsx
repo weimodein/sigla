@@ -94,7 +94,7 @@ const ActionBadge = ({ action }) => {
 // ── Pagination ───────────────────────────────────────────────
 const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) => (
   <div
-    className="flex items-center justify-between px-5 py-3.5"
+    className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5"
     style={{ borderTop: `1px solid ${C.border}`, fontSize: 13, color: "#6b7280" }}
   >
     <div className="flex items-center gap-3">

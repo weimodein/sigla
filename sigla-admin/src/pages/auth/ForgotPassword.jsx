@@ -117,7 +117,7 @@ const ForgotPassword = () => {
       }
       .fp-form-in { animation: fp-fadein 0.28s ease forwards; }
       @media (max-width: 768px) {
-        .fp-container { flex-direction: column-reverse !important; width: 90% !important; max-height: none !important; }
+        .fp-container { flex-direction: column-reverse !important; width: 90% !important; min-height: 0 !important; height: auto !important; }
         .fp-left { width: 100% !important; padding: 30px 25px !important; }
         .fp-right { width: 100% !important; padding: 30px 20px !important; min-height: 140px !important; }
       }
@@ -455,7 +455,10 @@ const S = {
     display: "flex",
     width: "700px",
     maxWidth: "95%",
-    height: "480px",
+    // See the note in Login.jsx: the media query below overrode `max-height`,
+    // which was never set, so a fixed `height` survived onto stacked phone
+    // layouts. minHeight lets the card grow with its content.
+    minHeight: "480px",
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow: "0 6px 25px rgba(0,0,0,0.3)",

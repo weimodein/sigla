@@ -118,7 +118,7 @@ const Login = () => {
       .sigla-input::-webkit-credentials-auto-fill-button,
       .sigla-input::-webkit-password-toggle { display: none; }
       @media (max-width: 768px) {
-        .sigla-login-container { flex-direction: column !important; width: 90% !important; max-height: none !important; }
+        .sigla-login-container { flex-direction: column !important; width: 90% !important; min-height: 0 !important; height: auto !important; }
         .sigla-left-panel { width: 100% !important; padding: 30px 20px !important; min-height: 140px !important; }
         .sigla-right-panel { width: 100% !important; padding: 30px 25px !important; }
       }
@@ -267,7 +267,11 @@ const S = {
     display: "flex",
     width: "700px",
     maxWidth: "95%",
-    height: "480px",
+    // minHeight, not height: once the panels stack on a phone the card must be
+    // able to grow. The @media block below tried to relax this by overriding
+    // `max-height` — a property that was never set — so the fixed 480px won and
+    // the stacked content overflowed into the right panel's scrollbar.
+    minHeight: "480px",
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow: "0 6px 25px rgba(0,0,0,0.3)",

@@ -121,14 +121,14 @@ const Dashboard = () => {
           <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
         </div>
         {/* Stat cards skeleton — 3-col spanning grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 280px", gridTemplateRows: "auto auto", gap: "24px" }}>
+        <div className="dash-hero-grid">
           <SkeletonCard index={0} />
           <SkeletonCard index={1} />
           <SkeletonCard index={2} />
           <SkeletonCard index={3} />
           <div
-            style={{ gridColumn: "3", gridRow: "1 / 3", ...listStagger(4) }}
-            className="dash-stat-card list-item-in animate-pulse"
+            style={listStagger(4)}
+            className="dash-hero-tall dash-stat-card list-item-in animate-pulse"
           />
         </div>
         {/* Chart skeleton */}
@@ -186,9 +186,11 @@ const Dashboard = () => {
       </div>
 
       {/* ── Stat cards — 3-col grid, model version spans both rows on the right ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 280px", gridTemplateRows: "auto auto", gap: "24px" }}>
-        {/* Col 3, rows 1–2 — placed first so auto-placement fills cols 1–2 correctly */}
-        <div style={{ gridColumn: "3", gridRow: "1 / 3" }}>
+      <div className="dash-hero-grid">
+        {/* Col 3, rows 1–2 — placed first so auto-placement fills cols 1–2
+            correctly. Placement is in CSS (.dash-hero-tall) so it can unpin at
+            narrow widths; see index.css. */}
+        <div className="dash-hero-tall">
           {/* Hand-rolled rather than a StatCard: it spans both rows and centres
               its content. It still takes the shared entrance, with an index that
               continues the sequence of the four cards beside it so the grid

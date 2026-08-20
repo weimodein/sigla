@@ -2,11 +2,17 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { navItems } from "./navItems.js";
-import { getSidebarCollapsed, setSidebarCollapsed } from "./sidebarState.js";
+import {
+  getSidebarCollapsed,
+  setSidebarCollapsed,
+  SIDEBAR_EXPANDED,
+  SIDEBAR_COLLAPSED,
+} from "./sidebarState.js";
 import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
 } from "lucide-react";
 
 const SURFACE = "#ffffff";
@@ -16,10 +22,16 @@ const HOVER = "#f3f4f6";
 const TEXT = "#1f2937";
 const MUTED = "#6b7280";
 
-const Sidebar = ({ onToggle, onLogout }) => {
+const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onCloseDrawer }) => {
   // Lazy initialiser: restores the persisted width on the first render.
   const [collapsed, setCollapsed] = useState(getSidebarCollapsed);
   const { isSuper } = useAuth();
+
+  // On mobile the rail-collapse idea does not apply: the drawer is either
+  // off-canvas or fully open at full width. Rendering it collapsed there would
+  // give a 70px drawer of unlabelled icons. The persisted desktop preference is
+  // untouched — it is simply ignored while mobile.
+  const isCollapsed = isMobile ? false : collapsed;
 
   // Manage Administrators is exclusive to the super administrator.
   const visibleNavItems = navItems.filter((item) => !item.superOnly || isSuper);
@@ -45,28 +57,42 @@ const Sidebar = ({ onToggle, onLogout }) => {
 
   return (
     <aside
+      /* Hidden from assistive tech (and from tab order, via inert) while the
+         drawer is closed — an off-canvas element is still focusable otherwise,
+         so keyboard users would tab into an invisible nav. */
+      aria-hidden={isMobile && !drawerOpen ? "true" : undefined}
+      inert={isMobile && !drawerOpen ? "" : undefined}
       style={{
-        width: collapsed ? "70px" : "280px",
+        width: isCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
         background: SURFACE,
         display: "flex",
         flexDirection: "column",
-        /* Matches the content wrapper's margin-left in Layout.jsx — the two
-           halves of one interaction previously ran at different durations. */
-        transition: "width var(--dur-base) var(--ease-standard)",
+        /* Mobile animates transform (composited, cheap); desktop animates width
+           and matches the content wrapper's margin-left transition in Layout.jsx
+           — the two halves of one interaction previously ran at different
+           durations. Animating width on the drawer would reflow every frame. */
+        transition: isMobile
+          ? "transform var(--dur-base) var(--ease-standard)"
+          : "width var(--dur-base) var(--ease-standard)",
         borderRight: `1px solid ${BORDER}`,
-        boxShadow: "1px 0 2px rgba(0, 0, 0, 0.03)",
-        zIndex: 1000,
+        boxShadow: isMobile && drawerOpen
+          ? "0 0 40px rgba(0, 0, 0, 0.18)"
+          : "1px 0 2px rgba(0, 0, 0, 0.03)",
+        /* Above the drawer backdrop (1040) so the panel sits on top of it. */
+        zIndex: 1050,
         height: "100vh",
         position: "fixed",
         left: 0,
         top: 0,
         overflow: "hidden",
-        willChange: "width",
-        transform: "translateZ(0)",
+        willChange: isMobile ? "transform" : "width",
+        transform: isMobile && !drawerOpen
+          ? "translateX(-100%)"
+          : "translateX(0)",
       }}
     >
       {/* Sidebar Header */}
-      {collapsed ? (
+      {isCollapsed ? (
         /* ── Collapsed: logo tile on top, toggle below ── */
         <div
           style={{
@@ -178,8 +204,9 @@ const Sidebar = ({ onToggle, onLogout }) => {
           >
             SIGLA
           </span>
+          {/* Mobile closes the drawer; desktop collapses to the icon rail. */}
           <button
-            onClick={handleToggle}
+            onClick={isMobile ? onCloseDrawer : handleToggle}
             style={{
               background: "none",
               border: "none",
@@ -195,9 +222,9 @@ const Sidebar = ({ onToggle, onLogout }) => {
             }}
             onMouseEnter={toggleHoverIn}
             onMouseLeave={toggleHoverOut}
-            aria-label="Collapse sidebar"
+            aria-label={isMobile ? "Close menu" : "Collapse sidebar"}
           >
-            <PanelLeftClose size={20} />
+            {isMobile ? <X size={20} /> : <PanelLeftClose size={20} />}
           </button>
         </div>
       )}
@@ -220,7 +247,7 @@ const Sidebar = ({ onToggle, onLogout }) => {
           <NavLink
             key={path}
             to={path}
-            title={collapsed ? label : undefined}
+            title={isCollapsed ? label : undefined}
             /* The `active` class is what .nav-item:hover:not(.active) keys off.
                NavLink only adds it automatically when className is a string, and
                this one is a function, so it is applied explicitly here. */
@@ -228,9 +255,9 @@ const Sidebar = ({ onToggle, onLogout }) => {
             style={({ isActive }) => ({
               display: "flex",
               alignItems: "center",
-              justifyContent: collapsed ? "center" : "flex-start",
-              gap: collapsed ? 0 : "12px",
-              padding: collapsed ? "0" : "0 12px",
+              justifyContent: isCollapsed ? "center" : "flex-start",
+              gap: isCollapsed ? 0 : "12px",
+              padding: isCollapsed ? "0" : "0 12px",
               textDecoration: "none",
               height: "42px",
               borderRadius: "8px",
@@ -241,7 +268,7 @@ const Sidebar = ({ onToggle, onLogout }) => {
             })}
           >
             <Icon size={20} style={{ flexShrink: 0 }} />
-            {!collapsed && (
+            {!isCollapsed && (
               <span
                 style={{
                   fontSize: "0.92rem",
@@ -269,16 +296,16 @@ const Sidebar = ({ onToggle, onLogout }) => {
       >
         <button
           onClick={handleLogout}
-          title={collapsed ? "Logout" : undefined}
+          title={isCollapsed ? "Logout" : undefined}
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: collapsed ? 0 : "12px",
+            justifyContent: isCollapsed ? "center" : "flex-start",
+            gap: isCollapsed ? 0 : "12px",
             width: "100%",
             background: "none",
             border: "none",
-            padding: collapsed ? "0" : "0 12px",
+            padding: isCollapsed ? "0" : "0 12px",
             height: "42px",
             borderRadius: "8px",
             color: MUTED,
@@ -296,7 +323,7 @@ const Sidebar = ({ onToggle, onLogout }) => {
           }}
         >
           <LogOut size={20} style={{ flexShrink: 0 }} />
-          {!collapsed && (
+          {!isCollapsed && (
             <span style={{ fontWeight: 500, fontSize: "0.92rem" }}>
               Logout
             </span>

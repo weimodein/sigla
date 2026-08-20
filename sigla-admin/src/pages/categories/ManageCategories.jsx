@@ -182,7 +182,7 @@ const ManageCategories = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
             Manage Categories
@@ -207,13 +207,13 @@ const ManageCategories = () => {
 
       {/* ── Summary cards ── */}
       {loading ? (
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {Array.from({ length: 3 }).map((_, i) => (
             <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <StatCard index={0}
             title="Total Categories"
             value={categories.length}
@@ -307,7 +307,7 @@ const ManageCategories = () => {
         {/* Pagination */}
         {!loading && categories.length > PAGE_SIZE && (
           <div
-            className="flex items-center justify-between px-5 py-3.5"
+            className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5"
             style={{ borderTop: `1px solid ${C.border}`, fontSize: 13, color: "#6b7280" }}
           >
             <span>
