@@ -254,19 +254,35 @@
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0);   }
 }
-/* Decaying oscillation — the familiar "wrong password" gesture. */
-@keyframes auth-shake {
-  10%, 90% { transform: translateX(-8px); }
-  20%, 80% { transform: translateX(8px);  }
-  30%, 50%, 70% { transform: translateX(-5px); }
-  40%, 60% { transform: translateX(5px);  }
-  100%     { transform: translateX(0);    }
+/* Rejection reads as a colour event, not a movement one.
+   This rides a dedicated overlay element rather than the card itself: the card
+   already owns an `animation` shorthand (auth-card-in / -out), and a second
+   shorthand on the same element replaces it instead of stacking — which
+   restarted the entrance mid-pulse and made the card blink out. */
+@keyframes auth-deny {
+  0%   { opacity: 0; }
+  30%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* Same springy curve as modal-panel-in, so the card reads as the same app. */
 .auth-card-in  { animation: auth-card-in  0.42s var(--ease-spring) both; }
 .auth-card-out { animation: auth-card-out var(--dur-base) ease-in forwards; }
-.auth-shake    { animation: auth-shake    0.40s ease-in-out; }
+
+/* The card sets overflow:hidden, which would clip an outward ring — so the ring
+   is inset, hugging the card's rounded edge, and only the soft glow spills out. */
+.auth-deny-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 15px; /* matches S.loginContainer.borderRadius */
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: inset 0 0 0 1.5px rgba(220, 38, 38, 0.55),
+              0 0 22px 4px      rgba(220, 38, 38, 0.28);
+}
+.auth-deny-overlay.is-denied {
+  animation: auth-deny 0.70s var(--ease-standard);
+}
 
 /* ── Toast ──
    Entrance was already animated; the exit was not, so toasts slid in and then
