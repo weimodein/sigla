@@ -312,6 +312,138 @@
 .modal-panel-in     { animation: modal-panel-in     0.20s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 .modal-panel-out    { animation: modal-panel-out    0.15s ease-in  forwards; }
 
+/* ── Auth screen layout (Login + ForgotPassword) ──
+   Same reasoning as .app-main above: these values used to live in the pages'
+   inline `S` style objects, which cannot carry a media query. The pages worked
+   around that by injecting a <style> block at runtime whose every rule needed
+   `!important` purely to out-specify those inline styles — and the fixed
+   `min-height: 480px` still won on phones, so the card grew taller than the
+   viewport and, being centred, clipped off both ends.
+
+   ForgotPassword mirrors Login: its logo is the RIGHT panel and it stacks with
+   `column-reverse`, so the logo still lands on top. The panel rules are
+   therefore paired by role, not by side.
+
+   Set on the container rather than the wrapper so `justify-content: center`
+   still centres horizontally. */
+.sigla-login-container,
+.fp-container {
+  width: 700px;
+  max-width: 95%;
+  min-height: 480px;
+}
+
+/* The logo deliberately overflows its panel and is clipped by the container's
+   overflow:hidden — a bleed effect that reads as intentional in a 45%-wide
+   desktop column. */
+.sigla-left-panel > img,
+.fp-right > img {
+  width: 120%;
+  max-width: 1200px;
+  height: auto;
+}
+
+/* dvh excludes mobile browser chrome (the Messenger in-app browser overlays a
+   header and a bottom bar); the vh line stays first as the fallback. */
+.auth-page-wrapper {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Tablet / small laptop. Previously uncovered — the old breakpoints were
+   768/480, so 769–1023px got the desktop 700px card with the 480px floor
+   intact. Stays two-column; just stops being rigid. */
+@media (max-width: 1023.98px) {
+  .sigla-login-container,
+  .fp-container {
+    width: 90%;
+    min-height: 0;
+  }
+}
+
+/* Stacking breakpoint. 640 rather than the old 768, to match .app-main and
+   Tailwind's `sm`. */
+@media (max-width: 640px) {
+  .sigla-login-container {
+    flex-direction: column;
+  }
+  .fp-container {
+    flex-direction: column-reverse;
+  }
+  .sigla-login-container,
+  .fp-container {
+    width: 100%;
+    max-width: 420px;
+    min-height: 0;
+  }
+
+  /* An over-tall card must scroll from the top. Centring clips it symmetrically,
+     which is what hid the Login button below the fold. */
+  .auth-page-wrapper {
+    align-items: flex-start;
+    padding: 16px 12px;
+  }
+
+  .sigla-left-panel,
+  .fp-right,
+  .sigla-right-panel,
+  .fp-left {
+    width: 100%;
+  }
+
+  /* A compact band, and the logo now fits whole inside it. At full width the
+     120% bleed becomes 120% of the *viewport* — heavily cropped and tall
+     enough to push the form off-screen. */
+  .sigla-left-panel,
+  .fp-right {
+    min-height: 0;
+    height: 132px;
+    padding: 16px 20px;
+    flex-shrink: 0;
+  }
+  .sigla-left-panel > img,
+  .fp-right > img {
+    width: auto;
+    max-width: 200px;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .sigla-right-panel,
+  .fp-left {
+    padding: 28px 22px;
+  }
+}
+
+@media (max-width: 380px) {
+  .sigla-right-panel,
+  .fp-left {
+    padding: 24px 18px;
+  }
+  .sigla-left-panel,
+  .fp-right {
+    height: 112px;
+  }
+}
+
+/* Landscape phones are short, not narrow, so the width queries above miss them.
+   The card must be allowed to exceed the viewport and let the PAGE scroll —
+   otherwise the form panel's own overflow-y traps it in an inner scrollbar. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .sigla-login-container,
+  .fp-container {
+    min-height: 0;
+  }
+  .auth-page-wrapper {
+    align-items: flex-start;
+    padding: 16px 0;
+  }
+  .sigla-right-panel,
+  .fp-left {
+    overflow-y: visible;
+  }
+}
+
 /* ── Auth screen motion ──
    Lives here rather than in Login's runtime-injected <style> block so the
    reduced-motion guard at the end of this file can reach it. */

@@ -117,15 +117,6 @@ const Login = () => {
       .sigla-input[type="password"]::-ms-clear { display: none; }
       .sigla-input::-webkit-credentials-auto-fill-button,
       .sigla-input::-webkit-password-toggle { display: none; }
-      @media (max-width: 768px) {
-        .sigla-login-container { flex-direction: column !important; width: 90% !important; min-height: 0 !important; height: auto !important; }
-        .sigla-left-panel { width: 100% !important; padding: 30px 20px !important; min-height: 140px !important; }
-        .sigla-right-panel { width: 100% !important; padding: 30px 25px !important; }
-      }
-      @media (max-width: 480px) {
-        .sigla-login-container { width: 95% !important; }
-        .sigla-right-panel { padding: 25px 20px !important; }
-      }
     `;
     document.head.appendChild(style);
   }, []);
@@ -166,7 +157,7 @@ const Login = () => {
   }, [identifier, password, login, navigate, toast, loading, succeeded]);
 
   return (
-    <div style={S.pageWrapper}>
+    <div className="auth-page-wrapper" style={S.pageWrapper}>
       <div style={S.background} />
       {/* Entrance on mount, exit once the sign-in is acknowledged. */}
       <div
@@ -184,7 +175,9 @@ const Login = () => {
 
         {/* Left panel */}
         <div className="sigla-left-panel" style={S.leftPanel}>
-          <img src="/logo.png" alt="SIGLA Logo" style={S.logo} />
+          {/* Sized in index.css: bleeds past the panel on desktop, fits whole
+              inside a compact band once the panels stack. */}
+          <img src="/logo.png" alt="SIGLA Logo" />
         </div>
 
         {/* Right panel */}
@@ -245,11 +238,12 @@ const Login = () => {
 };
 
 const S = {
+  // Sizing and every breakpoint live in index.css under `.auth-page-wrapper` /
+  // `.sigla-login-container` — an inline style cannot carry a media query.
   pageWrapper: {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    minHeight: "100vh",
     padding: "20px 0",
     position: "relative",
     backgroundColor: C.background,
@@ -261,17 +255,13 @@ const S = {
     filter: "blur(8px)",
     zIndex: -1,
   },
+  // width / maxWidth / minHeight are in index.css so they can be relaxed per
+  // breakpoint. Keeping them here as inline styles is what forced every
+  // responsive rule to use !important, and the 480px floor still won on phones.
   loginContainer: {
     // Anchors the .auth-deny-overlay child, which positions off this box.
     position: "relative",
     display: "flex",
-    width: "700px",
-    maxWidth: "95%",
-    // minHeight, not height: once the panels stack on a phone the card must be
-    // able to grow. The @media block below tried to relax this by overriding
-    // `max-height` — a property that was never set — so the fixed 480px won and
-    // the stacked content overflowed into the right panel's scrollbar.
-    minHeight: "480px",
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow: "0 6px 25px rgba(0,0,0,0.3)",
@@ -284,11 +274,6 @@ const S = {
     alignItems: "center",
     padding: "30px",
     flexShrink: 0,
-  },
-  logo: {
-    width: "120%",
-    maxWidth: "1200px",
-    height: "auto",
   },
   rightPanel: {
     width: "55%",

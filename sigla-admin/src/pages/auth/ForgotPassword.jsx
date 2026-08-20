@@ -116,15 +116,6 @@ const ForgotPassword = () => {
         to   { opacity: 1; transform: translateY(0); }
       }
       .fp-form-in { animation: fp-fadein 0.28s ease forwards; }
-      @media (max-width: 768px) {
-        .fp-container { flex-direction: column-reverse !important; width: 90% !important; min-height: 0 !important; height: auto !important; }
-        .fp-left { width: 100% !important; padding: 30px 25px !important; }
-        .fp-right { width: 100% !important; padding: 30px 20px !important; min-height: 140px !important; }
-      }
-      @media (max-width: 480px) {
-        .fp-container { width: 95% !important; }
-        .fp-left { padding: 25px 20px !important; }
-      }
     `;
     document.head.appendChild(style);
   }, []);
@@ -246,7 +237,7 @@ const ForgotPassword = () => {
   const passwordsMismatch = newPass && confirm && newPass !== confirm;
 
   return (
-    <div style={S.pageWrapper}>
+    <div className="auth-page-wrapper" style={S.pageWrapper}>
       <div style={S.background} />
       <div className="fp-container" style={S.container}>
 
@@ -372,7 +363,9 @@ const ForgotPassword = () => {
 
         {/* Right panel — logo */}
         <div className="fp-right" style={S.rightPanel}>
-          <img src="/logo.png" alt="SIGLA Logo" style={S.logo} />
+          {/* Sized in index.css: bleeds past the panel on desktop, fits whole
+              inside a compact band once the panels stack. */}
+          <img src="/logo.png" alt="SIGLA Logo" />
         </div>
       </div>
 
@@ -435,11 +428,12 @@ const ForgotPassword = () => {
 };
 
 const S = {
+  // Sizing and every breakpoint live in index.css under `.auth-page-wrapper` /
+  // `.fp-container` — an inline style cannot carry a media query.
   pageWrapper: {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    minHeight: "100vh",
     padding: "20px 0",
     position: "relative",
     backgroundColor: C.background,
@@ -451,14 +445,10 @@ const S = {
     filter: "blur(8px)",
     zIndex: -1,
   },
+  // See the note in Login.jsx: width / maxWidth / minHeight are in index.css so
+  // they can be relaxed per breakpoint.
   container: {
     display: "flex",
-    width: "700px",
-    maxWidth: "95%",
-    // See the note in Login.jsx: the media query below overrode `max-height`,
-    // which was never set, so a fixed `height` survived onto stacked phone
-    // layouts. minHeight lets the card grow with its content.
-    minHeight: "480px",
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow: "0 6px 25px rgba(0,0,0,0.3)",
@@ -481,11 +471,6 @@ const S = {
     alignItems: "center",
     padding: "30px",
     flexShrink: 0,
-  },
-  logo: {
-    width: "120%",
-    maxWidth: "1200px",
-    height: "auto",
   },
   heading: {
     fontSize: "1.75rem",
