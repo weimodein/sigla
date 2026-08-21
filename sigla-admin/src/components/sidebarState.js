@@ -8,6 +8,13 @@
 
 const KEY = "sidebarCollapsed";
 
+// Shared so Sidebar's width and Layout's content margin cannot drift apart —
+// they were previously separate hardcoded literals in the two files, kept in
+// sync by hand. Below `lg` the sidebar is an off-canvas drawer and the content
+// margin is 0, so only the drawer uses EXPANDED there.
+export const SIDEBAR_EXPANDED = "280px";
+export const SIDEBAR_COLLAPSED = "70px";
+
 // Read synchronously so it can seed a lazy useState initialiser — the correct
 // width is then present on first paint, with no expand-then-collapse flash.
 export const getSidebarCollapsed = () => {

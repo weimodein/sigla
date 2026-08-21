@@ -824,7 +824,7 @@ const ManageWord = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
             Manage Words
@@ -897,13 +897,13 @@ const ManageWord = () => {
 
       {/* ── Summary cards ── */}
       {!stats ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard index={i} key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard index={0}
             title="Total Words"
             value={stats.total}
@@ -1049,7 +1049,7 @@ const ManageWord = () => {
 
         {/* Pagination */}
         {total > 0 && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderTop: `1px solid ${C.border}`, background: "#f9fafb" }}>
+          <div className="flex flex-wrap items-center justify-between gap-2" style={{ padding: "12px 20px", borderTop: `1px solid ${C.border}`, background: "#f9fafb" }}>
             <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
               Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
             </span>

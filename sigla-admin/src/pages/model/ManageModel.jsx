@@ -446,14 +446,7 @@ const ManageModel = () => {
   return (
     <div>
       {/* Header */}
-      <div
-        style={{
-          marginBottom: "24px",
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-        }}
-      >
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
           <h1
             style={{
@@ -638,7 +631,8 @@ const ManageModel = () => {
         </div>
 
         {loading ? (
-          <table className="w-full text-left">
+          <div className="overflow-x-auto">
+          <table className="w-full text-left" style={{ minWidth: 720 }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 <th className="px-4 py-3">
@@ -681,7 +675,9 @@ const ManageModel = () => {
             <tbody>
               {Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-t">
-                  {Array.from({ length: 10 }).map((_, j) => (
+                  {/* 7 cells to match the 7 headers above — this rendered 10,
+                      so the skeleton was wider than the table it stood in for. */}
+                  {Array.from({ length: 7 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
                     </td>
@@ -690,10 +686,12 @@ const ManageModel = () => {
               ))}
             </tbody>
           </table>
+          </div>
         ) : (
           <>
             {/* Table header row */}
-            <table className="w-full text-left">
+            <div className="overflow-x-auto">
+            <table className="w-full text-left" style={{ minWidth: 720 }}>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
                   <th className="px-4 py-3" style={{ width: "36px" }} />
@@ -1024,15 +1022,13 @@ const ManageModel = () => {
                 )}
               </tbody>
             </table>
+            </div>
 
             {/* Pagination */}
             {filteredModels.length > pageSize && (
               <div
-                className="dash-card-footer"
+                className="dash-card-footer flex flex-wrap items-center justify-between gap-2"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
                   fontSize: "0.8rem",
                   color: "#6b7280",
                   paddingTop: "12px",

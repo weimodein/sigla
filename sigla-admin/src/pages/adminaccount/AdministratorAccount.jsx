@@ -393,14 +393,9 @@ const AdministratorAccount = () => {
       </div>
 
       {/* ── Top Section: Profile + Actions (two-column) ── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 320px",
-          gap: "24px",
-          alignItems: "start",
-        }}
-      >
+      {/* Tailwind rather than an inline gridTemplateColumns so the fixed 320px
+          sidebar column can stack below the profile on narrow screens. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
         {/* Left: Profile Information + Account Details */}
         <div>
         {!isEditing ? (

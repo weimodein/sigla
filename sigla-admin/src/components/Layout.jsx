@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import Sidebar from "./Sidebar.jsx";
 import Button from "./Button.jsx";
 import { useModalKeys } from "./useModalKeys.js";
 import { setAuthMessage } from "../utils/authMessage.js";
-import { getSidebarCollapsed } from "./sidebarState.js";
-import { X } from "lucide-react";
-
-const SIDEBAR_EXPANDED  = "280px";
-const SIDEBAR_COLLAPSED = "70px";
+import {
+  getSidebarCollapsed,
+  SIDEBAR_EXPANDED,
+  SIDEBAR_COLLAPSED,
+} from "./sidebarState.js";
+import { useIsMobile } from "../hooks/useMediaQuery.js";
+import { X, Menu } from "lucide-react";
 
 const Layout = ({ children }) => {
   // Mirrors the Sidebar's persisted state so the content margin matches the
@@ -18,15 +20,60 @@ const Layout = ({ children }) => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isMobile = useIsMobile();
+
+  // Drawer state lives HERE, not in Sidebar. Manage Administrators is guarded by
+  // SuperRoute while every other route uses ProtectedRoute, so navigating there
+  // swaps the element type and remounts Layout -> Sidebar. State held inside
+  // Sidebar would be lost; see the note at the top of sidebarState.js.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // The drawer force-closes on two events, both handled during render rather
+  // than in an effect (the pattern React recommends for resetting state when
+  // something changes — an effect would paint the stale open drawer for a frame
+  // first, then close it):
+  //
+  //   1. Navigation. Otherwise tapping a nav link leaves the drawer covering
+  //      the page it just opened.
+  //   2. Crossing up past the breakpoint. Otherwise `drawerOpen` stays true
+  //      behind the desktop rail, and returning to mobile shows it already open
+  //      with no backdrop.
+  const [drawerKey, setDrawerKey] = useState(
+    () => `${location.pathname}|${isMobile}`,
+  );
+  const currentKey = `${location.pathname}|${isMobile}`;
+  if (drawerKey !== currentKey) {
+    setDrawerKey(currentKey);
+    if (drawerOpen) setDrawerOpen(false);
+  }
+
+  // Escape closes the drawer, matching the modal contract elsewhere in the app.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
+
+  // The page behind an open drawer must not scroll under the finger.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [drawerOpen]);
 
   // Keep CSS variable in sync so modals can centre themselves within the content
-  // area — seeded from the restored state, not hardcoded to expanded.
+  // area — seeded from the restored state, not hardcoded to expanded. On mobile
+  // the sidebar is off-canvas and occupies no layout space, so it reads 0px.
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--sidebar-width",
-      sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
+      isMobile ? "0px" : sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
     );
-  }, [sidebarCollapsed]);
+  }, [sidebarCollapsed, isMobile]);
 
   // This used to also toggle a `sidebar-transitioning` class on <body> for 250ms,
   // with a timer and cleanup effect to manage it. No CSS rule anywhere in the app
@@ -87,23 +134,103 @@ const Layout = ({ children }) => {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
-      <Sidebar onToggle={handleToggle} onLogout={() => setShowLogoutModal(true)} />
+      <Sidebar
+        onToggle={handleToggle}
+        onLogout={() => setShowLogoutModal(true)}
+        isMobile={isMobile}
+        drawerOpen={drawerOpen}
+        onCloseDrawer={() => setDrawerOpen(false)}
+      />
+
+      {/* Drawer backdrop — mobile only, and only while open. Sits below the
+          sidebar (1050) and above page content. */}
+      {isMobile && drawerOpen && (
+        <div
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            backdropFilter: "blur(2px)",
+            zIndex: 1040,
+          }}
+        />
+      )}
+
       <div
         style={{
-          marginLeft: sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
+          /* The line that reclaims the screen: on mobile the sidebar is
+             off-canvas, so the content must not be pushed over at all. */
+          marginLeft: isMobile
+            ? 0
+            : sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
           transition: "margin-left var(--dur-base) var(--ease-standard)",
           willChange: "margin-left",
           minHeight: "100vh",
           display: "flex",
           flexDirection: "column",
+          /* Without this a wide child (a table at its min-width) can stretch the
+             flex item and scroll the whole page sideways instead of scrolling
+             inside its own wrapper. */
+          minWidth: 0,
         }}
       >
+        {/* Mobile header — the app has no topbar, so the hamburger needs a home.
+            Pages render their own <h2>, so this carries no title. */}
+        {isMobile && (
+          <header
+            style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 900,
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "10px 16px",
+              background: "#ffffff",
+              borderBottom: "1px solid #f0f0f0",
+              flexShrink: 0,
+            }}
+          >
+            <button
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open menu"
+              aria-expanded={drawerOpen}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#1f2937",
+                cursor: "pointer",
+                padding: "8px",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Menu size={22} />
+            </button>
+            <span
+              style={{
+                fontSize: "1.05rem",
+                fontWeight: 700,
+                color: "#1f2937",
+                letterSpacing: "0.02em",
+              }}
+            >
+              SIGLA
+            </span>
+          </header>
+        )}
+
         <main
+          className="app-main"
           style={{
             flex: 1,
-            padding: "32px",
             overflow: "auto",
             background: "var(--app-bg)",
+            minWidth: 0,
           }}
         >
           {children}
@@ -123,6 +250,9 @@ const Layout = ({ children }) => {
             justifyContent: "center",
             padding: "16px",
             background: "rgba(0,0,0,0.4)",
+            // Without this the dialog clips with no way to reach it on a short
+            // screen (a landscape phone), since the panel is centred, not top-aligned.
+            overflowY: "auto",
           }}
           onClick={dismissLogoutModal}
         >

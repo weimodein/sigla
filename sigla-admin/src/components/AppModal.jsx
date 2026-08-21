@@ -28,7 +28,9 @@ export const ModalFooter = ({ children, className = "" }) => {
 
   return (
     <div
-      className={`flex justify-end gap-2.5 px-6 py-4 ${className}`}
+      /* shrink-0 keeps the actions pinned while the body scrolls; flex-wrap so
+         three or more buttons stack instead of overflowing a narrow panel. */
+      className={`flex flex-wrap justify-end gap-2.5 px-6 py-4 shrink-0 ${className}`}
       style={{ borderTop: "1px solid #f0f0f0" }}
     >
       {content}
@@ -157,16 +159,21 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
       aria-labelledby={titleId.current}
       onClick={(e) => { if (e.target === e.currentTarget) startClose(); }}
     >
+      {/* max-h + column flex so a tall form scrolls INSIDE the body, keeping the
+          header and footer in view. Without it the panel grew unbounded and the
+          confirm button ended up below the fold on short screens — the user had
+          to scroll the backdrop, which carried the header away too.
+          dvh, not vh: mobile browser chrome shrinks the visible viewport. */}
       <div
         ref={panelRef}
-        className={`modal-panel-in bg-white rounded-2xl w-full my-auto ${wide ? "max-w-4xl" : "max-w-lg"}`}
+        className={`modal-panel-in bg-white rounded-2xl w-full my-auto flex flex-col max-h-[90dvh] ${wide ? "max-w-4xl" : "max-w-lg"}`}
         style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}
         onAnimationEnd={(e) => {
           if (closingRef.current && e.target === panelRef.current) onClose();
         }}
       >
         <div
-          className="flex items-center justify-between px-6 py-4"
+          className="flex items-center justify-between px-6 py-4 shrink-0"
           style={{ borderBottom: "1px solid #f0f0f0" }}
         >
           <h3
@@ -183,7 +190,9 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
             <X size={16} />
           </button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        {/* The only scrolling region; min-h-0 is required or the flex item
+            refuses to shrink below its content and overflow never kicks in. */}
+        <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">{children}</div>
         {footer && <ModalFooter>{footer}</ModalFooter>}
       </div>
     </div>

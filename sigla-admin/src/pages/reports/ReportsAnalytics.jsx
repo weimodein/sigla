@@ -482,7 +482,7 @@ const ReportsAnalytics = () => {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonCard index={i} key={i} />
           ))}
@@ -513,7 +513,7 @@ const ReportsAnalytics = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
             Reports & Analytics
@@ -540,7 +540,7 @@ const ReportsAnalytics = () => {
       </div>
 
       {/* Summary Cards (scope §20): words, gesture samples, categories, model accuracy */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard index={0}
           title="Total Words"
           value={wordStats?.total}
