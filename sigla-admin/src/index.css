@@ -366,6 +366,15 @@
   height: auto;
 }
 
+/* "Login Portal" exists as two elements — one in the blue band, one at the top
+   of the form — because CSS cannot move a node between parents. Exactly one is
+   shown per breakpoint. Desktop is the default: the form heading, on the light
+   panel where its dark colour belongs. `display: none` (not opacity/visibility)
+   so the hidden twin leaves the accessibility tree and is never announced. */
+.sigla-band-heading {
+  display: none;
+}
+
 /* Form panel. Padding differs slightly between the two pages, so it is set
    per-page below rather than shared here. */
 .sigla-right-panel,
@@ -454,6 +463,56 @@
     object-fit: contain;
   }
 
+  /* Login's band pairs the logo with the heading on one row. ForgotPassword
+     keeps a centred logo alone, so this is scoped to .sigla-left-panel — the
+     two auth pages differ on mobile by intent. The panel already has
+     display:flex + centring from the desktop rule; only the axis changes. */
+  .sigla-left-panel {
+    flex-direction: row;
+    /* Left-aligned rather than centred: the pair sits against the start edge,
+       which reads as a header rather than a floating badge. */
+    justify-content: flex-start;
+    gap: 12px;
+    height: 180px;
+    padding: 18px 14px 18px 8px;
+  }
+  /* The source is a square 500×500 PNG whose mark occupies only the middle
+     ~60% — scale() crops that built-in padding so the mark still reads large
+     from a smaller box. That smaller box is deliberate: the logo and a one-line
+     heading share the row, so width given back here is what lets the heading
+     reach 2.6rem. transform-origin keeps the growth leftward rather than
+     pushing the mark back toward the centre. */
+  .sigla-left-panel > img {
+    max-width: 130px;
+    flex-shrink: 0;
+    transform: scale(1.35);
+    transform-origin: left center;
+  }
+
+  /* Swap which twin is visible. */
+  .sigla-form-heading {
+    display: none;
+  }
+  .sigla-band-heading {
+    display: block;
+    margin: 0;
+    color: #fff;
+    font-weight: 700;
+    line-height: 1.15;
+    /* One line, always. `white-space: nowrap` is the guarantee; the fluid size
+       is what makes that safe — at a flat 2rem the text needs ~200px but only
+       ~176px is left beside the logo on a 412px phone, so it would either wrap
+       or spill. Scales with the viewport instead of stepping at a breakpoint. */
+    white-space: nowrap;
+    /* 7.6vw is the largest coefficient that still fits on one line at the
+       tightest widths (320px and 390px, where the logo takes the most of the
+       row). Wider phones hit the 2.6rem cap. */
+    font-size: clamp(1.5rem, 7.6vw, 2.6rem);
+    /* Lets the text shrink rather than push the row wider if it ever runs out
+       of room; the logo keeps its size because it is flex-shrink: 0. */
+    min-width: 0;
+  }
+
   /* `overflow-y: auto` earns its place on desktop, where this panel is a
      fixed-height column beside the logo. Stacked there is no fixed height to
      scroll within, so it only lets the panel absorb slack — which is what
@@ -464,6 +523,13 @@
     overflow-y: visible;
     flex: 0 0 auto;
   }
+
+  /* Extra breathing room under the blue band. Login only: its form heading is
+     hidden on mobile, so the first field would otherwise sit right against the
+     band. ForgotPassword keeps its heading and needs no extra gap. */
+  .sigla-right-panel {
+    padding-top: 44px;
+  }
 }
 
 @media (max-width: 380px) {
@@ -471,14 +537,34 @@
   .fp-left {
     padding: 24px 18px;
   }
-  .sigla-left-panel,
+  /* Restated because the shorthand above resets padding-top, which would undo
+     the gap under the band set in the 640px block. Slightly tighter here to
+     keep the Login button in reach on a short phone. */
+  .sigla-right-panel {
+    padding-top: 36px;
+  }
   .fp-right {
     height: 124px;
   }
-  .sigla-left-panel > img,
   .fp-right > img {
     max-width: 210px;
   }
+
+  /* Shrink the pair together so a narrow phone keeps the Login button in reach
+     and the row does not overflow at 320px. The tight gap and trailing padding
+     buy back the last few pixels the one-line heading needs at that width. */
+  .sigla-left-panel {
+    height: 150px;
+    gap: 8px;
+    padding: 16px 8px 16px 6px;
+  }
+  .sigla-left-panel > img {
+    max-width: 110px;
+    transform: scale(1.3);
+  }
+  /* No font-size override here on purpose: the clamp() above already scales the
+     heading down across this range, and a flat value would defeat it and put
+     "Login Portal" back onto two lines. */
 }
 
 /* Landscape phones are short, not narrow, so the width queries above miss them.

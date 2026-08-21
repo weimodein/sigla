@@ -178,12 +178,21 @@ const Login = () => {
           {/* Sized in index.css: bleeds past the panel on desktop, fits whole
               inside a compact band once the panels stack. */}
           <img src="/logo.png" alt="SIGLA Logo" />
+          {/* The mobile heading. CSS cannot move an element between parents, so
+              the heading exists twice — here and in the form — and index.css
+              shows exactly one per breakpoint via display:none, which also keeps
+              it out of the accessibility tree so it is never announced twice. */}
+          <h2 className="sigla-band-heading">Login Portal</h2>
         </div>
 
         {/* Right panel */}
         <div className="sigla-right-panel" style={S.rightPanel}>
           <form onSubmit={handleLogin}>
-            <h2 className="auth-field-in" style={{ ...S.heading, "--stagger-delay": "120ms" }}>
+            {/* Desktop-only twin of .sigla-band-heading above. */}
+            <h2
+              className="auth-field-in sigla-form-heading"
+              style={{ ...S.heading, "--stagger-delay": "120ms" }}
+            >
               Login Portal
             </h2>
 
