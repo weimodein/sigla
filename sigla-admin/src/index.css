@@ -337,12 +337,18 @@
   min-height: 100dvh;
 }
 
+/* One fixed size for both pages on desktop. `height`, not just `min-height`:
+   ForgotPassword's three steps carry different amounts of content (the reset
+   step needs ~410px, the verify step far less), so a floor alone let the card
+   resize as the user moved between steps and made the two pages disagree.
+   Pinning the height holds every card and every step at the same box; the form
+   panel's overflow-y absorbs anything taller. */
 .sigla-login-container,
 .fp-container {
   display: flex;
   width: 700px;
   max-width: 95%;
-  min-height: 480px;
+  height: 480px;
 }
 
 /* Logo panel */
@@ -375,8 +381,8 @@
   display: none;
 }
 
-/* Form panel. Padding differs slightly between the two pages, so it is set
-   per-page below rather than shared here. */
+/* Form panel. Both pages share one padding value — they used to differ by
+   2px/3px for no reason, which read as a wobble when moving between them. */
 .sigla-right-panel,
 .fp-left {
   width: 55%;
@@ -384,22 +390,22 @@
   flex-direction: column;
   justify-content: center;
   overflow-y: auto;
-}
-.sigla-right-panel {
   padding: 42px 45px;
-}
-.fp-left {
-  padding: 44px 48px;
 }
 
 /* Tablet / small laptop. Previously uncovered — the old breakpoints were
    768/480, so 769–1023px got the desktop 700px card with the 480px floor
-   intact. Stays two-column; just stops being rigid. */
+   intact. Stays two-column; just stops being rigid.
+
+   `height: auto` is what releases the fixed desktop height here — `min-height`
+   alone no longer does, now that the base rule sets `height`. The 480px floor
+   is kept so the card does not collapse while still two-column. */
 @media (max-width: 1023.98px) {
   .sigla-login-container,
   .fp-container {
     width: 90%;
-    min-height: 0;
+    height: auto;
+    min-height: 480px;
   }
 }
 
@@ -446,44 +452,33 @@
     width: 100%;
   }
 
-  /* A band across the full card width, with the logo fitted whole inside it.
-     The desktop 120% bleed would be 120% of the *viewport* here — cropped and
-     tall enough to push the form off-screen. */
+  /* A band across the full card width. Both auth pages share every dimension
+     here — height, padding, alignment, logo size — so the two read as the same
+     component. The only difference is that Login adds a heading beside the
+     logo; ForgotPassword's headings are step-dependent and stay in its form. */
   .sigla-left-panel,
   .fp-right {
     min-height: 0;
-    height: 150px;
-    padding: 20px;
-  }
-  .sigla-left-panel > img,
-  .fp-right > img {
-    width: auto;
-    max-width: 260px;
-    max-height: 100%;
-    object-fit: contain;
-  }
-
-  /* Login's band pairs the logo with the heading on one row. ForgotPassword
-     keeps a centred logo alone, so this is scoped to .sigla-left-panel — the
-     two auth pages differ on mobile by intent. The panel already has
-     display:flex + centring from the desktop rule; only the axis changes. */
-  .sigla-left-panel {
-    flex-direction: row;
-    /* Left-aligned rather than centred: the pair sits against the start edge,
+    height: 180px;
+    /* Left-aligned rather than centred: the logo sits against the start edge,
        which reads as a header rather than a floating badge. */
+    flex-direction: row;
     justify-content: flex-start;
     gap: 12px;
-    height: 180px;
     padding: 18px 14px 18px 8px;
   }
   /* The source is a square 500×500 PNG whose mark occupies only the middle
      ~60% — scale() crops that built-in padding so the mark still reads large
-     from a smaller box. That smaller box is deliberate: the logo and a one-line
-     heading share the row, so width given back here is what lets the heading
-     reach 2.6rem. transform-origin keeps the growth leftward rather than
-     pushing the mark back toward the centre. */
-  .sigla-left-panel > img {
+     from a smaller box. That smaller box is deliberate on Login: the logo and a
+     one-line heading share the row, so width given back here is what lets the
+     heading reach 2.6rem. transform-origin keeps the growth leftward rather
+     than pushing the mark back toward the centre. */
+  .sigla-left-panel > img,
+  .fp-right > img {
+    width: auto;
     max-width: 130px;
+    max-height: 100%;
+    object-fit: contain;
     flex-shrink: 0;
     transform: scale(1.35);
     transform-origin: left center;
@@ -493,24 +488,33 @@
   .sigla-form-heading {
     display: none;
   }
+  /* Shared type for both pages' band headings, so the two match in weight,
+     colour and size. Wrapping differs per page and is set below. */
   .sigla-band-heading {
     display: block;
     margin: 0;
     color: #fff;
     font-weight: 700;
     line-height: 1.15;
-    /* One line, always. `white-space: nowrap` is the guarantee; the fluid size
-       is what makes that safe — at a flat 2rem the text needs ~200px but only
-       ~176px is left beside the logo on a 412px phone, so it would either wrap
-       or spill. Scales with the viewport instead of stepping at a breakpoint. */
-    white-space: nowrap;
-    /* 7.6vw is the largest coefficient that still fits on one line at the
-       tightest widths (320px and 390px, where the logo takes the most of the
-       row). Wider phones hit the 2.6rem cap. */
-    font-size: clamp(1.5rem, 7.6vw, 2.6rem);
+    /* The tightest widths are 320px and 390px, where the logo takes the most of
+       the row. Wider phones hit the 2.5rem cap. */
+    font-size: clamp(1.4rem, 7.2vw, 2.5rem);
     /* Lets the text shrink rather than push the row wider if it ever runs out
        of room; the logo keeps its size because it is flex-shrink: 0. */
     min-width: 0;
+  }
+
+  /* Login's "Login Portal" is short enough to guarantee one line, which reads
+     best beside the logo. ForgotPassword's headings run to 17 characters
+     ("Verify Your Email") and would need ~1.5rem to do the same — visibly
+     smaller than here — so that page wraps instead and keeps the type size. */
+  .sigla-left-panel .sigla-band-heading {
+    white-space: nowrap;
+  }
+  /* Two lines at most: the band is 180px tall, and balanced wrapping keeps the
+     two lines close in length rather than leaving one stray word. */
+  .fp-right .sigla-band-heading {
+    text-wrap: balance;
   }
 
   /* `overflow-y: auto` earns its place on desktop, where this panel is a
@@ -524,10 +528,12 @@
     flex: 0 0 auto;
   }
 
-  /* Extra breathing room under the blue band. Login only: its form heading is
-     hidden on mobile, so the first field would otherwise sit right against the
-     band. ForgotPassword keeps its heading and needs no extra gap. */
-  .sigla-right-panel {
+  /* Extra breathing room under the blue band. Both pages hide their form
+     heading on mobile — it has moved into the band — so this padding stands in
+     for the space that heading's margin used to provide above the first field
+     or subtitle. */
+  .sigla-right-panel,
+  .fp-left {
     padding-top: 44px;
   }
 }
@@ -539,26 +545,22 @@
   }
   /* Restated because the shorthand above resets padding-top, which would undo
      the gap under the band set in the 640px block. Slightly tighter here to
-     keep the Login button in reach on a short phone. */
-  .sigla-right-panel {
+     keep the submit button in reach on a short phone. */
+  .sigla-right-panel,
+  .fp-left {
     padding-top: 36px;
   }
+  /* Both bands shrink together so a narrow phone keeps the submit button in
+     reach and Login's row does not overflow at 320px — the tight gap and
+     trailing padding buy back the last few pixels its one-line heading needs. */
+  .sigla-left-panel,
   .fp-right {
-    height: 124px;
-  }
-  .fp-right > img {
-    max-width: 210px;
-  }
-
-  /* Shrink the pair together so a narrow phone keeps the Login button in reach
-     and the row does not overflow at 320px. The tight gap and trailing padding
-     buy back the last few pixels the one-line heading needs at that width. */
-  .sigla-left-panel {
     height: 150px;
     gap: 8px;
     padding: 16px 8px 16px 6px;
   }
-  .sigla-left-panel > img {
+  .sigla-left-panel > img,
+  .fp-right > img {
     max-width: 110px;
     transform: scale(1.3);
   }
@@ -572,9 +574,12 @@
    otherwise the form panel's own overflow-y traps it in an inner scrollbar. */
 @media (max-height: 500px) and (orientation: landscape) {
   /* flex-shrink: 0 so the column wrapper below cannot squeeze the card; the
-     width set by the width-based queries still applies. */
+     width set by the width-based queries still applies. `height: auto` releases
+     the fixed desktop height — without it a short landscape window at >=1024px
+     keeps the 480px box and overflows the viewport. */
   .sigla-login-container,
   .fp-container {
+    height: auto;
     min-height: 0;
     flex-shrink: 0;
   }
