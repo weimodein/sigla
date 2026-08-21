@@ -26,6 +26,15 @@ const C = {
   accent: "#3f8efc",
 };
 
+// Single source for each step's heading. The mobile band renders from this map
+// and each form renders the same string for desktop, so the two twins cannot
+// drift apart — only one is ever visible (see .sigla-band-heading in index.css).
+const STEP_HEADINGS = {
+  forgot: "Forgot Password?",
+  verify: "Verify Your Email",
+  reset: "Set New Password",
+};
+
 const FloatingInput = ({
   id, type, value, onChange, label,
   maxLength, inputMode, pattern, autoComplete, icon,
@@ -247,7 +256,9 @@ const ForgotPassword = () => {
           {/* ── FORGOT PASSWORD ── */}
           {step === "forgot" && (
             <form key="forgot" className="fp-form-in" onSubmit={handleForgot}>
-              <h2 style={S.heading}>Forgot Password?</h2>
+              <h2 className="sigla-form-heading" style={S.heading}>
+                {STEP_HEADINGS.forgot}
+              </h2>
               <p style={S.subtitle}>
                 Enter the email address linked to your admin account.
               </p>
@@ -273,7 +284,9 @@ const ForgotPassword = () => {
           {/* ── VERIFY CODE ── */}
           {step === "verify" && (
             <form key="verify" className="fp-form-in" onSubmit={handleVerify}>
-              <h2 style={S.heading}>Verify Your Email</h2>
+              <h2 className="sigla-form-heading" style={S.heading}>
+                {STEP_HEADINGS.verify}
+              </h2>
               <p style={S.subtitle}>
                 A 6-digit code was sent to{" "}
                 <strong style={{ color: C.primary }}>{email}</strong>.
@@ -308,7 +321,9 @@ const ForgotPassword = () => {
           {/* ── RESET PASSWORD ── */}
           {step === "reset" && (
             <form key="reset" className="fp-form-in" onSubmit={handleReset}>
-              <h2 style={S.heading}>Set New Password</h2>
+              <h2 className="sigla-form-heading" style={S.heading}>
+                {STEP_HEADINGS.reset}
+              </h2>
               <p style={S.subtitle}>Choose a strong password for your account.</p>
               <div style={S.fields}>
                 <FloatingInput
@@ -366,6 +381,12 @@ const ForgotPassword = () => {
           {/* Sized in index.css: bleeds past the panel on desktop, fits whole
               inside a compact band once the panels stack. */}
           <img src="/logo.png" alt="SIGLA Logo" />
+          {/* Mobile-only band heading, mirroring Login's. Shows the current
+              step's heading; the twin inside each form is hidden ≤640px by
+              index.css so only one is ever visible or announced. The subtitles
+              stay in the form with their fields — the verify one interpolates
+              the email address. */}
+          <h2 className="sigla-band-heading">{STEP_HEADINGS[step]}</h2>
         </div>
       </div>
 
