@@ -237,14 +237,12 @@ const Login = () => {
   );
 };
 
+// Layout — sizing, flex, padding — lives in index.css under `.auth-page-wrapper`,
+// `.sigla-login-container`, `.sigla-left-panel` and `.sigla-right-panel`, because
+// an inline style cannot carry a media query AND beats any stylesheet rule that
+// tries to override it. What stays here is colour and typography only.
 const S = {
-  // Sizing and every breakpoint live in index.css under `.auth-page-wrapper` /
-  // `.sigla-login-container` — an inline style cannot carry a media query.
   pageWrapper: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "20px 0",
     position: "relative",
     backgroundColor: C.background,
   },
@@ -255,35 +253,19 @@ const S = {
     filter: "blur(8px)",
     zIndex: -1,
   },
-  // width / maxWidth / minHeight are in index.css so they can be relaxed per
-  // breakpoint. Keeping them here as inline styles is what forced every
-  // responsive rule to use !important, and the 480px floor still won on phones.
   loginContainer: {
     // Anchors the .auth-deny-overlay child, which positions off this box.
     position: "relative",
-    display: "flex",
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow: "0 6px 25px rgba(0,0,0,0.3)",
   },
   leftPanel: {
     background: C.primary,
-    width: "45%",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "30px",
-    flexShrink: 0,
   },
   rightPanel: {
-    width: "55%",
     background: "#f0f1f9",
-    padding: "42px 45px",
     color: C.text,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    overflowY: "auto",
   },
   heading: {
     fontSize: "1.75rem",

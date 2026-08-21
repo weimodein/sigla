@@ -428,13 +428,10 @@ const ForgotPassword = () => {
 };
 
 const S = {
-  // Sizing and every breakpoint live in index.css under `.auth-page-wrapper` /
-  // `.fp-container` — an inline style cannot carry a media query.
+  // See the note in Login.jsx: layout lives in index.css under
+  // `.auth-page-wrapper`, `.fp-container`, `.fp-left` (form) and `.fp-right`
+  // (logo). Only colour and typography stay inline.
   pageWrapper: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "20px 0",
     position: "relative",
     backgroundColor: C.background,
   },
@@ -445,32 +442,17 @@ const S = {
     filter: "blur(8px)",
     zIndex: -1,
   },
-  // See the note in Login.jsx: width / maxWidth / minHeight are in index.css so
-  // they can be relaxed per breakpoint.
   container: {
-    display: "flex",
     borderRadius: "15px",
     overflow: "hidden",
     boxShadow: "0 6px 25px rgba(0,0,0,0.3)",
   },
   leftPanel: {
-    width: "55%",
     background: "#f0f1f9",
-    padding: "44px 48px",
     color: C.text,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    overflowY: "auto",
   },
   rightPanel: {
     background: C.primary,
-    width: "45%",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "30px",
-    flexShrink: 0,
   },
   heading: {
     fontSize: "1.75rem",
