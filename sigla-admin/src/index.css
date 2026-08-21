@@ -314,23 +314,46 @@
 
 /* ── Auth screen layout (Login + ForgotPassword) ──
    Same reasoning as .app-main above: these values used to live in the pages'
-   inline `S` style objects, which cannot carry a media query. The pages worked
-   around that by injecting a <style> block at runtime whose every rule needed
-   `!important` purely to out-specify those inline styles — and the fixed
-   `min-height: 480px` still won on phones, so the card grew taller than the
-   viewport and, being centred, clipped off both ends.
+   inline `S` style objects, which cannot carry a media query.
 
-   ForgotPassword mirrors Login: its logo is the RIGHT panel and it stacks with
-   `column-reverse`, so the logo still lands on top. The panel rules are
-   therefore paired by role, not by side.
+   The FULL layout lives here, desktop values included — deliberately. A first
+   pass moved only the breakpoints here and left `width: 45%/55%` inline on the
+   panels; inline styles beat any stylesheet rule regardless of specificity, so
+   the mobile `width: 100%` silently lost and the panels stacked while staying
+   45% wide. Splitting layout across both places is what caused that, so the
+   inline objects now keep only colour and typography.
 
-   Set on the container rather than the wrapper so `justify-content: center`
-   still centres horizontally. */
+   ForgotPassword mirrors Login: its logo is the RIGHT panel (.fp-right) and it
+   stacks with `column-reverse`, so the logo still lands on top. Rules below are
+   therefore paired by ROLE — logo panel vs form panel — not by side. */
+.auth-page-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px 0;
+  /* dvh excludes mobile browser chrome (the Messenger in-app browser overlays a
+     header and a bottom bar); the vh line stays first as the fallback. */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .sigla-login-container,
 .fp-container {
+  display: flex;
   width: 700px;
   max-width: 95%;
   min-height: 480px;
+}
+
+/* Logo panel */
+.sigla-left-panel,
+.fp-right {
+  width: 45%;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
 }
 
 /* The logo deliberately overflows its panel and is clipped by the container's
@@ -343,11 +366,21 @@
   height: auto;
 }
 
-/* dvh excludes mobile browser chrome (the Messenger in-app browser overlays a
-   header and a bottom bar); the vh line stays first as the fallback. */
-.auth-page-wrapper {
-  min-height: 100vh;
-  min-height: 100dvh;
+/* Form panel. Padding differs slightly between the two pages, so it is set
+   per-page below rather than shared here. */
+.sigla-right-panel,
+.fp-left {
+  width: 55%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow-y: auto;
+}
+.sigla-right-panel {
+  padding: 42px 45px;
+}
+.fp-left {
+  padding: 44px 48px;
 }
 
 /* Tablet / small laptop. Previously uncovered — the old breakpoints were
@@ -370,17 +403,30 @@
   .fp-container {
     flex-direction: column-reverse;
   }
+
+  /* Near full-width: the form needs every pixel. A 420px cap here left a dead
+     grey band beside the card and squeezed "Login Portal" onto two lines. The
+     wrapper's 12px padding is the only gutter. */
   .sigla-login-container,
   .fp-container {
     width: 100%;
-    max-width: 420px;
+    max-width: none;
     min-height: 0;
+    /* Hug the content. Without this the card takes the flex line's height and
+       its white background runs on well below the last row. */
+    height: auto;
+    flex: 0 0 auto;
   }
 
-  /* An over-tall card must scroll from the top. Centring clips it symmetrically,
-     which is what hid the Login button below the fold. */
+  /* Centred, but safely. A column direction puts the vertical axis under
+     `justify-content`, which still lets an over-tall card overflow in BOTH
+     directions while the page scrolls and both ends stay reachable. The row +
+     `align-items: center` variant is the one that clips a too-tall card
+     unreachably — the bug this rule used to work around with flex-start. */
   .auth-page-wrapper {
-    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     padding: 16px 12px;
   }
 
@@ -391,27 +437,32 @@
     width: 100%;
   }
 
-  /* A compact band, and the logo now fits whole inside it. At full width the
-     120% bleed becomes 120% of the *viewport* — heavily cropped and tall
-     enough to push the form off-screen. */
+  /* A band across the full card width, with the logo fitted whole inside it.
+     The desktop 120% bleed would be 120% of the *viewport* here — cropped and
+     tall enough to push the form off-screen. */
   .sigla-left-panel,
   .fp-right {
     min-height: 0;
-    height: 132px;
-    padding: 16px 20px;
-    flex-shrink: 0;
+    height: 150px;
+    padding: 20px;
   }
   .sigla-left-panel > img,
   .fp-right > img {
     width: auto;
-    max-width: 200px;
+    max-width: 260px;
     max-height: 100%;
     object-fit: contain;
   }
 
+  /* `overflow-y: auto` earns its place on desktop, where this panel is a
+     fixed-height column beside the logo. Stacked there is no fixed height to
+     scroll within, so it only lets the panel absorb slack — which is what
+     stretched the card past its content. */
   .sigla-right-panel,
   .fp-left {
     padding: 28px 22px;
+    overflow-y: visible;
+    flex: 0 0 auto;
   }
 }
 
@@ -422,7 +473,11 @@
   }
   .sigla-left-panel,
   .fp-right {
-    height: 112px;
+    height: 124px;
+  }
+  .sigla-left-panel > img,
+  .fp-right > img {
+    max-width: 210px;
   }
 }
 
@@ -430,12 +485,24 @@
    The card must be allowed to exceed the viewport and let the PAGE scroll —
    otherwise the form panel's own overflow-y traps it in an inner scrollbar. */
 @media (max-height: 500px) and (orientation: landscape) {
+  /* flex-shrink: 0 so the column wrapper below cannot squeeze the card; the
+     width set by the width-based queries still applies. */
   .sigla-login-container,
   .fp-container {
     min-height: 0;
+    flex-shrink: 0;
   }
+  /* Start at the top rather than centre — a card taller than a 500px viewport
+     has nothing to gain from centring.
+
+     This query has no width bound, so it also catches short WIDE windows where
+     the wrapper is otherwise a row. Restating the column direction here keeps
+     the axes meaning the same thing in both cases: without it, `justify-content`
+     would be the horizontal axis on desktop and shove the card to the left. */
   .auth-page-wrapper {
-    align-items: flex-start;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
     padding: 16px 0;
   }
   .sigla-right-panel,
