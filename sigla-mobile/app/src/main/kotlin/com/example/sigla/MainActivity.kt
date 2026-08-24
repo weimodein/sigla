@@ -36,6 +36,10 @@ import kotlinx.coroutines.delay
 private const val TAG               = "MainActivity"
 private const val CAMERA_PERMISSION = 100
 
+// Steady-state text for the gesture indicator. CollectingState.isMotion was always
+// true, so the "○ static" branch it used to select between was unreachable.
+private const val MOTION_INDICATOR_TEXT = "● MOTION"
+
 // ── Left-handed support (inference-time handedness canonicalization) ──────────
 // When enabled, a hand MediaPipe reports as "Left" is mirrored (x → -x on the
 // normalized, wrist-relative coords) so the model always sees a right-handed sign.
@@ -105,6 +109,27 @@ class MainActivity : AppCompatActivity() {
 
     // Add this variable at the top of MainActivity
     private var frameCounter = 0
+
+    // ── Per-frame UI coalescing ───────────────────────────────────────────────
+    // The landmarker callback used to post TWO separate runOnUiThread messages per
+    // processed frame — one for the overlay, one from onCollecting — each costing a
+    // Handler.post plus a Choreographer wake at ~15 Hz. onCollecting now only stores
+    // its numbers here; the overlay post (the one that must stay near frame rate)
+    // reads them and applies both updates in a single pass.
+    @Volatile private var pendingCollectPct    = -1
+    @Volatile private var pendingCollectFrames = -1
+
+    // Last values actually written to the status views. progress is frames/30 capped,
+    // so it repeats constantly — and every redundant setText costs a measure/layout
+    // pass on the card. -1 forces the first write through.
+    private var lastShownPct    = -1
+    private var lastShownFrames = -1
+
+    // Resolved once. ContextCompat.getColor is a full Resources lookup, and this
+    // used to run on every collecting frame.
+    private val motionIndicatorColor: Int by lazy {
+        ContextCompat.getColor(this, android.R.color.holo_orange_light)
+    }
 
     // ── Handedness latch (stabilizes left-handed mirroring across a gesture) ────
     // MediaPipe's Left/Right label flickers mid-gesture; we vote over the first few
@@ -233,6 +258,10 @@ class MainActivity : AppCompatActivity() {
                     )
                     predictor?.processFrame(features, result.handsDetected)
 
+                    // Single main-thread post per frame. processFrame above runs
+                    // synchronously on this same callback thread, so anything it
+                    // handed to onCollecting is already staged in the pending*
+                    // fields by the time this block runs.
                     runOnUiThread {
                         val width = binding.cameraPreview.width.toFloat()
                         val height = binding.cameraPreview.height.toFloat()
@@ -244,6 +273,8 @@ class MainActivity : AppCompatActivity() {
                             height,
                             isFrontCamera  // ← Just pass the mirror flag
                         )
+
+                        flushCollectingState()
                     }
                 }
 
@@ -502,35 +533,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Stage only — no runOnUiThread here. This fires on MediaPipe's callback
+        // thread once per buffered frame, and the landmarker callback that invoked
+        // it posts to the UI thread immediately afterwards; flushCollectingState()
+        // applies these values there. See the pending* fields.
         predictor.onCollecting = { state ->
-            runOnUiThread {
-                val pct = (state.progress * 100).toInt()
-                binding.progressBuffer.progress = pct
-                binding.tvBufferPercent.text    = "$pct%"
-
-                // 👐 Hands card
-                binding.tvFrames.text = "${state.frames}"
-
-                // 🎯 Gesture card — tvVelocity shows motion/static indicator
-                binding.tvVelocity.text = if (state.isMotion) "● MOTION" else "○ static"
-                binding.tvVelocity.setTextColor(
-                    ContextCompat.getColor(this,
-                        if (state.isMotion) android.R.color.holo_orange_light
-                        else android.R.color.darker_gray)
-                )
-
-                // 📊 Status card — tvStreak shows early-exit streak
-                if (state.streak > 0) {
-                    binding.tvStreak.text       = "×${state.streak}"
-                    binding.tvStreak.visibility = View.VISIBLE
-                } else {
-                    binding.tvStreak.visibility = View.GONE
-                }
-            }
+            pendingCollectPct    = (state.progress * 100).toInt()
+            pendingCollectFrames = state.frames
         }
 
         predictor.onNoHands = {
             runOnUiThread {
+                // Drop any staged collecting update: the gesture is over, so applying
+                // it after this reset would put a stale frame count back on screen.
+                pendingCollectPct    = -1
+                pendingCollectFrames = -1
+                lastShownPct         = -1
+                lastShownFrames      = -1
+
                 binding.tvFrames.text             = "No hands"
                 binding.tvVelocity.text           = "—"
                 binding.tvStreak.visibility       = View.GONE
@@ -539,6 +559,38 @@ class MainActivity : AppCompatActivity() {
                 binding.overlayView.clear()
                 binding.tvHandsWarning.visibility = View.GONE
             }
+        }
+    }
+
+    /**
+     * Applies the collecting-progress values staged by [PredictionService.onCollecting],
+     * from the single per-frame UI post in the landmarker callback.
+     *
+     * Each update is guarded against the previous one. `progress` is frames/30 capped,
+     * so consecutive frames very often produce an identical percentage, and a redundant
+     * setText still costs a full measure/layout pass on the status card.
+     */
+    private fun flushCollectingState() {
+        val pct = pendingCollectPct
+        if (pct >= 0 && pct != lastShownPct) {
+            lastShownPct = pct
+            binding.progressBuffer.progress = pct
+            binding.tvBufferPercent.text    = "$pct%"
+        }
+
+        val frames = pendingCollectFrames
+        if (frames >= 0 && frames != lastShownFrames) {
+            lastShownFrames = frames
+            binding.tvFrames.text = "$frames"
+
+            // tvVelocity/tvStreak are NOT updated per frame any more. CollectingState's
+            // isMotion and streak were always true/0 (the producer never overrode their
+            // defaults), so this re-rendered a constant label — and resolved a colour
+            // through Resources — on every frame. The steady-state values are set here,
+            // only when a gesture actually starts, and reset by onNoHands.
+            if (binding.tvStreak.visibility != View.GONE) binding.tvStreak.visibility = View.GONE
+            binding.tvVelocity.text = MOTION_INDICATOR_TEXT
+            binding.tvVelocity.setTextColor(motionIndicatorColor)
         }
     }
 

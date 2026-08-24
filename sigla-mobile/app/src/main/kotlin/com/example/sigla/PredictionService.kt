@@ -52,7 +52,6 @@ private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence fires 
 // its own merit — only via `force`. 4 keeps a real consistency requirement (4 agreeing
 // inferences at >=0.95) while actually arriving sooner than the normal path.
 private const val EARLY_EXIT_STREAK      = 4
-private const val VELOCITY_WINDOW        = 8
 private const val BUFFER_CAPACITY        = 90     // rolling frame buffer size
 private const val NO_HAND_TIMEOUT        = 6      // frames with no hands before firing onNoHands
 private const val BUFFER_FILL_MS         = 1500L  // run inference on the full window after this long
@@ -194,12 +193,6 @@ internal fun peakVelocityIndex(frames: List<FloatArray>): Int {
     return best + 1
 }
 
-// Key landmark indices for the COLLECTING PROGRESS UI only — deliberately kept
-// separate from the model's window-selection signal above so a change to one
-// cannot silently alter the other.
-private val UI_KEY_LANDMARKS = listOf(0, 4, 8, 12, 16, 20)
-private val UI_KEY_XY: List<Int> = UI_KEY_LANDMARKS.flatMap { i -> listOf(i * 3, i * 3 + 1) }
-
 // ── Data classes ──────────────────────────────────────────────────────────────
 // isMotion is retained (always true) so existing callers compile unchanged.
 
@@ -231,12 +224,19 @@ private data class PendingFire(val result: PredictionResult)
  */
 private enum class ForceReason { NONE, TIMER, END_OF_GESTURE }
 
+/**
+ * Progress of the in-flight gesture, delivered to the UI once per buffered frame.
+ *
+ * Previously also carried `velocity`, `isMotion` and `streak`. None had a reader:
+ * `velocity` was never consulted, and `isMotion`/`streak` were declared with
+ * defaults that the sole construction site never overrode — so the UI re-rendered
+ * a constant "● MOTION" label (resolving a colour through Resources each time) and
+ * re-took the same `streak == 0` branch on every frame at ~15 Hz. Computing
+ * `velocity` also boxed 12 floats per frame through a List<Float>.
+ */
 data class CollectingState(
     val progress: Float,
-    val frames: Int,
-    val velocity: Float,
-    val isMotion: Boolean = true,
-    val streak: Int = 0
+    val frames: Int
 )
 
 // ── PredictionService ─────────────────────────────────────────────────────────
@@ -273,10 +273,6 @@ class PredictionService(private val context: Context) {
     private var collecting   = false
     private var bufStartTime = 0L
     private var framesSinceMotionRun = 0
-
-    // Velocity tracking (for the collecting UI)
-    private val velocityHistory = ArrayDeque<Float>()
-    private var lastKeyXY: FloatArray? = null
 
     // Early-exit tracking
     private var motionEarlyStreak = 0
@@ -492,11 +488,8 @@ class PredictionService(private val context: Context) {
             frameBuffer.addLast(features)
             while (frameBuffer.size > BUFFER_CAPACITY) frameBuffer.removeFirst()
 
-            val meanVel  = computeVelocity(features)
             val progress = (frameBuffer.size.toFloat() / SEQUENCE_LENGTH).coerceAtMost(1f)
-            collectingState = CollectingState(
-                progress = progress, frames = frameBuffer.size, velocity = meanVel
-            )
+            collectingState = CollectingState(progress = progress, frames = frameBuffer.size)
 
             // Run inference at most ONCE per frame. The time-based fallback takes priority:
             // once the window has been filling for a while it forces a run, otherwise the
@@ -675,30 +668,10 @@ class PredictionService(private val context: Context) {
         return window.take(SEQUENCE_LENGTH)
     }
 
-    // ── Velocity (for the collecting UI) ──────────────────────────────────────
-
-    private fun computeVelocity(features: FloatArray): Float {
-        val keyXY    = UI_KEY_XY.map { features[it] }.toFloatArray()
-        val prev     = lastKeyXY
-        lastKeyXY    = keyXY
-        val instantV = if (prev != null) euclideanDist(keyXY, prev) else 0f
-        velocityHistory.addLast(instantV)
-        if (velocityHistory.size > VELOCITY_WINDOW) velocityHistory.removeFirst()
-        return velocityHistory.average().toFloat()
-    }
-
-    private fun euclideanDist(a: FloatArray, b: FloatArray): Float {
-        var sum = 0f
-        for (i in a.indices) { val d = a[i] - b[i]; sum += d * d }
-        return sqrt(sum)
-    }
-
     // ── Reset / cleanup ───────────────────────────────────────────────────────
 
     private fun resetBuffers() {
         frameBuffer.clear()
-        velocityHistory.clear()
-        lastKeyXY            = null
         collecting           = false
         bufStartTime         = 0L
         framesSinceMotionRun = 0
