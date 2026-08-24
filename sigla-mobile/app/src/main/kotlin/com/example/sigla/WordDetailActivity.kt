@@ -10,6 +10,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
@@ -179,9 +180,9 @@ class WordDetailActivity : AppCompatActivity() {
     }
 
     // ── Tap-to-download demo video ───────────────────────────────
-    // The video is never streamed automatically. We show a placeholder;
-    // the first tap downloads it once (cached for offline use), later
-    // taps play the cached local file with no network access.
+    // First tap shows a placeholder and asks whether to download; declining
+    // still plays the video (streamed, not cached). Once a copy is cached,
+    // later taps play the local file directly with no network access or prompt.
 
     private fun setupVideoPlaceholder(w: WordBankWord, resolvedVideo: String) {
         ivThumbnail.visibility        = View.GONE
@@ -198,10 +199,36 @@ class WordDetailActivity : AppCompatActivity() {
             noMediaPlaceholder.setOnClickListener(start)
         } else {
             tvMediaCaption.text = "Tap to download demo video"
-            val download = View.OnClickListener { downloadThenPlay(w, resolvedVideo) }
-            playOverlay.setOnClickListener(download)
-            noMediaPlaceholder.setOnClickListener(download)
+            val prompt = View.OnClickListener { showDownloadConfirmDialog(w, resolvedVideo) }
+            playOverlay.setOnClickListener(prompt)
+            noMediaPlaceholder.setOnClickListener(prompt)
         }
+    }
+
+    // Asks whether to save the video for offline use before playing it. Either
+    // choice plays the video right away — declining download just skips the
+    // local cache and streams it once instead.
+    private fun showDownloadConfirmDialog(w: WordBankWord, resolvedVideo: String) {
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Download demo video?"
+        view.findViewById<TextView>(R.id.tvConfirmMessage).text =
+            "Save this demo video for offline use? It will play either way."
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).text = "NO"
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "YES"
+
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener {
+            dialog.dismiss()
+            playVideo(resolvedVideo)
+        }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            dialog.dismiss()
+            downloadThenPlay(w, resolvedVideo)
+        }
+
+        dialog.show()
     }
 
     private fun downloadThenPlay(w: WordBankWord, resolvedVideo: String) {
@@ -225,7 +252,9 @@ class WordDetailActivity : AppCompatActivity() {
         }
     }
 
-    private fun playLocalVideo(file: java.io.File) {
+    private fun playLocalVideo(file: java.io.File) = playVideo(file.absolutePath)
+
+    private fun playVideo(path: String) {
         noMediaPlaceholder.visibility = View.GONE
         ivThumbnail.visibility        = View.GONE
         videoDemo.visibility          = View.VISIBLE
@@ -233,7 +262,7 @@ class WordDetailActivity : AppCompatActivity() {
         progressVideo.visibility      = View.VISIBLE
         tvMediaCaption.text = "Demo Video"
 
-        videoDemo.setVideoPath(file.absolutePath)
+        videoDemo.setVideoPath(path)
         videoDemo.setOnPreparedListener { mp ->
             progressVideo.visibility = View.GONE
             mp.isLooping = true

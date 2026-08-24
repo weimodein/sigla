@@ -11,7 +11,7 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#08162a">
+        android:background="@color/sig_page_bg">
 
         <!-- Camera preview card occupying the main screen area -->
         <com.google.android.material.card.MaterialCardView
@@ -24,8 +24,8 @@
             android:layout_marginBottom="0dp"
             app:cardCornerRadius="0dp"
             app:cardElevation="10dp"
-            app:cardBackgroundColor="#121f31"
-            app:strokeColor="#335AC7FF"
+            app:cardBackgroundColor="@color/sig_surface_card"
+            app:strokeColor="@color/sig_border_card"
             app:strokeWidth="1dp"
             app:layout_constraintTop_toBottomOf="@id/topBarCard"
             app:layout_constraintBottom_toTopOf="@id/bottomPanelCard"
@@ -51,9 +51,10 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Ready"
-                    android:textColor="#4CAF50"
+                    android:textColor="@color/colorSuccess"
                     android:textSize="14sp"
                     android:textStyle="bold"
+                    android:fontFamily="@font/poppins_medium"
                     android:background="#CC000000"
                     android:padding="4dp"
                     android:paddingStart="8dp"
@@ -91,12 +92,15 @@
                             android:id="@+id/tvResult"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_gravity="center_horizontal"
+                            android:gravity="center"
+                            android:maxWidth="220dp"
                             android:text="HELLO"
                             android:textColor="#FFFFFF"
-                            android:textSize="52sp"
+                            android:textSize="36sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.05"
-                            android:fontFamily="sans-serif-black"
+                            android:fontFamily="@font/poppins_bold"
                             android:includeFontPadding="false" />
 
                         <!-- Filipino translation -->
@@ -104,13 +108,16 @@
                             android:id="@+id/tvFilipinoResult"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_gravity="center_horizontal"
+                            android:gravity="center"
+                            android:maxWidth="220dp"
                             android:text=""
-                            android:textColor="#6AB0FF"
-                            android:textSize="22sp"
+                            android:textColor="@color/sig_accent"
+                            android:textSize="14sp"
                             android:textStyle="italic"
                             android:layout_marginTop="4dp"
                             android:visibility="gone"
-                            android:fontFamily="sans-serif" />
+                            android:fontFamily="@font/poppins_medium" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -120,7 +127,6 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- ── TOP BAR (full width, no rounding) ── -->
-        <!-- Updated color: #1E3B8A -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/topBarCard"
             android:layout_width="0dp"
@@ -130,7 +136,7 @@
             android:layout_marginTop="0dp"
             app:cardCornerRadius="0dp"
             app:cardElevation="8dp"
-            app:cardBackgroundColor="#1E3B8A"
+            app:cardBackgroundColor="@color/sig_chrome_navy"
             app:strokeWidth="0dp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -157,10 +163,8 @@
                     app:iconGravity="textStart"
                     app:iconPadding="0dp"
                     app:iconSize="20dp"
-                    app:iconTint="#FFFFFF"
-                    app:backgroundTint="#14FFFFFF"
-                    app:strokeColor="#33FFFFFF"
-                    app:strokeWidth="1dp"
+                    app:iconTint="@color/sig_icon_accent"
+                    app:backgroundTint="@color/sig_header_button_bg"
                     app:cornerRadius="10dp" />
 
                 <!-- App name + subtitle -->
@@ -174,12 +178,11 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="SIGLA"
+                        android:text="SigLa"
                         android:textColor="#FFFFFF"
                         android:textSize="18sp"
-                        android:textStyle="bold"
                         android:letterSpacing="0.1"
-                        android:fontFamily="sans-serif-medium" />
+                        android:fontFamily="@font/poppins_bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -188,7 +191,7 @@
                         android:textColor="#80B0D4FF"
                         android:textSize="10sp"
                         android:letterSpacing="0.03"
-                        android:fontFamily="sans-serif" />
+                        android:fontFamily="@font/poppins_regular" />
 
                 </LinearLayout>
 
@@ -206,10 +209,8 @@
                     app:iconGravity="textStart"
                     app:iconPadding="0dp"
                     app:iconSize="22dp"
-                    app:iconTint="#FFFFFF"
-                    app:backgroundTint="#14FFFFFF"
-                    app:strokeColor="#33FFFFFF"
-                    app:strokeWidth="1dp"
+                    app:iconTint="@color/sig_icon_accent"
+                    app:backgroundTint="@color/sig_header_button_bg"
                     app:cornerRadius="12dp" />
 
             </LinearLayout>
@@ -224,6 +225,7 @@
             android:text="More than 2 hands detected"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
+            android:fontFamily="@font/poppins_medium"
             android:background="#CC000000"
             android:padding="8dp"
             android:paddingStart="16dp"
@@ -243,6 +245,7 @@
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
+            android:fontFamily="@font/poppins_bold"
             android:background="#CCD32F2F"
             android:padding="8dp"
             android:paddingStart="16dp"
@@ -256,7 +259,6 @@
 
 
         <!-- ── BOTTOM PANEL ── -->
-        <!-- Updated color: #1E3B8A -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/bottomPanelCard"
             android:layout_width="0dp"
@@ -266,7 +268,7 @@
             android:layout_marginBottom="0dp"
             app:cardCornerRadius="0dp"
             app:cardElevation="8dp"
-            app:cardBackgroundColor="#1E3B8A"
+            app:cardBackgroundColor="@color/sig_chrome_navy"
             app:strokeWidth="0dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -320,7 +322,8 @@
                                     android:text="Detecting…"
                                     android:textColor="#B0D4FF"
                                     android:textSize="14sp"
-                                    android:textStyle="bold" />
+                                    android:textStyle="bold"
+                                    android:fontFamily="@font/poppins_bold" />
 
                             </LinearLayout>
 
@@ -343,7 +346,8 @@
                                     android:layout_height="wrap_content"
                                     android:text="Hand tracking is active"
                                     android:textColor="#B0D4FF"
-                                    android:textSize="11sp" />
+                                    android:textSize="11sp"
+                                    android:fontFamily="@font/poppins_regular" />
 
                             </LinearLayout>
 
@@ -360,7 +364,8 @@
                             android:text="Ready"
                             android:textColor="#4CAF50"
                             android:textSize="12sp"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            android:fontFamily="@font/poppins_bold" />
 
                     </LinearLayout>
 
@@ -380,9 +385,10 @@
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:text="Show Filipino"
-                    android:textColor="#6AB0FF"
+                    android:textColor="@color/sig_accent"
                     android:textSize="11sp"
-                    app:strokeColor="#6AB0FF"
+                    android:fontFamily="@font/poppins_medium"
+                    app:strokeColor="@color/sig_accent"
                     app:cornerRadius="16dp" />
 
                 <!-- Green detection loader -->
@@ -393,7 +399,8 @@
                     android:layout_marginBottom="6dp"
                     android:text="Detection loading"
                     android:textColor="#B0D4FF"
-                    android:textSize="11sp" />
+                    android:textSize="11sp"
+                    android:fontFamily="@font/poppins_regular" />
 
                 <ProgressBar
                     android:id="@+id/progressBuffer"
@@ -421,7 +428,8 @@
                         android:layout_weight="1"
                         android:text="FPS: 0"
                         android:textColor="#B0D4FF"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:fontFamily="@font/poppins_regular" />
 
                     <TextView
                         android:id="@+id/tvBufferPercent"
@@ -431,7 +439,8 @@
                         android:gravity="center"
                         android:text="0%"
                         android:textColor="#B0D4FF"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:fontFamily="@font/poppins_regular" />
 
                     <TextView
                         android:id="@+id/tvVelocity"
@@ -441,7 +450,8 @@
                         android:gravity="center"
                         android:text="motion"
                         android:textColor="#B0D4FF"
-                        android:textSize="12sp" />
+                        android:textSize="12sp"
+                        android:fontFamily="@font/poppins_regular" />
 
                     <TextView
                         android:id="@+id/tvStreak"
@@ -452,6 +462,7 @@
                         android:text=""
                         android:textColor="#FFB74D"
                         android:textSize="12sp"
+                        android:fontFamily="@font/poppins_medium"
                         android:visibility="gone" />
 
                 </LinearLayout>
@@ -489,6 +500,7 @@
                     android:textColor="#FFFFFF"
                     android:textSize="14sp"
                     android:textStyle="bold"
+                    android:fontFamily="@font/poppins_bold"
                     android:includeFontPadding="false"
                     app:backgroundTint="#D32F2F"
                     app:cornerRadius="32dp"
@@ -508,6 +520,7 @@
                     android:text="Hold 2 seconds\nfor emergency"
                     android:textColor="#FFFFFF"
                     android:textSize="10sp"
+                    android:fontFamily="@font/poppins_regular"
                     android:gravity="center"
                     android:layout_marginTop="2dp"
                     android:background="#66000000"
