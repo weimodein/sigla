@@ -40,6 +40,9 @@ private const val CAMERA_PERMISSION = 100
 // true, so the "○ static" branch it used to select between was unreachable.
 private const val MOTION_INDICATOR_TEXT = "● MOTION"
 
+// Minimum gap between onResume-triggered word-bank refreshes.
+private const val WORD_BANK_REFRESH_INTERVAL_MS = 5 * 60 * 1000L
+
 /**
  * Runs the blocking close() calls in stopVision() off the main thread.
  *
@@ -167,6 +170,9 @@ class MainActivity : AppCompatActivity() {
 
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
+
+    // elapsedRealtime of the last word-bank refresh, throttling onResume. 0 = never.
+    private var lastWordBankRefresh = 0L
 
     // Last recognized label, so the Filipino toggle can re-show its translation
     // immediately instead of waiting for the next recognition.
@@ -433,7 +439,24 @@ class MainActivity : AppCompatActivity() {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, null)
     }
 
+    /**
+     * Refreshes translations in the background, at most once per
+     * [WORD_BANK_REFRESH_INTERVAL_MS].
+     *
+     * Called from onResume, which fires on every return to this screen — including
+     * a quick trip to the sidebar and back. Unthrottled that meant a full word-bank
+     * fetch plus a disk cache write each time. The interval still picks up admin
+     * edits without a restart, which is why the refresh exists.
+     *
+     * Startup does NOT come through here: it awaits refreshWordBank() directly,
+     * because after a model-version change the word list has to land before
+     * recognition starts.
+     */
     private fun loadFilipinoTranslations() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastWordBankRefresh != 0L && now - lastWordBankRefresh < WORD_BANK_REFRESH_INTERVAL_MS) return
+        lastWordBankRefresh = now
+
         lifecycleScope.launch(Dispatchers.IO) {
             refreshWordBank()
         }
@@ -480,15 +503,18 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // Persisted here, still on the IO dispatcher. This loop used to sit inside the
+        // withContext(Main) block below, so it ran one SharedPreferences write per word
+        // on the UI thread — on every resume.
+        words.forEach { word ->
+            if (!word.filipino_translation.isNullOrBlank()) {
+                historyManager.setTranslation(word.label.lowercase(), word.filipino_translation)
+            }
+        }
+
         withContext(Dispatchers.Main) {
             filipinoMap = map
             Log.i(TAG, "Loaded ${map.size} Filipino translation(s)")
-            // Also save to history manager if needed
-            words.forEach { word ->
-                if (!word.filipino_translation.isNullOrBlank()) {
-                    historyManager.setTranslation(word.label.lowercase(), word.filipino_translation)
-                }
-            }
         }
     }
 
@@ -497,6 +523,11 @@ class MainActivity : AppCompatActivity() {
         // EncryptedSharedPreferences), so it happens inside the coroutine
         // rather than on the main thread during onCreate.
         lifecycleScope.launch(Dispatchers.IO) {
+            // First touch of the encrypted store, and so where Keystore init lands.
+            // Carries the onboarding flags over for users upgrading from a build that
+            // kept them there.
+            session.migrateOnboardingFlags()
+
             val token = session.token
             if (token.isNullOrEmpty()) return@launch
             try {
@@ -538,8 +569,14 @@ class MainActivity : AppCompatActivity() {
                 // Text-to-speech
                 speak(result.label)
 
-                // Save to history
-                historyManager.add(result.label, pct, if (result.isMotion) "motion" else "static")
+                // Save to history off the main thread: add() serializes the whole
+                // list and writes prefs, and this fires at the exact moment the
+                // result card animates in.
+                val gestureType = if (result.isMotion) "motion" else "static"
+                val label = result.label
+                lifecycleScope.launch(Dispatchers.IO) {
+                    historyManager.add(label, pct, gestureType)
+                }
 
                 // Filipino translation
                 val filipino = getFilipinoTranslation(result.label)
