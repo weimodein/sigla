@@ -40,6 +40,19 @@ private const val CAMERA_PERMISSION = 100
 // true, so the "○ static" branch it used to select between was unreachable.
 private const val MOTION_INDICATOR_TEXT = "● MOTION"
 
+/**
+ * Runs the blocking close() calls in stopVision() off the main thread.
+ *
+ * Process-scoped on purpose. The per-Activity camera executor is shut down at the
+ * top of onDestroy(), before stopVision() runs, so a teardown handed to it there
+ * would be silently discarded and the interpreter and GPU context would leak.
+ * Single-threaded, so a predictor and landmarker released together are closed in
+ * order, and a later screen's teardown cannot overlap an earlier one.
+ */
+private val teardownExecutor = Executors.newSingleThreadExecutor { r ->
+    Thread(r, "sigla-teardown").apply { isDaemon = true }
+}
+
 // ── Left-handed support (inference-time handedness canonicalization) ──────────
 // When enabled, a hand MediaPipe reports as "Left" is mirrored (x → -x on the
 // normalized, wrist-relative coords) so the model always sees a right-handed sign.
@@ -369,10 +382,25 @@ class MainActivity : AppCompatActivity() {
         modelInitJob = null
         cameraProvider?.unbindAll()
         cameraProvider = null
-        predictor?.close()
-        predictor = null
-        landmarker?.close()
+
+        // Both close() calls block: PredictionService.close() waits on the lock an
+        // in-flight LSTM pass holds, and HandLandmarkHelper.close() tears down a GPU
+        // context. Running them on the main thread janked every exit from this screen.
+        //
+        // The fields are nulled FIRST, and unbindAll() above has already stopped new
+        // frames, so nothing can reach either object once it is handed to the executor.
+        // Both close() implementations are idempotent and hold applicationContext, so a
+        // late-finishing close cannot retain this Activity.
+        val doomedPredictor  = predictor
+        val doomedLandmarker = landmarker
+        predictor  = null
         landmarker = null
+        if (doomedPredictor != null || doomedLandmarker != null) {
+            teardownExecutor.execute {
+                doomedPredictor?.close()
+                doomedLandmarker?.close()
+            }
+        }
     }
 
     // ── Backend Initialization ────────────────────────────────────────────────

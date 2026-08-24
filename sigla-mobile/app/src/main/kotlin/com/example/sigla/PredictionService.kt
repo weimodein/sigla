@@ -274,6 +274,10 @@ class PredictionService(private val context: Context) {
     private var bufStartTime = 0L
     private var framesSinceMotionRun = 0
 
+    // Set by reset() from the UI thread without taking the lock; consumed at the top
+    // of the next processFrame on MediaPipe's thread. See reset().
+    @Volatile private var resetRequested = false
+
     // Early-exit tracking
     private var motionEarlyStreak = 0
     private var motionEarlyLabel  = -1
@@ -452,6 +456,15 @@ class PredictionService(private val context: Context) {
         var pending: PendingFire? = null
 
         synchronized(lock) {
+            // Honour a reset requested from the UI thread since the last frame.
+            // Cleared before the buffers are touched so a request arriving during
+            // this block is not swallowed — it will be seen on the next frame.
+            if (resetRequested) {
+                resetRequested = false
+                resetBuffers()
+                noHandFrames = 0
+            }
+
             // No hands — count towards a timeout, then notify + reset.
             if (handsDetected == 0) {
                 noHandFrames++
@@ -679,9 +692,21 @@ class PredictionService(private val context: Context) {
         motionEarlyLabel     = -1
     }
 
-    fun reset() = synchronized(lock) {
-        resetBuffers()
-        noHandFrames = 0
+    /**
+     * Requests that the frame buffer and streak state be cleared.
+     *
+     * Deliberately does NOT take [lock]. This is called from the UI thread (the
+     * camera-flip button), and an LSTM pass runs on MediaPipe's callback thread
+     * while holding that lock — so acquiring it here blocked the tap for the
+     * duration of a full inference.
+     *
+     * Instead the request is flagged and honoured at the top of the next
+     * [processFrame]. The reset therefore lands up to one frame later, which is
+     * immaterial: the flip already rebinds the camera, and resetHandednessLatch()
+     * introduces a multi-frame gap of its own.
+     */
+    fun reset() {
+        resetRequested = true
     }
 
     /**
