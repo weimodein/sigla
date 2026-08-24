@@ -298,6 +298,29 @@ class PredictionService(private val context: Context) {
     // 1-element placeholder visible to an in-flight frame and overflow on interp.run().
     private var motionOutputArr: Array<FloatArray> = arrayOf(FloatArray(1))
 
+    /**
+     * Reused input tensor, shape [1, SEQUENCE_LENGTH, FEATURE_SIZE].
+     *
+     * The inner FloatArrays are references INTO the frame buffer, not copies —
+     * exactly as when this was allocated per call. Filled and consumed entirely
+     * within a single runMotionInference under [lock], so no in-flight run can
+     * observe a half-written tensor.
+     *
+     * Allocated at declaration rather than in init(), so it is safe to publish
+     * before isReady like motionOutputArr above; its shape depends only on
+     * compile-time constants, which init() has already validated against the
+     * model's input tensor.
+     */
+    private val motionInputArr: Array<Array<FloatArray>> =
+        arrayOf(Array(SEQUENCE_LENGTH) { FloatArray(0) })
+
+    /**
+     * Scratch list for the window passed to extractMotionWindow — replaces a
+     * frameBuffer.toList() that copied up to BUFFER_CAPACITY references per
+     * inference. Only ever touched under [lock].
+     */
+    private val frameSnapshot = ArrayList<FloatArray>(BUFFER_CAPACITY)
+
     // ── Init ──────────────────────────────────────────────────────────────────
     fun getLabelCount(): Int = motionLabels.size
 
@@ -538,8 +561,14 @@ class PredictionService(private val context: Context) {
      * invokes onResult outside the lock — see processFrame.
      */
     private fun runAndMaybeFire(now: Long, force: ForceReason = ForceReason.NONE): PendingFire? {
-        val result = runMotionInference(frameBuffer.toList()) ?: return null
-        val (idx, conf) = result
+        // Reused snapshot instead of frameBuffer.toList(). Same contents and order;
+        // extractMotionWindow only reads it (indexed access and subList).
+        frameSnapshot.clear()
+        frameSnapshot.addAll(frameBuffer)
+
+        val idx = runMotionInference(frameSnapshot)
+        if (idx < 0) return null
+        val conf  = motionOutputArr[0][idx]
         val label = motionLabels.getOrNull(idx) ?: return null
 
         // Count the streak EXACTLY ONCE per inference. The two confidence tiers below
@@ -601,24 +630,45 @@ class PredictionService(private val context: Context) {
 
     // ── Motion inference ──────────────────────────────────────────────────────
 
-    private fun runMotionInference(frames: List<FloatArray>): Pair<Int, Float>? {
-        val interp = motionInterp ?: return null
-        if (frames.size < MIN_MOTION_FRAMES) return null
+    /**
+     * Runs one LSTM pass. Caller must hold [lock].
+     *
+     * Returns the argmax class index, or -1 if nothing ran. The confidence is left
+     * in `motionOutputArr[0][idx]` for the caller to read, which avoids boxing an
+     * index and a float into a Pair on every inference.
+     */
+    private fun runMotionInference(frames: List<FloatArray>): Int {
+        val interp = motionInterp ?: return -1
+        if (frames.size < MIN_MOTION_FRAMES) return -1
 
         val seq = extractMotionWindow(frames)
-        if (seq.any { it.size != FEATURE_SIZE }) {
-            Log.w(TAG, "Motion inference skipped — frame with wrong feature size (expected $FEATURE_SIZE)")
-            return null
+        for (frame in seq) {
+            if (frame.size != FEATURE_SIZE) {
+                Log.w(TAG, "Motion inference skipped — frame with wrong feature size (expected $FEATURE_SIZE)")
+                return -1
+            }
         }
-        val input = Array(1) { Array(SEQUENCE_LENGTH) { i -> seq[i] } }
+
+        // Reused tensor; the inner references are rebound to this window's frames.
+        val row = motionInputArr[0]
+        for (i in 0 until SEQUENCE_LENGTH) row[i] = seq[i]
+
         val startNs = if (LATENCY_LOGGING) System.nanoTime() else 0L
         return try {
-            interp.run(input, motionOutputArr)
+            interp.run(motionInputArr, motionOutputArr)
             if (LATENCY_LOGGING) recordLatency((System.nanoTime() - startNs) / 1_000_000.0)
+
+            // Plain loop rather than probs.indices.maxByOrNull, which allocated an
+            // IntRange and iterator and boxed the result. Strict `>` keeps
+            // maxByOrNull's first-wins behaviour on ties.
             val probs = motionOutputArr[0]
-            val idx   = probs.indices.maxByOrNull { probs[it] } ?: return null
-            Pair(idx, probs[idx])
-        } catch (_: Exception) { null }
+            if (probs.isEmpty()) return -1
+            var best = 0
+            for (i in 1 until probs.size) {
+                if (probs[i] > probs[best]) best = i
+            }
+            best
+        } catch (_: Exception) { -1 }
     }
 
     // ── Latency instrumentation ───────────────────────────────────────────────
