@@ -1165,25 +1165,34 @@ private fun setActiveNavItem(activeId: Int) {
         return mirrored
     }
 
+    /**
+     * Rotates the analysis frame upright for MediaPipe.
+     *
+     * Rotation is the ONLY transform. The previous version also computed a
+     * downscale to 640 px, but ImageAnalysis is configured at 240x180, so `scale`
+     * was always 1f and that branch never ran. The front camera is likewise not
+     * mirrored here — the model wants the unmirrored scene and PreviewView handles
+     * display mirroring — yet `frontCamera` gated the no-op fast path, forcing a
+     * full bitmap copy on the front camera even when the frame needed nothing done
+     * to it. Both are gone; the parameter is kept only for call-site clarity.
+     */
     private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
-        val maxDim = 640
-        val scale = minOf(maxDim.toFloat() / bitmap.width, maxDim.toFloat() / bitmap.height, 1f)
-        
-        // Fast path: no transform needed
-        if (scale >= 1f && rotationDegrees == 0 && !frontCamera) {
-            return bitmap
-        }
-        
-        // Reused rather than allocated: this runs on every camera frame, and in
-        // portrait rotationDegrees is never 0, so the fast path above never hits.
+        // No rotation needed — hand the camera's own bitmap straight through and
+        // skip a ~180 KB allocation plus the copy. In portrait this is rare
+        // (rotationDegrees is typically 90/270), but it costs nothing to check.
+        if (rotationDegrees == 0) return bitmap
+
+        // Reused rather than allocated: this runs on every processed camera frame.
         val matrix = frameMatrix.apply {
             reset()
-            if (scale < 1f) postScale(scale, scale)
-            if (rotationDegrees != 0) postRotate(rotationDegrees.toFloat())
-            // For front camera: DON'T mirror the image going to the model
-            // The preview (PreviewView) handles the display mirroring separately
+            postRotate(rotationDegrees.toFloat())
         }
-        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        // filter=false: a multiple-of-90 rotation maps every source pixel exactly
+        // onto a destination pixel, so bilinear filtering has nothing to interpolate
+        // and only costs time. Non-right-angle rotations never occur here —
+        // ImageInfo.rotationDegrees is always 0/90/180/270.
+        val filter = rotationDegrees % 90 != 0
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, filter)
     }
     // ── Permissions ───────────────────────────────────────────────────────────
 
