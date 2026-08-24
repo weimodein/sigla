@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.tabs.TabLayout
@@ -280,15 +281,34 @@ class NotificationsActivity : AppCompatActivity() {
         findViewById<TabLayout>(R.id.tabsFilter).selectedTabPosition
 
     private fun applyFilter(tabPosition: Int) {
-        filteredList.clear()
-        filteredList.addAll(when (tabPosition) {
+        val updated = when (tabPosition) {
             1    -> allNotifications.filter { !it.isRead }
             2    -> allNotifications.filter { it.type == NotifType.ANNOUNCEMENT || it.type == NotifType.MAINTENANCE }
             3    -> allNotifications.filter { it.type == NotifType.APPROVAL || it.type == NotifType.DENIAL }
             4    -> allNotifications.filter { it.type == NotifType.SYSTEM || it.type == NotifType.WARNING }
             else -> allNotifications
+        }
+
+        // The adapter aliases filteredList, so the diff is computed against a snapshot
+        // of the current contents BEFORE the list is mutated in place. Switching tabs
+        // used to rebind every visible row.
+        val previous = ArrayList(filteredList)
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = previous.size
+            override fun getNewListSize() = updated.size
+
+            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
+                previous[oldPos].id == updated[newPos].id
+
+            // NotificationItem is a data class, so this covers isRead and every
+            // other displayed field.
+            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
+                previous[oldPos] == updated[newPos]
         })
-        adapter.notifyDataSetChanged()
+
+        filteredList.clear()
+        filteredList.addAll(updated)
+        diff.dispatchUpdatesTo(adapter)
         updateEmptyState()
     }
 
@@ -417,17 +437,19 @@ class NotificationsActivity : AppCompatActivity() {
             holder.message.text = item.message
             holder.time.text = item.timeAgo
 
+            // Colours are pre-parsed constants: this used to run Color.parseColor on
+            // a string literal for every row bind.
             val (emoji, label, color) = when (item.type) {
-                NotifType.ANNOUNCEMENT -> Triple("📢", "ANNOUNCEMENT", "#0056A4")
-                NotifType.APPROVAL     -> Triple("✅", "APPROVED",     "#2E7D32")
-                NotifType.DENIAL       -> Triple("❌", "DENIED",       "#C62828")
-                NotifType.WARNING      -> Triple("⚠️", "WARNING",      "#E65100")
-                NotifType.MAINTENANCE  -> Triple("🔧", "MAINTENANCE",  "#5C6BC0")
-                NotifType.SYSTEM       -> Triple("⚙️", "SYSTEM",       "#00838F")
+                NotifType.ANNOUNCEMENT -> Triple("📢", "ANNOUNCEMENT", COLOR_ANNOUNCEMENT)
+                NotifType.APPROVAL     -> Triple("✅", "APPROVED",     COLOR_APPROVAL)
+                NotifType.DENIAL       -> Triple("❌", "DENIED",       COLOR_DENIAL)
+                NotifType.WARNING      -> Triple("⚠️", "WARNING",      COLOR_WARNING)
+                NotifType.MAINTENANCE  -> Triple("🔧", "MAINTENANCE",  COLOR_MAINTENANCE)
+                NotifType.SYSTEM       -> Triple("⚙️", "SYSTEM",       COLOR_SYSTEM)
             }
             holder.icon.text = emoji
             holder.type.text = label
-            holder.type.setTextColor(android.graphics.Color.parseColor(color))
+            holder.type.setTextColor(color)
 
             holder.unreadBar.background?.alpha = if (item.isRead) 0 else 255
             holder.unreadDot.visibility = if (item.isRead) View.GONE else View.VISIBLE
@@ -436,3 +458,12 @@ class NotificationsActivity : AppCompatActivity() {
         }
     }
 }
+
+// Notification type accent colours, pre-parsed. These were string literals run
+// through Color.parseColor on every RecyclerView bind.
+private const val COLOR_ANNOUNCEMENT = 0xFF0056A4.toInt()
+private const val COLOR_APPROVAL     = 0xFF2E7D32.toInt()
+private const val COLOR_DENIAL       = 0xFFC62828.toInt()
+private const val COLOR_WARNING      = 0xFFE65100.toInt()
+private const val COLOR_MAINTENANCE  = 0xFF5C6BC0.toInt()
+private const val COLOR_SYSTEM       = 0xFF00838F.toInt()

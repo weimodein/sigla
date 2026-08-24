@@ -10,6 +10,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -312,9 +313,33 @@ class HistoryAdapter(
     // ── Public helpers ────────────────────────────────────────────────────────
 
     fun setItems(newItems: List<HistoryItem>) {
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = items.size
+            override fun getNewListSize() = newItems.size
+
+            // Identity deliberately ignores flatIndex: deleting a row shifts the index
+            // of every entry below it, and keying on it would make one delete look like
+            // a change to the entire tail. A recognition is identified by its timestamp
+            // and word instead.
+            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean {
+                val a = items[oldPos]
+                val b = newItems[newPos]
+                return when {
+                    a is HistoryItem.DateHeader && b is HistoryItem.DateHeader -> a.date == b.date
+                    a is HistoryItem.Entry && b is HistoryItem.Entry ->
+                        a.entry.timestamp == b.entry.timestamp && a.entry.word == b.entry.word
+                    else -> false
+                }
+            }
+
+            // Both subclasses are data classes, so equality covers every bound field
+            // (including flatIndex, so a shifted row still rebinds its delete handler).
+            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
+                items[oldPos] == newItems[newPos]
+        })
         items.clear()
         items.addAll(newItems)
-        notifyDataSetChanged()
+        diff.dispatchUpdatesTo(this)
     }
 
     fun entryCount(): Int = items.count { it is HistoryItem.Entry }

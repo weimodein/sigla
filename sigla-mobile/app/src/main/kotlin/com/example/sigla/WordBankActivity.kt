@@ -210,18 +210,29 @@ class WordBankActivity : AppCompatActivity() {
                 .sorted()
         }
 
+        // One pass over allWords instead of a full scan per category. This runs on
+        // every onResume, so the old shape was O(categories x words) on the main
+        // thread each time the screen came back. Keyed on lowercase to preserve the
+        // equals(ignoreCase = true) semantics the per-category counts used.
+        val countsByCategory = HashMap<String, Int>(categoryNames.size * 2)
+        var favoritesCount = 0
+        for (word in allWords) {
+            val key = word.category.lowercase()
+            countsByCategory[key] = (countsByCategory[key] ?: 0) + 1
+            if (favoritesManager.isFavorite(word.id)) favoritesCount++
+        }
+
         val items = mutableListOf<CategoryGridItem>()
 
         if (gridCategoryFilter == "All Categories") {
-            val favoritesCount = allWords.count { favoritesManager.isFavorite(it.id) }
             items.add(CategoryGridItem(displayName = "Favorites", wordCount = favoritesCount, isFavorites = true))
             items.add(CategoryGridItem(displayName = "All Words", wordCount = allWords.size, isAllWords = true))
             categoryNames.forEach { catName ->
-                val count = allWords.count { it.category.equals(catName, ignoreCase = true) }
+                val count = countsByCategory[catName.lowercase()] ?: 0
                 items.add(CategoryGridItem(displayName = catName, wordCount = count))
             }
         } else {
-            val count = allWords.count { it.category.equals(gridCategoryFilter, ignoreCase = true) }
+            val count = countsByCategory[gridCategoryFilter.lowercase()] ?: 0
             items.add(CategoryGridItem(displayName = gridCategoryFilter, wordCount = count))
         }
 
