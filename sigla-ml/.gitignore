@@ -20,6 +20,12 @@ env/
 models/
 datasets/
 
+# Row backups written by tools/dedupe_samples.py --backup. These inline the full
+# 30x147 sequence of every deleted row (~33 MB for 335 rows) and are a local
+# recovery artefact, not source. Keep them until the dedupe is confirmed good.
+dedupe_backup*.json
+*_backup.json
+
 # MediaPipe model bundles (downloaded, not committed — see app/models/README.md).
 # The app/models/ dir is tracked for its README; only the .task binaries are ignored.
 !app/models/

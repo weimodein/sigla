@@ -206,13 +206,17 @@ def guard(dataset, cross, within) -> None:
 
 
 def fetch_rows(conn, ids):
-    """Full rows for the backup, so a bad run can be reconstructed."""
+    """
+    Full rows for the backup, so a bad run can be reconstructed.
+
+    SELECT * on purpose. An explicit column list has to be kept in step with the
+    table -- an earlier version named `updated_at`, which this table does not
+    have, and the backup blew up mid-run. A backup that silently omits a column
+    is worse still, since the omission only surfaces when someone tries to
+    restore. Whatever the table holds is what gets saved.
+    """
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT id, word_id, submitted_by, file_url, session_id, sample_count, "
-            "       is_validated, status, sequence, created_at, updated_at "
-            "FROM gesture_samples WHERE id = ANY(%s)", (list(ids),)
-        )
+        cur.execute("SELECT * FROM gesture_samples WHERE id = ANY(%s)", (list(ids),))
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
