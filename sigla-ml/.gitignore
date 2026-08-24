@@ -26,6 +26,10 @@ datasets/
 dedupe_backup*.json
 *_backup.json
 
+# Console output from long tool runs (cross_validate.py etc). The results land in
+# the --out JSON, which IS worth committing; the log is just progress noise.
+*_run.log
+
 # MediaPipe model bundles (downloaded, not committed — see app/models/README.md).
 # The app/models/ dir is tracked for its README; only the .task binaries are ignored.
 !app/models/
