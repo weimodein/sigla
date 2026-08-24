@@ -62,7 +62,7 @@ private const val DETECTION_COOLDOWN_MS  = 2000L  // wait before accepting the n
 // a compile-time constant.)
 private val LATENCY_LOGGING         = BuildConfig.DEBUG
 private const val LATENCY_WINDOW    = 100   // rolling samples kept for percentiles
-private const val LATENCY_LOG_EVERY = 50    // emit a summary every N inferences
+private const val LATENCY_LOG_EVERY = 20    // emit a summary every N inferences
 
 // ── Velocity signal for temporal window selection ────────────────────────────
 //

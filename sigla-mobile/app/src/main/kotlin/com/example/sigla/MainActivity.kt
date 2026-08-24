@@ -16,6 +16,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import android.content.Context
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
+import android.util.Range
+import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -42,6 +48,14 @@ private const val MOTION_INDICATOR_TEXT = "● MOTION"
 
 // Minimum gap between onResume-triggered word-bank refreshes.
 private const val WORD_BANK_REFRESH_INTERVAL_MS = 5 * 60 * 1000L
+
+// Temporary stage-level pipeline timing — see PipelineProfiler. Debug-only.
+private val PIPELINE_PROFILING = BuildConfig.DEBUG
+
+// Lowest sustained capture rate the recognition pipeline is willing to run at.
+// The frame skip halves this again before MediaPipe sees it, so 24 fps yields
+// ~12 Hz of inference — close to what the firing constants were tuned against.
+private const val MIN_ACCEPTABLE_FPS = 24
 
 /**
  * Runs the blocking close() calls in stopVision() off the main thread.
@@ -270,12 +284,22 @@ class MainActivity : AppCompatActivity() {
                 // Activity — a late-finishing build must not retain a destroyed
                 // Activity.
                 val helper = HandLandmarkHelper(applicationContext) { result ->
+                    val c0 = if (PIPELINE_PROFILING) System.nanoTime() else 0L
                     // Canonical slot order FIRST (RIGHT→slot0, LEFT→slot1)
                     val ordered = canonicalizeSlots(result.features, result.handedness, result.handsDetected)
                     val features = canonicalizeHandedness(
                         ordered, result.handedness, result.handednessScore, result.handsDetected
                     )
+                    val c1 = if (PIPELINE_PROFILING) System.nanoTime() else 0L
                     predictor?.processFrame(features, result.handsDetected)
+                    if (PIPELINE_PROFILING) {
+                        val c2 = System.nanoTime()
+                        PipelineProfiler.recordCallback(
+                            canonicalizeMs = (c1 - c0) / 1e6,
+                            processFrameMs = (c2 - c1) / 1e6,
+                            sinceSubmitMs  = result.graphLatencyMs
+                        )
+                    }
 
                     // Single main-thread post per frame. processFrame above runs
                     // synchronously on this same callback thread, so anything it
@@ -810,10 +834,67 @@ private fun setActiveNavItem(activeId: Int) {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    /**
+     * Picks an AE target-fps range with the highest available lower bound.
+     *
+     * Only ranges the HAL advertises are eligible — passing an unsupported range
+     * makes the capture session throw. Preferring a high FLOOR is the point: it is
+     * the floor the HAL drops to in low light, and on this hardware the default
+     * [5, 30] is what pinned the pipeline near 5 fps. Ties break on the higher
+     * ceiling. Returns null if nothing beats the default, leaving CameraX alone.
+     */
+    private fun selectAeFpsRange(): Range<Int>? = try {
+        val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val lensFacing = if (isFrontCamera) {
+            CameraCharacteristics.LENS_FACING_FRONT
+        } else {
+            CameraCharacteristics.LENS_FACING_BACK
+        }
+        val cameraId = manager.cameraIdList.firstOrNull { id ->
+            manager.getCameraCharacteristics(id)
+                .get(CameraCharacteristics.LENS_FACING) == lensFacing
+        }
+        val ranges = cameraId?.let {
+            manager.getCameraCharacteristics(it)
+                .get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+        }
+        val best = ranges
+            ?.filter { it.upper >= MIN_ACCEPTABLE_FPS }
+            ?.maxWithOrNull(compareBy({ it.lower }, { it.upper }))
+
+        if (best != null && best.lower >= MIN_ACCEPTABLE_FPS) {
+            Log.i(TAG, "AE fps range pinned to $best (available: ${ranges?.joinToString()})")
+            best
+        } else {
+            Log.w(TAG, "No AE range with floor >= $MIN_ACCEPTABLE_FPS; " +
+                "leaving HAL default (available: ${ranges?.joinToString()})")
+            null
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not query AE fps ranges: ${e.message}")
+        null
+    }
+
     private fun bindCamera() {
         val provider = cameraProvider ?: return
 
-        val preview = Preview.Builder().build().also {
+        // Pin the auto-exposure frame-rate floor.
+        //
+        // The MediaTek HAL defaults this to [5, 30]: in anything short of bright
+        // light, AE lengthens exposure and drops the sensor to ~5 fps to brighten the
+        // image. Measured on-device, that alone set the whole pipeline's cadence —
+        // frames arrived ~200 ms apart while the work per frame was only ~110 ms, so
+        // the analyzer sat idle waiting for the camera, and recognition saw a third
+        // of the frames it was tuned for.
+        //
+        // Raising the floor to 24 trades some low-light brightness for a steady feed.
+        // Applied to Preview, so the analyzer inherits the same capture cadence.
+        val previewBuilder = Preview.Builder()
+        selectAeFpsRange()?.let { range ->
+            Camera2Interop.Extender(previewBuilder)
+                .setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range)
+        }
+        val preview = previewBuilder.build().also {
             it.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
         }
 
@@ -861,11 +942,22 @@ private fun setActiveNavItem(activeId: Int) {
                 imageProxy.close()
                 return@setAnalyzer
             }
+            val t0              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            val t1              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
+            val t2              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             lm.detectAsync(prepared, SystemClock.elapsedRealtime())
+            val t3              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             imageProxy.close()
+            if (PIPELINE_PROFILING) {
+                PipelineProfiler.recordCamera(
+                    toBitmapMs = (t1 - t0) / 1e6,
+                    prepareMs  = (t2 - t1) / 1e6,
+                    submitMs   = (t3 - t2) / 1e6
+                )
+            }
         }
 
         val selector = if (isFrontCamera)

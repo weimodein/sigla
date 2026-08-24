@@ -27,6 +27,32 @@
         tools:replace="android:allowBackup,android:icon,android:label,android:theme"
 >
 
+        <!--
+            Lets MediaPipe's GPU delegate dlopen the vendor OpenCL driver.
+
+            Since Android 7 (and enforced hard on 12+), an app process can only load
+            vendor native libraries that it declares here, even when the .so is in the
+            platform's public.libraries allowlist. Without this, dlopen("libOpenCL.so")
+            fails with:
+
+                Failed to load OpenCL library with dlopen: dlopen failed:
+                library "libvndksupport.so" not found. Trying ICD loader.
+
+            MediaPipe does NOT surface that as an error — createFromOptions() still
+            succeeds and the helper logs "ready [GPU]", but the graph silently runs on
+            CPU. On this device that was ~109 ms per frame, capping the pipeline near
+            5 fps, which is what made the preview and predictions feel laggy.
+
+            android:required="false" so devices with no OpenCL driver still install and
+            fall back to the CPU path as before.
+        -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <!-- Vendor-specific OpenCL names used by some Arm/Qualcomm/MediaTek stacks. -->
+        <uses-native-library android:name="libOpenCL-car.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL-pixel.so" android:required="false" />
+        <uses-native-library android:name="libGLES_mali.so" android:required="false" />
+
+
         <!-- launchMode="singleTop" on the sidebar-reachable screens: re-tapping
              the current screen in the drawer reuses the existing instance
              instead of stacking (and rebuilding) a second copy of it. -->

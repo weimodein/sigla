@@ -48,7 +48,11 @@ data class LandmarkResult(
     // Per hand-slot MediaPipe handedness ("Left"/"Right"/null) and its score,
     // aligned to the same slot index as `features` (slot 0 = features[0..62]).
     val handedness: List<String?> = emptyList(),
-    val handednessScore: List<Float> = emptyList()
+    val handednessScore: List<Float> = emptyList(),
+    // Milliseconds from detectAsync() submission to this callback firing — i.e. how
+    // long the MediaPipe graph itself took. Only populated when profiling; see
+    // PipelineProfiler.
+    val graphLatencyMs: Double = 0.0
 )
 
 /**
@@ -68,6 +72,10 @@ class HandLandmarkHelper(
 ) {
     private var landmarker: HandLandmarker? = null
     private var poseLandmarker: PoseLandmarker? = null
+
+    // nanoTime of the most recent detectAsync submission, for graph-latency
+    // profiling only. Volatile: written on the camera thread, read on MediaPipe's.
+    @Volatile private var lastSubmitNs = 0L
 
     // LIVE_STREAM mode: async, non-blocking — fastest for real-time camera feeds
     val isLiveStream: Boolean get() = onResult != null
@@ -129,9 +137,18 @@ class HandLandmarkHelper(
     }
 
     init {
+        // "[GPU]" below means the options were ACCEPTED, not that the graph is
+        // actually running on the GPU. If the vendor OpenCL driver cannot be
+        // dlopen'd, MediaPipe logs `Failed to load OpenCL library` at its own tflite
+        // tag, then silently executes on CPU — createFromOptions still succeeds and
+        // nothing here throws. That fallback cost ~109 ms/frame on a MediaTek device
+        // until AndroidManifest declared <uses-native-library libOpenCL.so>.
+        //
+        // So: if the pipeline is slow, check logcat for that tflite line before
+        // trusting this one. PipelineProfiler reports the real per-stage cost.
         landmarker = try {
             val lm = buildLandmarker(Delegate.GPU)
-            Log.i(TAG, "HandLandmarker ready [GPU]")
+            Log.i(TAG, "HandLandmarker ready [GPU requested]")
             lm
         } catch (e: Throwable) {
             Log.w(TAG, "GPU delegate failed (${e.message}) — falling back to CPU")
@@ -148,7 +165,7 @@ class HandLandmarkHelper(
         // "absent pose" sentinel) and hand-only recognition keeps working.
         poseLandmarker = try {
             val pl = buildPoseLandmarker(Delegate.GPU)
-            Log.i(TAG, "PoseLandmarker ready [GPU]")
+            Log.i(TAG, "PoseLandmarker ready [GPU requested]")
             pl
         } catch (e: Throwable) {
             Log.w(TAG, "Pose GPU delegate failed (${e.message}) — falling back to CPU")
@@ -186,6 +203,7 @@ class HandLandmarkHelper(
         val lmk = landmarker ?: return
         try {
             val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
+            lastSubmitNs = System.nanoTime()
             lmk.detectAsync(mpImage, frameTimestampMs)
             // Pose only every Nth frame — hands run every frame.
             poseFrameCounter++
@@ -250,10 +268,19 @@ class HandLandmarkHelper(
         // epsilon 1e-6). Only the model's `features` are normalized — drawData stays
         // in raw frame coords for drawing.
         normalizeFrame(features)
-        return LandmarkResult(numHands, features, drawData, handLabels, handScores)
+        return LandmarkResult(
+            numHands, features, drawData, handLabels, handScores, graphLatencyMs()
+        )
     }
 
-    private fun empty() = LandmarkResult(0, FloatArray(FEATURE_SIZE), emptyList())
+    private fun empty() =
+        LandmarkResult(0, FloatArray(FEATURE_SIZE), emptyList(), graphLatencyMs = graphLatencyMs())
+
+    /** Time from the last detectAsync submission to now, in ms. Profiling only. */
+    private fun graphLatencyMs(): Double {
+        val submitted = lastSubmitNs
+        return if (submitted == 0L) 0.0 else (System.nanoTime() - submitted) / 1e6
+    }
 
     /**
      * Releases both MediaPipe graphs. Idempotent — MainActivity closes in
