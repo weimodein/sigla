@@ -13,6 +13,7 @@ class AppSettings(context: Context) {
         private const val KEY_VOICE_TYPE = "voice_type"
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_SHOW_FILIPINO = "show_filipino"
+        private const val KEY_FRONT_CAMERA = "front_camera"
 
         const val VOICE_FEMALE = "female"
         const val VOICE_MALE = "male"
@@ -41,6 +42,10 @@ class AppSettings(context: Context) {
     var showFilipino: Boolean
         get() = prefs.getBoolean(KEY_SHOW_FILIPINO, true)
         set(v) = prefs.edit().putBoolean(KEY_SHOW_FILIPINO, v).apply()
+
+    var isFrontCamera: Boolean
+        get() = prefs.getBoolean(KEY_FRONT_CAMERA, false)
+        set(v) = prefs.edit().putBoolean(KEY_FRONT_CAMERA, v).apply()
 
     fun resetToDefault() {
         prefs.edit()

@@ -150,6 +150,7 @@ class MainActivity : AppCompatActivity() {
         historyManager = TranslationHistoryManager.getInstance(this)
         appSettings = AppSettings.getInstance(this)
         showFilipino = appSettings.showFilipino
+        isFrontCamera = appSettings.isFrontCamera
 
         // Check first launch / onboarding
         if (session.isFirstLaunch) {
@@ -547,6 +548,7 @@ class MainActivity : AppCompatActivity() {
         // Flip camera
         binding.btnFlipCamera.setOnClickListener {
             isFrontCamera = !isFrontCamera
+            appSettings.isFrontCamera = isFrontCamera
             // No-op if the models are still loading — flipping is still valid.
             predictor?.reset()
             resetHandednessLatch()
