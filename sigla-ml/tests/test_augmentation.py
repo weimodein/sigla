@@ -1,6 +1,6 @@
 """
-Tests for the augmentation pipeline, including the rotation and truncated-prefix
-augmentations and the per-class RNG fix.
+Tests for the augmentation pipeline, including rotation, landmark visibility,
+truncated-prefix augmentation, and the per-class RNG fix.
 
 These are the safety net for changes that CANNOT be validated by cross_validate.py
 in reasonable time: a mistake in rotation (e.g. rotating raw instead of normalized
@@ -17,6 +17,7 @@ from app.utils.preprocessor import (
     SEQUENCE_LENGTH,
     _POSE_BASE,
     augment_motion_sequences,
+    landmark_dropout_sequence,
     mirror_sequence,
     rotate_sequence,
     truncated_prefix_sequence,
@@ -140,6 +141,31 @@ def test_mirror_negates_x_and_is_involutive(seq):
     once = mirror_sequence(seq)
     assert not np.allclose(once[:, 0:63], seq[:, 0:63], atol=1e-4)
     np.testing.assert_allclose(mirror_sequence(once), seq, rtol=1e-4, atol=1e-5)
+
+
+# -- Landmark visibility dropout ---------------------------------------------
+
+def test_landmark_dropout_is_bounded_and_only_zeros_existing_blocks(seq):
+    out = landmark_dropout_sequence(seq, np.random.default_rng(9), max_frames=4)
+    changed_frames = np.flatnonzero(np.any(out != seq, axis=1))
+
+    assert 1 <= len(changed_frames) <= 4
+    for frame_idx in changed_frames:
+        changed = np.flatnonzero(out[frame_idx] != seq[frame_idx])
+        # Exactly one complete hand (63) or pose (21) block is hidden per frame.
+        assert len(changed) in (21, 63)
+        assert np.all(out[frame_idx, changed] == 0)
+
+
+def test_landmark_dropout_preserves_absent_blocks_and_shape(seq):
+    seq = seq.copy()
+    seq[:, 63:126] = 0
+    out = landmark_dropout_sequence(seq, np.random.default_rng(17), max_frames=4)
+
+    assert out.shape == seq.shape
+    assert np.all(out[:, 63:126] == 0)
+    # Visibility loss may hide values but must never invent or move them.
+    assert np.all((out == seq) | (out == 0))
 
 
 # ── Augmentation driver ──────────────────────────────────────────────────────

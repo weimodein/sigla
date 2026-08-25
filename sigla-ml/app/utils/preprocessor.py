@@ -17,6 +17,16 @@ SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 # 96.2% original-orientation and 94.2% mirrored-orientation accuracy, versus the
 # non-augmented deployed model's 24.8% sensitivity result when mirrored.
 MIRROR_AUGMENTATION_ENABLED = os.getenv("MIRROR_AUGMENTATION_ENABLED", "true").lower() == "true"
+MIRROR_AUGMENTATION_RATIO = float(os.getenv("MIRROR_AUGMENTATION_RATIO", 1.0))
+
+# Live MediaPipe occasionally loses a pose or one hand for a few frames even when
+# the gesture itself is clear. The uploaded dataset currently has pose in 100% of
+# stored frames, so without this bounded augmentation the model has never seen the
+# zero-block sentinel that the phone legitimately emits. Keep the maximum aligned
+# with PredictionService.MIN_POSE_FRAMES: at most 4 of 30 frames are hidden here,
+# while the app still rejects windows with more than 6 missing pose frames.
+LANDMARK_DROPOUT_ENABLED = os.getenv("LANDMARK_DROPOUT_ENABLED", "true").lower() == "true"
+LANDMARK_DROPOUT_MAX_FRAMES = int(os.getenv("LANDMARK_DROPOUT_MAX_FRAMES", 4))
 
 # Rotation augmentation: small in-plane (xy) rotations of already-normalized
 # sequences. Normalization removes translation and scale but NOT rotation, so
@@ -604,13 +614,29 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
         # real_counts note in this function's docstring.
         real_train_counts[idx] = len(train_seqs)
 
+        # Per-class generator. A single default_rng(42) inside the callee gave every
+        # class identical augmentation draws; deriving from [seed, idx] keeps runs
+        # reproducible while decorrelating classes.
+        class_rng = np.random.default_rng([random_state, idx])
+
         # Mirror-augment the TRAIN portion only. Mirrored copies join the source
         # pool but stay inside the existing real_count * AUGMENTATION_FACTOR budget;
         # enabling handedness robustness must not silently double training time or
-        # double the synthetic-to-real ratio.
+        # double the synthetic-to-real ratio. A tunable subset avoids making the
+        # training distribution artificially 50/50 when the primary phone camera
+        # domain has a consistent orientation.
         real_train_count = len(train_seqs)
+        mirror_count = 0
         if MIRROR_AUGMENTATION_ENABLED:
-            train_seqs = train_seqs + [mirror_sequence(s) for s in train_seqs]
+            ratio = min(max(MIRROR_AUGMENTATION_RATIO, 0.0), 1.0)
+            mirror_count = min(real_train_count, int(round(real_train_count * ratio)))
+            if mirror_count:
+                chosen = (
+                    np.arange(real_train_count)
+                    if mirror_count == real_train_count else
+                    class_rng.choice(real_train_count, size=mirror_count, replace=False)
+                )
+                train_seqs = train_seqs + [mirror_sequence(train_seqs[i]) for i in chosen]
 
         # Augment the TRAIN portion only — evaluation stays 100% real, unaugmented.
         #
@@ -621,10 +647,6 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
         # real count keeps the genuine imbalance visible so class weights can act on it.
         target = real_train_count * AUGMENTATION_FACTOR
 
-        # Per-class generator. A single default_rng(42) inside the callee gave every
-        # class identical augmentation draws; deriving from [seed, idx] keeps runs
-        # reproducible while decorrelating classes.
-        class_rng = np.random.default_rng([random_state, idx])
         augmented = augment_motion_sequences(
             [s.tolist() for s in train_seqs], target_count=target, rng=class_rng
         )
@@ -745,6 +767,44 @@ def truncated_prefix_sequence(seq: np.ndarray, keep_fraction: float) -> np.ndarr
     return np.array(window[:SEQUENCE_LENGTH], dtype=np.float32)
 
 
+def landmark_dropout_sequence(seq: np.ndarray, rng: np.random.Generator,
+                              max_frames: int = LANDMARK_DROPOUT_MAX_FRAMES) -> np.ndarray:
+    """Hide one landmark block in a few frames, reproducing live detector loss.
+
+    A whole block is set to zero because zero is the shared ML/mobile sentinel for
+    "not detected". We never perturb individual coordinates (which would describe
+    an anatomically impossible hand), never hide more than max_frames, and only
+    choose blocks that were present in the source frame.
+    """
+    out = seq.copy()
+    limit = max(0, min(int(max_frames), len(out)))
+    if limit == 0:
+        return out
+
+    candidates = []
+    for frame_idx, frame in enumerate(out):
+        if np.any(frame[0:63]):
+            candidates.append((frame_idx, 0, 63))
+        if np.any(frame[63:126]):
+            candidates.append((frame_idx, 63, 126))
+        if np.any(frame[_POSE_BASE:_POSE_BASE + 21]):
+            candidates.append((frame_idx, _POSE_BASE, _POSE_BASE + 21))
+    if not candidates:
+        return out
+
+    count = int(rng.integers(1, min(limit, len(out)) + 1))
+    # Use distinct frames so one augmentation cannot erase several blocks from
+    # the same instant or exceed the documented missing-frame bound.
+    selected_frames = rng.choice(len(out), size=count, replace=False)
+    for frame_idx in selected_frames:
+        available = [item for item in candidates if item[0] == int(frame_idx)]
+        if not available:
+            continue
+        _, start, end = available[int(rng.integers(len(available)))]
+        out[int(frame_idx), start:end] = 0.0
+    return out
+
+
 def augment_motion_sequences(sequences: list, target_count: int = 100,
                              rng: np.random.Generator | None = None) -> list:
     """
@@ -764,13 +824,15 @@ def augment_motion_sequences(sequences: list, target_count: int = 100,
     if rng is None:
         rng = np.random.default_rng(42)
 
-    # Build the enabled augmentation menu. Rotation and prefix are togglable so each
-    # can be A/B'd independently against cv_baseline.json.
+    # Build the enabled augmentation menu. Optional transforms stay independently
+    # switchable so each can be A/B'd with signer-grouped cross-validation.
     aug_types = [0, 1, 2]
     if ROTATION_AUGMENTATION_ENABLED:
         aug_types.append(3)
-    if PREFIX_AUGMENTATION_ENABLED:
+    if LANDMARK_DROPOUT_ENABLED:
         aug_types.append(4)
+    if PREFIX_AUGMENTATION_ENABLED:
+        aug_types.append(5)
 
     needed = target_count - len(sequences)
 
@@ -810,6 +872,8 @@ def augment_motion_sequences(sequences: list, target_count: int = 100,
             # translation and scale but leaves orientation unmodelled.
             degrees = rng.uniform(-ROTATION_MAX_DEGREES, ROTATION_MAX_DEGREES)
             result = rotate_sequence(base, float(np.radians(degrees)))
+        elif aug_type == 4:
+            result = landmark_dropout_sequence(base, rng)
         else:
             # Truncated prefix — a partial gesture padded the way inference pads it.
             keep = rng.uniform(PREFIX_KEEP_MIN, PREFIX_KEEP_MAX)
