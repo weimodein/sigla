@@ -26,16 +26,12 @@ MIRROR_AUGMENTATION_ENABLED = os.getenv("MIRROR_AUGMENTATION_ENABLED", "false").
 ROTATION_AUGMENTATION_ENABLED = os.getenv("ROTATION_AUGMENTATION_ENABLED", "true").lower() == "true"
 ROTATION_MAX_DEGREES = float(os.getenv("ROTATION_MAX_DEGREES", 12.0))
 
-# Truncated-prefix augmentation: train on partial gestures padded exactly the way
-# live inference pads them. PredictionService fires on a GROWING buffer and
-# right-pads by repeating the last frame when it holds < SEQUENCE_LENGTH frames,
-# so every early fire is an input shape the model never saw in training. This
-# augmentation puts those inputs in-distribution.
-#
-# NOTE: this deliberately trades a possible small CV loss for real-world early-fire
-# accuracy. cross_validate.py only scores COMPLETE gestures, so it cannot see the
-# benefit — judge this one with tools/simulate_early_fire.py instead.
-PREFIX_AUGMENTATION_ENABLED = os.getenv("PREFIX_AUGMENTATION_ENABLED", "true").lower() == "true"
+# Truncated-prefix augmentation is opt-in. Labelling a shared opening as the final
+# word taught the model to make confident guesses before the distinguishing tail
+# arrived, which inflated full-clip validation while hurting live precision. The
+# mobile evidence gate now waits for a complete-enough gesture instead. Only enable
+# this after tools/simulate_early_fire.py demonstrates a vocabulary-wide benefit.
+PREFIX_AUGMENTATION_ENABLED = os.getenv("PREFIX_AUGMENTATION_ENABLED", "false").lower() == "true"
 PREFIX_KEEP_MIN = float(os.getenv("PREFIX_KEEP_MIN", 0.40))
 PREFIX_KEEP_MAX = float(os.getenv("PREFIX_KEEP_MAX", 0.85))
 

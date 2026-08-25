@@ -50,9 +50,10 @@ from app.utils.preprocessor import (  # noqa: E402
 # ── Constants mirrored from PredictionService.kt ──────────────────────────────
 # Keep these in sync with the Kotlin file; they are the thing under test.
 MIN_MOTION_FRAMES     = 12    # raised from 8: at 8, 22 of 30 input frames were padding
+MIN_COMPLETE_GESTURE_FRAMES = 36
 MOTION_SLIDE_INTERVAL = 2
-MOTION_THRESHOLD      = 0.70
-MOTION_EARLY_CONF     = 0.70
+MOTION_THRESHOLD      = 0.80
+MOTION_EARLY_CONF     = 0.80
 MOTION_EARLY_STREAK   = 10
 EARLY_EXIT_THRESHOLD  = 0.95
 # Shorter than MOTION_EARLY_STREAK so the high-confidence tier fires SOONER. When both
@@ -181,6 +182,12 @@ class Simulator:
                         streak_label = idx
                     else:
                         streak, streak_label = 0, -1
+
+                    # Match PredictionService: confidence on a partial opening is
+                    # not enough evidence to emit a word. The end-of-gesture flush
+                    # below remains exempt for completed fast gestures.
+                    if len(buffer) < MIN_COMPLETE_GESTURE_FRAMES:
+                        continue
 
                     # Only an END-OF-GESTURE force may bypass the streak. `force` here
                     # is the BUFFER_FILL_MS timer, which fires while the signer is

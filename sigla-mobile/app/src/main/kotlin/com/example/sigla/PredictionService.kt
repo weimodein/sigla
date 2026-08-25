@@ -23,14 +23,19 @@ private const val SEQUENCE_LENGTH        = 30    // LSTM input length
 // may be frozen padding: at 8 real frames, 22 of 30 (73%) were one repeated frame — far
 // outside anything the model was trained on, yet still able to fire.
 //
-// 12 matches the training-side truncated-prefix augmentation floor
-// (PREFIX_KEEP_MIN = 0.40 of 30 frames = 12), so the shortest buffer inference accepts is
-// the shortest prefix training actually saw. Raising it further would delay fast signs;
-// this is the point where the two sides agree.
+// Starting inference at 12 frames lets the consistency streak accumulate without
+// adding latency after the evidence gate below opens. These partial results are never
+// emitted by themselves, because shared sign openings are not reliable final labels.
 private const val MIN_MOTION_FRAMES      = 12     // begin inference once this many frames buffered
+// Do not EMIT a mid-gesture result until the buffer is wider than the model's
+// 30-frame input. At exactly 30 frames there is no temporal-window choice; at 36
+// frames peak-centering can discard entry motion and retain the distinguishing
+// part of the sign. Inference may run earlier to build a consistency streak, but
+// only END_OF_GESTURE may bypass this evidence gate for a completed fast sign.
+private const val MIN_COMPLETE_GESTURE_FRAMES = 36
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
-private const val MOTION_THRESHOLD       = 0.70f  // min confidence to accept a prediction
-private const val MOTION_EARLY_CONF      = 0.70f  // confidence for early-exit streak counting
+private const val MOTION_THRESHOLD       = 0.80f  // min confidence to accept a prediction
+private const val MOTION_EARLY_CONF      = 0.80f  // confidence for early-exit streak counting
 // Raised from 5/6 to 10/10 (2026-07-19) after simulating the live streak/early-exit logic
 // against every real stored sample: at the old values, several signs that share an opening
 // movement with another sign (GOOD EVENING/GOOD AFTERNOON, GOOD MORNING/HELLO, YES/YESTERDAY,
@@ -41,9 +46,9 @@ private const val MOTION_EARLY_CONF      = 0.70f  // confidence for early-exit s
 // no regression on any word that was already firing correctly. See PredictionService's
 // runAndMaybeFire() for how this streak is counted.
 private const val MOTION_EARLY_STREAK    = 10     // consistent frames before firing early
-private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence fires sooner
-// Shorter than MOTION_EARLY_STREAK on purpose — this tier only exists to fire FASTER
-// when the model is very confident.
+private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence needs a shorter streak
+// Shorter than MOTION_EARLY_STREAK on purpose: this tier needs fewer agreeing
+// inferences, but the 36-frame evidence gate still prevents a premature result.
 //
 // It used to equal MOTION_EARLY_STREAK (both 10), which made the tier unreachable: the
 // streak resets whenever confidence drops below MOTION_EARLY_CONF, so any run of 10
@@ -127,10 +132,8 @@ internal fun frameVelocity(prev: FloatArray, cur: FloatArray): Float {
 // onto the real sign. Margins from 0.15 to 0.30 converge on the same frame.
 //
 // Verified safe for live inference: the delivered window shifts while the buffer
-// is small but stabilises by ~35 frames, and the earliest possible fire is
-// MIN_MOTION_FRAMES + MOTION_EARLY_STREAK * MOTION_SLIDE_INTERVAL = 8 + 20 = 28
-// frames, with the buffer still growing through the streak. So the margin does
-// not delay firing.
+// is small but stabilises by ~35 frames. Mid-gesture emission now starts at 36
+// frames, while a completed fast sign can still be evaluated on the no-hands flush.
 private const val VELOCITY_SMOOTH_WINDOW = 5
 private const val VELOCITY_EDGE_MARGIN   = 0.20
 
@@ -223,6 +226,12 @@ private data class PendingFire(val result: PredictionResult)
  *                    the alternative is dropping a completed fast sign entirely.
  */
 private enum class ForceReason { NONE, TIMER, END_OF_GESTURE }
+
+/** Pure policy guard, exposed internally so local tests can pin the accuracy-first
+ * behavior without loading TensorFlow Lite. A finished gesture is allowed through
+ * even when it was fast; an in-flight gesture needs a peak-centerable buffer. */
+internal fun hasEnoughGestureEvidence(frameCount: Int, endOfGesture: Boolean): Boolean =
+    endOfGesture || frameCount >= MIN_COMPLETE_GESTURE_FRAMES
 
 /**
  * Progress of the in-flight gesture, delivered to the UI once per buffered frame.
@@ -573,7 +582,7 @@ class PredictionService(private val context: Context) {
 
         // Count the streak EXACTLY ONCE per inference. The two confidence tiers below
         // must stay mutually exclusive: EARLY_EXIT_THRESHOLD (0.95) is above
-        // MOTION_EARLY_CONF (0.70), so a frame clearing the high bar also clears the
+        // MOTION_EARLY_CONF (0.80), so a frame clearing the high bar also clears the
         // low one. Incrementing in both branches (the pre-2026-07-27 shape) advanced
         // the streak twice per inference for exactly the high-confidence frames the
         // streak exists to slow down, so MOTION_EARLY_STREAK=10 was really reached in
@@ -590,6 +599,12 @@ class PredictionService(private val context: Context) {
         // force fires mid-gesture, so letting one frame through there re-opens the
         // "fires on a shared opening movement" failure the 10-frame streak fixed.
         val mayBypassStreak = force == ForceReason.END_OF_GESTURE
+
+        // A softmax can be extremely confident on an incomplete shared opening.
+        // Confidence and label streaks do not prove that the distinguishing tail
+        // was observed. Require a buffer that can actually be peak-centered before
+        // any mid-gesture emission; the completed-gesture flush remains exempt.
+        if (!hasEnoughGestureEvidence(frameBuffer.size, mayBypassStreak)) return null
 
         // Very high confidence: fires on a SHORTER streak than the normal path.
         if (conf >= EARLY_EXIT_THRESHOLD) {
@@ -706,7 +721,7 @@ class PredictionService(private val context: Context) {
     // that happened to survive at exactly 30 frames, so they were stored with no window
     // ever selected and the velocity signal never consulted. That path now resamples
     // above SEQUENCE_LENGTH first and passes force=True. Here it is harmless: the live
-    // buffer holds MIN_MOTION_FRAMES..BUFFER_CAPACITY (8..90) frames and only lands on
+    // buffer holds MIN_MOTION_FRAMES..BUFFER_CAPACITY (12..90) frames and only lands on
     // exactly 30 transiently. Do NOT "fix" this side to match without re-checking
     // parity — the two must agree on what a 30-frame input yields.
     private fun extractMotionWindow(frames: List<FloatArray>): List<FloatArray> {
