@@ -80,7 +80,26 @@ def test(version_number: str, model_id: int) -> dict:
     print(f"Starting evaluation for version: {version_number}")
     print(f"{'='*50}\n")
 
-    # ── Step 1: Fetch approved samples (all motion sequences) ──
+    # Prefer the held-out-signer metrics captured before train.py rebuilt the final
+    # deployment model on all clips. Evaluating that final model on any approved row
+    # is training-set evaluation and was the reason the UI reported nearly 100% even
+    # when live predictions were weaker.
+    try:
+        metrics_path = download_model_from_supabase(version_number, "selection_metrics.json")
+        with open(metrics_path, encoding="utf-8") as f:
+            metrics = json.load(f)
+        required = {"accuracy", "precision", "recall", "f1_score"}
+        if required.issubset(metrics):
+            print("Using held-out-signer metrics saved by the training run.")
+            return {
+                "version_number": version_number,
+                "model_id": model_id,
+                "motion_model": metrics,
+            }
+    except Exception as e:
+        print(f"Held-out metrics unavailable for this older model: {e}")
+
+    # ── Legacy fallback: fetch approved samples (all motion sequences) ──
     dataset = fetch_approved_samples()
 
     motion_dataset = {
@@ -99,15 +118,9 @@ def test(version_number: str, model_id: int) -> dict:
     h5_path = download_model_from_supabase(version_number, "sign_model_motion.h5")
 
     # ── Step 3: Prepare + split ───────────────────────────────
-    # Same split logic AND the same default random_state=42 as train.py, so X_test
-    # here is byte-identical to the split that EarlyStopping(restore_best_weights=True)
-    # selected the weights on.
-    #
-    # That means this is NOT a generalization estimate, despite being the number the
-    # admin UI shows next to the word "test". The model was chosen to maximize
-    # accuracy on exactly these samples. It is a useful regression check — a sharp
-    # drop means something broke — but it is optimistic by construction, and
-    # train.py:156-173 says the same about its own number.
+    # Older artifacts do not contain selection_metrics.json. This fallback is only
+    # a compatibility regression check: the final model trained on these rows, so
+    # its score must never be described as unseen-user accuracy.
     #
     # tools/cross_validate.py is the trustworthy measurement: it trains K models and
     # scores every sample exactly once while held out. Its result is surfaced below
@@ -158,9 +171,9 @@ def test(version_number: str, model_id: int) -> dict:
     print(f"\nClassification Report:\n{report}")
     print(f"Top confusions (true -> predicted):\n{confusion_lines}")
 
-    print("\n  NOTE: measured on the model-selection split (same random_state as")
-    print("        training), so this is a regression check, NOT a generalization")
-    print("        estimate. Run tools/cross_validate.py for a trustworthy number.")
+    print("\n  NOTE: legacy artifact: the final model trained on these rows, so")
+    print("        this is training-set accuracy, NOT a generalization estimate.")
+    print("        Retrain for held-out metrics or run grouped cross-validation.")
 
     cv = _load_cv_baseline()
     if cv:
@@ -185,9 +198,9 @@ def test(version_number: str, model_id: int) -> dict:
         # comment nobody reads at the call site.
         "is_generalization_estimate": False,
         "evaluation_note": (
-            "Measured on the model-selection split (same random_state as training). "
-            "Optimistic by construction — a regression check, not a generalization "
-            "estimate. Run tools/cross_validate.py for that."
+            "Legacy artifact without held-out metrics. The final deployment model "
+            "trained on these approved rows, so this is training-set accuracy only. "
+            "Retrain with the current pipeline for held-out-signer metrics."
         ),
     }
 

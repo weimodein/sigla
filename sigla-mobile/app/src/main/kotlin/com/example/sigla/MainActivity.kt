@@ -71,11 +71,12 @@ private val teardownExecutor = Executors.newSingleThreadExecutor { r ->
 }
 
 // ── Left-handed support (inference-time handedness canonicalization) ──────────
-// When enabled, a hand MediaPipe reports as "Left" is mirrored (x → -x on the
-// normalized, wrist-relative coords) so the model always sees a right-handed sign.
-// The rule is camera-independent (the front-camera bitmap flip is already encoded
-// in the reported label). When disabled, behavior is byte-identical to before.
-private const val LEFT_HANDED_SUPPORT_ENABLED = true
+// Do not canonicalize handedness at inference time. Uploaded clips are stored in
+// their observed orientation, so changing only the phone-side features is a hard
+// train/inference mismatch (measured: 96.1% complete-clip accuracy fell to 24.8%
+// when those clips were mirrored). Training now mirror-augments both orientations,
+// while the phone preserves the raw MediaPipe orientation it was trained against.
+private const val LEFT_HANDED_SUPPORT_ENABLED = false
 // On-device calibration (HANDEDNESS_TEST log, both cameras, both hands, 0.95-0.97
 // confidence, 2026-07-13) confirmed MediaPipe's Left/Right label matches the true
 // anatomical hand identically on front AND back camera — no inversion. If a future
@@ -136,9 +137,6 @@ class MainActivity : AppCompatActivity() {
     private var modelInitJob: Job? = null
     // Reused per frame instead of allocating a Matrix for every camera frame.
     private val frameMatrix = Matrix()
-
-    // Add this variable at the top of MainActivity
-    private var frameCounter = 0
 
     // ── Per-frame UI coalescing ───────────────────────────────────────────────
     // The landmarker callback used to post TWO separate runOnUiThread messages per
@@ -911,7 +909,10 @@ private fun setActiveNavItem(activeId: Int) {
 
         val analysis = ImageAnalysis.Builder()
             .setTargetRotation(binding.cameraPreview.display?.rotation ?: android.view.Surface.ROTATION_0)
-            .setTargetResolution(android.util.Size(240, 180))
+            // 240x180 caused avoidable landmark and pose failures. The classifier
+            // depends heavily on pose wrists for hand trajectory, so use enough
+            // pixels for MediaPipe to resolve the upper body and finger shape.
+            .setTargetResolution(android.util.Size(480, 360))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
@@ -925,28 +926,14 @@ private fun setActiveNavItem(activeId: Int) {
                 imageProxy.close()
                 return@setAnalyzer
             }
-            frameCounter++
-            // Skip every 2nd frame: MediaPipe runs on half the camera frames.
-            //
-            // Combined with PredictionService.MOTION_SLIDE_INTERVAL = 2, an LSTM pass
-            // therefore happens on every 4th CAMERA frame — roughly 7.5 Hz at 30 fps.
-            // That is the cadence the firing constants were tuned against
-            // (MOTION_EARLY_STREAK = 10 ≈ 40 camera frames ≈ 1.3 s of held sign), so
-            // changing this skip silently retunes MOTION_EARLY_STREAK / EARLY_EXIT_STREAK
-            // in wall-clock terms. Re-run sigla-ml/tools/simulate_early_fire.py before
-            // altering it.
-            //
-            // STRATEGY_KEEP_ONLY_LATEST means CameraX drops stale frames if MediaPipe
-            // falls behind, so the real rate self-limits to what the device sustains.
-            if (frameCounter % 2 == 0) {
-                imageProxy.close()
-                return@setAnalyzer
-            }
+            // Submit every available frame. CameraX and MediaPipe already apply
+            // keep-latest/flow-limiting backpressure, so manually discarding half
+            // the stream only removes temporal evidence from fast signs.
             val t0              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val t1              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
-            val prepared        = prepareBitmap(bitmap, rotationDegrees, isFrontCamera)
+            val prepared        = prepareBitmap(bitmap, rotationDegrees)
             val t2              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             lm.detectAsync(prepared, SystemClock.elapsedRealtime())
             val t3              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
@@ -1046,8 +1033,9 @@ private fun setActiveNavItem(activeId: Int) {
         handsDetected: Int,
     ): FloatArray {
         if (!LEFT_HANDED_SUPPORT_ENABLED) {
-            // Legacy behavior: unconditionally mirror the whole frame on the front camera.
-            return if (isFrontCamera) mirrorHandX(features) else features
+            // Preserve the exact orientation produced by MediaPipe. Training-time
+            // mirror augmentation provides handedness robustness symmetrically.
+            return features
         }
 
         // Gesture boundary: when hands disappear long enough, reset the latch.
@@ -1169,14 +1157,14 @@ private fun setActiveNavItem(activeId: Int) {
      * Rotates the analysis frame upright for MediaPipe.
      *
      * Rotation is the ONLY transform. The previous version also computed a
-     * downscale to 640 px, but ImageAnalysis is configured at 240x180, so `scale`
-     * was always 1f and that branch never ran. The front camera is likewise not
+     * downscale to 640 px, but ImageAnalysis is already configured below that, so
+     * `scale` was always 1f and that branch never ran. The front camera is likewise not
      * mirrored here — the model wants the unmirrored scene and PreviewView handles
      * display mirroring — yet `frontCamera` gated the no-op fast path, forcing a
      * full bitmap copy on the front camera even when the frame needed nothing done
-     * to it. Both are gone; the parameter is kept only for call-site clarity.
+     * to it. Both are gone.
      */
-    private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int, frontCamera: Boolean): Bitmap {
+    private fun prepareBitmap(bitmap: Bitmap, rotationDegrees: Int): Bitmap {
         // No rotation needed — hand the camera's own bitmap straight through and
         // skip a ~180 KB allocation plus the copy. In portrait this is rare
         // (rotationDegrees is typically 90/270), but it costs nothing to check.

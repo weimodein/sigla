@@ -54,6 +54,8 @@ MIN_COMPLETE_GESTURE_FRAMES = 36
 MOTION_SLIDE_INTERVAL = 2
 MOTION_THRESHOLD      = 0.80
 MOTION_EARLY_CONF     = 0.80
+MOTION_MIN_MARGIN     = 0.15
+MIN_POSE_FRAMES       = 24
 MOTION_EARLY_STREAK   = 10
 EARLY_EXIT_THRESHOLD  = 0.95
 # Shorter than MOTION_EARLY_STREAK so the high-confidence tier fires SOONER. When both
@@ -112,8 +114,14 @@ class Simulator:
 
     def _predict(self, buffer: list):
         window = extract_motion_window(buffer)
+        pose_frames = np.any(window[:, 126:147] != 0, axis=1).sum()
+        if pose_frames < MIN_POSE_FRAMES:
+            return None, None
         probs = self.model.predict(window[np.newaxis, ...], verbose=0)[0]
         idx = int(np.argmax(probs))
+        second = float(np.partition(probs, -2)[-2]) if len(probs) > 1 else 0.0
+        if float(probs[idx]) - second < MOTION_MIN_MARGIN:
+            return None, None
         return idx, float(probs[idx])
 
     def run(self, sequence: np.ndarray):
@@ -160,6 +168,9 @@ class Simulator:
 
             for force in runs:
                 idx, conf = self._predict(buffer)
+                if idx is None:
+                    streak, streak_label = 0, -1
+                    continue
 
                 if self.legacy:
                     # BUG 1: both tiers incremented, so a >=0.95 frame counted twice.
@@ -215,7 +226,7 @@ class Simulator:
         # real app, which was the case before D3 split the two force reasons.
         if not self.legacy and len(buffer) >= MIN_MOTION_FRAMES:
             idx, conf = self._predict(buffer)
-            if conf >= MOTION_THRESHOLD:
+            if idx is not None and conf >= MOTION_THRESHOLD:
                 return idx, conf, len(sequence) - 1
 
         return None, None, None

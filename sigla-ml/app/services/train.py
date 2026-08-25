@@ -1,7 +1,9 @@
 import os
 import re
+import json
 import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import precision_score, recall_score, f1_score, classification_report, confusion_matrix
 from app.utils.preprocessor import (
     fetch_approved_samples,
     prepare_motion_dataset,
@@ -43,6 +45,12 @@ TRAIN_SEED = int(os.getenv("TRAIN_SEED", 42))
 # frames a backward pass reads are already in hand.
 MODEL_ARCH = os.getenv("MODEL_ARCH", "lstm").strip().lower()
 _VALID_ARCHS = ("lstm", "bilstm_half", "bilstm_full")
+
+# Select the deployment epoch on a completely held-out signer. A random clip split
+# puts every signer on both sides and produced the near-100% number that did not
+# reproduce on a live user. The final model is still rebuilt on all approved clips.
+GROUP_MODEL_SELECTION = os.getenv("GROUP_MODEL_SELECTION", "true").lower() == "true"
+MODEL_SELECTION_SIGNER_FOLD = int(os.getenv("MODEL_SELECTION_SIGNER_FOLD", 0))
 
 
 def set_global_seed(seed: int = TRAIN_SEED) -> None:
@@ -202,7 +210,11 @@ def train(version_number: str, model_id: int) -> dict:
     # Split happens BEFORE augmentation inside prepare_motion_dataset, so X_val/y_val
     # is real, unaugmented data the model never trained on — a genuine holdout.
     print(f"\n--- Training Motion Model (LSTM) — {total_classes} classes ---")
-    X_train, y_train, X_val, y_val, motion_label_map, real_counts = prepare_motion_dataset(motion_dataset)
+    X_train, y_train, X_val, y_val, motion_label_map, real_counts = prepare_motion_dataset(
+        motion_dataset,
+        fold=MODEL_SELECTION_SIGNER_FOLD if GROUP_MODEL_SELECTION else None,
+        group_by_session=GROUP_MODEL_SELECTION,
+    )
 
     selection_model = build_motion_model(len(motion_label_map))
 
@@ -259,15 +271,47 @@ def train(version_number: str, model_id: int) -> dict:
     # scores every sample while held out. Nothing in this function can produce an
     # unbiased estimate: the split it evaluates is the split it selected on.
     selection_best = max(history.history["val_accuracy"])
+    selection_predictions = (
+        np.argmax(selection_model.predict(X_val, verbose=0), axis=1)
+        if len(X_val) else np.array([], dtype=np.int64)
+    )
     if len(X_val):
-        _, accuracy = selection_model.evaluate(X_val, y_val, verbose=0)
+        accuracy = float(np.mean(selection_predictions == y_val))
+        precision = float(precision_score(y_val, selection_predictions, average="weighted", zero_division=0))
+        recall = float(recall_score(y_val, selection_predictions, average="weighted", zero_division=0))
+        f1 = float(f1_score(y_val, selection_predictions, average="weighted", zero_division=0))
+        ordered_indices = list(range(len(motion_label_map)))
+        ordered_labels = [motion_label_map[i] for i in ordered_indices]
+        report = classification_report(
+            y_val, selection_predictions,
+            labels=ordered_indices,
+            target_names=ordered_labels,
+            zero_division=0,
+        )
+        matrix = confusion_matrix(y_val, selection_predictions, labels=ordered_indices)
+        confusions = sorted(
+            (
+                (int(matrix[t, p]), ordered_labels[t], ordered_labels[p])
+                for t in ordered_indices for p in ordered_indices
+                if t != p and matrix[t, p] > 0
+            ),
+            reverse=True,
+        )
+        confusion_lines = "\n".join(
+            f"  {true_label} -> predicted as {pred_label}: {count}"
+            for count, true_label, pred_label in confusions
+        ) or "  (none - every held-out sample classified correctly)"
     else:
-        accuracy = selection_best
+        accuracy = float(selection_best)
+        precision = recall = f1 = accuracy
+        report = "No held-out samples were available."
+        confusion_lines = "  (no held-out samples)"
 
-    print(f"Motion model val accuracy (restored weights): {accuracy:.4f}")
+    selection_name = "held-out signer" if GROUP_MODEL_SELECTION else "random selection split"
+    print(f"Motion model {selection_name} accuracy (restored weights): {accuracy:.4f}")
     print(f"  best epoch during training (optimistic, selection metric): {selection_best:.4f}")
-    print(f"  NOTE: both are measured on the model-selection split. For a")
-    print(f"        generalization estimate run: python tools/cross_validate.py")
+    print(f"  NOTE: this split selected the epoch. For a multi-signer")
+    print(f"        estimate run: python tools/cross_validate.py --group-by-session")
 
     # The holdout above chooses the epoch; it must not also cost the deployed model
     # 20% of the real recordings. Rebuild from fresh weights and fit a final model
@@ -315,11 +359,36 @@ def train(version_number: str, model_id: int) -> dict:
     label_map_path = os.path.join(version_dir, "labels_motion.json")
     save_label_map(motion_label_map, label_map_path)
 
+    # Preserve the only honest pre-deployment evaluation. test.py must not load the
+    # final all-data model and score rows that model trained on, which was the source
+    # of the misleading near-100% "test" result in the admin UI.
+    selection_metrics = {
+        "accuracy": round(accuracy, 4),
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "f1_score": round(f1, 4),
+        "classification_report": report,
+        "top_confusions": confusion_lines,
+        "is_generalization_estimate": False,
+        "evaluation_note": (
+            "Measured on one completely held-out signer before the deployment model "
+            "was rebuilt on all approved clips. This split selected the epoch; run "
+            "tools/cross_validate.py --group-by-session for a multi-signer estimate."
+            if GROUP_MODEL_SELECTION else
+            "Measured on the epoch-selection split before the final all-data fit."
+        ),
+    }
+    metrics_path = os.path.join(version_dir, "selection_metrics.json")
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        json.dump(selection_metrics, f, indent=2)
+
     motion_tflite_url = upload_model_to_supabase(tflite_path, version_number, "motion")
     motion_h5_url     = upload_model_to_supabase(h5_path,     version_number, "motion_h5")
 
     with open(label_map_path, "rb") as f:
         upload_file(BUCKET_MODELS, f"{version_number}/labels_motion.json", f.read(), "application/json")
+    with open(metrics_path, "rb") as f:
+        upload_file(BUCKET_MODELS, f"{version_number}/selection_metrics.json", f.read(), "application/json")
 
     print(f"\n{'='*50}")
     print(f"Training complete for version: {version_number}")
@@ -331,15 +400,20 @@ def train(version_number: str, model_id: int) -> dict:
         "version_number":     version_number,
         "model_id":           model_id,
         "total_classes":      total_classes,
-        # Restored-weights score on the model-selection split. Still optimistic
-        # (it is the split that selected the weights) but no longer the max over
-        # 200 epochs. tools/cross_validate.py is the trustworthy number.
+        # Restored-weights score on the epoch-selection split. It is held out by
+        # signer by default, but still selected the epoch; grouped cross-validation
+        # remains the trustworthy multi-signer number.
         "accuracy":           round(float(accuracy), 4),
         "selection_best_accuracy": round(float(selection_best), 4),
         "selected_epoch":      best_epoch,
         "deployment_real_samples": int(sum(full_real_counts.values())),
         "deployment_fit_samples": int(len(X_full)),
-        "accuracy_note":      "measured on the model-selection split; run cross_validate.py for a generalization estimate",
+        "accuracy_note":      (
+            "measured on a held-out signer used for epoch selection; run "
+            "cross_validate.py --group-by-session for a multi-signer estimate"
+            if GROUP_MODEL_SELECTION else
+            "measured on the model-selection split; run cross_validate.py for a generalization estimate"
+        ),
         "tflite_url":         motion_tflite_url,
         "h5_url":             motion_h5_url,
     }

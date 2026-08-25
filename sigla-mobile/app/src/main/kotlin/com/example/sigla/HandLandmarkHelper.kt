@@ -36,7 +36,7 @@ internal const val POSE_RSHOULDER = 2
 // (shoulders/nose) are near-static, so the normalized block barely changes between
 // consecutive frames. Training uses same-frame pose; raise/lower this only with an
 // on-device accuracy check.
-private const val POSE_DETECT_INTERVAL = 3
+private const val POSE_DETECT_INTERVAL = 1
 
 data class LandmarkResult(
     val handsDetected: Int,

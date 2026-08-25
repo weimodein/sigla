@@ -105,14 +105,24 @@ object ModelUpdateManager {
 
                 // model.tflite_url is the (motion) LSTM model — the only model.
                 val remoteModelUrl = model.tflite_url
-                // A matching version is only "up to date" if BOTH files are present.
+                val localModelFile = File(context.filesDir, "sign_model_motion.tflite")
+                val expectedChecksum = model.checksum
+                val localChecksumMatches = expectedChecksum.isNullOrBlank() ||
+                    (localModelFile.exists() &&
+                        computeSha256(localModelFile).equals(expectedChecksum, ignoreCase = true))
+
+                // A matching version/URL is only "up to date" if BOTH files are
+                // present and the local model checksum still matches the deployed
+                // bytes. Retraining under the same version otherwise left the phone
+                // permanently using its old cached model.
                 // Without the labels check, a device missing labels_motion.json (the
                 // labels download used to be optional) would report itself current
                 // forever and never recover.
                 if (remoteVersion == cachedVersion &&
                     remoteModelUrl == getCachedStaticUrl(context) &&
                     hasLocalModel(context) &&
-                    hasLocalLabels(context)
+                    hasLocalLabels(context) &&
+                    localChecksumMatches
                 ) {
                     Log.i(TAG, "Model up-to-date (v$remoteVersion)")
                     return@withContext true
@@ -154,12 +164,11 @@ object ModelUpdateManager {
                 // every prediction confidently mislabelled. PredictionService's count
                 // check only catches that when the class count also changed, which is
                 // exactly the case a word-swap retrain does not produce.
-                val modelDest  = File(context.filesDir, "sign_model_motion.tflite")
+                val modelDest  = localModelFile
                 val labelsDest = File(context.filesDir, "labels_motion.json")
                 val modelStaging  = File(context.filesDir, "sign_model_motion.tflite.staging")
                 val labelsStaging = File(context.filesDir, "labels_motion.json.staging")
 
-                val expectedChecksum = model.checksum
                 if (!downloadAndVerifyToStaging(remoteModelUrl, modelStaging, expectedChecksum)) {
                     Log.e(TAG, "Motion model download/verify failed — keeping existing model if any")
                     modelStaging.delete()

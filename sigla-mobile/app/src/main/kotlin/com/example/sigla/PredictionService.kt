@@ -36,6 +36,8 @@ private const val MIN_COMPLETE_GESTURE_FRAMES = 36
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
 private const val MOTION_THRESHOLD       = 0.80f  // min confidence to accept a prediction
 private const val MOTION_EARLY_CONF      = 0.80f  // confidence for early-exit streak counting
+private const val MOTION_MIN_MARGIN      = 0.15f  // top-1 must clearly beat the runner-up
+private const val MIN_POSE_FRAMES        = 24     // 80% of the model's 30-frame input
 // Raised from 5/6 to 10/10 (2026-07-19) after simulating the live streak/early-exit logic
 // against every real stored sample: at the old values, several signs that share an opening
 // movement with another sign (GOOD EVENING/GOOD AFTERNOON, GOOD MORNING/HELLO, YES/YESTERDAY,
@@ -232,6 +234,22 @@ private enum class ForceReason { NONE, TIMER, END_OF_GESTURE }
  * even when it was fast; an in-flight gesture needs a peak-centerable buffer. */
 internal fun hasEnoughGestureEvidence(frameCount: Int, endOfGesture: Boolean): Boolean =
     endOfGesture || frameCount >= MIN_COMPLETE_GESTURE_FRAMES
+
+/** The deployed model was trained with pose present in every approved frame and
+ * drops close to chance when that block is missing. Refuse an out-of-distribution
+ * window instead of returning a confidently wrong word. */
+internal fun hasSufficientPoseCoverage(frames: List<FloatArray>): Boolean =
+    frames.count(::posePresent) >= MIN_POSE_FRAMES
+
+/** Difference between the winning probability and the next-best class. */
+internal fun topPredictionMargin(probabilities: FloatArray, best: Int): Float {
+    if (best !in probabilities.indices) return 0f
+    var second = Float.NEGATIVE_INFINITY
+    for (i in probabilities.indices) {
+        if (i != best && probabilities[i] > second) second = probabilities[i]
+    }
+    return if (second == Float.NEGATIVE_INFINITY) 1f else probabilities[best] - second
+}
 
 /**
  * Progress of the in-flight gesture, delivered to the UI once per buffered frame.
@@ -576,9 +594,23 @@ class PredictionService(private val context: Context) {
         frameSnapshot.addAll(frameBuffer)
 
         val idx = runMotionInference(frameSnapshot)
-        if (idx < 0) return null
+        if (idx < 0) {
+            motionEarlyStreak = 0
+            motionEarlyLabel = -1
+            return null
+        }
         val conf  = motionOutputArr[0][idx]
         val label = motionLabels.getOrNull(idx) ?: return null
+        val margin = topPredictionMargin(motionOutputArr[0], idx)
+
+        // High softmax confidence alone is not a reliable uncertainty signal.
+        // Require separation from the runner-up, especially for visually similar
+        // phrases such as GOOD AFTERNOON / GOOD EVENING.
+        if (margin < MOTION_MIN_MARGIN) {
+            motionEarlyStreak = 0
+            motionEarlyLabel = -1
+            return null
+        }
 
         // Count the streak EXACTLY ONCE per inference. The two confidence tiers below
         // must stay mutually exclusive: EARLY_EXIT_THRESHOLD (0.95) is above
@@ -663,6 +695,7 @@ class PredictionService(private val context: Context) {
                 return -1
             }
         }
+        if (!hasSufficientPoseCoverage(seq)) return -1
 
         // Reused tensor; the inner references are rebound to this window's frames.
         val row = motionInputArr[0]
