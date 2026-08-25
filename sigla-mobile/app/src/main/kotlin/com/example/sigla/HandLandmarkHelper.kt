@@ -36,7 +36,7 @@ internal const val POSE_RSHOULDER = 2
 // (shoulders/nose) are near-static, so the normalized block barely changes between
 // consecutive frames. Training uses same-frame pose; raise/lower this only with an
 // on-device accuracy check.
-private const val POSE_DETECT_INTERVAL = 1
+private const val POSE_DETECT_INTERVAL = 2
 
 data class LandmarkResult(
     val handsDetected: Int,
@@ -45,6 +45,11 @@ data class LandmarkResult(
     // frame coords, for the on-screen overlay. Flat arrays avoid the ~42 boxed Pair
     // allocations per frame that were feeding the GC. Empty list = no hands.
     val landmarks: List<FloatArray>,
+    // Dimensions of the image coordinate system used by MediaPipe after applying
+    // ImageProcessingOptions rotation. OverlayView needs this aspect ratio to
+    // reproduce PreviewView's FILL_CENTER crop instead of stretching landmarks.
+    val sourceWidth: Int = 1,
+    val sourceHeight: Int = 1,
     // Per hand-slot MediaPipe handedness ("Left"/"Right"/null) and its score,
     // aligned to the same slot index as `features` (slot 0 = features[0..62]).
     val handedness: List<String?> = emptyList(),
@@ -76,6 +81,8 @@ class HandLandmarkHelper(
     // nanoTime of the most recent detectAsync submission, for graph-latency
     // profiling only. Volatile: written on the camera thread, read on MediaPipe's.
     @Volatile private var lastSubmitNs = 0L
+    @Volatile private var lastSourceWidth = 1
+    @Volatile private var lastSourceHeight = 1
 
     // LIVE_STREAM mode: async, non-blocking — fastest for real-time camera feeds
     val isLiveStream: Boolean get() = onResult != null
@@ -203,6 +210,12 @@ class HandLandmarkHelper(
         val lmk = landmarker ?: return
         try {
             val mpImage: MPImage = BitmapImageBuilder(bitmap).build()
+            // MainActivity supplies an already-upright portrait bitmap. Keeping the
+            // pixels and returned coordinates in the same orientation is essential:
+            // rotation metadata made inference upright but left this device's result
+            // coordinates in the original sideways camera-buffer space.
+            lastSourceWidth = bitmap.width
+            lastSourceHeight = bitmap.height
             lastSubmitNs = System.nanoTime()
             lmk.detectAsync(mpImage, frameTimestampMs)
             // Pose only every Nth frame — hands run every frame.
@@ -269,12 +282,24 @@ class HandLandmarkHelper(
         // in raw frame coords for drawing.
         normalizeFrame(features)
         return LandmarkResult(
-            numHands, features, drawData, handLabels, handScores, graphLatencyMs()
+            handsDetected = numHands,
+            features = features,
+            landmarks = drawData,
+            sourceWidth = lastSourceWidth,
+            sourceHeight = lastSourceHeight,
+            handedness = handLabels,
+            handednessScore = handScores,
+            graphLatencyMs = graphLatencyMs(),
         )
     }
 
     private fun empty() =
-        LandmarkResult(0, FloatArray(FEATURE_SIZE), emptyList(), graphLatencyMs = graphLatencyMs())
+        LandmarkResult(
+            0, FloatArray(FEATURE_SIZE), emptyList(),
+            sourceWidth = lastSourceWidth,
+            sourceHeight = lastSourceHeight,
+            graphLatencyMs = graphLatencyMs(),
+        )
 
     /** Time from the last detectAsync submission to now, in ms. Profiling only. */
     private fun graphLatencyMs(): Double {

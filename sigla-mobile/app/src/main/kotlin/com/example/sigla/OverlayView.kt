@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
+import kotlin.math.max
 
 private val CONNECTIONS = listOf(
     0 to 1, 1 to 2, 2 to 3, 3 to 4,
@@ -15,6 +16,30 @@ private val CONNECTIONS = listOf(
     0 to 17, 17 to 18, 18 to 19, 19 to 20,
     5 to 9, 9 to 13, 13 to 17
 )
+
+internal data class FillCenterTransform(
+    val scale: Float,
+    val offsetX: Float,
+    val offsetY: Float,
+)
+
+/** Same uniform scale + centred crop used by PreviewView.ScaleType.FILL_CENTER. */
+internal fun fillCenterTransform(
+    sourceWidth: Float,
+    sourceHeight: Float,
+    viewWidth: Float,
+    viewHeight: Float,
+): FillCenterTransform {
+    if (sourceWidth <= 0f || sourceHeight <= 0f) {
+        return FillCenterTransform(1f, 0f, 0f)
+    }
+    val scale = max(viewWidth / sourceWidth, viewHeight / sourceHeight)
+    return FillCenterTransform(
+        scale = scale,
+        offsetX = (viewWidth - sourceWidth * scale) / 2f,
+        offsetY = (viewHeight - sourceHeight * scale) / 2f,
+    )
+}
 
 class OverlayView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -62,8 +87,17 @@ class OverlayView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val scaleX = width / srcWidth
-        val scaleY = height / srcHeight
+        val transform = fillCenterTransform(
+            srcWidth, srcHeight, width.toFloat(), height.toFloat()
+        )
+
+        fun drawX(normalizedX: Float): Float {
+            val x = transform.offsetX + normalizedX * srcWidth * transform.scale
+            return if (isMirrored) width - x else x
+        }
+
+        fun drawY(normalizedY: Float): Float =
+            transform.offsetY + normalizedY * srcHeight * transform.scale
 
         for ((handIdx, hand) in landmarks.withIndex()) {
             val dp = if (handIdx == 0) dotPaint else dot2Paint
@@ -72,32 +106,19 @@ class OverlayView @JvmOverloads constructor(
 
             for ((a, b) in CONNECTIONS) {
                 if (a < n && b < n) {
-                    var x1 = hand[a * 2] * srcWidth * scaleX
-                    var x2 = hand[b * 2] * srcWidth * scaleX
-
-                    // Mirror X coordinates if needed
-                    if (isMirrored) {
-                        x1 = width - x1
-                        x2 = width - x2
-                    }
-
                     canvas.drawLine(
-                        x1,
-                        hand[a * 2 + 1] * srcHeight * scaleY,
-                        x2,
-                        hand[b * 2 + 1] * srcHeight * scaleY,
+                        drawX(hand[a * 2]),
+                        drawY(hand[a * 2 + 1]),
+                        drawX(hand[b * 2]),
+                        drawY(hand[b * 2 + 1]),
                         lp
                     )
                 }
             }
             for (i in 0 until n) {
-                var drawX = hand[i * 2] * srcWidth * scaleX
-                if (isMirrored) {
-                    drawX = width - drawX
-                }
                 canvas.drawCircle(
-                    drawX,
-                    hand[i * 2 + 1] * srcHeight * scaleY,
+                    drawX(hand[i * 2]),
+                    drawY(hand[i * 2 + 1]),
                     6f, dp
                 )
             }

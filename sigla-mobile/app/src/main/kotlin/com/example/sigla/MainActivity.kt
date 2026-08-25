@@ -37,6 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.delay
 
 private const val TAG               = "MainActivity"
@@ -146,6 +147,11 @@ class MainActivity : AppCompatActivity() {
     // reads them and applies both updates in a single pass.
     @Volatile private var pendingCollectPct    = -1
     @Volatile private var pendingCollectFrames = -1
+
+    // Keep at most one overlay render queued. A newer MediaPipe result replaces
+    // the staged result instead of building a visible backlog of stale frames.
+    @Volatile private var pendingOverlayResult: LandmarkResult? = null
+    private val overlayPostPending = AtomicBoolean(false)
 
     // Last values actually written to the status views. progress is frames/30 capped,
     // so it repeats constantly — and every redundant setText costs a measure/layout
@@ -303,20 +309,7 @@ class MainActivity : AppCompatActivity() {
                     // synchronously on this same callback thread, so anything it
                     // handed to onCollecting is already staged in the pending*
                     // fields by the time this block runs.
-                    runOnUiThread {
-                        val width = binding.cameraPreview.width.toFloat()
-                        val height = binding.cameraPreview.height.toFloat()
-
-                        // result.landmarks is already List<FloatArray> - no conversion needed!
-                        binding.overlayView.setLandmarks(
-                            result.landmarks,  // This is already the right format
-                            width,
-                            height,
-                            isFrontCamera  // ← Just pass the mirror flag
-                        )
-
-                        flushCollectingState()
-                    }
+                    enqueueOverlayUpdate(result)
                 }
 
                 val service = PredictionService(applicationContext)
@@ -405,6 +398,7 @@ class MainActivity : AppCompatActivity() {
     private fun stopVision() {
         if (!visionActive) return
         visionActive = false
+        pendingOverlayResult = null
 
         modelInitJob?.cancel()
         modelInitJob = null
@@ -645,6 +639,38 @@ class MainActivity : AppCompatActivity() {
                 binding.tvBufferPercent.text = "0%"
                 binding.overlayView.clear()
                 binding.tvHandsWarning.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun enqueueOverlayUpdate(result: LandmarkResult) {
+        pendingOverlayResult = result
+        if (overlayPostPending.compareAndSet(false, true)) {
+            runOnUiThread { drainOverlayUpdate() }
+        }
+    }
+
+    /** Runs on the main thread and renders only the newest staged result. */
+    private fun drainOverlayUpdate() {
+        val displayed = pendingOverlayResult
+        try {
+            if (visionActive && displayed != null) {
+                binding.overlayView.setLandmarks(
+                    displayed.landmarks,
+                    displayed.sourceWidth.toFloat(),
+                    displayed.sourceHeight.toFloat(),
+                    isFrontCamera,
+                )
+                flushCollectingState()
+            }
+        } finally {
+            overlayPostPending.set(false)
+            // A callback may have replaced the staged result while this draw ran.
+            // Schedule exactly one follow-up; the same gate prevents duplicates.
+            if (pendingOverlayResult !== displayed &&
+                overlayPostPending.compareAndSet(false, true)
+            ) {
+                binding.root.post { drainOverlayUpdate() }
             }
         }
     }
@@ -896,16 +922,12 @@ private fun setActiveNavItem(activeId: Int) {
             it.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
         }
 
-        // For front camera, mirror the preview
-        if (isFrontCamera) {
-            // CameraX PreviewView handles mirroring automatically for front camera
-            // But if you need to force it:
-            binding.cameraPreview.scaleX = -1f
-            binding.cameraPreview.scaleY = 1f
-        } else {
-            binding.cameraPreview.scaleX = 1f
-            binding.cameraPreview.scaleY = 1f
-        }        
+        // PreviewView mirrors front-camera output automatically. A manual scaleX=-1
+        // applied a second flip while OverlayView mirrored once, so the two diverged.
+        binding.cameraPreview.scaleX = 1f
+        binding.cameraPreview.scaleY = 1f
+        binding.cameraPreview.scaleType =
+            androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
 
         val analysis = ImageAnalysis.Builder()
             .setTargetRotation(binding.cameraPreview.display?.rotation ?: android.view.Surface.ROTATION_0)
@@ -933,6 +955,10 @@ private fun setActiveNavItem(activeId: Int) {
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
             val t1              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
+            // Rotate the actual pixels into the same upright portrait orientation as
+            // PreviewView. MediaPipe rotation metadata can orient inference while its
+            // returned landmarks remain in the sideways source-buffer coordinates,
+            // which rotates both the overlay and the classifier features by 90°.
             val prepared        = prepareBitmap(bitmap, rotationDegrees)
             val t2              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             lm.detectAsync(prepared, SystemClock.elapsedRealtime())
