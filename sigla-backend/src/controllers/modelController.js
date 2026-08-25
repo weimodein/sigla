@@ -304,7 +304,14 @@ const trainModel = async (req, res) => {
         const response = await axios.post(
           `${ML_SERVICE_URL}/train`,
           { version_number, model_id: modelRecord.id },
-          { timeout: 20 * 60 * 1000, headers: { "ngrok-skip-browser-warning": "1" } },
+          {
+            // TensorFlow training can exceed 20 minutes, especially now that the
+            // deployment model is refit on the complete dataset. Axios interprets
+            // zero as no client-side timeout; the job remains tracked through the
+            // model row and the admin continues polling its status.
+            timeout: 0,
+            headers: { "ngrok-skip-browser-warning": "1" },
+          },
         );
         const r = response.data;
 

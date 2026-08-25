@@ -204,7 +204,7 @@ def train(version_number: str, model_id: int) -> dict:
     print(f"\n--- Training Motion Model (LSTM) — {total_classes} classes ---")
     X_train, y_train, X_val, y_val, motion_label_map, real_counts = prepare_motion_dataset(motion_dataset)
 
-    model = build_motion_model(len(motion_label_map))
+    selection_model = build_motion_model(len(motion_label_map))
 
     # Class weights from REAL pre-augmentation counts, not from y_train.
     #
@@ -231,16 +231,16 @@ def train(version_number: str, model_id: int) -> dict:
           + ", ".join(f"{motion_label_map[c]}={class_weight_dict[c]:.2f}"
                       for c in sorted(class_weight_dict, key=class_weight_dict.get, reverse=True)[:3]))
 
+    # Keep the optimizer schedule validation-independent. The final all-data fit
+    # has no validation loss, so a ReduceLROnPlateau(val_loss) schedule selected
+    # here could not be reproduced there. This also matches cross_validate.py.
     callbacks = [
         keras.callbacks.EarlyStopping(
             monitor="val_accuracy", patience=20, restore_best_weights=True
         ),
-        keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss", factor=0.5, patience=10
-        ),
     ]
 
-    history = model.fit(
+    history = selection_model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
         epochs=200,
@@ -260,7 +260,7 @@ def train(version_number: str, model_id: int) -> dict:
     # unbiased estimate: the split it evaluates is the split it selected on.
     selection_best = max(history.history["val_accuracy"])
     if len(X_val):
-        _, accuracy = model.evaluate(X_val, y_val, verbose=0)
+        _, accuracy = selection_model.evaluate(X_val, y_val, verbose=0)
     else:
         accuracy = selection_best
 
@@ -268,6 +268,44 @@ def train(version_number: str, model_id: int) -> dict:
     print(f"  best epoch during training (optimistic, selection metric): {selection_best:.4f}")
     print(f"  NOTE: both are measured on the model-selection split. For a")
     print(f"        generalization estimate run: python tools/cross_validate.py")
+
+    # The holdout above chooses the epoch; it must not also cost the deployed model
+    # 20% of the real recordings. Rebuild from fresh weights and fit a final model
+    # on 100% of the deduplicated approved dataset for that fixed epoch count. The
+    # validation score remains the selection model's score above -- evaluating the
+    # all-data model on those same rows would be training accuracy, not evidence.
+    best_epoch = int(np.argmax(history.history["val_accuracy"])) + 1
+    print(f"[train] selected epoch {best_epoch}; rebuilding deployment model on 100% of real samples")
+
+    del selection_model
+    keras.backend.clear_session()
+    set_global_seed(TRAIN_SEED)
+
+    X_full, y_full, _, _, full_label_map, full_real_counts = prepare_motion_dataset(
+        motion_dataset, random_state=TRAIN_SEED, train_all=True
+    )
+    if full_label_map != motion_label_map:
+        raise ValueError("Label map changed between model selection and final fit")
+
+    full_classes = np.array(sorted(full_real_counts.keys()), dtype=np.int64)
+    full_real_labels = np.concatenate([
+        np.full(full_real_counts[c], c, dtype=np.int64) for c in full_classes
+    ])
+    full_weights = compute_class_weight(
+        'balanced', classes=full_classes, y=full_real_labels
+    )
+    full_weight_dict = {
+        int(c): float(w) for c, w in zip(full_classes, full_weights)
+    }
+
+    model = build_motion_model(len(motion_label_map))
+    model.fit(
+        X_full, y_full,
+        epochs=best_epoch,
+        batch_size=32,
+        class_weight=full_weight_dict,
+        verbose=1,
+    )
 
     # ── Step 3: Save + convert + upload ───────────────────────
     h5_path = os.path.join(version_dir, "sign_model_motion.h5")
@@ -298,6 +336,9 @@ def train(version_number: str, model_id: int) -> dict:
         # 200 epochs. tools/cross_validate.py is the trustworthy number.
         "accuracy":           round(float(accuracy), 4),
         "selection_best_accuracy": round(float(selection_best), 4),
+        "selected_epoch":      best_epoch,
+        "deployment_real_samples": int(sum(full_real_counts.values())),
+        "deployment_fit_samples": int(len(X_full)),
         "accuracy_note":      "measured on the model-selection split; run cross_validate.py for a generalization estimate",
         "tflite_url":         motion_tflite_url,
         "h5_url":             motion_h5_url,

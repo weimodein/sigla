@@ -116,9 +116,10 @@ export const generateVideoFromSequence = async (wordId, sequenceIds) => {
 // Returns 202 with { job } — the clips are uploaded synchronously, but landmark
 // extraction runs in a background job on the server. Poll getUploadJob for
 // progress; onProgress only covers the byte transfer.
-export const uploadVideos = async (wordId, files, onProgress) => {
+export const uploadVideos = async (wordId, files, sessionId, onProgress) => {
   const formData = new FormData();
   for (const file of files) formData.append("videos", file);
+  formData.append("session_id", sessionId.trim());
   const token = localStorage.getItem("token");
   const { API_URL } = await import("../utils/constants.js");
   const response = await axios.post(`${API_URL}/words/${wordId}/upload-videos`, formData, {

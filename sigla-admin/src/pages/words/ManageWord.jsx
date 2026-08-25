@@ -223,6 +223,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
   const { error: errorToast } = useToast();
   const fileRef = useRef();
   const [files, setFiles] = useState([]);
+  const [sessionId, setSessionId] = useState("");
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
 
@@ -234,11 +235,11 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
   // hands the job row to the page and closes — the page owns progress from here,
   // which is why closing the modal no longer loses the batch.
   const handleUpload = async () => {
-    if (!files.length) return;
+    if (!files.length || !sessionId.trim()) return;
     setSending(true);
     setProgress(0);
     try {
-      const data = await uploadVideos(word.id, files, (e) => {
+      const data = await uploadVideos(word.id, files, sessionId, (e) => {
         if (e.total) setProgress(Math.round((e.loaded / e.total) * 100));
       });
       onStarted(data.job);
@@ -255,13 +256,13 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
     <AppModal
       title={`Upload Files — ${word?.label}`}
       onClose={onClose}
-      onEnter={() => { if (!sending && files.length) handleUpload(); }}
+      onEnter={() => { if (!sending && files.length && sessionId.trim()) handleUpload(); }}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={sending}>
             Cancel
           </Button>
-          <Button onClick={handleUpload} loading={sending} disabled={!files.length}>
+          <Button onClick={handleUpload} loading={sending} disabled={!files.length || !sessionId.trim()}>
             Upload &amp; Extract
           </Button>
         </>
@@ -270,6 +271,23 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
       <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
         Upload video clips (.MOV, .MP4). Landmarks are extracted automatically with MediaPipe.
       </p>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>
+          Signer ID
+        </label>
+        <input
+          value={sessionId}
+          onChange={(e) => setSessionId(e.target.value)}
+          placeholder="e.g. signer-03"
+          maxLength={100}
+          disabled={sending}
+          style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
+        />
+        <p style={{ fontSize: "0.72rem", color: C.muted, marginTop: "4px" }}>
+          Reuse this ID across every word, batch, and recording session from the same person. This keeps that signer wholly in either training or evaluation.
+        </p>
+      </div>
 
       <div
         onClick={() => fileRef.current?.click()}

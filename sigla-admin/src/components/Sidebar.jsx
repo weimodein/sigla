@@ -61,7 +61,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
          drawer is closed — an off-canvas element is still focusable otherwise,
          so keyboard users would tab into an invisible nav. */
       aria-hidden={isMobile && !drawerOpen ? "true" : undefined}
-      inert={isMobile && !drawerOpen ? "" : undefined}
+      inert={isMobile && !drawerOpen}
       style={{
         width: isCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
         background: SURFACE,

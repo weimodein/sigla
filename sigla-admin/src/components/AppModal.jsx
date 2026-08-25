@@ -1,4 +1,12 @@
-import { useEffect, useRef, Children, cloneElement, isValidElement } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  Children,
+  Fragment,
+  cloneElement,
+  isValidElement,
+} from "react";
 import { X } from "lucide-react";
 import { useModalKeys } from "./useModalKeys.js";
 
@@ -15,16 +23,22 @@ const FOCUSABLE = [
    Exported so the few overlays that don't use AppModal can match it. */
 export const ModalFooter = ({ children, className = "" }) => {
   // A footer with one button has nothing to cancel — that button IS the confirm,
-  // so it renders blue rather than as a grey secondary. Children.toArray flattens
-  // fragments and drops `false`/null, so a conditionally-rendered second button
-  // (ManageWord's upload primary, which unmounts once results arrive) correctly
-  // leaves an array of one. A lone destructive action stays red.
-  const items = Children.toArray(children);
+  // so it renders blue rather than as a grey secondary. A conditionally-rendered
+  // second button that disappears must correctly leave an array of one. A lone
+  // destructive action stays red.
+  // Children.toArray preserves fragments as opaque elements. Unwrap them before
+  // counting actions; cloning a fragment with `variant` is invalid React usage.
+  const flatten = (nodes) => Children.toArray(nodes).flatMap((child) =>
+    isValidElement(child) && child.type === Fragment
+      ? flatten(child.props.children)
+      : [child],
+  );
+  const items = flatten(children);
   const lone = items.length === 1 && isValidElement(items[0]);
   const content =
     lone && items[0].props.variant !== "danger"
       ? cloneElement(items[0], { variant: "primary" })
-      : children;
+      : items;
 
   return (
     <div
@@ -42,7 +56,7 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
   const panelRef   = useRef(null);
   const closingRef = useRef(false);
   const triggerRef = useRef(document.activeElement);
-  const titleId    = useRef(`modal-title-${Math.random().toString(36).slice(2)}`);
+  const titleId    = useId();
 
   // The keydown listener is on `window`, so with stacked modals (Reset Password
   // under Confirm Reset, a delete confirm over a form) every mounted instance
@@ -156,7 +170,7 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
       }}
       role="dialog"
       aria-modal="true"
-      aria-labelledby={titleId.current}
+      aria-labelledby={titleId}
       onClick={(e) => { if (e.target === e.currentTarget) startClose(); }}
     >
       {/* max-h + column flex so a tall form scrolls INSIDE the body, keeping the
@@ -177,7 +191,7 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
           style={{ borderBottom: "1px solid #f0f0f0" }}
         >
           <h3
-            id={titleId.current}
+            id={titleId}
             className="text-base font-semibold text-gray-800 tracking-tight"
           >
             {title}

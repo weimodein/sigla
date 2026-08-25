@@ -20,6 +20,7 @@ from app.utils.preprocessor import (
     mirror_sequence,
     rotate_sequence,
     truncated_prefix_sequence,
+    prepare_motion_dataset,
 )
 
 from tests.test_parity import make_sequence
@@ -200,3 +201,53 @@ def test_pose_block_rotates_as_a_unit(seq):
         return np.hypot(rx - lx, ry - ly)
 
     assert shoulder_width(out[0]) == pytest.approx(shoulder_width(seq[0]), rel=1e-4)
+
+
+# -- Dataset integrity / final-fit coverage -----------------------------------
+
+def _sample(sequence, sample_id, label_session="session-a"):
+    return {
+        "sequence": sequence.tolist(),
+        "sample_id": sample_id,
+        "session_id": label_session,
+    }
+
+
+def test_exact_duplicates_are_removed_before_split(seq):
+    other = seq.copy()
+    other[:, 3] += 0.25
+    dataset = {
+        "A": [_sample(seq, 1), _sample(seq, 2), _sample(other, 3)],
+        "B": [_sample(seq + 0.5, 4), _sample(seq + 0.75, 5)],
+    }
+    X, y, _, _, labels, counts = prepare_motion_dataset(dataset, train_all=True)
+    # AUGMENTATION_FACTOR copies per unique real sequence.
+    assert counts[0] == 2
+    assert counts[1] == 2
+    assert len(X) == 4 * 6
+    assert set(y.tolist()) == set(labels.keys())
+
+
+def test_cross_label_duplicate_fails_training(seq):
+    dataset = {
+        "A": [_sample(seq, 1)],
+        "B": [_sample(seq, 2)],
+    }
+    with pytest.raises(ValueError, match="conflicting labels"):
+        prepare_motion_dataset(dataset, train_all=True)
+
+
+def test_train_all_uses_every_unique_real_sequence(seq):
+    dataset = {}
+    for class_idx, label in enumerate(("A", "B")):
+        samples = []
+        for i in range(5):
+            varied = seq.copy()
+            varied[:, 3] += class_idx + i * 0.1
+            samples.append(_sample(varied, class_idx * 10 + i))
+        dataset[label] = samples
+
+    _, _, X_val, y_val, _, counts = prepare_motion_dataset(dataset, train_all=True)
+    assert counts == {0: 5, 1: 5}
+    assert len(X_val) == 0
+    assert len(y_val) == 0

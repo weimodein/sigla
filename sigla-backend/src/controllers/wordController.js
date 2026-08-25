@@ -1623,9 +1623,11 @@ const uploadVideos = async (req, res) => {
     // Defaults to one group per upload batch, which is correct as long as a batch
     // contains one signer's clips. Pass an explicit `session_id` form field to keep
     // one signer's grouping intact across several batches.
-    const sessionId =
-      (req.body?.session_id || "").trim() ||
-      `upload_${req.user.id}_${Date.now()}`;
+    const providedSessionId = (req.body?.session_id || "").trim();
+    if (providedSessionId.length > 100) {
+      return res.status(400).json({ message: "Signer/session ID must be at most 100 characters." });
+    }
+    const sessionId = providedSessionId || `upload_${req.user.id}_${Date.now()}`;
 
     // Refuse a second concurrent batch for the same word. The UI disables its
     // upload button while a job is live, but the server cannot rely on that —

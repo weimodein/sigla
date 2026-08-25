@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import numpy as np
 import httpx
 from sklearn.model_selection import train_test_split, KFold
@@ -397,21 +398,44 @@ def _load_real_sequences(dataset: dict, with_groups: bool = False):
     """
     real = {}
     groups = {}
+    # Exact duplicates must not become extra training votes. They commonly arise
+    # when the same upload is retried, and otherwise make the model overfit that
+    # recording while making random holdouts look better than they are. Hash the
+    # stored float32 bytes before normalization so the check is deterministic and
+    # independent of later feature-pipeline changes.
+    seen_hashes = {}
     for label, samples in dataset.items():
         sequences = []
         seq_groups = []
         skipped_empty = 0
         skipped_shape = 0
+        skipped_duplicate = 0
         for sample in samples:
             sequence = sample.get("sequence", [])
             if not sequence:
                 skipped_empty += 1
                 continue
-            if len(sequence[0]) != FEATURE_SIZE:
+            try:
+                seq = np.array(sequence, dtype=np.float32)
+            except (TypeError, ValueError):
+                skipped_shape += 1
+                continue
+            if seq.ndim != 2 or seq.shape[1] != FEATURE_SIZE or not np.isfinite(seq).all():
                 skipped_shape += 1
                 continue
 
-            seq = np.array(sequence, dtype=np.float32)
+            digest = hashlib.sha256(seq.tobytes()).hexdigest()
+            previous_label = seen_hashes.get(digest)
+            if previous_label is not None:
+                if previous_label != label:
+                    raise ValueError(
+                        "Identical gesture sequence is approved under conflicting "
+                        f"labels '{previous_label}' and '{label}'. Resolve the bad "
+                        "sample before training; learning both labels is impossible."
+                    )
+                skipped_duplicate += 1
+                continue
+            seen_hashes[digest] = label
 
             # Position/scale-invariant normalization (per hand: wrist-center + hand-size
             # scale). Applied here so existing stored samples are normalized at train
@@ -439,9 +463,10 @@ def _load_real_sequences(dataset: dict, with_groups: bool = False):
                 str(sid) if sid else f"__unknown_{label}_{sample.get('sample_id', len(seq_groups))}"
             )
 
-        if skipped_empty or skipped_shape:
+        if skipped_empty or skipped_shape or skipped_duplicate:
             print(f"[preprocessor] '{label}': skipped {skipped_empty} empty and "
-                  f"{skipped_shape} wrong-width sample(s) "
+                  f"{skipped_shape} invalid-shape/non-finite and "
+                  f"{skipped_duplicate} exact-duplicate sample(s) "
                   f"(expected {FEATURE_SIZE} features/frame)")
 
         if sequences:
@@ -459,7 +484,8 @@ def _load_real_sequences(dataset: dict, with_groups: bool = False):
 
 def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: int = 42,
                            fold: int | None = None, n_splits: int = 5,
-                           group_by_session: bool = False):
+                           group_by_session: bool = False,
+                           train_all: bool = False):
     """
     Prepare a motion dataset split BEFORE augmentation, so the evaluation split is
     always pure real (unaugmented) data. Augmenting first and splitting after (the
@@ -479,6 +505,10 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
       binding constraint on accuracy. K-fold keeps every sample in training for most
       folds while still predicting each one exactly once while held out, and the
       spread across folds says whether a change is real or noise.
+
+    `train_all=True` is the final-fit mode: it creates no holdout and assigns every
+    unique real sequence to training. Use it only after the stopping epoch has been
+    selected independently (train.py does this with its first, holdout-based fit).
 
     Returns (X_train, y_train, X_val, y_val, label_map, real_train_counts).
 
@@ -535,7 +565,11 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
         sequences = real[label]
         idx = label_idx[label]
 
-        if len(sequences) < 2:
+        if train_all:
+            # Final deployment fit: epoch count has already been selected on a
+            # separate holdout, so use every approved real recording here.
+            train_seqs, val_seqs = sequences, []
+        elif len(sequences) < 2:
             # Too few real samples to hold any out — everything goes to training;
             # this class just won't have a data point in the evaluation split.
             train_seqs, val_seqs = sequences, []
