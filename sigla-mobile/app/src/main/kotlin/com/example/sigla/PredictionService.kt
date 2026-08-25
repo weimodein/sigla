@@ -63,6 +63,11 @@ private const val BUFFER_CAPACITY        = 90     // rolling frame buffer size
 private const val NO_HAND_TIMEOUT        = 6      // frames with no hands before firing onNoHands
 private const val BUFFER_FILL_MS         = 1500L  // run inference on the full window after this long
 private const val DETECTION_COOLDOWN_MS  = 2000L  // wait before accepting the next gesture
+// Average the newest overlapping temporal windows before applying confidence and
+// margin gates. A single noisy window can be confidently wrong; three nearby
+// windows must collectively support the word while adding only a few floats of work
+// (the expensive LSTM runs were already happening).
+private const val PROBABILITY_CONSENSUS_WINDOWS = 3
 
 // Latency instrumentation. Tied to BuildConfig.DEBUG so release builds skip the timing
 // calls entirely. (`val`, not `const val` — BuildConfig.DEBUG is a generated field, not
@@ -251,6 +256,24 @@ internal fun topPredictionMargin(probabilities: FloatArray, best: Int): Float {
     return if (second == Float.NEGATIVE_INFINITY) 1f else probabilities[best] - second
 }
 
+/** Mean class probabilities across recent overlapping windows. Exposed for local
+ * policy tests; production keeps only [PROBABILITY_CONSENSUS_WINDOWS] entries. */
+internal fun meanPredictionProbabilities(
+    history: Iterable<FloatArray>,
+    classCount: Int,
+): FloatArray {
+    if (classCount <= 0) return FloatArray(0)
+    val mean = FloatArray(classCount)
+    var count = 0
+    for (probabilities in history) {
+        if (probabilities.size != classCount) continue
+        for (i in 0 until classCount) mean[i] += probabilities[i]
+        count++
+    }
+    if (count > 0) for (i in mean.indices) mean[i] /= count.toFloat()
+    return mean
+}
+
 /**
  * Progress of the in-flight gesture, delivered to the UI once per buffered frame.
  *
@@ -308,6 +331,7 @@ class PredictionService(private val context: Context) {
     // Early-exit tracking
     private var motionEarlyStreak = 0
     private var motionEarlyLabel  = -1
+    private val probabilityHistory = ArrayDeque<FloatArray>()
 
     // Cooldown between detections
     private var lastDetectionTime = 0L
@@ -593,15 +617,25 @@ class PredictionService(private val context: Context) {
         frameSnapshot.clear()
         frameSnapshot.addAll(frameBuffer)
 
-        val idx = runMotionInference(frameSnapshot)
-        if (idx < 0) {
+        if (runMotionInference(frameSnapshot) < 0) {
             motionEarlyStreak = 0
             motionEarlyLabel = -1
             return null
         }
-        val conf  = motionOutputArr[0][idx]
+
+        probabilityHistory.addLast(motionOutputArr[0].copyOf())
+        while (probabilityHistory.size > PROBABILITY_CONSENSUS_WINDOWS) {
+            probabilityHistory.removeFirst()
+        }
+        val consensus = meanPredictionProbabilities(
+            probabilityHistory, motionOutputArr[0].size
+        )
+        var idx = 0
+        for (i in 1 until consensus.size) if (consensus[i] > consensus[idx]) idx = i
+
+        val conf  = consensus[idx]
         val label = motionLabels.getOrNull(idx) ?: return null
-        val margin = topPredictionMargin(motionOutputArr[0], idx)
+        val margin = topPredictionMargin(consensus, idx)
 
         // High softmax confidence alone is not a reliable uncertainty signal.
         // Require separation from the runner-up, especially for visually similar
@@ -788,6 +822,7 @@ class PredictionService(private val context: Context) {
         framesSinceMotionRun = 0
         motionEarlyStreak    = 0
         motionEarlyLabel     = -1
+        probabilityHistory.clear()
     }
 
     /**

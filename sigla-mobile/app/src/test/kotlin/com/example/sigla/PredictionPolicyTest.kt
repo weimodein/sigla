@@ -7,6 +7,32 @@ import org.junit.Test
 
 class PredictionPolicyTest {
     @Test
+    fun probabilityConsensusSuppressesOneNoisyWindow() {
+        val mean = meanPredictionProbabilities(
+            listOf(
+                floatArrayOf(0.90f, 0.10f),
+                floatArrayOf(0.85f, 0.15f),
+                floatArrayOf(0.05f, 0.95f),
+            ),
+            classCount = 2,
+        )
+
+        assertEquals(0.60f, mean[0], 0.0001f)
+        assertEquals(0.40f, mean[1], 0.0001f)
+        assertTrue(topPredictionMargin(mean, 0) > 0.15f)
+    }
+
+    @Test
+    fun probabilityConsensusIgnoresWrongSizedEntries() {
+        val mean = meanPredictionProbabilities(
+            listOf(floatArrayOf(0.7f, 0.3f), floatArrayOf(1f)),
+            classCount = 2,
+        )
+        assertEquals(0.7f, mean[0], 0.0001f)
+        assertEquals(0.3f, mean[1], 0.0001f)
+    }
+
+    @Test
     fun inFlightPartialGestureCannotEmit() {
         assertFalse(hasEnoughGestureEvidence(frameCount = 12, endOfGesture = false))
         assertFalse(hasEnoughGestureEvidence(frameCount = 30, endOfGesture = false))

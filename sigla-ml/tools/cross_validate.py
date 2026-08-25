@@ -25,9 +25,10 @@ sample in training for most folds.
 
 CAVEATS (read before trusting the number)
 -----------------------------------------
-* Single signer. All samples come from one person in one session, so this measures
-  "accuracy for this signer" and overstates performance for anyone else. Swap
-  KFold for StratifiedGroupKFold grouped on session_id once a second signer exists.
+* Use --group-by-session for the deployment-relevant estimate. Ungrouped folds put
+  recordings from the same signer on both sides and overstate new-user accuracy.
+* Grouped mode requires stable signer IDs reused across every word. It automatically
+  runs one leave-one-signer-out fold per known signer.
 * Trains K models. Slow -- roughly K x a normal training run.
 
 USAGE
@@ -117,21 +118,37 @@ def main() -> int:
         print(f"Need >=2 classes, found {len(motion_dataset)}")
         return 1
 
+    folds = args.folds
+    if args.group_by_session:
+        signer_ids = sorted({
+            str(sample.get("session_id")).strip().casefold()
+            for samples in motion_dataset.values()
+            for sample in samples
+            if sample.get("session_id")
+        })
+        if len(signer_ids) < 2:
+            print("Need at least two known signer IDs for grouped validation.")
+            return 1
+        if folds != len(signer_ids):
+            print(f"[cv] grouped validation uses one fold per signer; overriding "
+                  f"--folds {folds} with {len(signer_ids)} ({', '.join(signer_ids)})")
+        folds = len(signer_ids)
+
     per_fold_acc = []
     recall_runs = defaultdict(list)      # label -> [recall per fold]
     confusion = defaultdict(int)         # (true, pred) -> count
     label_map = {}
 
-    total = args.folds * args.repeats
+    total = folds * args.repeats
     done = 0
     for rep in range(args.repeats):
         seed = 42 + rep
-        for fold in range(args.folds):
+        for fold in range(folds):
             done += 1
             print(f"[cv] fold {done}/{total} (repeat {rep + 1}, fold {fold}) ...",
                   flush=True)
             y_true, y_pred, label_map = run_fold(
-                motion_dataset, fold, args.folds, seed, args.epochs,
+                motion_dataset, fold, folds, seed, args.epochs,
                 group_by_session=args.group_by_session,
             )
             if y_true is None:

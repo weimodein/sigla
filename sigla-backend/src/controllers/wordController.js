@@ -50,6 +50,8 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 const PER_USER_CAP = 25;         // max samples ONE user can contribute to a word
 const DEFAULT_SAMPLE_CAP = 25;   // flat total-sample cap per word, across all users
 const ACTIVATION_THRESHOLD = 20; // approved samples needed before a word is deploy-eligible (scope §17)
+const MIN_SIGNERS_PER_WORD = Number.parseInt(process.env.MIN_SIGNERS_PER_WORD || "4", 10);
+const MIN_SAMPLES_PER_SIGNER = Number.parseInt(process.env.MIN_SAMPLES_PER_SIGNER || "4", 10);
 
 // ── Helper: normalize word label ──────────────────────────────
 const normalizeLabel = (label) =>
@@ -84,13 +86,40 @@ const getApprovedSampleCount = async (wordId) => {
   });
 };
 
+// Count only known signer IDs with enough approved clips. The uploading admin is
+// not a signer identifier, and twenty clips from one person do not demonstrate
+// that a model will work for a new user.
+const getSignerCoverage = async (wordId) => {
+  const rows = await GestureSample.findAll({
+    where: {
+      word_id: wordId,
+      status: "approved",
+      session_id: { [Op.ne]: null },
+    },
+    attributes: ["session_id"],
+    raw: true,
+  });
+  const counts = {};
+  for (const row of rows) {
+    const signer = String(row.session_id || "").trim().toLowerCase();
+    if (signer) counts[signer] = (counts[signer] || 0) + 1;
+  }
+  const qualifiedSigners = Object.values(counts).filter(
+    (count) => count >= MIN_SAMPLES_PER_SIGNER,
+  ).length;
+  return { counts, qualifiedSigners };
+};
+
 // ── Helper: update sample count; mark word approved when threshold met ────
 // Words are NOT activated here — activation only happens on model deploy.
 const checkAndActivateWord = async (word, reviewerId = null) => {
   const threshold = getActivationThreshold();
   const approvedCount = await getApprovedSampleCount(word.id);
+  const signerCoverage = await getSignerCoverage(word.id);
 
-  const reachedThreshold = approvedCount >= threshold;
+  const reachedThreshold =
+    approvedCount >= threshold &&
+    signerCoverage.qualifiedSigners >= MIN_SIGNERS_PER_WORD;
 
   await word.update({
     approved_sample_count: approvedCount,
@@ -845,10 +874,20 @@ const activateWord = async (req, res) => {
     // 20-24 approved samples was reported "ready to activate" by getWordStats and
     // checkAndActivateWord, while this endpoint refused it.
     const threshold = getActivationThreshold();
+    const signerCoverage = await getSignerCoverage(word.id);
 
     if ((word.approved_sample_count || 0) < threshold) {
       return res.status(400).json({
         message: `Cannot activate: needs ${threshold} approved samples but only has ${word.approved_sample_count || 0}.`,
+      });
+    }
+    if (signerCoverage.qualifiedSigners < MIN_SIGNERS_PER_WORD) {
+      return res.status(400).json({
+        message:
+          `Cannot activate: needs ${MIN_SIGNERS_PER_WORD} signers with at least ` +
+          `${MIN_SAMPLES_PER_SIGNER} approved clips each, but only ` +
+          `${signerCoverage.qualifiedSigners} signer(s) qualify.`,
+        signer_counts: signerCoverage.counts,
       });
     }
 
@@ -1620,14 +1659,19 @@ const uploadVideos = async (req, res) => {
     // key, cross-validation puts the same signer in both train and test and the
     // resulting accuracy overstates performance for a new user.
     //
-    // Defaults to one group per upload batch, which is correct as long as a batch
-    // contains one signer's clips. Pass an explicit `session_id` form field to keep
-    // one signer's grouping intact across several batches.
-    const providedSessionId = (req.body?.session_id || "").trim();
+    // A generated ID per upload batch would make repeated batches from one person
+    // look like several independent signers and could falsely satisfy the diversity
+    // gate. Require the real signer ID and normalize its spelling across batches.
+    const providedSessionId = (req.body?.session_id || "").trim().toLowerCase();
+    if (!providedSessionId) {
+      return res.status(400).json({
+        message: "Signer ID is required. Reuse the same ID for this person across every word and batch.",
+      });
+    }
     if (providedSessionId.length > 100) {
       return res.status(400).json({ message: "Signer/session ID must be at most 100 characters." });
     }
-    const sessionId = providedSessionId || `upload_${req.user.id}_${Date.now()}`;
+    const sessionId = providedSessionId;
 
     // Refuse a second concurrent batch for the same word. The UI disables its
     // upload button while a job is live, but the server cannot rely on that —

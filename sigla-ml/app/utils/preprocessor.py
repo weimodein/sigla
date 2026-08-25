@@ -37,6 +37,21 @@ LANDMARK_DROPOUT_MAX_FRAMES = int(os.getenv("LANDMARK_DROPOUT_MAX_FRAMES", 4))
 ROTATION_AUGMENTATION_ENABLED = os.getenv("ROTATION_AUGMENTATION_ENABLED", "true").lower() == "true"
 ROTATION_MAX_DEGREES = float(os.getenv("ROTATION_MAX_DEGREES", 12.0))
 
+# The phone runs pose inference every second camera frame and merges the newest
+# completed pose result into every hand frame. That makes the live pose trajectory
+# stepwise and normally one frame stale, while uploaded clips are extracted with a
+# same-frame pose on every frame. Include this live-domain pattern in training.
+POSE_CADENCE_AUGMENTATION_ENABLED = os.getenv(
+    "POSE_CADENCE_AUGMENTATION_ENABLED", "true"
+).lower() == "true"
+POSE_CADENCE_INTERVAL = max(1, int(os.getenv("POSE_CADENCE_INTERVAL", 2)))
+POSE_CADENCE_LAG = max(0, int(os.getenv("POSE_CADENCE_LAG", 1)))
+
+# Cover real signer-speed and effective device-FPS variation. These bounds remain
+# conservative enough to avoid implausibly static or hyper-fast gestures.
+TEMPORAL_STRETCH_MIN = float(os.getenv("TEMPORAL_STRETCH_MIN", 0.80))
+TEMPORAL_STRETCH_MAX = float(os.getenv("TEMPORAL_STRETCH_MAX", 1.20))
+
 # Truncated-prefix augmentation is opt-in. Labelling a shared opening as the final
 # word taught the model to make confident guesses before the distinguishing tail
 # arrived, which inflated full-clip validation while hurting live precision. The
@@ -52,6 +67,13 @@ PREFIX_KEEP_MAX = float(os.getenv("PREFIX_KEEP_MAX", 0.85))
 # SAME count it made compute_class_weight('balanced') return exactly 1.0 for every
 # class — weighting that appeared to handle imbalance while doing nothing.
 AUGMENTATION_FACTOR = int(os.getenv("AUGMENTATION_FACTOR", 6))
+
+# Accuracy-first gate used by train.py. Many clips from one person do not replace
+# signer diversity; that pattern yields high random-split accuracy and weak live
+# accuracy for a new user.
+MIN_REAL_SAMPLES_PER_CLASS = int(os.getenv("MIN_REAL_SAMPLES_PER_CLASS", 20))
+MIN_SIGNERS_PER_CLASS = int(os.getenv("MIN_SIGNERS_PER_CLASS", 4))
+MIN_SAMPLES_PER_SIGNER = int(os.getenv("MIN_SAMPLES_PER_SIGNER", 4))
 
 # Backend API configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:3000/api")
@@ -466,8 +488,10 @@ def _load_real_sequences(dataset: dict, with_groups: bool = False):
             # merging unknowns would assert that they came from one signer, which was
             # never observed and would corrupt a grouped split.
             sid = sample.get("session_id")
+            normalized_sid = str(sid).strip().casefold() if sid else ""
             seq_groups.append(
-                str(sid) if sid else f"__unknown_{label}_{sample.get('sample_id', len(seq_groups))}"
+                normalized_sid if normalized_sid
+                else f"__unknown_{label}_{sample.get('sample_id', len(seq_groups))}"
             )
 
         if skipped_empty or skipped_shape or skipped_duplicate:
@@ -487,6 +511,61 @@ def _load_real_sequences(dataset: dict, with_groups: bool = False):
             print(f"[preprocessor] WARNING: '{label}' has NO usable samples and is "
                   f"excluded from the model's classes. Every later class index shifts.")
     return (real, groups) if with_groups else real
+
+
+def validate_training_coverage(dataset: dict) -> dict:
+    """Fail fast when a class lacks enough real, signer-diverse recordings.
+
+    Exact duplicates are removed before counting, so re-uploading a clip cannot
+    satisfy the gate. Unknown-provenance samples count toward total clips but not
+    toward signer coverage.
+    """
+    real, groups = _load_real_sequences(dataset, with_groups=True)
+    issues = []
+    report = {}
+
+    for label in sorted(real):
+        signer_counts = {}
+        for group in groups[label]:
+            if group.startswith("__unknown_"):
+                continue
+            signer_counts[group] = signer_counts.get(group, 0) + 1
+
+        qualified = {
+            signer: count for signer, count in signer_counts.items()
+            if count >= MIN_SAMPLES_PER_SIGNER
+        }
+        report[label] = {
+            "real_samples": len(real[label]),
+            "signers": signer_counts,
+            "qualified_signers": len(qualified),
+        }
+
+        problems = []
+        if len(real[label]) < MIN_REAL_SAMPLES_PER_CLASS:
+            problems.append(
+                f"{len(real[label])}/{MIN_REAL_SAMPLES_PER_CLASS} unique clips"
+            )
+        if len(qualified) < MIN_SIGNERS_PER_CLASS:
+            problems.append(
+                f"{len(qualified)}/{MIN_SIGNERS_PER_CLASS} signers with at least "
+                f"{MIN_SAMPLES_PER_SIGNER} clips"
+            )
+        if problems:
+            issues.append(f"{label}: " + ", ".join(problems))
+
+    if issues:
+        raise ValueError(
+            "Training dataset does not meet the signer-diversity quality gate. "
+            "Upload more real clips and reuse the same signer ID across words.\n  - "
+            + "\n  - ".join(issues)
+        )
+
+    print(
+        f"[preprocessor] coverage gate passed: >= {MIN_REAL_SAMPLES_PER_CLASS} clips, "
+        f">= {MIN_SIGNERS_PER_CLASS} signers/class, >= {MIN_SAMPLES_PER_SIGNER} clips/signer"
+    )
+    return report
 
 
 def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: int = 42,
@@ -540,6 +619,7 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
     # This is what makes the number mean "accuracy for a NEW signer". Ungrouped folds
     # put the same signer on both sides, so the model can score by recognising the
     # person rather than the sign.
+    held_out_session = None
     if group_by_session:
         distinct = {g for gs in all_groups.values() for g in gs}
         real_sessions = {g for g in distinct if not g.startswith("__unknown_")}
@@ -552,6 +632,10 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
             )
         print(f"[preprocessor] grouped split ON — {len(real_sessions)} session(s): "
               f"{', '.join(sorted(real_sessions))}")
+        if fold is not None:
+            ordered_sessions = sorted(real_sessions)
+            held_out_session = ordered_sessions[fold % len(ordered_sessions)]
+            print(f"[preprocessor] globally held-out signer: {held_out_session}")
 
     label_map = { i: label for i, label in enumerate(labels) }
     label_idx = { label: i for i, label in enumerate(labels) }
@@ -581,15 +665,12 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
             # this class just won't have a data point in the evaluation split.
             train_seqs, val_seqs = sequences, []
         elif group_by_session and fold is not None:
-            # Leave-one-signer-out within this class: fold k holds out the k-th
-            # session entirely. GroupKFold does not shuffle (groups are the unit), so
-            # ordering the sessions deterministically keeps folds reproducible.
+            # Hold out one GLOBAL signer across every class. Choosing the k-th group
+            # independently inside each class could silently evaluate a different
+            # person per word when a class contained a missing/legacy session.
             seq_groups = all_groups[label]
-            ordered = sorted(set(seq_groups))
-            k = min(n_splits, len(ordered))
-            held_out = ordered[fold % k]
-            train_seqs = [s for s, g in zip(sequences, seq_groups) if g != held_out]
-            val_seqs   = [s for s, g in zip(sequences, seq_groups) if g == held_out]
+            train_seqs = [s for s, g in zip(sequences, seq_groups) if g != held_out_session]
+            val_seqs   = [s for s, g in zip(sequences, seq_groups) if g == held_out_session]
             if not train_seqs:
                 # Every sample of this class belongs to the held-out signer, so it
                 # cannot be learned this fold. Train on it anyway rather than emit a
@@ -805,6 +886,29 @@ def landmark_dropout_sequence(seq: np.ndarray, rng: np.random.Generator,
     return out
 
 
+def pose_cadence_sequence(seq: np.ndarray, interval: int = POSE_CADENCE_INTERVAL,
+                          lag: int = POSE_CADENCE_LAG) -> np.ndarray:
+    """Reproduce the phone's cached-pose cadence without changing hand features.
+
+    Pose is submitted every ``interval`` frames and becomes visible after ``lag``
+    hand callbacks. Frames between updates reuse the newest completed pose, while
+    startup frames carry the all-zero absent-pose sentinel.
+    """
+    out = seq.copy()
+    out[:, _POSE_BASE:_POSE_BASE + 21] = 0.0
+    interval = max(1, int(interval))
+    lag = max(0, int(lag))
+    last_pose = None
+
+    for frame_idx in range(len(out)):
+        source_idx = frame_idx - lag
+        if source_idx >= 0 and (source_idx + 1) % interval == 0:
+            last_pose = seq[source_idx, _POSE_BASE:_POSE_BASE + 21].copy()
+        if last_pose is not None:
+            out[frame_idx, _POSE_BASE:_POSE_BASE + 21] = last_pose
+    return out
+
+
 def augment_motion_sequences(sequences: list, target_count: int = 100,
                              rng: np.random.Generator | None = None) -> list:
     """
@@ -831,8 +935,10 @@ def augment_motion_sequences(sequences: list, target_count: int = 100,
         aug_types.append(3)
     if LANDMARK_DROPOUT_ENABLED:
         aug_types.append(4)
-    if PREFIX_AUGMENTATION_ENABLED:
+    if POSE_CADENCE_AUGMENTATION_ENABLED:
         aug_types.append(5)
+    if PREFIX_AUGMENTATION_ENABLED:
+        aug_types.append(6)
 
     needed = target_count - len(sequences)
 
@@ -841,8 +947,10 @@ def augment_motion_sequences(sequences: list, target_count: int = 100,
 
         aug_type = aug_types[rng.integers(len(aug_types))]
         if aug_type == 0:
-            # Temporal speed variation (±20%)
-            stretch = rng.uniform(0.80, 1.20)
+            # Temporal speed variation (default ±20%)
+            low = min(TEMPORAL_STRETCH_MIN, TEMPORAL_STRETCH_MAX)
+            high = max(TEMPORAL_STRETCH_MIN, TEMPORAL_STRETCH_MAX)
+            stretch = rng.uniform(low, high)
             new_len = int(SEQUENCE_LENGTH * stretch)
             indices = np.linspace(0, SEQUENCE_LENGTH - 1, new_len)
             stretched = np.array([
@@ -874,6 +982,8 @@ def augment_motion_sequences(sequences: list, target_count: int = 100,
             result = rotate_sequence(base, float(np.radians(degrees)))
         elif aug_type == 4:
             result = landmark_dropout_sequence(base, rng)
+        elif aug_type == 5:
+            result = pose_cadence_sequence(base)
         else:
             # Truncated prefix — a partial gesture padded the way inference pads it.
             keep = rng.uniform(PREFIX_KEEP_MIN, PREFIX_KEEP_MAX)

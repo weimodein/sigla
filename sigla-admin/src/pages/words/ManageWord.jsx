@@ -268,9 +268,15 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
         </>
       }
     >
-      <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "16px" }}>
-        Upload video clips (.MOV, .MP4). Landmarks are extracted automatically with MediaPipe.
-      </p>
+        <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "8px" }}>
+          Upload one signer&apos;s clips per batch. MediaPipe rejects clips without enough
+          visible hand, body, or motion evidence.
+        </p>
+        <ul style={{ fontSize: "0.75rem", color: C.muted, margin: "0 0 16px 18px", lineHeight: 1.6 }}>
+          <li>Record in portrait with the head, shoulders, elbows, wrists, and signing hand(s) visible.</li>
+          <li>Include the complete sign with a brief neutral moment before and after it.</li>
+          <li>Collect at least 5 natural variations per word from each of at least 4 signers.</li>
+        </ul>
 
       <div style={{ marginBottom: "16px" }}>
         <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>
@@ -285,7 +291,8 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
           style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
         />
         <p style={{ fontSize: "0.72rem", color: C.muted, marginTop: "4px" }}>
-          Reuse this ID across every word, batch, and recording session from the same person. This keeps that signer wholly in either training or evaluation.
+          Reuse this ID across every word and batch from the same person. Never put
+          clips from different people in one batch; signer-held-out evaluation depends on it.
         </p>
       </div>
 

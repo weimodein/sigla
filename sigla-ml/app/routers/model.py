@@ -215,5 +215,9 @@ async def extract_landmarks(file: UploadFile = File(...)):
         return {"type": "motion", "sequence": sequence}
     except HTTPException:
         raise
+    except ValueError as e:
+        # Extraction quality failures are actionable client errors (too few hand
+        # frames, missing upper body, or a frozen clip), not ML-service crashes.
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Landmark extraction failed: {str(e)}")

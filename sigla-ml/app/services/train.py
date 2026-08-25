@@ -8,6 +8,7 @@ from app.utils.preprocessor import (
     fetch_approved_samples,
     prepare_motion_dataset,
     save_label_map,
+    validate_training_coverage,
 )
 from app.utils.supabase_client import upload_file, BUCKET_MODELS
 from dotenv import load_dotenv
@@ -205,6 +206,10 @@ def train(version_number: str, model_id: int) -> dict:
             f"At least 2 gesture classes with valid sequence data are required "
             f"(found {total_classes})."
         )
+
+    # Refuse a flattering but non-generalizing model before spending minutes on
+    # TensorFlow. Defaults require 20 unique clips from four signers per word.
+    validate_training_coverage(motion_dataset)
 
     # ── Step 2: Train motion model (LSTM) ─────────────────────
     # Split happens BEFORE augmentation inside prepare_motion_dataset, so X_val/y_val

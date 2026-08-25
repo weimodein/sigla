@@ -7,7 +7,22 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
-from app.utils.preprocessor import center_on_peak_velocity, normalize_sequence, FEATURE_SIZE, SEQUENCE_LENGTH
+from app.utils.preprocessor import (
+    center_on_peak_velocity,
+    frame_velocity,
+    normalize_sequence,
+    FEATURE_SIZE,
+    SEQUENCE_LENGTH,
+)
+
+MIN_DETECTED_HAND_FRAMES = int(os.getenv("MIN_DETECTED_HAND_FRAMES", 12))
+MIN_HAND_COVERAGE = float(os.getenv("MIN_HAND_COVERAGE", 0.50))
+MIN_POSE_COVERAGE = float(os.getenv("MIN_POSE_COVERAGE", 0.80))
+MIN_SEQUENCE_MOTION = float(os.getenv("MIN_SEQUENCE_MOTION", 0.50))
+
+
+class ExtractionQualityError(ValueError):
+    """The video decoded, but does not contain enough reliable training signal."""
 
 # Feature layout — MUST match sigla-mobile (HandLandmarkHelper.kt):
 # [0..125]   2 hands x 21 landmarks x (x,y,z), normalized per hand block.
@@ -121,7 +136,7 @@ def _build_feature_vector(hand_landmarks_list, pose_landmarks=None) -> list[floa
 def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) -> list[list[float]] | None:
     """
     Extract a 30-frame motion sequence from a video.
-    Samples up to SEQUENCE_LENGTH evenly-spaced frames, then centers on peak velocity.
+    Samples up to twice SEQUENCE_LENGTH evenly-spaced frames, then centers on peak velocity.
     Returns None if no hands detected.
     """
     # Preserve the real extension — on Windows, OpenCV's backend picks its
@@ -144,6 +159,9 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
         sample_count = min(total_frames, SEQUENCE_LENGTH * 2)
         indices = np.linspace(0, total_frames - 1, sample_count, dtype=int)
         sequence = []
+        analyzed_frames = 0
+        detected_hand_frames = 0
+        detected_pose_frames = 0
 
         with _make_landmarker() as landmarker, _make_pose_landmarker() as pose_landmarker:
             for idx in indices:
@@ -151,8 +169,10 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
                 ret, frame = cap.read()
                 if not ret:
                     continue
+                analyzed_frames += 1
                 result = _detect(landmarker, frame)
                 if result.hand_landmarks:
+                    detected_hand_frames += 1
                     # Pose is only detected on frames that have hands — matches
                     # HandLandmarkHelper.detect() (IMAGE-mode / offline extraction path).
                     pose_result = _detect_pose(pose_landmarker, frame)
@@ -160,13 +180,35 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
                         pose_result.pose_landmarks[0]
                         if pose_result.pose_landmarks else None
                     )
+                    if pose_landmarks is not None:
+                        detected_pose_frames += 1
                     sequence.append(_build_feature_vector(result.hand_landmarks, pose_landmarks))
                 elif sequence:
                     # Repeat last frame to fill gaps
                     sequence.append(sequence[-1])
 
-        if len(sequence) < 4:
-            return None
+        if detected_hand_frames < MIN_DETECTED_HAND_FRAMES:
+            raise ExtractionQualityError(
+                f"Only {detected_hand_frames} frames had a detectable hand; "
+                f"at least {MIN_DETECTED_HAND_FRAMES} are required. Keep the hand "
+                "fully visible and record the complete sign."
+            )
+
+        hand_coverage = detected_hand_frames / max(analyzed_frames, 1)
+        if hand_coverage < MIN_HAND_COVERAGE:
+            raise ExtractionQualityError(
+                f"A hand was visible in only {hand_coverage:.0%} of analyzed frames; "
+                f"at least {MIN_HAND_COVERAGE:.0%} is required. Keep the signing "
+                "hand(s) inside the frame for the whole clip."
+            )
+
+        pose_coverage = detected_pose_frames / max(detected_hand_frames, 1)
+        if pose_coverage < MIN_POSE_COVERAGE:
+            raise ExtractionQualityError(
+                f"Upper-body pose was visible in only {pose_coverage:.0%} of hand "
+                f"frames; at least {MIN_POSE_COVERAGE:.0%} is required. Frame the "
+                "head, shoulders, elbows, wrists, and hands."
+            )
 
         seq_np = np.array(sequence, dtype=np.float32)
         # Normalize BEFORE windowing, not after — matches the mobile pipeline
@@ -177,6 +219,17 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
         # articulation, so it can select a different moment of the gesture than what
         # live inference's extractMotionWindow() would pick for the same clip.
         seq_np = normalize_sequence(seq_np)
+
+        motion_energy = sum(
+            frame_velocity(seq_np[i - 1], seq_np[i])
+            for i in range(1, len(seq_np))
+        )
+        if motion_energy < MIN_SEQUENCE_MOTION:
+            raise ExtractionQualityError(
+                f"The clip contains too little gesture motion ({motion_energy:.3f}); "
+                f"minimum is {MIN_SEQUENCE_MOTION:.3f}. Record the complete movement, "
+                "not a held pose or frozen clip."
+            )
 
         # A sequence of EXACTLY SEQUENCE_LENGTH frames cannot be windowed: the only
         # possible window is [0:SEQUENCE_LENGTH], the clip unchanged. It used to hit

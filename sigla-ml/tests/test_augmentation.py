@@ -19,9 +19,12 @@ from app.utils.preprocessor import (
     augment_motion_sequences,
     landmark_dropout_sequence,
     mirror_sequence,
+    normalize_sequence,
+    pose_cadence_sequence,
     rotate_sequence,
     truncated_prefix_sequence,
     prepare_motion_dataset,
+    validate_training_coverage,
 )
 
 from tests.test_parity import make_sequence
@@ -168,6 +171,27 @@ def test_landmark_dropout_preserves_absent_blocks_and_shape(seq):
     assert np.all((out == seq) | (out == 0))
 
 
+# -- Live pose cadence --------------------------------------------------------
+
+def test_pose_cadence_matches_every_second_frame_with_one_frame_lag(seq):
+    out = pose_cadence_sequence(seq, interval=2, lag=1)
+
+    np.testing.assert_array_equal(out[:, :126], seq[:, :126])
+    assert not np.any(out[0:2, _POSE_BASE:_POSE_BASE + 21])
+    np.testing.assert_array_equal(
+        out[2:4, _POSE_BASE:_POSE_BASE + 21],
+        np.repeat(seq[1:2, _POSE_BASE:_POSE_BASE + 21], 2, axis=0),
+    )
+    np.testing.assert_array_equal(
+        out[4:6, _POSE_BASE:_POSE_BASE + 21],
+        np.repeat(seq[3:4, _POSE_BASE:_POSE_BASE + 21], 2, axis=0),
+    )
+
+
+def test_pose_cadence_interval_one_without_lag_is_identity(seq):
+    np.testing.assert_array_equal(pose_cadence_sequence(seq, interval=1, lag=0), seq)
+
+
 # ── Augmentation driver ──────────────────────────────────────────────────────
 
 def test_augmentation_reaches_target_count(seq):
@@ -277,3 +301,49 @@ def test_train_all_uses_every_unique_real_sequence(seq):
     assert counts == {0: 5, 1: 5}
     assert len(X_val) == 0
     assert len(y_val) == 0
+
+
+def test_grouped_fold_holds_same_global_signer_for_every_class(seq):
+    def varied(delta):
+        out = seq.copy()
+        out[:, 5] += delta
+        return out
+
+    a_signer = varied(0.10)
+    dataset = {
+        "A": [
+            _sample(varied(0.01), 1, ""),
+            _sample(a_signer, 2, "signer-a"),
+            _sample(varied(0.20), 3, "signer-b"),
+        ],
+        "B": [
+            _sample(varied(1.10), 4, "signer-a"),
+            _sample(varied(1.20), 5, "signer-b"),
+        ],
+    }
+
+    _, _, X_val, y_val, labels, _ = prepare_motion_dataset(
+        dataset, fold=0, n_splits=99, group_by_session=True
+    )
+
+    assert len(X_val) == 2
+    assert sorted(y_val.tolist()) == [0, 1]
+    expected_a = normalize_sequence(a_signer)
+    np.testing.assert_allclose(X_val[y_val == 0][0], expected_a, rtol=1e-5, atol=1e-6)
+
+
+def test_training_coverage_requires_four_real_signers(seq):
+    dataset = {"A": [], "B": []}
+    sample_id = 1
+    for class_idx, label in enumerate(dataset):
+        for signer_idx in range(3):
+            for clip_idx in range(7):
+                varied = seq.copy()
+                varied[:, 5] += class_idx * 10 + signer_idx + clip_idx * 0.01
+                dataset[label].append(
+                    _sample(varied, sample_id, f"signer-{signer_idx + 1:02d}")
+                )
+                sample_id += 1
+
+    with pytest.raises(ValueError, match="signer-diversity"):
+        validate_training_coverage(dataset)
