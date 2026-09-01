@@ -60,6 +60,8 @@ private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence needs 
 // inferences at >=0.95) while actually arriving sooner than the normal path.
 private const val EARLY_EXIT_STREAK      = 4
 private const val BUFFER_CAPACITY        = 90     // rolling frame buffer size
+// TFLite interpreter thread count for the motion LSTM. See init().
+private const val INTERPRETER_THREADS     = 4
 private const val NO_HAND_TIMEOUT        = 6      // frames with no hands before firing onNoHands
 private const val BUFFER_FILL_MS         = 1500L  // run inference on the full window after this long
 private const val DETECTION_COOLDOWN_MS  = 2000L  // wait before accepting the next gesture
@@ -385,7 +387,11 @@ class PredictionService(private val context: Context) {
     suspend fun init() {
         try {
             Log.d(TAG, "=== INIT START ===")
-            val options = Interpreter.Options().apply { numThreads = 2 }
+            // 4 threads, not 2. The LSTM pass is the single heaviest step in the
+            // per-frame budget and runs on MediaPipe's callback thread; every
+            // current target device is at least octa-core, so 2 left measurable
+            // headroom unused. Overridable for A/B on low-core hardware.
+            val options = Interpreter.Options().apply { numThreads = INTERPRETER_THREADS }
 
             // Load the model from assets or internal storage
             val motionBuf = withContext(Dispatchers.IO) {

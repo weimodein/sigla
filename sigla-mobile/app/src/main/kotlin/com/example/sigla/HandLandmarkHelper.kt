@@ -189,8 +189,17 @@ class HandLandmarkHelper(
 
     // Synchronous — use only in IMAGE mode. Unlike detectAsync(), this pairs pose with
     // the SAME frame as the hands, matching sigla-ml extract.py's offline path exactly.
-    // Currently has no production caller (the on-device collection screen was removed);
-    // kept as the reference same-frame path for parity work against extract.py.
+    //
+    // NO PRODUCTION CALLER (the on-device collection screen was removed). It is kept
+    // as the reference same-frame path for parity work against extract.py, which
+    // means it is also unexercised code that can rot silently: nothing here fails if
+    // it drifts from parseResult() or from extract.py. Two safeguards, both cheap:
+    //   * it shares parseResult() with detectAsync(), so the feature layout and
+    //     normalization cannot diverge without breaking the live path too;
+    //   * the pose-on-hand-frames-only rule below is asserted from the Python side
+    //     by tests/test_mobile_parity_flags.py, which reads THIS file.
+    // If you delete this function, delete that assertion too rather than letting it
+    // silently match nothing.
     fun detect(bitmap: Bitmap): LandmarkResult {
         val lmk = landmarker ?: return empty()
         return try {

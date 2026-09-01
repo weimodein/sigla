@@ -47,6 +47,22 @@ POSE_CADENCE_AUGMENTATION_ENABLED = os.getenv(
 POSE_CADENCE_INTERVAL = max(1, int(os.getenv("POSE_CADENCE_INTERVAL", 2)))
 POSE_CADENCE_LAG = max(0, int(os.getenv("POSE_CADENCE_LAG", 1)))
 
+# Fraction of augmented samples that get the phone's pose cadence applied.
+#
+# Cadence used to be one of N mutually-exclusive augmentation TYPES, drawn ~1/6 of
+# the time — so ~83% of training frames paired hands with a pose captured on the
+# SAME frame, a pairing the phone never produces. Live, pose is submitted every
+# POSE_CADENCE_INTERVAL frames and read back POSE_CADENCE_LAG callbacks later, so
+# every live frame carries a stale, repeated pose block.
+#
+# It is now a composable POST-STEP instead: any augmentation type may additionally
+# be cadence-shifted, so the transform composes with stretch/noise/rotation rather
+# than competing with them for draws. Kept below 1.0 so the model still sees some
+# same-frame pairings — the offline extractor genuinely produces those, and a clip
+# re-extracted server-side should not become out-of-distribution.
+POSE_CADENCE_APPLY_RATIO = min(max(
+    float(os.getenv("POSE_CADENCE_APPLY_RATIO", 0.60)), 0.0), 1.0)
+
 # Cover real signer-speed and effective device-FPS variation. These bounds remain
 # conservative enough to avoid implausibly static or hyper-fast gestures.
 TEMPORAL_STRETCH_MIN = float(os.getenv("TEMPORAL_STRETCH_MIN", 0.80))
@@ -935,10 +951,10 @@ def augment_motion_sequences(sequences: list, target_count: int = 100,
         aug_types.append(3)
     if LANDMARK_DROPOUT_ENABLED:
         aug_types.append(4)
-    if POSE_CADENCE_AUGMENTATION_ENABLED:
-        aug_types.append(5)
     if PREFIX_AUGMENTATION_ENABLED:
         aug_types.append(6)
+    # NOTE: pose cadence (formerly type 5) is deliberately NOT in this menu. It is
+    # applied as a composable post-step below — see POSE_CADENCE_APPLY_RATIO.
 
     needed = target_count - len(sequences)
 
@@ -982,13 +998,28 @@ def augment_motion_sequences(sequences: list, target_count: int = 100,
             result = rotate_sequence(base, float(np.radians(degrees)))
         elif aug_type == 4:
             result = landmark_dropout_sequence(base, rng)
-        elif aug_type == 5:
-            result = pose_cadence_sequence(base)
         else:
             # Truncated prefix — a partial gesture padded the way inference pads it.
             keep = rng.uniform(PREFIX_KEEP_MIN, PREFIX_KEEP_MAX)
             result = truncated_prefix_sequence(base, float(keep))
 
-        augmented.append(result.tolist())
+        # Composable post-step: reproduce the phone's stale/repeated pose cadence on
+        # a share of every augmentation type, rather than as a competing type that
+        # only ~1/6 of samples ever drew.
+        #
+        # NOT applied on top of landmark dropout (type 4). Cadence resamples the pose
+        # track by REUSING the newest completed pose, so running it after a dropout
+        # both refills frames the dropout deliberately zeroed and relocates the zeros
+        # to whichever frames the cadence lands on. On-device the two effects are
+        # sequential, not nested: a failed detection overwrites lastPoseResult with an
+        # empty result (so that frame's block really is 21 zeros), and the cadence then
+        # holds THAT state. Composing them here would manufacture a pose track the
+        # device never emits, which is the opposite of what this augmentation is for.
+        if (POSE_CADENCE_AUGMENTATION_ENABLED and POSE_CADENCE_APPLY_RATIO > 0
+                and aug_type != 4):
+            if rng.random() < POSE_CADENCE_APPLY_RATIO:
+                result = pose_cadence_sequence(np.asarray(result, dtype=np.float32))
+
+        augmented.append(np.asarray(result, dtype=np.float32).tolist())
 
     return augmented

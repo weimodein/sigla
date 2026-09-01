@@ -26,6 +26,14 @@ MODELS_DIR      = "models"
 # measured, which made changes impossible to evaluate honestly.
 TRAIN_SEED = int(os.getenv("TRAIN_SEED", 42))
 
+# Weight-only float16 quantization of the shipped .tflite. Roughly halves the
+# download and the mapped size on device. Verified numerically against the Keras
+# model before it is shipped — see convert_to_tflite; a failed or drifting
+# conversion silently falls back to the float32 build rather than changing what
+# the classifier predicts.
+TFLITE_FLOAT16 = os.getenv("TFLITE_FLOAT16", "true").lower() == "true"
+TFLITE_FLOAT16_MAX_DRIFT = float(os.getenv("TFLITE_FLOAT16_MAX_DRIFT", 0.02))
+
 # Recurrent architecture. Defaults to the current plain LSTM so behaviour does not
 # change until an A/B justifies it (tools/cross_validate.py).
 #
@@ -123,31 +131,105 @@ def build_motion_model(num_classes: int, arch: str | None = None):
     return model
 
 
+def _convert_tflite_bytes(model, float16: bool) -> bytes:
+    """One TFLite conversion attempt. `float16` selects half-precision weights."""
+    import tensorflow as tf
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+
+    if float16:
+        # Weight-only float16: halves the weight payload with no representative
+        # dataset and no activation quantization, so the LSTM's numerics are
+        # essentially unchanged. Activations still compute in float32 on any
+        # delegate that lacks native fp16 support.
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
+        converter.target_spec.supported_types = [tf.float16]
+    else:
+        # Historical default: no optimizations at all, which also avoids the
+        # advanced op versions (e.g. FULLY_CONNECTED v12) that older runtimes
+        # could not parse.
+        converter.optimizations = []
+
+    converter.target_spec.supported_ops = [
+        tf.lite.OpsSet.TFLITE_BUILTINS,
+        tf.lite.OpsSet.SELECT_TF_OPS,
+    ]
+    converter._experimental_lower_tensor_list_ops = False
+    return converter.convert()
+
+
 def convert_to_tflite(model, save_path: str) -> str:
     """
     Convert the motion (LSTM) Keras model to TFLite. LSTM uses TensorList ops
     that cannot be lowered to built-in TFLite ops with static shapes, so
     SELECT_TF_OPS is required. The Android app must include
     tensorflow-lite-select-tf-ops to run this model.
+
+    TFLITE_FLOAT16 (default on) applies weight-only float16 quantization, roughly
+    halving the on-device model size. It is NOT forced: if the float16 conversion
+    raises, or produces a model whose outputs drift from the Keras model by more
+    than TFLITE_FLOAT16_MAX_DRIFT on a real probe batch, we fall back to the
+    unquantized build. A smaller download is not worth silently changing what the
+    classifier predicts.
     """
+    import numpy as _np
     import tensorflow as tf
-    converter = tf.lite.TFLiteConverter.from_keras_model(model)
-
-    # Disable optimizations to avoid advanced op versions (like FULLY_CONNECTED v12)
-    converter.optimizations = []
-    converter.target_spec.supported_ops = [
-        tf.lite.OpsSet.TFLITE_BUILTINS,
-        tf.lite.OpsSet.SELECT_TF_OPS,
-    ]
-    converter._experimental_lower_tensor_list_ops = False
-
-    tflite_model = converter.convert()
 
     tflite_path = save_path.replace(".h5", ".tflite")
-    with open(tflite_path, "wb") as f:
-        f.write(tflite_model)
 
-    print(f"TFLite model saved to {tflite_path}")
+    def _write(payload: bytes) -> str:
+        with open(tflite_path, "wb") as f:
+            f.write(payload)
+        return tflite_path
+
+    baseline = _convert_tflite_bytes(model, float16=False)
+
+    if not TFLITE_FLOAT16:
+        _write(baseline)
+        print(f"TFLite model saved to {tflite_path} ({len(baseline)/1024:.0f} KiB, float32)")
+        return tflite_path
+
+    try:
+        fp16 = _convert_tflite_bytes(model, float16=True)
+    except Exception as e:                                    # noqa: BLE001
+        print(f"[train] float16 conversion failed ({e}) — keeping float32 model")
+        _write(baseline)
+        return tflite_path
+
+    # Verify against the Keras model on a real-shaped probe batch. The Python
+    # tf.lite.Interpreter cannot register the Select-TF (Flex) ops this LSTM uses,
+    # so a numeric check is only possible when that runtime is available; when it
+    # is not, we do NOT ship an unverified quantized model.
+    try:
+        rng = _np.random.default_rng(TRAIN_SEED)
+        probe = rng.standard_normal(
+            (8, SEQUENCE_LENGTH, FEATURE_SIZE)
+        ).astype(_np.float32)
+        expected = model.predict(probe, verbose=0)
+
+        interp = tf.lite.Interpreter(model_content=fp16)
+        interp.allocate_tensors()
+        inp = interp.get_input_details()[0]
+        out = interp.get_output_details()[0]
+        got = []
+        for row in probe:
+            interp.set_tensor(inp["index"], row[None, ...])
+            interp.invoke()
+            got.append(interp.get_tensor(out["index"])[0])
+        drift = float(_np.max(_np.abs(_np.array(got) - expected)))
+    except Exception as e:                                    # noqa: BLE001
+        print(f"[train] could not verify float16 model ({e}) — keeping float32 model")
+        _write(baseline)
+        return tflite_path
+
+    if drift > TFLITE_FLOAT16_MAX_DRIFT:
+        print(f"[train] float16 drift {drift:.5f} exceeds "
+              f"{TFLITE_FLOAT16_MAX_DRIFT} — keeping float32 model")
+        _write(baseline)
+        return tflite_path
+
+    _write(fp16)
+    print(f"TFLite model saved to {tflite_path} ({len(fp16)/1024:.0f} KiB, float16; "
+          f"was {len(baseline)/1024:.0f} KiB float32; max drift {drift:.6f})")
     return tflite_path
 
 

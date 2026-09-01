@@ -54,8 +54,17 @@ private const val WORD_BANK_REFRESH_INTERVAL_MS = 5 * 60 * 1000L
 private val PIPELINE_PROFILING = BuildConfig.DEBUG
 
 // Lowest sustained capture rate the recognition pipeline is willing to run at.
-// The frame skip halves this again before MediaPipe sees it, so 24 fps yields
-// ~12 Hz of inference — close to what the firing constants were tuned against.
+//
+// STALE COMMENT REMOVED: this used to claim "the frame skip halves this again ...
+// so 24 fps yields ~12 Hz of inference". There is no frame skip any more — the
+// analyzer submits EVERY frame (see bindCamera), so capture rate IS the landmark
+// rate. That matters for the firing constants: PredictionService's evidence gate
+// needs MIN_COMPLETE_GESTURE_FRAMES (36) buffered frames before it will emit a
+// mid-gesture result, and its BUFFER_FILL_MS timer fires at 1500 ms. At 24 fps
+// those coincide almost exactly (36 frames = 1500 ms), so any sustained dip below
+// 24 fps means the timer fires before the evidence gate can ever open and every
+// prediction has to wait for END_OF_GESTURE. Keep this floor at or above 24, and
+// treat a device that cannot hold it as a latency bug rather than lowering it.
 private const val MIN_ACCEPTABLE_FPS = 24
 
 /**

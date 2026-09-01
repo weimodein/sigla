@@ -54,7 +54,7 @@ from app.utils.preprocessor import (  # noqa: E402
 
 
 def run_fold(motion_dataset, fold, n_splits, seed, epochs, quiet=True,
-             group_by_session=False):
+             group_by_session=False, arch=None):
     """Train one fold from scratch; return (y_true, y_pred, label_map)."""
     from tensorflow import keras
     from app.services.train import build_motion_model, set_global_seed
@@ -72,7 +72,9 @@ def run_fold(motion_dataset, fold, n_splits, seed, epochs, quiet=True,
     if len(X_va) == 0:
         return None, None, label_map
 
-    model = build_motion_model(len(label_map))
+    # Explicit arch beats the MODEL_ARCH env var, so an A/B is a flag rather than a
+    # shell variable someone forgets to unset between runs.
+    model = build_motion_model(len(label_map), arch=arch)
 
     # Match train.py: weight from real pre-augmentation counts, not augmented labels.
     classes_present = np.array(sorted(real_counts.keys()), dtype=np.int64)
@@ -102,6 +104,12 @@ def main() -> int:
     ap.add_argument("--repeats", type=int, default=1,
                     help="repeat the whole K-fold with a different seed each time")
     ap.add_argument("--epochs", type=int, default=200)
+    ap.add_argument("--arch", default=None,
+                    choices=("lstm", "bilstm_half", "bilstm_full"),
+                    help="recurrent architecture to cross-validate; defaults to "
+                         "MODEL_ARCH. bilstm_half matches the current layer widths "
+                         "at roughly the current parameter count, so comparing it "
+                         "with bilstm_full separates bidirectionality from capacity.")
     ap.add_argument("--out", default=None, help="write results as JSON")
     ap.add_argument("--group-by-session", action="store_true",
                     help="hold out whole signers per fold (leave-one-signer-out) using "
@@ -149,7 +157,7 @@ def main() -> int:
                   flush=True)
             y_true, y_pred, label_map = run_fold(
                 motion_dataset, fold, folds, seed, args.epochs,
-                group_by_session=args.group_by_session,
+                group_by_session=args.group_by_session, arch=args.arch,
             )
             if y_true is None:
                 print("[cv]   skipped - no validation samples in this fold")
