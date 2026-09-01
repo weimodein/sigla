@@ -16,7 +16,7 @@ from app.utils.preprocessor import (
 )
 
 MIN_DETECTED_HAND_FRAMES = int(os.getenv("MIN_DETECTED_HAND_FRAMES", 12))
-MIN_HAND_COVERAGE = float(os.getenv("MIN_HAND_COVERAGE", 0.50))
+MIN_HAND_COVERAGE = float(os.getenv("MIN_HAND_COVERAGE", 0.35))
 MIN_POSE_COVERAGE = float(os.getenv("MIN_POSE_COVERAGE", 0.80))
 MIN_SEQUENCE_MOTION = float(os.getenv("MIN_SEQUENCE_MOTION", 0.50))
 
