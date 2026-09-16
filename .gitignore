@@ -1,4 +1,19 @@
 references
-FSL-105 A dataset for recognizing 105 Filipino sign language videos
 Collated
 Wireframe
+
+# Video / dataset source clips — large binaries, never committed
+datasets/
+
+# Debug scratch (API response dumps, throwaway output)
+scratch/
+
+# Generated ML artifacts
+artifacts/
+sigla-ml/venv/
+sigla-ml/models/
+sigla-ml/cv_*.json
+sigla-ml/ds*.json
+sigla-ml/fsl105_import.json
+sigla-ml/dedupe_backup.json
+sigla-ml/cv_run.log

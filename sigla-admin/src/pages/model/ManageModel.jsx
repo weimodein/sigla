@@ -320,7 +320,7 @@ const ManageModel = () => {
       return;
     }
     if (!/^[a-zA-Z0-9._\-]+$/.test(trainForm.version_number)) {
-      showError("Version number can only contain letters, numbers, dots, dashes, and underscores (e.g. v1.0, v2.1-beta)");
+      showError("Version number can only contain letters, numbers, dots, dashes, and underscores. Use MAJOR.MINOR.PATCH with no prefix, e.g. 1.0.2");
       return;
     }
     setActionLoading(true);
@@ -1118,11 +1118,12 @@ const ManageModel = () => {
                 onChange={(e) =>
                   setTrainForm({ ...trainForm, version_number: e.target.value.replace(/[^a-zA-Z0-9._\-]/g, "") })
                 }
-                placeholder="e.g. v1.0"
+                placeholder="e.g. 1.0.2"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Only letters, numbers, dots, dashes, and underscores allowed (e.g. v1.0, v2.1-beta).
+                Use MAJOR.MINOR.PATCH with no prefix — e.g. 1.0.2. The UI adds the
+                &quot;v&quot; when displaying, so typing one here shows as &quot;vv1.0.2&quot;.
               </p>
             </div>
             <div>
