@@ -87,6 +87,16 @@ private val teardownExecutor = Executors.newSingleThreadExecutor { r ->
 // when those clips were mirrored). Training now mirror-augments both orientations,
 // while the phone preserves the raw MediaPipe orientation it was trained against.
 private const val LEFT_HANDED_SUPPORT_ENABLED = false
+// ── Single-orientation scope (2026-09-12) ────────────────────────────────────
+// The greetings dataset was recorded entirely on the BACK camera, and training
+// mirror augmentation is now OFF (sigla-ml/.env MIRROR_AUGMENTATION_ENABLED=false)
+// because the scope is right-handed, one orientation. Mirror augmentation was the
+// ONLY thing making the model work on both cameras: the front camera delivers a
+// horizontally flipped image, which without mirrored training data is the exact
+// condition measured at 96.1% -> 24.8%. Pinning the lens keeps the app inside the
+// distribution the model was trained on. Re-enable together with
+// MIRROR_AUGMENTATION_ENABLED if front-camera support returns.
+private const val FORCE_BACK_CAMERA_ONLY = true
 // On-device calibration (HANDEDNESS_TEST log, both cameras, both hands, 0.95-0.97
 // confidence, 2026-07-13) confirmed MediaPipe's Left/Right label matches the true
 // anatomical hand identically on front AND back camera — no inversion. If a future
@@ -221,7 +231,10 @@ class MainActivity : AppCompatActivity() {
         historyManager = TranslationHistoryManager.getInstance(this)
         appSettings = AppSettings.getInstance(this)
         showFilipino = appSettings.showFilipino
-        isFrontCamera = appSettings.isFrontCamera
+        // Ignore any saved front-camera preference while the scope is back-only —
+        // a device that had it set before the flag landed would otherwise start in
+        // the untrained orientation. See FORCE_BACK_CAMERA_ONLY.
+        isFrontCamera = if (FORCE_BACK_CAMERA_ONLY) false else appSettings.isFrontCamera
 
         // Check first launch / onboarding
         if (session.isFirstLaunch) {
@@ -720,7 +733,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupButtons() {
         // Flip camera
+        // Hidden rather than disabled: a visible button that does nothing reads as
+        // a bug. See FORCE_BACK_CAMERA_ONLY.
+        binding.btnFlipCamera.visibility = if (FORCE_BACK_CAMERA_ONLY) View.GONE else View.VISIBLE
         binding.btnFlipCamera.setOnClickListener {
+            if (FORCE_BACK_CAMERA_ONLY) return@setOnClickListener
             isFrontCamera = !isFrontCamera
             appSettings.isFrontCamera = isFrontCamera
             // No-op if the models are still loading — flipping is still valid.

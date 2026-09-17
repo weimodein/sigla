@@ -332,11 +332,30 @@ def test_grouped_fold_holds_same_global_signer_for_every_class(seq):
     np.testing.assert_allclose(X_val[y_val == 0][0], expected_a, rtol=1e-5, atol=1e-6)
 
 
-def test_training_coverage_requires_four_real_signers(seq):
+def test_training_coverage_rejects_too_few_signers(seq, monkeypatch):
+    """
+    The gate must reject a dataset one signer short of its configured minimum.
+
+    Parameterised on MIN_SIGNERS_PER_CLASS rather than hardcoding four: the value
+    is an env var, and a local override (sigla-ml/.env currently sets 2 for the
+    two-signer greetings dataset) otherwise makes this test silently pass without
+    exercising the gate at all — the suite would stop guarding signer diversity on
+    exactly the machine that relaxed it. Pin the threshold here so the INVARIANT is
+    tested regardless of ambient config.
+    """
+    import app.utils.preprocessor as pre
+
+    required = 4
+    monkeypatch.setattr(pre, "MIN_SIGNERS_PER_CLASS", required)
+    monkeypatch.setattr(pre, "MIN_SAMPLES_PER_SIGNER", 4)
+    monkeypatch.setattr(pre, "MIN_REAL_SAMPLES_PER_CLASS", 20)
+
     dataset = {"A": [], "B": []}
     sample_id = 1
     for class_idx, label in enumerate(dataset):
-        for signer_idx in range(3):
+        # One signer short of the requirement, each with plenty of clips — so the
+        # ONLY reason to reject is signer diversity, not clip count.
+        for signer_idx in range(required - 1):
             for clip_idx in range(7):
                 varied = seq.copy()
                 varied[:, 5] += class_idx * 10 + signer_idx + clip_idx * 0.01

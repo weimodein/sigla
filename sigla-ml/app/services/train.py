@@ -27,11 +27,27 @@ MODELS_DIR      = "models"
 TRAIN_SEED = int(os.getenv("TRAIN_SEED", 42))
 
 # Weight-only float16 quantization of the shipped .tflite. Roughly halves the
-# download and the mapped size on device. Verified numerically against the Keras
-# model before it is shipped — see convert_to_tflite; a failed or drifting
-# conversion silently falls back to the float32 build rather than changing what
-# the classifier predicts.
-TFLITE_FLOAT16 = os.getenv("TFLITE_FLOAT16", "true").lower() == "true"
+# download and the mapped size on device.
+#
+# CURRENTLY A NO-OP FOR THIS ARCHITECTURE — defaults to OFF.
+#
+# The verification step in convert_to_tflite runs the candidate through the Python
+# tf.lite.Interpreter, which CANNOT load this model at all: the LSTM lowers to
+# Select-TF (Flex) ops that the Python runtime does not register (the same reason
+# test.py evaluates the .h5 rather than the .tflite — see its predict_keras
+# docstring). Verification therefore fails on every run and the float32 build ships:
+#
+#   [train] could not verify float16 model (Select TensorFlow op(s) ... 
+#           FlexTensorListReserve failed to prepare) — keeping float32 model
+#
+# That fallback is correct — shipping an unverified quantized model would risk
+# silently changing predictions to save a few hundred KB — but it means enabling
+# this flag buys nothing today. Measured on v1.1.0: 855 KB float32.
+#
+# To make it real, verification has to stop using the Python interpreter: either
+# compare dequantized WEIGHTS against the Keras model directly (no invoke), or
+# verify on-device where the Flex delegate exists. Do that before turning this on.
+TFLITE_FLOAT16 = os.getenv("TFLITE_FLOAT16", "false").lower() == "true"
 TFLITE_FLOAT16_MAX_DRIFT = float(os.getenv("TFLITE_FLOAT16_MAX_DRIFT", 0.02))
 
 # Recurrent architecture. Defaults to the current plain LSTM so behaviour does not

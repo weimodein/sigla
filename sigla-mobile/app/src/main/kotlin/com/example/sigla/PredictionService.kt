@@ -34,10 +34,44 @@ private const val MIN_MOTION_FRAMES      = 12     // begin inference once this m
 // only END_OF_GESTURE may bypass this evidence gate for a completed fast sign.
 private const val MIN_COMPLETE_GESTURE_FRAMES = 36
 private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
+// Restored to the deployment values 2026-09-15 (had been lowered to 0.40 / 0.40 /
+// 0.08 on 2026-09-12 for a one-off evaluation of the v1.0.0-greetings model's weak
+// classes — IM FINE 15% recall, GOOD AFTERNOON 30%, NICE TO MEET YOU 50%).
+//
+// That experiment deliberately traded silence for confident mistakes so the weak
+// classes would surface at all. It must not ship: the high bar is what keeps
+// GOOD AFTERNOON / GOOD EVENING (10 confusions in CV) from firing as each other.
+//
+// If those classes need to be evaluated again, override for the run rather than
+// editing these constants — tests/ThresholdPolicyTest pins them to the deployment
+// values precisely so a temporary lowering cannot be forgotten a second time.
 private const val MOTION_THRESHOLD       = 0.80f  // min confidence to accept a prediction
+// The EVIDENCE gate, not the acceptance gate: it decides whether an inference counts
+// toward motionEarlyStreak, and the streak is what proves the distinguishing TAIL of
+// a sign was observed rather than just its opening.
+//
+// This stayed at 0.80 through the 2026-09-12 threshold experiment while
+// MOTION_THRESHOLD was temporarily dropped, for a reason worth keeping in mind if
+// that is ever repeated: drop this bar too and a 10-frame streak degenerates into
+// "10 frames happened", re-opening the shared-opening misfire (GOOD EVENING/GOOD
+// AFTERNOON, GOOD MORNING/HELLO) that raising the streak to 10 fixed at
+// 94.3% -> 99.3%. Keep the bar high here and let MOTION_THRESHOLD alone decide what
+// is acceptable to emit.
 private const val MOTION_EARLY_CONF      = 0.80f  // confidence for early-exit streak counting
 private const val MOTION_MIN_MARGIN      = 0.15f  // top-1 must clearly beat the runner-up
 private const val MIN_POSE_FRAMES        = 24     // 80% of the model's 30-frame input
+// Minimum REAL buffered frames before a window may fire. extractMotionWindow pads
+// short buffers by repeating the last frame, so firing at MIN_MOTION_FRAMES (12)
+// would hand the model 18 padded copies out of 30 — a shape no stored training
+// sample has, since those always carry >= SEQUENCE_LENGTH real frames. Set to
+// SEQUENCE_LENGTH * 2/3 so a fast sign still classifies on the end-of-gesture
+// flush while a mostly-padding window does not. MUST stay <= MIN_MOTION_FRAMES's
+// intent: inference may still RUN earlier to build a streak, this only gates FIRING.
+private const val MIN_REAL_FRAMES_FOR_FIRE = 20
+// Total frame-to-frame motion a window must carry to be considered a sign at all.
+// Mirrors extract.py MIN_SEQUENCE_MOTION, which rejects "a held pose or frozen
+// clip" at storage time; without this the offline and live definitions disagreed.
+private const val MIN_SEQUENCE_MOTION    = 0.50f
 // Raised from 5/6 to 10/10 (2026-07-19) after simulating the live streak/early-exit logic
 // against every real stored sample: at the old values, several signs that share an opening
 // movement with another sign (GOOD EVENING/GOOD AFTERNOON, GOOD MORNING/HELLO, YES/YESTERDAY,
@@ -48,7 +82,13 @@ private const val MIN_POSE_FRAMES        = 24     // 80% of the model's 30-frame
 // no regression on any word that was already firing correctly. See PredictionService's
 // runAndMaybeFire() for how this streak is counted.
 private const val MOTION_EARLY_STREAK    = 10     // consistent frames before firing early
-private const val EARLY_EXIT_THRESHOLD   = 0.95f  // very-high confidence needs a shorter streak
+// Lowered 0.95 -> 0.90 (2026-09-12). With 10 classes at ~73-82% accuracy the softmax
+// almost never reaches 0.95, so this tier never fired and every prediction took the
+// full 10-frame path — the fast route was dead weight and results felt slower than
+// designed. 0.90 is still well clear of MOTION_EARLY_CONF (0.80), so the two tiers
+// stay mutually exclusive as the streak-counting comment below requires.
+// Revisit once more signers lift per-class confidence.
+private const val EARLY_EXIT_THRESHOLD   = 0.90f  // very-high confidence needs a shorter streak
 // Shorter than MOTION_EARLY_STREAK on purpose: this tier needs fewer agreeing
 // inferences, but the 36-frame evidence gate still prevents a premature result.
 //
@@ -247,6 +287,44 @@ internal fun hasEnoughGestureEvidence(frameCount: Int, endOfGesture: Boolean): B
  * window instead of returning a confidently wrong word. */
 internal fun hasSufficientPoseCoverage(frames: List<FloatArray>): Boolean =
     frames.count(::posePresent) >= MIN_POSE_FRAMES
+
+/**
+ * Total motion energy of a window, summed frame-to-frame.
+ *
+ * Mirrors extract.py's MIN_SEQUENCE_MOTION gate, which refuses to STORE a clip
+ * carrying too little movement ("a held pose or frozen clip"). That gate had no
+ * device counterpart, so a near-static live gesture reached the model even though
+ * a training clip of the same thing would have been thrown out — the offline and
+ * online definitions of "is this actually a sign" disagreed.
+ *
+ * Uses the same frameVelocity() the peak-centering search uses, so the units match
+ * the Python side term for term.
+ */
+internal fun sequenceMotionEnergy(frames: List<FloatArray>): Float {
+    if (frames.size < 2) return 0f
+    var total = 0f
+    for (i in 0 until frames.size - 1) total += frameVelocity(frames[i], frames[i + 1])
+    return total
+}
+
+/** Reject a window with too little movement to be a sign — see sequenceMotionEnergy. */
+internal fun hasSufficientMotion(frames: List<FloatArray>): Boolean =
+    sequenceMotionEnergy(frames) >= MIN_SEQUENCE_MOTION
+
+/**
+ * Refuse a window that would be mostly repeated padding.
+ *
+ * extractMotionWindow pads a short buffer by repeating the last frame, and the
+ * END_OF_GESTURE flush may fire on as few as MIN_MOTION_FRAMES (12) — 18 of the
+ * model's 30 frames would then be copies of one frame. Stored training samples
+ * always carry at least SEQUENCE_LENGTH real frames, so nothing in training looks
+ * like that; the model is being asked to classify a shape it has never seen.
+ *
+ * MIN_REAL_FRAMES_FOR_FIRE keeps the flush (a genuinely fast sign still gets
+ * classified) while dropping the windows that are more padding than gesture.
+ */
+internal fun hasEnoughRealFrames(frameCount: Int): Boolean =
+    frameCount >= MIN_REAL_FRAMES_FOR_FIRE
 
 /** Difference between the winning probability and the next-best class. */
 internal fun topPredictionMargin(probabilities: FloatArray, best: Int): Float {
@@ -678,6 +756,12 @@ class PredictionService(private val context: Context) {
         // any mid-gesture emission; the completed-gesture flush remains exempt.
         if (!hasEnoughGestureEvidence(frameBuffer.size, mayBypassStreak)) return null
 
+        // Even the end-of-gesture flush must not fire on a window that is mostly
+        // repeated padding — see hasEnoughRealFrames. This is the one gate the
+        // flush does NOT get to bypass, because the problem it guards against is
+        // created BY the flush firing early.
+        if (!hasEnoughRealFrames(frameBuffer.size)) return null
+
         // Very high confidence: fires on a SHORTER streak than the normal path.
         if (conf >= EARLY_EXIT_THRESHOLD) {
             if (motionEarlyStreak >= EARLY_EXIT_STREAK || mayBypassStreak) {
@@ -736,6 +820,9 @@ class PredictionService(private val context: Context) {
             }
         }
         if (!hasSufficientPoseCoverage(seq)) return -1
+        // Reject a frozen/held window — the offline extractor refuses to store one,
+        // so the model was never trained on it. See sequenceMotionEnergy.
+        if (!hasSufficientMotion(seq)) return -1
 
         // Reused tensor; the inner references are rebound to this window's frames.
         val row = motionInputArr[0]

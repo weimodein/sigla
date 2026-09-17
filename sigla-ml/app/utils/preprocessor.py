@@ -11,6 +11,11 @@ load_dotenv()
 FEATURE_SIZE    = int(os.getenv("FEATURE_SIZE",    147))
 SEQUENCE_LENGTH = int(os.getenv("SEQUENCE_LENGTH", 30))
 
+# Pose blocks the phone requires in a 30-frame window before it will run the model
+# (PredictionService.MIN_POSE_FRAMES). Mirrored here so augmentation can be derived
+# from the device's real tolerance rather than a hand-picked number.
+MIN_POSE_WINDOW_FRAMES = int(os.getenv("MIN_POSE_WINDOW_FRAMES", 24))
+
 # Train-time mirror augmentation (doubles every real training sample with a
 # horizontally-flipped copy, so the model sees both hand orientations) — see
 # mirror_sequence() below. Enabled after held-out-signer A/B validation showed
@@ -23,10 +28,17 @@ MIRROR_AUGMENTATION_RATIO = float(os.getenv("MIRROR_AUGMENTATION_RATIO", 1.0))
 # the gesture itself is clear. The uploaded dataset currently has pose in 100% of
 # stored frames, so without this bounded augmentation the model has never seen the
 # zero-block sentinel that the phone legitimately emits. Keep the maximum aligned
-# with PredictionService.MIN_POSE_FRAMES: at most 4 of 30 frames are hidden here,
-# while the app still rejects windows with more than 6 missing pose frames.
+# with PredictionService.MIN_POSE_FRAMES, which is the widest gap the phone will
+# still hand to the model: SEQUENCE_LENGTH - MIN_POSE_FRAMES = 30 - 24 = 6.
+#
+# This was 4, which left frames with 5 or 6 missing pose blocks accepted live but
+# never seen in training — a narrow out-of-distribution band on exactly the windows
+# the app is most likely to be unsure about. Deriving it from the device constant
+# closes the band and keeps the two from drifting apart again.
 LANDMARK_DROPOUT_ENABLED = os.getenv("LANDMARK_DROPOUT_ENABLED", "true").lower() == "true"
-LANDMARK_DROPOUT_MAX_FRAMES = int(os.getenv("LANDMARK_DROPOUT_MAX_FRAMES", 4))
+LANDMARK_DROPOUT_MAX_FRAMES = int(
+    os.getenv("LANDMARK_DROPOUT_MAX_FRAMES", SEQUENCE_LENGTH - MIN_POSE_WINDOW_FRAMES)
+)
 
 # Rotation augmentation: small in-plane (xy) rotations of already-normalized
 # sequences. Normalization removes translation and scale but NOT rotation, so

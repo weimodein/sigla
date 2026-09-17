@@ -89,18 +89,44 @@ def test_pose_cadence_matches_device_interval():
 
 def test_missing_frame_gate_matches_no_hand_timeout():
     """
-    A clip is rejected for a dropout run longer than the phone tolerates.
+    A clip is rejected for a dropout longer than the phone tolerates.
 
-    Live, NO_HAND_TIMEOUT consecutive hands-less frames end the gesture and reset
-    the buffer, so a longer run cannot occur inside a single classified window.
+    Live, NO_HAND_TIMEOUT consecutive CAMERA frames end the gesture and reset the
+    buffer. Extraction subsamples, so its gate is expressed in SECONDS and must
+    correspond to that same wall-clock duration at the app's minimum frame rate.
     """
-    from app.services.extract import MAX_CONSECUTIVE_MISSING_FRAMES
+    from app.services.extract import MAX_MISSING_HAND_SECONDS
 
-    kotlin = _kotlin_int(_read(_PREDICTION_SERVICE), "NO_HAND_TIMEOUT")
-    assert MAX_CONSECUTIVE_MISSING_FRAMES <= kotlin, (
-        "MAX_CONSECUTIVE_MISSING_FRAMES must not exceed the phone's NO_HAND_TIMEOUT; "
-        "otherwise extraction accepts gaps that end the gesture on-device."
+    no_hand_frames = _kotlin_int(_read(_PREDICTION_SERVICE), "NO_HAND_TIMEOUT")
+    min_fps = _kotlin_int(_read(_MAIN_ACTIVITY), "MIN_ACCEPTABLE_FPS")
+    device_seconds = no_hand_frames / min_fps
+
+    assert abs(MAX_MISSING_HAND_SECONDS - device_seconds) < 1e-6, (
+        f"MAX_MISSING_HAND_SECONDS ({MAX_MISSING_HAND_SECONDS}) must equal the "
+        f"phone's NO_HAND_TIMEOUT/MIN_ACCEPTABLE_FPS "
+        f"({no_hand_frames}/{min_fps} = {device_seconds:.4f}s)."
     )
+
+
+def test_gap_gate_is_measured_in_time_not_sampled_frames():
+    """
+    The dropout gate must convert sampled frames to seconds.
+
+    Extraction analyzes only `sample_budget` frames spread across the whole video,
+    so one sampled frame spans `total_frames / analyzed_frames` real ones. Counting
+    sampled frames directly made the gate mean 0.21s on a 3s/30fps clip and 0.70s
+    on a 10s/60fps one — the same recording passing or failing on length alone.
+    """
+    from app.services import extract
+
+    src = _read(extract.__file__.replace(".pyc", ".py"))
+    assert "MAX_CONSECUTIVE_MISSING_FRAMES" not in src, (
+        "the frame-counted gap gate is back; it is length-dependent by construction"
+    )
+    assert "stride = (total_frames / analyzed_frames)" in src, (
+        "the gap must be scaled by the sampling stride before comparing to seconds"
+    )
+    assert "CAP_PROP_FPS" in src, "source fps must be read to convert frames to time"
 
 
 def test_pose_window_coverage_matches_device_gate():
@@ -227,4 +253,103 @@ def test_motion_gate_measures_the_stored_window():
         "the motion-energy gate must run AFTER center_on_peak_velocity, so it "
         "measures the fixed-length stored window rather than a variable-length "
         "pre-window sequence."
+    )
+
+
+def _kotlin_float(source: str, name: str) -> float:
+    return float(_kotlin_const(source, name))
+
+
+def test_sequence_motion_gate_matches_device():
+    """
+    MIN_SEQUENCE_MOTION must mean the same thing offline and live.
+
+    extract.py refuses to STORE a window whose summed frame-to-frame velocity is
+    below this floor ("a held pose or frozen clip"). PredictionService applies the
+    same floor to the window it is about to classify. Both sum frame_velocity /
+    frameVelocity over the SEQUENCE_LENGTH window, so the numbers are directly
+    comparable — but only while they stay equal, which nothing but this test
+    enforces. A device floor BELOW the training floor lets the phone classify
+    windows no training sample could ever have looked like.
+    """
+    from app.services.extract import MIN_SEQUENCE_MOTION
+
+    kotlin = _kotlin_float(_read(_PREDICTION_SERVICE), "MIN_SEQUENCE_MOTION")
+    assert abs(kotlin - MIN_SEQUENCE_MOTION) < 1e-6, (
+        f"PredictionService.MIN_SEQUENCE_MOTION ({kotlin}) must equal extract.py's "
+        f"MIN_SEQUENCE_MOTION ({MIN_SEQUENCE_MOTION})."
+    )
+
+
+def test_fire_floor_leaves_no_padding_only_windows():
+    """
+    A window the phone may FIRE on must be mostly real frames.
+
+    extractMotionWindow pads a short buffer by repeating its last frame, so the
+    firing floor sets how much of the model's input may be frozen padding. Stored
+    training samples always carry at least SEQUENCE_LENGTH real frames, so a window
+    that is mostly padding is out of distribution by construction.
+
+    Asserted as a RATIO rather than a fixed number so SEQUENCE_LENGTH can change
+    without silently loosening the guarantee.
+    """
+    from app.utils.preprocessor import SEQUENCE_LENGTH
+
+    src = _read(_PREDICTION_SERVICE)
+    fire_floor = _kotlin_int(src, "MIN_REAL_FRAMES_FOR_FIRE")
+    run_floor = _kotlin_int(src, "MIN_MOTION_FRAMES")
+
+    assert fire_floor >= run_floor, (
+        "MIN_REAL_FRAMES_FOR_FIRE must not be below MIN_MOTION_FRAMES — inference "
+        "may run early to build a streak, but firing needs at least as much evidence."
+    )
+    real_ratio = fire_floor / SEQUENCE_LENGTH
+    assert real_ratio >= 0.60, (
+        f"firing at {fire_floor} real frames means {SEQUENCE_LENGTH - fire_floor} of "
+        f"{SEQUENCE_LENGTH} model inputs ({1 - real_ratio:.0%}) are repeated padding; "
+        "no stored training sample looks like that."
+    )
+
+
+def test_mirror_augmentation_and_camera_scope_stay_paired():
+    """
+    Mirror augmentation is what makes the model work on BOTH camera orientations.
+
+    The front camera delivers a horizontally flipped image. Training on mirrored
+    copies is the only thing that covers it — measured at 96.1% -> 24.8% when clips
+    were mirrored against a non-mirror-augmented model (see MainActivity's
+    LEFT_HANDED_SUPPORT_ENABLED comment).
+
+    So the two must move together: if the app can select the front camera, training
+    MUST mirror-augment. Pinning the lens (FORCE_BACK_CAMERA_ONLY) is what makes
+    disabling mirroring safe. Re-enabling the camera toggle without re-enabling
+    mirroring silently reintroduces that collapse, which is the failure this pairs
+    against — the same trap as SLOT_CANONICALIZATION_ENABLED.
+    """
+    from app.utils.preprocessor import MIRROR_AUGMENTATION_ENABLED
+
+    back_only = _kotlin_bool(_read(_MAIN_ACTIVITY), "FORCE_BACK_CAMERA_ONLY")
+    assert MIRROR_AUGMENTATION_ENABLED or back_only, (
+        "MIRROR_AUGMENTATION_ENABLED is off while the app can still select the "
+        "front camera. Either pin the lens (FORCE_BACK_CAMERA_ONLY=true) or turn "
+        "mirror augmentation back on — a flipped image against a non-mirrored "
+        "model is the measured 24.8% case."
+    )
+
+
+def test_offline_sampling_rate_matches_device_fps_floor():
+    """
+    Extraction must sample a clip at the rate the phone actually delivers.
+
+    TARGET_SAMPLE_FPS controls how much wall-clock time one analyzed frame covers.
+    If it drifts from the device's MIN_ACCEPTABLE_FPS floor, the stored 30-frame
+    window spans a different real duration than the live one, and the LSTM sees a
+    speed difference the signer never made.
+    """
+    from app.services.extract import TARGET_SAMPLE_FPS
+
+    device_floor = _kotlin_int(_read(_MAIN_ACTIVITY), "MIN_ACCEPTABLE_FPS")
+    assert abs(TARGET_SAMPLE_FPS - device_floor) < 1e-6, (
+        f"extract.TARGET_SAMPLE_FPS ({TARGET_SAMPLE_FPS}) must equal "
+        f"MainActivity.MIN_ACCEPTABLE_FPS ({device_floor})."
     )
