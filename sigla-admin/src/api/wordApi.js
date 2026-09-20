@@ -36,6 +36,16 @@ export const updateWord = withInvalidation(async (id, data) => (await api.put(`/
 
 export const deleteWord = withInvalidation(async (id) => (await api.delete(`/words/${id}`)).data, "word");
 
+// Clear a word's training data without removing the word itself. The server
+// requires ?confirm=<label> to match exactly — it will not act on an id alone,
+// since the deletion is unrecoverable and the row count is not visible from the
+// URL. Callers pass the label they displayed to the user.
+export const deleteAllWordSamples = withInvalidation(
+  async (id, label) =>
+    (await api.delete(`/words/${id}/samples`, { params: { confirm: label } })).data,
+  "word",
+);
+
 export const getWordSamples = async (id) => {
   const response = await api.get(`/words/${id}/samples`);
   return response.data;

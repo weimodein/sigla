@@ -11,6 +11,7 @@ import {
   adminAddWord,
   updateWord,
   deleteWord,
+  deleteAllWordSamples,
   uploadVideos,
   getUploadJob,
   getActiveUploadJob,
@@ -23,6 +24,7 @@ import {
   Upload,
   Film,
   Trash2,
+  Eraser,
   Pencil,
   ChevronLeft,
   ChevronRight,
@@ -615,6 +617,7 @@ const ManageWord = () => {
   const [uploadWord, setUploadWord] = useState(null);
   const [demoVideoWord, setDemoVideoWord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [clearSamplesConfirm, setClearSamplesConfirm] = useState(null);
   const [stats, setStats] = useState(null);
   // The in-flight clip-extraction batch, held at PAGE level so it survives the
   // upload modal closing. Seeded from the 202 response and re-adopted from the
@@ -820,6 +823,24 @@ const ManageWord = () => {
     }
   };
 
+  // Clear a word's samples but keep the word. Used when a category has to be
+  // re-recorded (inconsistent takes, a mislabelled batch) — deleting the word
+  // instead would drop its id, so a later re-import renumbers it.
+  const handleClearSamples = async (word) => {
+    try {
+      const res = await deleteAllWordSamples(word.id, word.label);
+      success(
+        res.deleted > 0
+          ? `Deleted ${res.deleted} sample(s) from "${word.label}"`
+          : `"${word.label}" already had no samples`,
+      );
+      setClearSamplesConfirm(null);
+      fetchWords();
+    } catch (err) {
+      errorToast(err.response?.data?.message || "Failed to clear samples");
+    }
+  };
+
   // Floored at 1, and clamped below. Deleting the only word on the last page used
   // to leave `page` past the end: the table showed "No words found" while the
   // footer read "Showing 21–20 of 20" and Next stayed enabled, recoverable only
@@ -987,7 +1008,34 @@ const ManageWord = () => {
         }}
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-left" style={{ minWidth: 760, fontSize: "0.875rem" }}>
+          {/* minWidth raised from 760 with the fifth action button: below this the
+              Actions cell wraps instead of scrolling, which is what the
+              overflow-x-auto wrapper exists to prevent. */}
+          <table className="w-full text-left" style={{ minWidth: 860, fontSize: "0.875rem", tableLayout: "fixed" }}>
+            <colgroup>
+              {/* Every column below is sized to what its own content actually
+                  needs, at 0.875rem / weight 600 for Label and regular weight
+                  elsewhere, plus the 20px+20px cell padding (px-5):
+                    Label    — longest value is "DON'T UNDERSTAND" (18 chars)
+                    Category — longest value is "CALENDAR" (8 chars)
+                    Samples  — at most 3 digits (max sample count is in the 40s)
+                    Status   — "Inactive" is the longer of the two pill labels
+                    Actions  — 5 buttons at their natural (nowrap) width
+                  Label keeps a % share so it, not a fixed column, absorbs
+                  whatever the table's own minWidth adds beyond these five
+                  sums — the same role it had before, just sized correctly
+                  instead of guessed. Previous attempts got two things wrong in
+                  turn: Actions at 46% left ~100px of dead space beside its
+                  buttons (it needed ~440px, not 46% of an 860px+ table), then
+                  Category at 90px was too narrow for "CALENDAR" and truncated
+                  to "CALEND…" while Label's leftover 38% sat mostly empty
+                  beside short labels like "DECEMBER". */}
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "130px" }} />
+              <col style={{ width: "90px" }} />
+              <col style={{ width: "100px" }} />
+              <col style={{ width: "440px" }} />
+            </colgroup>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 {["Label", "Category", "Samples", "Status", "Actions"].map(h => (
@@ -1020,8 +1068,11 @@ const ManageWord = () => {
                   className="row-interactive list-item-in"
                   style={{ borderTop: `1px solid ${C.border}`, ...listStagger(i) }}
                 >
-                  <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937" }}>{word.label}</td>
-                  <td className="px-5 py-3" style={{ color: "#6b7280", textTransform: "capitalize" }}>{word.category || "—"}</td>
+                  {/* Fixed layout means an over-long label would overflow its cell
+                      rather than widening the column, so truncate with the full
+                      text on hover. Label.VARCHAR(100) allows more than fits. */}
+                  <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={word.label}>{word.label}</td>
+                  <td className="px-5 py-3" style={{ color: "#6b7280", textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={word.category || ""}>{word.category || "—"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>{word.approved_sample_count ?? 0}</td>
                   <td className="px-5 py-3">
                     <span title="Words become active automatically when a model is deployed" style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 600,
@@ -1031,6 +1082,12 @@ const ManageWord = () => {
                     </span>
                   </td>
                   <td className="px-5 py-3">
+                    {/* flexShrink: 0 on every button below stops them shrinking to
+                        fit the row, which is what squeezed "Dataset Clips" / "Demo
+                        Video" onto two lines when the column was narrower than the
+                        buttons' natural width. whiteSpace: nowrap on the two text
+                        buttons is the other half — without it a shrunk button just
+                        wraps its own label instead of clipping. */}
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       {/* Disabled while a batch is extracting — the server also
                           rejects a concurrent batch with 409, since two would race
@@ -1039,19 +1096,34 @@ const ManageWord = () => {
                         title={uploadJob ? "An upload is already in progress…" : "Upload dataset clips for training"}
                         onClick={() => setUploadWord(word)}
                         disabled={!!uploadJob}
-                        style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: uploadJob ? "not-allowed" : "pointer", fontSize: "0.8rem", color: "#374151", opacity: uploadJob ? 0.5 : 1 }}>
+                        style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: uploadJob ? "not-allowed" : "pointer", fontSize: "0.8rem", color: "#374151", opacity: uploadJob ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
                         <Upload size={14} /> Dataset Clips
                       </button>
                       <button title="Set the single demonstration video shown in the mobile app" onClick={() => setDemoVideoWord(word)}
-                        style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${word.video_url ? "#bbf7d0" : C.border}`, background: word.video_url ? "#f0fdf4" : "white", cursor: "pointer", fontSize: "0.8rem", color: word.video_url ? "#166534" : "#374151" }}>
+                        style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "6px", border: `1px solid ${word.video_url ? "#bbf7d0" : C.border}`, background: word.video_url ? "#f0fdf4" : "white", cursor: "pointer", fontSize: "0.8rem", color: word.video_url ? "#166534" : "#374151", whiteSpace: "nowrap", flexShrink: 0 }}>
                         <Film size={14} /> Demo Video
                       </button>
                       <button title="Edit word" onClick={() => setEditWord(word)}
-                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}>
                         <Pencil size={14} color="#374151" />
                       </button>
-                      <button title="Delete" onClick={() => setDeleteConfirm(word)}
-                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid #fecaca`, background: "#fff5f5", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                      {/* Clear samples, keep the word. Disabled at 0 samples so
+                          the row cannot offer an action that would do nothing,
+                          and greyed rather than hidden so the control does not
+                          appear and disappear as counts change. */}
+                      <button
+                        title={
+                          word.total_samples > 0
+                            ? `Delete all ${word.total_samples} training sample(s), keeping the word`
+                            : "No samples to clear"
+                        }
+                        onClick={() => setClearSamplesConfirm(word)}
+                        disabled={!word.total_samples}
+                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid ${word.total_samples ? "#fed7aa" : C.border}`, background: word.total_samples ? "#fff7ed" : "white", cursor: word.total_samples ? "pointer" : "not-allowed", display: "flex", alignItems: "center", opacity: word.total_samples ? 1 : 0.45, flexShrink: 0 }}>
+                        <Eraser size={14} color={word.total_samples ? "#c2410c" : "#9ca3af"} />
+                      </button>
+                      <button title="Delete word and all its samples" onClick={() => setDeleteConfirm(word)}
+                        style={{ padding: "6px", borderRadius: "6px", border: `1px solid #fecaca`, background: "#fff5f5", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}>
                         <Trash2 size={14} color={C.red} />
                       </button>
                     </div>
@@ -1163,6 +1235,43 @@ const ManageWord = () => {
           <p style={{ fontSize: "0.9rem", color: "#374151" }}>
             Are you sure you want to delete <strong>"{deleteConfirm.label}"</strong>? This will also remove all its gesture samples.
           </p>
+        </AppModal>
+      )}
+
+      {clearSamplesConfirm && (
+        <AppModal
+          title="Delete All Samples"
+          onClose={() => setClearSamplesConfirm(null)}
+          onEnter={() => handleClearSamples(clearSamplesConfirm)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setClearSamplesConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => handleClearSamples(clearSamplesConfirm)}>
+                Delete {clearSamplesConfirm.total_samples} Sample
+                {clearSamplesConfirm.total_samples === 1 ? "" : "s"}
+              </Button>
+            </>
+          }
+        >
+          <p style={{ fontSize: "0.9rem", color: "#374151" }}>
+            Permanently delete all{" "}
+            <strong>{clearSamplesConfirm.total_samples}</strong> training sample
+            {clearSamplesConfirm.total_samples === 1 ? "" : "s"} for{" "}
+            <strong>"{clearSamplesConfirm.label}"</strong>?
+          </p>
+          <p style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "10px" }}>
+            The word itself is kept, so you can re-upload clips for it later. This
+            cannot be undone — the samples are not recoverable from the app.
+          </p>
+          {clearSamplesConfirm.is_active && (
+            <p style={{ fontSize: "0.85rem", color: "#c2410c", marginTop: "10px" }}>
+              This word is <strong>active</strong> in the deployed model. Clearing
+              its samples does not change what the app currently recognises, but
+              the word will be dropped from the next model you train.
+            </p>
+          )}
         </AppModal>
       )}
     </div>
