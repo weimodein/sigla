@@ -87,16 +87,31 @@ private val teardownExecutor = Executors.newSingleThreadExecutor { r ->
 // when those clips were mirrored). Training now mirror-augments both orientations,
 // while the phone preserves the raw MediaPipe orientation it was trained against.
 private const val LEFT_HANDED_SUPPORT_ENABLED = false
-// ── Single-orientation scope (2026-09-12) ────────────────────────────────────
-// The greetings dataset was recorded entirely on the BACK camera, and training
-// mirror augmentation is now OFF (sigla-ml/.env MIRROR_AUGMENTATION_ENABLED=false)
-// because the scope is right-handed, one orientation. Mirror augmentation was the
-// ONLY thing making the model work on both cameras: the front camera delivers a
-// horizontally flipped image, which without mirrored training data is the exact
-// condition measured at 96.1% -> 24.8%. Pinning the lens keeps the app inside the
-// distribution the model was trained on. Re-enable together with
-// MIRROR_AUGMENTATION_ENABLED if front-camera support returns.
-private const val FORCE_BACK_CAMERA_ONLY = true
+// ── Camera scope ─────────────────────────────────────────────────────────────
+// PAIRED WITH sigla-ml/.env MIRROR_AUGMENTATION_ENABLED. The two must move
+// together and tests/test_mobile_parity_flags.py fails the build if they do not.
+//
+// The front camera delivers a horizontally flipped image. Against a model whose
+// training data carries only one orientation that is a hard train/inference
+// mismatch — measured at 96.1% -> 24.8% on complete clips. Mirror augmentation
+// (which trains on both orientations) is the ONLY thing that makes the flipped
+// image safe, so:
+//
+//   FORCE_BACK_CAMERA_ONLY = true   requires nothing; pinning the lens keeps the
+//                                   app inside a single-orientation model.
+//   FORCE_BACK_CAMERA_ONLY = false  REQUIRES MIRROR_AUGMENTATION_ENABLED=true
+//                                   *and a retrain*. Flipping this flag against
+//                                   an already-deployed non-mirrored model is
+//                                   exactly the 24.8% case.
+//
+// 2026-09-12: set to true for the back-camera-only greetings scope.
+// 2026-09-20: back to false for front-camera support. Mirroring costs the
+// back-camera domain a little accuracy, because mirrored copies join the pool
+// INSIDE the existing real_count * AUGMENTATION_FACTOR budget rather than
+// extending it — the prior A/B measured 96.2% original vs 94.2% mirrored on the
+// 10-class model. MIRROR_AUGMENTATION_RATIO (<1.0) biases that split back toward
+// the primary orientation if the cost turns out too high at 40 classes.
+private const val FORCE_BACK_CAMERA_ONLY = false
 // On-device calibration (HANDEDNESS_TEST log, both cameras, both hands, 0.95-0.97
 // confidence, 2026-07-13) confirmed MediaPipe's Left/Right label matches the true
 // anatomical hand identically on front AND back camera — no inversion. If a future
