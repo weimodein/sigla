@@ -224,9 +224,22 @@ const extractAndStoreSample = async (
     const form = new FormData();
     form.append("file", fileBuffer, { filename, contentType: mimetype });
 
+    // 180s, not 60s. /extract-landmarks now trims the clip to its signing span
+    // before extracting (see TRIM_TO_SIGNING_SPAN in sigla-ml extract.py), which
+    // is what makes an admin UI upload produce the same sequence as a
+    // tools/import_fsl105.py import instead of being rejected outright for the
+    // idle head and tail. That trim costs a hand-detection pass over the clip:
+    // measured 32-55s end to end per clip on this hardware against the old 60s
+    // ceiling, so two of eight test clips came within 5s of timing out. The work
+    // is CPU-bound and scales with clip length and machine speed, so the ceiling
+    // has to clear the worst case by a wide margin rather than the average.
+    const ML_EXTRACT_TIMEOUT_MS = Number(
+      process.env.ML_EXTRACT_TIMEOUT_MS || 180000,
+    );
+
     const mlRes = await axios.post(`${ML_SERVICE_URL}/extract-landmarks`, form, {
       headers: form.getHeaders(),
-      timeout: 60000,
+      timeout: ML_EXTRACT_TIMEOUT_MS,
       maxBodyLength: Infinity,
     });
 

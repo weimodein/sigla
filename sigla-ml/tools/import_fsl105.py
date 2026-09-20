@@ -513,9 +513,24 @@ def _process_one(job: tuple) -> dict:
             out["reason"] = "re-encode failed"
             return out
 
+        # Extract from the ORIGINAL clip, not from `trimmed`.
+        #
+        # extract_motion_landmarks now trims to the signing span itself (see
+        # TRIM_TO_SIGNING_SPAN in app/services/extract.py), so handing it the
+        # already-trimmed file would trim twice. That is not destructive — a
+        # second pass over a trimmed clip still keeps ~94% of its frames — but it
+        # is not a no-op either: it shaves the edge padding again and shifts which
+        # 30 frames are stored, so the same source clip would yield a different
+        # sequence here than through the admin UI. Feeding the original keeps the
+        # two paths byte-identical, which is the entire point of moving the trim
+        # into the shared function.
+        #
+        # The trimmed file is still WRITTEN above when --save-trimmed is set,
+        # because its purpose is to let a human eyeball what the trim selected.
+        # It is simply no longer what gets extracted.
         try:
-            with open(trimmed, "rb") as f:
-                sequence = extract_motion_landmarks(f.read(), os.path.basename(trimmed))
+            with open(path, "rb") as f:
+                sequence = extract_motion_landmarks(f.read(), os.path.basename(path))
         except ExtractionQualityError as e:
             _unlink(trimmed)
             out["status"] = "rejected"

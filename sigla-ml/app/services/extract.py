@@ -72,6 +72,42 @@ TARGET_SAMPLE_FPS = float(os.getenv("TARGET_SAMPLE_FPS", 24.0))
 # the phone would reject is exactly the skew this closes. 24/30 = 0.80.
 MIN_POSE_WINDOW_COVERAGE = float(os.getenv("MIN_POSE_WINDOW_COVERAGE", 24.0 / 30.0))
 
+# ── Signing-span trim ────────────────────────────────────────────────────────
+#
+# Clips are recorded as "stand still, sign, stand still". The idle head and tail
+# are not part of the gesture and actively break extraction: they are long runs
+# of hands-less frames, which MAX_MISSING_HAND_SECONDS (0.25s) rejects outright.
+#
+# This used to live ONLY in tools/import_fsl105.py, so the two import paths
+# disagreed. Measured on class 4 / signer-01: the script (which trimmed first)
+# accepted 10/10, while the admin UI's "Upload Dataset Clips" — which posts the
+# raw file straight to /extract-landmarks — accepted 0/8, every rejection being
+# "the signing hand left the frame for 0.54-1.59s". That is pure idle time.
+# Trimming here means both paths run the same code and produce the same sequence.
+#
+# The trim is LOGICAL, not a re-encode: find the first and last frame carrying a
+# hand, then restrict the sampling window below to that span. Physically writing
+# a trimmed file (what import_fsl105 did) costs ~4-5s per clip in re-encoding and
+# produces the same frames, since the sampling math is driven by a frame count
+# and an offset either way.
+TRIM_TO_SIGNING_SPAN = os.getenv("TRIM_TO_SIGNING_SPAN", "true").lower() == "true"
+
+# Frames scanned across the clip to locate the signing span. Each one costs a
+# hand detection, so this is the dominant cost of trimming.
+#
+# 30, not the 60 import_fsl105.py used. Measured per clip on this machine: scan
+# 23-26s at 60 against a 33-38.5s total, versus the backend's 60s axios timeout
+# for /extract-landmarks — around 21s of headroom, too thin. Halving the scan
+# takes it to ~11s (total ~22s, headroom ~38s) while the detected span moves by
+# only 1-7 frames out of the ~110-130 kept. At 20 or 12 the span drifts
+# materially, so 30 is the floor rather than a free knob.
+TRIM_SCAN_FRAMES = int(os.getenv("TRIM_SCAN_FRAMES", 30))
+
+# Real frames of padding kept on each side of the detected span, so the start of
+# the raise and the end of the lower — which carry gesture velocity — survive.
+# Matches import_fsl105.TRIM_PAD_FRAMES, whose value this replaces.
+TRIM_PAD_FRAMES = int(os.getenv("TRIM_PAD_FRAMES", 4))
+
 
 class ExtractionQualityError(ValueError):
     """The video decoded, but does not contain enough reliable training signal."""
@@ -185,6 +221,34 @@ def _build_feature_vector(hand_landmarks_list, pose_landmarks=None) -> list[floa
     return features
 
 
+def _find_signing_span(cap, total_frames: int, landmarker) -> tuple[int, int] | None:
+    """
+    First and last frame index carrying a detected hand, padded by
+    TRIM_PAD_FRAMES on each side.
+
+    Returns (start, end) inclusive, or None when no hand is found anywhere —
+    the caller treats that as "no gesture in this clip" rather than trimming to
+    nothing.
+
+    Takes an already-open VideoCapture so the clip is not decoded twice; the
+    caller's own sampling loop seeks the same handle afterwards.
+    """
+    idxs = np.linspace(0, total_frames - 1,
+                       min(total_frames, TRIM_SCAN_FRAMES), dtype=int)
+    hits = []
+    for i in idxs:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(i))
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        if _detect(landmarker, frame).hand_landmarks:
+            hits.append(int(i))
+    if not hits:
+        return None
+    return (max(hits[0] - TRIM_PAD_FRAMES, 0),
+            min(hits[-1] + TRIM_PAD_FRAMES, total_frames - 1))
+
+
 def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) -> list[list[float]] | None:
     """
     Extract a 30-frame motion sequence from a video.
@@ -213,6 +277,28 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
             source_fps = DEFAULT_SOURCE_FPS
         if total_frames < 1:
             return None
+
+        # Trim to the signing span before anything else looks at the clip.
+        #
+        # `span_start` becomes the origin for every frame index computed below,
+        # and `total_frames` the length of the span rather than of the file, so
+        # the sampling maths downstream is unchanged — it just operates on the
+        # gesture instead of on the gesture plus the idle head and tail. See
+        # TRIM_TO_SIGNING_SPAN for why this has to happen here rather than in the
+        # caller.
+        span_start = 0
+        if TRIM_TO_SIGNING_SPAN:
+            with _make_landmarker() as trim_landmarker:
+                span = _find_signing_span(cap, total_frames, trim_landmarker)
+            if span is None:
+                # No hand anywhere. Returning None (rather than raising) matches
+                # what this function already does for an undecodable clip, and
+                # the router turns it into a 422 "No hands detected in video".
+                return None
+            span_start, span_end = span
+            total_frames = span_end - span_start + 1
+            if total_frames < 1:
+                return None
 
         # Sample enough frames that a clip at the MIN_HAND_COVERAGE floor can still
         # yield SEQUENCE_LENGTH frames WITH a hand in them.
@@ -271,7 +357,9 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
 
         with _make_landmarker() as landmarker, _make_pose_landmarker() as pose_landmarker:
             for idx in indices:
-                cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+                # `indices` are relative to the signing span, so shift them back
+                # onto real file positions. span_start is 0 when trimming is off.
+                cap.set(cv2.CAP_PROP_POS_FRAMES, int(span_start + idx))
                 ret, frame = cap.read()
                 if not ret:
                     continue
