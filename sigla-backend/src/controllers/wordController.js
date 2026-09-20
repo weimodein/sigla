@@ -86,6 +86,62 @@ const getApprovedSampleCount = async (wordId) => {
   });
 };
 
+// Live sample counts, derived from gesture_samples rather than read from the
+// words.total_samples / words.approved_sample_count columns.
+//
+// Those columns are denormalized counters that were incremented on upload and
+// never decremented on delete, so they drifted from reality the first time any
+// samples were removed: after two cleanups the admin UI reported 1880 samples
+// against 1039 real rows, and showed the twelve CALENDAR words as holding 33-40
+// samples each when all of them had zero. That is not a cosmetic difference — it
+// is the UI asserting that training data exists when it does not.
+//
+// A decrement on the delete path would not have fixed it. Rows are also removed
+// by direct SQL during dataset cleanups, which no controller-side hook observes.
+// Deriving the number instead makes it impossible to drift, and at this scale
+// (~1k sample rows, indexed word_id FK) the cost is not measurable.
+//
+// Returns a Map of word_id -> { total, approved }; callers merge it into their
+// response so the API shape stays exactly as clients expect.
+const getSampleCounts = async (wordIds = null) => {
+  const where = wordIds && wordIds.length ? { word_id: { [Op.in]: wordIds } } : {};
+  const rows = await GestureSample.findAll({
+    where,
+    attributes: [
+      "word_id",
+      [sequelize.fn("COUNT", sequelize.col("id")), "total"],
+      [
+        sequelize.fn(
+          "SUM",
+          sequelize.literal("CASE WHEN status = 'approved' THEN 1 ELSE 0 END"),
+        ),
+        "approved",
+      ],
+    ],
+    group: ["word_id"],
+    raw: true,
+  });
+  const counts = new Map();
+  for (const r of rows) {
+    counts.set(Number(r.word_id), {
+      total: Number(r.total) || 0,
+      approved: Number(r.approved) || 0,
+    });
+  }
+  return counts;
+};
+
+// Overlay derived counts onto a word (or plain object) for the API response.
+// Words with no samples are absent from the count map, so they resolve to 0
+// rather than to whatever the stale column happened to hold.
+const withSampleCounts = (word, counts) => {
+  const json = typeof word.toJSON === "function" ? word.toJSON() : { ...word };
+  const c = counts.get(Number(json.id)) || { total: 0, approved: 0 };
+  json.total_samples = c.total;
+  json.approved_sample_count = c.approved;
+  return json;
+};
+
 // Count only known signer IDs with enough approved clips. The uploading admin is
 // not a signer identifier, and twenty clips from one person do not demonstrate
 // that a model will work for a new user.
@@ -354,11 +410,15 @@ const getAllWords = async (req, res) => {
       order: [["created_at", "DESC"]],
     });
 
+    // Sample counts derived from gesture_samples, not from the stored columns —
+    // one grouped query for the whole page. See getSampleCounts.
+    const counts = await getSampleCounts(rows.map((w) => w.id));
+
     return res.status(200).json({
       total: count,
       page: parseInt(page),
       totalPages: Math.ceil(count / limit),
-      words: rows.map(withCategoryName),
+      words: rows.map((w) => withSampleCounts(withCategoryName(w), counts)),
     });
   } catch (err) {
     console.error("Get all words error:", err);
@@ -376,7 +436,9 @@ const getWordStats = async (req, res) => {
         Word.count({ where: { status: "approved" } }),
         Word.count({ where: { status: "rejected" } }),
         Word.count({ where: { is_active: true } }),
-        Word.sum("total_samples"),
+        // Count the sample rows themselves. Summing words.total_samples reported
+        // 1880 against 1039 real rows — see getSampleCounts.
+        GestureSample.count(),
       ]);
 
     // Words approved but not yet active — waiting for next model deploy
@@ -609,11 +671,11 @@ const adminUploadSamples = async (req, res) => {
 
     const newCount = samples.length;
 
-    // Update word counters
-    await word.update({
-      total_samples: (word.total_samples || 0) + newCount,
-      approved_sample_count: (word.approved_sample_count || 0) + newCount,
-    });
+    // Counters are no longer incremented here: the API derives them from
+    // gesture_samples (see getSampleCounts), so a blind `+ newCount` could only
+    // reintroduce the drift it used to cause. checkAndActivateWord below still
+    // recomputes approved_sample_count from the real rows, which is what the
+    // activation threshold reads.
 
     // Re-fetch word with updated counts before activation check
     await word.reload();
@@ -1122,8 +1184,10 @@ const getSamples = async (req, res) => {
 
     return res.status(200).json({
       samples,
-      total_samples: word.total_samples,
-      approved_sample_count: word.approved_sample_count,
+      // Derived from the rows this handler already loaded rather than from the
+      // stored columns, which drift on delete — see getSampleCounts.
+      total_samples: samples.length,
+      approved_sample_count: samples.filter((s) => s.status === "approved").length,
       is_active: word.is_active,
       activation_threshold: getActivationThreshold(),
       sample_cap: getSampleCap(word),
@@ -1750,12 +1814,11 @@ const uploadVideos = async (req, res) => {
           console.log(`[uploadVideos] "${word.label}": ${successCount} stored`);
         }
 
-        // Update word counters
+        // total_samples is no longer incremented — it is derived from
+        // gesture_samples at read time (see getSampleCounts). approved_sample_count
+        // is still written from a real COUNT because checkAndActivateWord reads it.
         const newApproved = await getApprovedSampleCount(word.id);
-        await word.update({
-          total_samples: (word.total_samples || 0) + successCount,
-          approved_sample_count: newApproved,
-        });
+        await word.update({ approved_sample_count: newApproved });
         await word.reload();
         await checkAndActivateWord(word, req.user.id);
 
