@@ -25,6 +25,7 @@ const {
   rejectAllSamplesByUser,
   approveAllSamplesForWord,
   rejectAllSamplesForWord,
+  deleteAllSamplesForWord,
   approveSubmission,
   rejectSubmission,
   activateWord,
@@ -128,6 +129,12 @@ router.get("/:id/upload-jobs/active", roleMiddleware("admin"), getActiveUploadJo
 
 // ── Samples ───────────────────────────────────────────────────
 router.get("/:id/samples", roleMiddleware("admin"), getSamples);
+
+// Permanently delete every sample for a word, keeping the word row. Requires
+// ?confirm=<label>. Registered before the /:sampleId routes below for the same
+// reason they are ordered that way — Express would otherwise have no chance to
+// match this bare path once a wildcard segment is in play.
+router.delete("/:id/samples", roleMiddleware("admin"), deleteAllSamplesForWord);
 
 // ── Sample review routes (admin only) ────────────────────────
 // IMPORTANT: specific /user/:userId routes MUST come BEFORE /:sampleId wildcard

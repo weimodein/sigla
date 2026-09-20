@@ -1270,6 +1270,82 @@ const approveAllSamplesForWord = async (req, res) => {
   }
 };
 
+// ── DELETE /api/words/:id/samples ────────────────────────────
+// Permanently delete every gesture sample for a word, keeping the word itself.
+//
+// This existed only as hand-written SQL before. Clearing a word's training data
+// is a normal part of the dataset workflow — a category is re-recorded because
+// the takes were inconsistent, or a batch is found to be mislabelled — and the
+// only alternatives were deleting the whole word (losing its id, so a re-import
+// renumbers and the label->id mapping shifts) or running DELETE by hand against
+// production.
+//
+// Deliberately NOT touched here:
+//   * word.status    — an admin decision, not a consequence of having no clips.
+//   * word.is_active — set only by the model-deploy path, which reconciles
+//     against the deployed model's trained_word_ids. A deployed model still
+//     genuinely recognises this word; clearing the rows we would retrain FROM
+//     does not change what the shipped .tflite can do. Flipping it here would
+//     hide a word the app can still predict.
+//
+// Requires ?confirm=<label> matching the word exactly. The guard is the point:
+// this is unrecoverable, the row count is not visible from the URL, and an
+// id-only call is too easy to fire at the wrong word.
+const deleteAllSamplesForWord = async (req, res) => {
+  try {
+    const word = await Word.findOne({ where: { id: req.params.id } });
+    if (!word) {
+      return res.status(404).json({ message: "Word not found" });
+    }
+
+    const confirm = req.query.confirm ?? req.body?.confirm;
+    if (confirm !== word.label) {
+      return res.status(400).json({
+        message:
+          `Confirmation required. Pass confirm="${word.label}" to delete every ` +
+          `sample for this word. This cannot be undone.`,
+        word_id: word.id,
+        label: word.label,
+      });
+    }
+
+    const total = await GestureSample.count({ where: { word_id: word.id } });
+    if (total === 0) {
+      return res.status(200).json({
+        message: `"${word.label}" already has no samples.`,
+        deleted: 0,
+      });
+    }
+
+    const deleted = await GestureSample.destroy({ where: { word_id: word.id } });
+
+    // Keep the stored counter consistent with the rows. The API derives
+    // total_samples at read time (see getSampleCounts), but approved_sample_count
+    // is read back by checkAndActivateWord, so it must not be left stale.
+    await word.update({ total_samples: 0, approved_sample_count: 0 });
+
+    await logActivity({
+      administrator_id: req.user.id,
+      action: "deleted_word_samples",
+      target_type: "word",
+      target_id: word.id,
+      details:
+        `Deleted all ${deleted} gesture sample(s) for word: ${word.label}. ` +
+        `The word row was kept; is_active and status were left unchanged.`,
+    });
+
+    return res.status(200).json({
+      message: `Deleted all ${deleted} sample(s) for "${word.label}".`,
+      word_id: word.id,
+      label: word.label,
+      deleted,
+    });
+  } catch (err) {
+    console.error("Delete all samples error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ── PATCH /api/words/:id/samples/reject-all ──────────────────
 // Reject ALL pending samples for a word regardless of submitter
 const rejectAllSamplesForWord = async (req, res) => {
@@ -1911,6 +1987,7 @@ module.exports = {
   rejectAllSamplesByUser,
   approveAllSamplesForWord,
   rejectAllSamplesForWord,
+  deleteAllSamplesForWord,
   approveSubmission,
   rejectSubmission,
   activateWord,
