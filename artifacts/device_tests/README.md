@@ -62,13 +62,21 @@ words themselves are almost all fine (9/10) — the confusion is asymmetric, whi
 is what you would expect if the day signs carry extra movement that the numbers
 lack.
 
-### What this does NOT tell us
+### What this does NOT tell us on its own
 
-A single pass of one signer on one device. It does not separate:
+A single pass of one signer on one device. It cannot separate:
   * a genuine class-overlap problem (would also show in cross-validation), from
   * a live-only problem such as windowing or threshold behaviour (would not).
 
-cv_40class.json is the companion measurement. If the number-vs-day confusion
-appears there too, the confusion matrix names the exact pairs and the fix is
-targeted data collection. If it does NOT appear offline, the problem is in the
-live path and more clips would not help.
+**That question is now answered — see analysis_1.5.0.md.** Cross-validation
+(87.7% +/- 1.0%) showed five of the eight failures sitting at 95-100% recall
+offline, so they are live-path artifacts and more clips of those words would not
+help. Only TEN (38%), GOOD AFTERNOON (48%) and partly GOOD EVENING (75%) are
+genuine class overlap.
+
+## Files
+
+  device_test_1.5.0.csv      raw per-word results from the app
+  analysis_1.5.0.md          device-vs-CV comparison and what to record next
+  cv_40class_summary.json    the CV numbers the analysis draws on (the full
+                             cv_40class.json lives in ../cv/, which is ignored)
