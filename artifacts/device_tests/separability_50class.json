@@ -1,0 +1,109 @@
+{
+ "categories": {
+  "FAMILY": {
+   "separability": 0.4994,
+   "within_class_spread": 18.1,
+   "between_class_distance": 20.7,
+   "ratio": 1.14
+  },
+  "DAYS": {
+   "separability": 0.5182,
+   "within_class_spread": 32.9,
+   "between_class_distance": 45.3,
+   "ratio": 1.38
+  },
+  "NUMBERS": {
+   "separability": 0.5685,
+   "within_class_spread": 15.0,
+   "between_class_distance": 17.3,
+   "ratio": 1.15
+  },
+  "GREETING": {
+   "separability": 0.3424,
+   "within_class_spread": 38.7,
+   "between_class_distance": 38.8,
+   "ratio": 1.0
+  }
+ },
+ "family_pairs_closest": [
+  {
+   "pair": [
+    "SON",
+    "DAUGHTER"
+   ],
+   "ratio": 0.33
+  },
+  {
+   "pair": [
+    "MOTHER",
+    "PARENTS"
+   ],
+   "ratio": 0.38
+  },
+  {
+   "pair": [
+    "FATHER",
+    "PARENTS"
+   ],
+   "ratio": 0.64
+  },
+  {
+   "pair": [
+    "FATHER",
+    "MOTHER"
+   ],
+   "ratio": 0.7
+  },
+  {
+   "pair": [
+    "GRANDFATHER",
+    "GRANDMOTHER"
+   ],
+   "ratio": 0.7
+  },
+  {
+   "pair": [
+    "UNCLE",
+    "COUSIN"
+   ],
+   "ratio": 0.8
+  },
+  {
+   "pair": [
+    "FATHER",
+    "COUSIN"
+   ],
+   "ratio": 0.93
+  },
+  {
+   "pair": [
+    "DAUGHTER",
+    "AUNTIE"
+   ],
+   "ratio": 0.93
+  },
+  {
+   "pair": [
+    "UNCLE",
+    "AUNTIE"
+   ],
+   "ratio": 0.97
+  },
+  {
+   "pair": [
+    "SON",
+    "AUNTIE"
+   ],
+   "ratio": 1.05
+  }
+ ],
+ "reference": {
+  "MONTHS_failed": {
+   "separability": 0.07,
+   "within": 37.4,
+   "between": 14.3,
+   "ratio": 0.38,
+   "cv_recall": "45%"
+  }
+ }
+}
