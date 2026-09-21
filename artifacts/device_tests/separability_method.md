@@ -62,8 +62,30 @@ not a reliable substitute for measuring it.
 
 ## How to run it
 
-Fetch approved samples, normalize each sequence with
-`preprocessor.normalize_sequence`, then compute the two quantities per group. The
-code used is inline in the session that produced `separability_50class.json`; it
-is short enough to rewrite than to maintain as a tool, and it needs the backend
-running for `fetch_approved_samples`.
+`sigla-ml/scripts/separability.py`, which needs the backend running for
+`fetch_approved_samples`. It reports per-pair ratios, and per-pair signer counts
+with a warning when two classes were recorded by different numbers of signers —
+a class with fewer carries less inter-signer variation in its within-class
+spread, so its ratios read optimistically.
+
+The numbers above predate that script and came from inline code in the session
+that produced `separability_50class.json`.
+
+**The two do not agree, and the reason is not known.** The script reports DAYS
+at 1.62 where the table above says 1.38, and FAMILY at 1.35 against 1.14.
+`between/within` reproduces the published ratios exactly, so the formula is not
+the difference; aggregation method (per-class mean, pooled pairwise, centroid),
+silhouette scoring, dataset drift, re-normalization, excluded samples,
+within-signer scoping and landmark corruption have all been tested and ruled
+out. Until someone explains it, read the script's output as RELATIVE — pair
+against pair, within one run — and do not compare it to the ~1.0 threshold in
+this document, which was calibrated on the other scale.
+
+## What this check cannot see
+
+It measures whether classes are DISTINGUISHABLE, not whether they are CLEAN. See
+`landmark_corruption.md`: 2.28% of stored hand-frames carry landmarks scaled
+~100x by a near-zero normalization divisor, and removing them cuts within-class
+spread by 14-29% while barely moving any ratio, because they inflate the
+between-class term in the same proportion. TODAY scores acceptably here with a
+third of its hand-frames corrupted.

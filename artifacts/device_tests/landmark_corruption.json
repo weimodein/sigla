@@ -1,0 +1,374 @@
+{
+  "overall": {
+    "corrupt_hand_frames": 1409,
+    "hand_frames": 61839,
+    "rate": 0.0228,
+    "median_within_spread": 21.5
+  },
+  "per_class": {
+    "AUNTIE": {
+      "corrupt_frames": 0,
+      "hand_frames": 1110,
+      "rate": 0.0,
+      "within_spread": 21.7,
+      "n": 37
+    },
+    "CORRECT": {
+      "corrupt_frames": 112,
+      "hand_frames": 1557,
+      "rate": 0.0719,
+      "within_spread": 107.2,
+      "n": 34
+    },
+    "COUSIN": {
+      "corrupt_frames": 1,
+      "hand_frames": 1020,
+      "rate": 0.001,
+      "within_spread": 21.3,
+      "n": 34
+    },
+    "DAUGHTER": {
+      "corrupt_frames": 0,
+      "hand_frames": 1473,
+      "rate": 0.0,
+      "within_spread": 48.3,
+      "n": 38
+    },
+    "DON\u2019T KNOW": {
+      "corrupt_frames": 12,
+      "hand_frames": 1110,
+      "rate": 0.0108,
+      "within_spread": 29.8,
+      "n": 37
+    },
+    "DON\u2019T UNDERSTAND": {
+      "corrupt_frames": 4,
+      "hand_frames": 1140,
+      "rate": 0.0035,
+      "within_spread": 22.4,
+      "n": 38
+    },
+    "EIGHT": {
+      "corrupt_frames": 2,
+      "hand_frames": 990,
+      "rate": 0.002,
+      "within_spread": 20.3,
+      "n": 33
+    },
+    "F": {
+      "corrupt_frames": 4,
+      "hand_frames": 900,
+      "rate": 0.0044,
+      "within_spread": 20.5,
+      "n": 30
+    },
+    "FAST": {
+      "corrupt_frames": 1,
+      "hand_frames": 930,
+      "rate": 0.0011,
+      "within_spread": 26.5,
+      "n": 31
+    },
+    "FATHER": {
+      "corrupt_frames": 0,
+      "hand_frames": 990,
+      "rate": 0.0,
+      "within_spread": 16.1,
+      "n": 33
+    },
+    "FIVE": {
+      "corrupt_frames": 1,
+      "hand_frames": 990,
+      "rate": 0.001,
+      "within_spread": 13.8,
+      "n": 33
+    },
+    "FOUR": {
+      "corrupt_frames": 0,
+      "hand_frames": 1080,
+      "rate": 0.0,
+      "within_spread": 13.8,
+      "n": 36
+    },
+    "FRIDAY": {
+      "corrupt_frames": 0,
+      "hand_frames": 1200,
+      "rate": 0.0,
+      "within_spread": 10.8,
+      "n": 40
+    },
+    "GOOD AFTERNOON": {
+      "corrupt_frames": 97,
+      "hand_frames": 1200,
+      "rate": 0.0808,
+      "within_spread": 77.7,
+      "n": 40
+    },
+    "GOOD EVENING": {
+      "corrupt_frames": 106,
+      "hand_frames": 1200,
+      "rate": 0.0883,
+      "within_spread": 67.6,
+      "n": 40
+    },
+    "GOOD MORNING": {
+      "corrupt_frames": 33,
+      "hand_frames": 1200,
+      "rate": 0.0275,
+      "within_spread": 37.5,
+      "n": 40
+    },
+    "GRANDFATHER": {
+      "corrupt_frames": 2,
+      "hand_frames": 1170,
+      "rate": 0.0017,
+      "within_spread": 16.8,
+      "n": 39
+    },
+    "GRANDMOTHER": {
+      "corrupt_frames": 1,
+      "hand_frames": 990,
+      "rate": 0.001,
+      "within_spread": 17.2,
+      "n": 33
+    },
+    "HELLO": {
+      "corrupt_frames": 0,
+      "hand_frames": 930,
+      "rate": 0.0,
+      "within_spread": 12.4,
+      "n": 31
+    },
+    "HOW ARE YOU": {
+      "corrupt_frames": 26,
+      "hand_frames": 1805,
+      "rate": 0.0144,
+      "within_spread": 75.4,
+      "n": 40
+    },
+    "IM FINE": {
+      "corrupt_frames": 0,
+      "hand_frames": 780,
+      "rate": 0.0,
+      "within_spread": 16.7,
+      "n": 26
+    },
+    "KNOW": {
+      "corrupt_frames": 1,
+      "hand_frames": 1020,
+      "rate": 0.001,
+      "within_spread": 15.9,
+      "n": 34
+    },
+    "M": {
+      "corrupt_frames": 13,
+      "hand_frames": 965,
+      "rate": 0.0135,
+      "within_spread": 33.3,
+      "n": 31
+    },
+    "MONDAY": {
+      "corrupt_frames": 9,
+      "hand_frames": 1122,
+      "rate": 0.008,
+      "within_spread": 29.0,
+      "n": 37
+    },
+    "MOTHER": {
+      "corrupt_frames": 0,
+      "hand_frames": 1110,
+      "rate": 0.0,
+      "within_spread": 14.8,
+      "n": 37
+    },
+    "NICE TO MEET YOU": {
+      "corrupt_frames": 79,
+      "hand_frames": 1910,
+      "rate": 0.0414,
+      "within_spread": 68.8,
+      "n": 40
+    },
+    "NINE": {
+      "corrupt_frames": 0,
+      "hand_frames": 720,
+      "rate": 0.0,
+      "within_spread": 12.1,
+      "n": 24
+    },
+    "NO": {
+      "corrupt_frames": 4,
+      "hand_frames": 1050,
+      "rate": 0.0038,
+      "within_spread": 22.4,
+      "n": 35
+    },
+    "ONE": {
+      "corrupt_frames": 0,
+      "hand_frames": 1050,
+      "rate": 0.0,
+      "within_spread": 17.1,
+      "n": 35
+    },
+    "PARENTS": {
+      "corrupt_frames": 0,
+      "hand_frames": 931,
+      "rate": 0.0,
+      "within_spread": 14.6,
+      "n": 31
+    },
+    "SATURDAY": {
+      "corrupt_frames": 18,
+      "hand_frames": 2319,
+      "rate": 0.0078,
+      "within_spread": 47.4,
+      "n": 39
+    },
+    "SEE YOU TOMORROW": {
+      "corrupt_frames": 0,
+      "hand_frames": 1200,
+      "rate": 0.0,
+      "within_spread": 21.0,
+      "n": 40
+    },
+    "SEVEN": {
+      "corrupt_frames": 2,
+      "hand_frames": 990,
+      "rate": 0.002,
+      "within_spread": 23.0,
+      "n": 33
+    },
+    "SIX": {
+      "corrupt_frames": 0,
+      "hand_frames": 990,
+      "rate": 0.0,
+      "within_spread": 14.9,
+      "n": 33
+    },
+    "SLOW": {
+      "corrupt_frames": 210,
+      "hand_frames": 1131,
+      "rate": 0.1857,
+      "within_spread": 117.4,
+      "n": 30
+    },
+    "SON": {
+      "corrupt_frames": 0,
+      "hand_frames": 1620,
+      "rate": 0.0,
+      "within_spread": 55.7,
+      "n": 39
+    },
+    "SUNDAY": {
+      "corrupt_frames": 2,
+      "hand_frames": 2394,
+      "rate": 0.0008,
+      "within_spread": 37.4,
+      "n": 40
+    },
+    "TEN": {
+      "corrupt_frames": 21,
+      "hand_frames": 900,
+      "rate": 0.0233,
+      "within_spread": 43.2,
+      "n": 30
+    },
+    "THANK YOU": {
+      "corrupt_frames": 3,
+      "hand_frames": 1960,
+      "rate": 0.0015,
+      "within_spread": 73.0,
+      "n": 33
+    },
+    "THREE": {
+      "corrupt_frames": 1,
+      "hand_frames": 990,
+      "rate": 0.001,
+      "within_spread": 14.2,
+      "n": 33
+    },
+    "THURSDAY": {
+      "corrupt_frames": 0,
+      "hand_frames": 1020,
+      "rate": 0.0,
+      "within_spread": 17.3,
+      "n": 34
+    },
+    "TODAY": {
+      "corrupt_frames": 569,
+      "hand_frames": 1788,
+      "rate": 0.3182,
+      "within_spread": 180.3,
+      "n": 38
+    },
+    "TOMORROW": {
+      "corrupt_frames": 49,
+      "hand_frames": 1080,
+      "rate": 0.0454,
+      "within_spread": 44.6,
+      "n": 36
+    },
+    "TUESDAY": {
+      "corrupt_frames": 0,
+      "hand_frames": 1171,
+      "rate": 0.0,
+      "within_spread": 19.0,
+      "n": 39
+    },
+    "TWO": {
+      "corrupt_frames": 0,
+      "hand_frames": 1050,
+      "rate": 0.0,
+      "within_spread": 13.8,
+      "n": 35
+    },
+    "UNCLE": {
+      "corrupt_frames": 1,
+      "hand_frames": 990,
+      "rate": 0.001,
+      "within_spread": 22.6,
+      "n": 33
+    },
+    "UNDERSTAND": {
+      "corrupt_frames": 1,
+      "hand_frames": 900,
+      "rate": 0.0011,
+      "within_spread": 18.4,
+      "n": 30
+    },
+    "WEDNESDAY": {
+      "corrupt_frames": 0,
+      "hand_frames": 1110,
+      "rate": 0.0,
+      "within_spread": 14.6,
+      "n": 37
+    },
+    "WRONG": {
+      "corrupt_frames": 11,
+      "hand_frames": 1140,
+      "rate": 0.0096,
+      "within_spread": 37.8,
+      "n": 38
+    },
+    "YES": {
+      "corrupt_frames": 12,
+      "hand_frames": 1110,
+      "rate": 0.0108,
+      "within_spread": 27.4,
+      "n": 37
+    },
+    "YESTERDAY": {
+      "corrupt_frames": 0,
+      "hand_frames": 1140,
+      "rate": 0.0,
+      "within_spread": 13.4,
+      "n": 38
+    },
+    "YOURE WELCOME": {
+      "corrupt_frames": 1,
+      "hand_frames": 1203,
+      "rate": 0.0008,
+      "within_spread": 16.4,
+      "n": 40
+    }
+  }
+}

@@ -141,10 +141,20 @@ def wait_for_job(client: httpx.Client, job_id: int, label: str, signer: str) -> 
     deadline = time.time() + JOB_TIMEOUT_SECONDS
     while time.time() < deadline:
         time.sleep(JOB_POLL_SECONDS)
-        r = client.get(
-            f"{BACKEND_URL}/words/upload-jobs/{job_id}",
-            headers=_headers(), timeout=30.0,
-        )
+        # A dropped connection here is not a failed import. The job runs on the
+        # SERVER, detached from this request, so losing the socket only costs us
+        # the status update — the extraction carries on regardless. Letting the
+        # transport error propagate killed a 16-batch run on its first batch
+        # while the backend happily finished that batch alone, so treat it the
+        # same as a non-200: say so, and poll again.
+        try:
+            r = client.get(
+                f"{BACKEND_URL}/words/upload-jobs/{job_id}",
+                headers=_headers(), timeout=30.0,
+            )
+        except httpx.HTTPError as e:
+            print(f"    poll dropped ({type(e).__name__}); retrying")
+            continue
         if r.status_code != 200:
             print(f"    poll failed ({r.status_code}); retrying")
             continue
@@ -158,9 +168,47 @@ def wait_for_job(client: httpx.Client, job_id: int, label: str, signer: str) -> 
     return {"status": "timeout", "job_id": job_id}
 
 
+def stored_per_signer(client: httpx.Client, word_id: int) -> dict[str, int]:
+    """How many samples each session_id already has stored for this word.
+
+    Makes a re-run resumable: a batch already stored is skipped rather than
+    uploaded twice, and duplicate rows are exactly the damage that is tedious to
+    find afterwards.
+
+    Counts rather than presence, because a crashed run leaves PARTIAL batches —
+    the first attempt died with 5 of 10 clips stored. Treating "signer appears
+    at all" as done would silently abandon the other half.
+    """
+    r = client.get(f"{BACKEND_URL}/words/{word_id}/samples",
+                   headers=_headers(), timeout=60.0)
+    if r.status_code != 200:
+        return {}
+    body = r.json()
+    rows = body.get("samples", body if isinstance(body, list) else [])
+    counts: dict[str, int] = {}
+    for s in rows:
+        if isinstance(s, dict):
+            sid = s.get("session_id")
+            counts[sid] = counts.get(sid, 0) + 1
+    return counts
+
+
 def upload_batch(client: httpx.Client, word_id: int, label: str,
                  signer: str, clips: list[str]) -> dict:
-    """One (letter, signer) batch, then wait for its job to finish."""
+    """One (letter, signer) batch, then wait for its job to finish.
+
+    Waits out any job already live for this word first. The endpoint answers 409
+    while one is processing, so a crashed earlier run leaves a job that must
+    finish before this word accepts anything more.
+    """
+    live = client.get(f"{BACKEND_URL}/words/{word_id}/upload-jobs/active",
+                      headers=_headers(), timeout=30.0)
+    if live.status_code == 200:
+        job = (live.json() or {}).get("job")
+        if job and job.get("status") == "processing":
+            print(f"    a job is already live for {label}; waiting for it")
+            wait_for_job(client, job["id"], label, job.get("session_id", "?"))
+
     if len(clips) > MAX_FILES_PER_BATCH:
         sys.exit(f"{label}/{signer} has {len(clips)} clips; the server caps a "
                  f"batch at {MAX_FILES_PER_BATCH}")
@@ -172,13 +220,20 @@ def upload_batch(client: httpx.Client, word_id: int, label: str,
             fh = open(p, "rb")
             handles.append(fh)
             files.append(("videos", (os.path.basename(p), fh, "video/quicktime")))
-        r = client.post(
-            f"{BACKEND_URL}/words/{word_id}/upload-videos",
-            headers=_headers(),
-            data={"session_id": signer},
-            files=files,
-            timeout=300.0,
-        )
+        try:
+            r = client.post(
+                f"{BACKEND_URL}/words/{word_id}/upload-videos",
+                headers=_headers(),
+                data={"session_id": signer},
+                files=files,
+                timeout=300.0,
+            )
+        except httpx.HTTPError as e:
+            # Deliberately NOT retried. The server may already have accepted the
+            # batch and started extracting, so re-POSTing risks a second job for
+            # the same clips. Report it and let the caller re-run, which picks up
+            # from the live job rather than duplicating it.
+            return {"status": "transport-error", "detail": f"{type(e).__name__}: {e}"}
     finally:
         for fh in handles:
             fh.close()
@@ -237,7 +292,27 @@ def main() -> int:
             word_id = find_or_create_word(client, letter)
             print(f"\n{letter} (word_id {word_id})")
             report[letter] = {"word_id": word_id, "batches": {}}
+            already = stored_per_signer(client, word_id)
             for signer, clips in signers.items():
+                # Some clips are legitimately rejected by the quality gates, so a
+                # complete batch is not always len(clips) rows. Anything within a
+                # couple of rows is treated as done; a badly short one is not,
+                # since that is what a crashed batch looks like.
+                have = already.get(signer, 0)
+                if have >= len(clips) - 2:
+                    print(f"  {signer}: {have} samples already stored — skipping")
+                    report[letter]["batches"][signer] = {
+                        "status": "skipped", "stored": have,
+                    }
+                    continue
+                if have:
+                    print(f"  {signer}: only {have}/{len(clips)} stored from an "
+                          f"earlier run — re-uploading would duplicate those; "
+                          f"skipping, clear them first if you want a clean batch")
+                    report[letter]["batches"][signer] = {
+                        "status": "partial", "stored": have,
+                    }
+                    continue
                 print(f"  {signer}: {len(clips)} clips …")
                 result = upload_batch(client, word_id, letter, signer, clips)
                 report[letter]["batches"][signer] = result
