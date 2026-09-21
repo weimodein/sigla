@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 import hashlib
 import httpx
 import os
@@ -18,6 +18,10 @@ router = APIRouter(prefix="", tags=["Model"])
 class TrainRequest(BaseModel):
     version_number: str
     model_id:       int
+    # Restrict the model to these classes. Omitted or null trains on every
+    # approved class, which is what this endpoint did before separate
+    # vocabularies existed — see train() for why the alphabet needs its own.
+    word_labels:    Optional[List[str]] = None
 
 class TestRequest(BaseModel):
     version_number: str
@@ -61,6 +65,7 @@ async def train_model(request: TrainRequest):
         result = train(
             version_number=request.version_number,
             model_id=request.model_id,
+            word_labels=request.word_labels,
         )
         return {
             "message":           "Model trained successfully",
@@ -69,6 +74,9 @@ async def train_model(request: TrainRequest):
             "total_classes":     result.get("total_classes"),
             "tflite_url":        result.get("tflite_url"),
             "h5_url":            result.get("h5_url"),
+            # Lifted out of `result` so the caller does not have to reach into
+            # it to learn which classes this model covers.
+            "trained_labels":    result.get("trained_labels"),
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

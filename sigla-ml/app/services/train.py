@@ -267,7 +267,8 @@ def upload_model_to_supabase(local_path: str, version_number: str, model_type: s
     return url
 
 
-def train(version_number: str, model_id: int) -> dict:
+def train(version_number: str, model_id: int,
+          word_labels: list[str] | None = None) -> dict:
     from tensorflow import keras
 
     # Seed before anything touches TF, so weight init is reproducible.
@@ -288,8 +289,19 @@ def train(version_number: str, model_id: int) -> dict:
     os.makedirs(version_dir, exist_ok=True)
 
     # ── Step 1: Fetch approved samples ───────────────────────
-    # Every sample is a motion sequence (30×126). All signs are trained as a
-    # single motion LSTM model — there is no static/motion distinction.
+    # Every sample is a motion sequence (30×147). Signs are trained as a motion
+    # LSTM; there is no static/motion distinction WITHIN a model.
+    #
+    # `word_labels` restricts the model to a subset of the approved classes, so
+    # separate models can cover separate vocabularies — the alphabet alongside
+    # the words, rather than one flat class list. The FSL day signs are the
+    # first letter of the word plus a circular motion, so M and MONDAY differ
+    # only in motion and separate at 1.06, below every day-to-day pair and just
+    # under TOMORROW/TEN, which already confuses the deployed model. Keeping
+    # them in different models sidesteps that instead of training against it.
+    #
+    # None means every approved class, which is what every caller did before
+    # this parameter existed and what a plain words model still wants.
     dataset = fetch_approved_samples()
 
     motion_dataset = {
@@ -297,6 +309,20 @@ def train(version_number: str, model_id: int) -> dict:
         for k, v in dataset.items()
     }
     motion_dataset = { k: v for k, v in motion_dataset.items() if v }
+
+    if word_labels is not None:
+        wanted = set(word_labels)
+        missing = sorted(wanted - set(motion_dataset))
+        motion_dataset = { k: v for k, v in motion_dataset.items() if k in wanted }
+        if missing:
+            # Train on what exists rather than failing, but say so loudly: a
+            # typo'd label would otherwise silently shrink the model by one
+            # class and the labels file would still look internally consistent.
+            print(f"WARNING: {len(missing)} requested label(s) have no approved "
+                  f"samples and are not in this model: {', '.join(missing)}")
+        print(f"Training on {len(motion_dataset)} of {len(dataset)} approved "
+              f"classes (subset requested)")
+
     total_classes  = len(motion_dataset)
 
     if total_classes < 2:
@@ -503,6 +529,13 @@ def train(version_number: str, model_id: int) -> dict:
         "version_number":     version_number,
         "model_id":           model_id,
         "total_classes":      total_classes,
+        # The classes this model actually covers, in label-index order — the
+        # same set labels_motion.json names. The caller records it rather than
+        # re-deriving the list from the dataset afterwards, which would credit a
+        # subset-trained model with every approved word and let it hide or show
+        # words it was never trained on.
+        "trained_labels":     [motion_label_map[i]
+                               for i in range(len(motion_label_map))],
         # Restored-weights score on the epoch-selection split. It is held out by
         # signer by default, but still selected the epoch; grouped cross-validation
         # remains the trustworthy multi-signer number.
