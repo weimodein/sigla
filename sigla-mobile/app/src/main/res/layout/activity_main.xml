@@ -87,7 +87,13 @@
                         android:paddingTop="24dp"
                         android:paddingBottom="24dp">
 
-                        <!-- English result -->
+                        <!-- English result. wrap_content so the box hugs short words
+                             tightly; maxWidth caps how wide it can grow before wrapping
+                             to a second line. textSize is fixed (not autosize — confirmed
+                             via on-device testing to not engage reliably on this device)
+                             but chosen small enough that even the longest realistic single
+                             word (e.g. "UNDERSTAND") fits within maxWidth on one line, so
+                             wrapping only ever happens at word boundaries, never mid-word. -->
                         <TextView
                             android:id="@+id/tvResult"
                             android:layout_width="wrap_content"
@@ -95,15 +101,17 @@
                             android:layout_gravity="center_horizontal"
                             android:gravity="center"
                             android:maxWidth="220dp"
+                            android:maxLines="2"
                             android:text="HELLO"
                             android:textColor="#FFFFFF"
-                            android:textSize="36sp"
+                            android:textSize="26sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.05"
                             android:fontFamily="@font/poppins_bold"
                             android:includeFontPadding="false" />
 
-                        <!-- Filipino translation -->
+                        <!-- Filipino translation — same hug-to-content treatment; these
+                             phrases run longer than the English labels. -->
                         <TextView
                             android:id="@+id/tvFilipinoResult"
                             android:layout_width="wrap_content"
@@ -111,9 +119,10 @@
                             android:layout_gravity="center_horizontal"
                             android:gravity="center"
                             android:maxWidth="220dp"
+                            android:maxLines="2"
                             android:text=""
                             android:textColor="@color/sig_accent"
-                            android:textSize="14sp"
+                            android:textSize="11sp"
                             android:textStyle="italic"
                             android:layout_marginTop="4dp"
                             android:visibility="gone"
