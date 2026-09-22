@@ -416,6 +416,18 @@ const ManageModel = () => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  // Letters this deploy will ACTUALLY add to the word bank, or null when none
+  // will. deployCompanion skips an alphabet with no .tflite — a failed or
+  // never-finished half — so counting its recorded ids would promise entries
+  // that never appear on the phone.
+  const deployLetterCount =
+    deployModal?.letters &&
+    deployModal.letters.tflite_url &&
+    deployModal.letters.status !== "failed" &&
+    Array.isArray(deployModal.letters.trained_word_ids)
+      ? deployModal.letters.trained_word_ids.length
+      : null;
+
   const paginatedModels = filteredModels.slice(
     (page - 1) * pageSize,
     page * pageSize
@@ -849,12 +861,25 @@ const ManageModel = () => {
                             when its words half failed or was deleted. */}
                         <td className="px-4 py-3 font-semibold text-gray-800">
                           {model.version_number}
-                          {model.letters && (
+                          {/* A FAILED alphabet is marked as such rather than
+                              shown as "+ alphabet", which would read as this
+                              version having one. The failure reason is in the
+                              expanded panel, but the list is what gets scanned. */}
+                          {model.letters && model.letters.status !== "failed" && (
                             <span
                               className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold align-middle"
                               style={{ background: "#ede9fe", color: "#5b21b6" }}
                             >
                               + alphabet
+                            </span>
+                          )}
+                          {model.letters?.status === "failed" && (
+                            <span
+                              className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold align-middle"
+                              style={{ background: "#fee2e2", color: "#991b1b" }}
+                              title={model.letters.training_error || "Alphabet training failed"}
+                            >
+                              alphabet failed
                             </span>
                           )}
                           {model.model_kind === "letters" && (
@@ -1336,21 +1361,21 @@ const ManageModel = () => {
                   The mobile word bank will match this version:{" "}
                   <strong>
                     {deployModal.trained_word_ids.length +
-                      (Array.isArray(deployModal.letters?.trained_word_ids)
-                        ? deployModal.letters.trained_word_ids.length
-                        : 0)}
+                      (deployLetterCount ?? 0)}
                   </strong>{" "}
                   entries visible
                   {/* The alphabet deploys with this model, and the word bank is
                       the UNION of both — so counting only this row's list
-                      understated what deploy is about to do. */}
-                  {Array.isArray(deployModal.letters?.trained_word_ids) && (
+                      understated what deploy is about to do. Only an alphabet
+                      that will ACTUALLY deploy counts: deployCompanion skips one
+                      with no .tflite, so a failed half must not inflate this. */}
+                  {deployLetterCount != null && (
                     <>
                       {" "}
                       ({deployModal.trained_word_ids.length} word
                       {deployModal.trained_word_ids.length !== 1 ? "s" : ""} +{" "}
-                      {deployModal.letters.trained_word_ids.length} letter
-                      {deployModal.letters.trained_word_ids.length !== 1 ? "s" : ""})
+                      {deployLetterCount} letter
+                      {deployLetterCount !== 1 ? "s" : ""})
                     </>
                   )}
                   . Words this version was not trained on become hidden.
@@ -1393,9 +1418,10 @@ const ManageModel = () => {
                   matters: the letters model changes under the user's feet
                   otherwise, and a version's two halves are only ever deployed
                   as a pair. */}
-              {revertModal.letters && (
-                <> Its alphabet model reverts with it.</>
-              )}
+              {revertModal.letters?.tflite_url &&
+                revertModal.letters.status !== "failed" && (
+                  <> Its alphabet model reverts with it.</>
+                )}
             </p>
           </div>
         </AppModal>
