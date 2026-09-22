@@ -55,26 +55,31 @@ const Badge = ({ value }) => {
     incomplete: "#dc2626",
     inconsistent: "#dc2626",
   };
+  const labels = {
+    deployed: "Active",
+    trained: "Ready",
+    inactive: "Previous",
+    training: "Training",
+    failed: "Failed",
+    incomplete: "Incomplete",
+    inconsistent: "Needs attention",
+  };
   const bg = map[value] || C.muted;
   return (
     <span
       className="px-2.5 py-1 rounded-full text-xs font-semibold"
       style={{ background: bg + "18", color: bg }}
     >
-      {value}
+      {labels[value] || value}
     </span>
   );
 };
 
-// ── MetricBox (for expanded row) ──────────────────────────────
-const MetricBox = ({ label, value, color }) => (
-  <div style={{ background: "#f3f4f6", borderRadius: "8px", padding: "12px" }}>
-    <p className="text-xs" style={{ color: "#6b7280" }}>
-      {label}
-    </p>
-    <p className="text-lg font-bold" style={{ color }}>
-      {value}
-    </p>
+// Compact metric used inside the expanded pair summary.
+const ModelMetric = ({ label, value, color = C.text }) => (
+  <div className="min-w-0">
+    <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+    <p className="text-sm font-semibold truncate" style={{ color }}>{value}</p>
   </div>
 );
 
@@ -383,7 +388,16 @@ const ManageModel = () => {
     }
     for (const m of letters.values()) {
       if (!claimed.has(m.id)) {
-        rows.push({ ...m, words_status: null, status: "incomplete", letters: null });
+        rows.push({
+          ...m,
+          words_status: null,
+          status: "incomplete",
+          total_classes: null,
+          accuracy: null,
+          trained_word_ids: null,
+          letters: m,
+          is_letters_only: true,
+        });
       }
     }
     return rows;
@@ -712,12 +726,14 @@ const ManageModel = () => {
             flexWrap: "wrap",
           }}
         >
-          <h3
-            className="text-base font-semibold text-gray-800"
-            style={{ margin: 0 }}
-          >
-            All Model Versions
-          </h3>
+          <div>
+            <h3 className="text-base font-semibold text-gray-800" style={{ margin: 0 }}>
+              Model Versions
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Words and alphabet models are managed as one version.
+            </p>
+          </div>
           <div
             style={{
               display: "flex",
@@ -733,9 +749,9 @@ const ManageModel = () => {
                 setSearchTerm(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search models..."
+              placeholder="Search versions..."
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-              style={{ width: "180px" }}
+              style={{ width: "200px" }}
             />
             <span className="text-xs text-gray-500">
               {filteredModels.length} version
@@ -746,9 +762,10 @@ const ManageModel = () => {
 
         {loading ? (
           <div className="overflow-x-auto">
-          <table className="w-full text-left" style={{ minWidth: 720 }}>
+          <table className="w-full text-left" style={{ minWidth: 820 }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
+                <th className="px-4 py-3" style={{ width: "36px" }} />
                 <th className="px-4 py-3">
                   <span className="text-xs font-semibold text-gray-500">
                     Version
@@ -761,22 +778,12 @@ const ManageModel = () => {
                 </th>
                 <th className="px-4 py-3">
                   <span className="text-xs font-semibold text-gray-500">
-                    Accuracy
+                    Models
                   </span>
                 </th>
                 <th className="px-4 py-3">
                   <span className="text-xs font-semibold text-gray-500">
-                    Classes
-                  </span>
-                </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
-                    Trained By
-                  </span>
-                </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
-                    Trained At
+                    Training
                   </span>
                 </th>
                 <th className="px-4 py-3">
@@ -789,9 +796,7 @@ const ManageModel = () => {
             <tbody>
               {Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-t">
-                  {/* 7 cells to match the 7 headers above — this rendered 10,
-                      so the skeleton was wider than the table it stood in for. */}
-                  {Array.from({ length: 7 }).map((_, j) => (
+                  {Array.from({ length: 6 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
                     </td>
@@ -805,17 +810,14 @@ const ManageModel = () => {
           <>
             {/* Table header row */}
             <div className="overflow-x-auto">
-            <table className="w-full text-left" style={{ minWidth: 720 }}>
+            <table className="w-full text-left" style={{ minWidth: 820 }}>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
                   <th className="px-4 py-3" style={{ width: "36px" }} />
                   <SortableHeader label="Version" sortKey="version_number" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Models" sortKey="accuracy" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <SortableHeader label="Status" sortKey="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <SortableHeader label="Accuracy" sortKey="accuracy" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">
-                    Trained By
-                  </th>
-                  <SortableHeader label="Trained At" sortKey="trained_at" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Training" sortKey="trained_at" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <th
                     className="px-4 py-3"
                     style={{ minWidth: "160px" }}
@@ -828,7 +830,7 @@ const ManageModel = () => {
                 {paginatedModels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={6}
                       className="text-center py-10"
                       style={{ color: C.muted, fontSize: "0.85rem" }}
                     >
@@ -866,57 +868,64 @@ const ManageModel = () => {
                             style={{ color: C.muted }}
                           />
                         </td>
-                        {/* One row per version. The tag says an alphabet model
-                            came with it — its numbers are in the expanded panel
-                            — or marks a lone alphabet row, which only happens
-                            when its words half failed or was deleted. */}
-                        <td className="px-4 py-3 font-semibold text-gray-800">
-                          {model.version_number}
-                          {/* A FAILED alphabet is marked as such rather than
-                              shown as "+ alphabet", which would read as this
-                              version having one. The failure reason is in the
-                              expanded panel, but the list is what gets scanned. */}
-                          {model.letters && model.letters.status !== "failed" && (
-                            <span
-                              className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold align-middle"
-                              style={{ background: "#ede9fe", color: "#5b21b6" }}
-                            >
-                              + alphabet
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900">
+                              {model.version_number}
                             </span>
-                          )}
-                          {model.letters?.status === "failed" && (
-                            <span
-                              className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold align-middle"
-                              style={{ background: "#fee2e2", color: "#991b1b" }}
-                              title={model.letters.training_error || "Alphabet training failed"}
-                            >
-                              alphabet failed
-                            </span>
-                          )}
-                          {model.model_kind === "letters" && (
-                            <span
-                              className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold align-middle"
-                              style={{ background: "#ede9fe", color: "#5b21b6" }}
-                            >
-                              alphabet only
-                            </span>
-                          )}
+                            {model.status === "deployed" && (
+                              <span className="w-2 h-2 rounded-full bg-green-500" title="Active version" />
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {model.letters && !model.is_letters_only
+                              ? "Words + alphabet"
+                              : "Incomplete pair"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-xs whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              <span className="font-medium text-gray-700">Words</span>
+                              <span className="text-gray-400">
+                                {model.total_classes ?? "—"} classes
+                              </span>
+                              <span className="font-semibold" style={{ color: getMetricColor(model.accuracy) }}>
+                                {fmt(model.accuracy)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                              <span className="font-medium text-gray-700">Alphabet</span>
+                              <span className="text-gray-400">
+                                {model.letters?.total_classes ?? "—"} classes
+                              </span>
+                              <span
+                                className="font-semibold"
+                                style={{
+                                  color: model.letters?.accuracy == null
+                                    ? C.muted
+                                    : getMetricColor(model.letters.accuracy),
+                                }}
+                              >
+                                {fmt(model.letters?.accuracy)}
+                              </span>
+                            </div>
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <Badge value={model.status} />
                         </td>
-                        <td className="px-4 py-3 font-medium">
-                          <span style={{ color: getMetricColor(model.accuracy) }}>
-                            {fmt(model.accuracy)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-500">
-                          {model.trainer?.username || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-500">
-                          {model.trained_at
-                            ? new Date(model.trained_at).toLocaleDateString()
-                            : "—"}
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-medium text-gray-700">
+                            {model.trainer?.username || "—"}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {model.trained_at
+                              ? new Date(model.trained_at).toLocaleDateString()
+                              : "Not completed"}
+                          </p>
                         </td>
                         <td
                           className="px-4 py-3"
@@ -1028,183 +1037,131 @@ const ManageModel = () => {
                               </button>
                             )}
                             {model.status === "deployed" && (
-                              <span
-                                className="text-xs font-medium px-3 py-1.5 rounded-full"
-                                style={{
-                                  background: "#bbf7d0",
-                                  color: "#16a34a",
-                                }}
-                              >
-                                Currently Active
-                              </span>
+                              <span className="text-xs text-gray-400">No actions</span>
                             )}
                           </div>
                         </td>
                       </tr>
 
-                      {/* Expanded details row */}
+                      {/* Compact pair details */}
                       {expandedRow === model.id && (
                         <tr
-                          style={{ background: "#fafafa" }}
+                          style={{ background: "#f8fafc" }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {/* Must match the 7 header cells (chevron, Version,
-                              Status, Accuracy, Trained By, Trained At, Actions)
-                              or the panel stops short and leaves a dead gutter. */}
-                          <td colSpan={7} className="px-4 py-4">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
-                              <MetricBox
-                                label="Total Classes"
-                                value={model.total_classes ?? "—"}
-                                color={C.text}
-                              />
-                              <MetricBox
-                                label="Accuracy"
-                                value={fmt(model.accuracy)}
-                                color={
-                                  model.accuracy == null
-                                    ? C.muted
-                                    : getMetricColor(model.accuracy)
-                                }
-                              />
-                              {/* Words this version was trained on. The mobile word
-                                  bank is derived from this list, so it explains why
-                                  a revert changes the words on the device. */}
-                              <MetricBox
-                                label="Words in Bank"
-                                value={
-                                  Array.isArray(model.trained_word_ids)
-                                    ? model.trained_word_ids.length
-                                    : "—"
-                                }
-                                color={C.text}
-                              />
-                              <MetricBox
-                                label="Trained"
-                                value={
-                                  model.trained_at
-                                    ? new Date(model.trained_at).toLocaleDateString()
-                                    : "—"
-                                }
-                                color={C.text}
-                              />
-                            </div>
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                              <div className="grid grid-cols-1 md:grid-cols-2">
+                                <section className="p-4 md:border-r border-gray-200">
+                                  <div className="flex items-start justify-between gap-3 mb-4">
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                        <h4 className="text-sm font-semibold text-gray-900">Words model</h4>
+                                      </div>
+                                      <p className="text-xs text-gray-500 mt-1 ml-4">
+                                        General sign vocabulary
+                                      </p>
+                                    </div>
+                                    {model.words_status ? <Badge value={model.words_status} /> : <Badge value="incomplete" />}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-4">
+                                    <ModelMetric
+                                      label="Accuracy"
+                                      value={fmt(model.accuracy)}
+                                      color={model.accuracy == null ? C.muted : getMetricColor(model.accuracy)}
+                                    />
+                                    <ModelMetric label="Classes" value={model.total_classes ?? "—"} />
+                                    <ModelMetric
+                                      label="Bank entries"
+                                      value={
+                                        Array.isArray(model.trained_word_ids)
+                                          ? model.trained_word_ids.length
+                                          : "—"
+                                      }
+                                    />
+                                  </div>
+                                </section>
 
-                            {/* The alphabet model trained in the same run. Its
-                                accuracy is not comparable to the words model's
-                                — far fewer classes over far fewer samples — so
-                                it is shown in its own band rather than averaged
-                                in or displayed as though the two were one
-                                number. */}
-                            {model.letters && (
-                              <div
-                                className="mt-3 pt-3"
-                                style={{ borderTop: `1px solid ${C.border}` }}
-                              >
-                                <p
-                                  className="text-xs font-semibold mb-2"
-                                  style={{ color: "#5b21b6" }}
-                                >
-                                  Alphabet model
-                                </p>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
-                                  <MetricBox
-                                    label="Letters"
-                                    value={model.letters.total_classes ?? "—"}
-                                    color={C.text}
-                                  />
-                                  <MetricBox
-                                    label="Accuracy"
-                                    value={fmt(model.letters.accuracy)}
-                                    color={
-                                      model.letters.accuracy == null
-                                        ? C.muted
-                                        : getMetricColor(model.letters.accuracy)
-                                    }
-                                  />
-                                  <MetricBox
-                                    label="Status"
-                                    value={model.letters.status}
-                                    color={
-                                      model.letters.status === "failed"
-                                        ? C.red
-                                        : C.text
-                                    }
-                                  />
-                                  <MetricBox
-                                    label="Trained"
-                                    value={
-                                      model.letters.trained_at
-                                        ? new Date(
-                                            model.letters.trained_at,
-                                          ).toLocaleDateString()
-                                        : "—"
-                                    }
-                                    color={C.text}
-                                  />
-                                </div>
-                                {model.letters.status === "failed" &&
-                                  model.letters.training_error && (
-                                    <p className="text-xs mt-2" style={{ color: C.red }}>
-                                      {model.letters.training_error}
-                                    </p>
-                                  )}
+                                <section className="p-4 border-t md:border-t-0 border-gray-200">
+                                  <div className="flex items-start justify-between gap-3 mb-4">
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-violet-500" />
+                                        <h4 className="text-sm font-semibold text-gray-900">Alphabet model</h4>
+                                      </div>
+                                      <p className="text-xs text-gray-500 mt-1 ml-4">
+                                        Fingerspelling recognition
+                                      </p>
+                                    </div>
+                                    <Badge value={model.letters?.status || "incomplete"} />
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-4">
+                                    <ModelMetric
+                                      label="Accuracy"
+                                      value={fmt(model.letters?.accuracy)}
+                                      color={
+                                        model.letters?.accuracy == null
+                                          ? C.muted
+                                          : getMetricColor(model.letters.accuracy)
+                                      }
+                                    />
+                                    <ModelMetric
+                                      label="Classes"
+                                      value={model.letters?.total_classes ?? "—"}
+                                    />
+                                    <ModelMetric
+                                      label="Bank entries"
+                                      value={
+                                        Array.isArray(model.letters?.trained_word_ids)
+                                          ? model.letters.trained_word_ids.length
+                                          : "—"
+                                      }
+                                    />
+                                  </div>
+                                </section>
                               </div>
-                            )}
 
-                            {/* Deployment + notes. The integrity checksum is
-                                deliberately not surfaced: it is verified on the
-                                device before a downloaded model replaces the
-                                active one, and the raw hash means nothing to an
-                                administrator reading this table. */}
-                            {(model.deployed_at || model.notes) && (
-                              <div
-                                className="mt-3 pt-3 grid grid-cols-1 sm:grid-cols-4 gap-3"
-                                style={{ borderTop: `1px solid ${C.border}` }}
-                              >
-                                {model.deployed_at && (
+                              <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
+                                <div className="flex flex-wrap items-start gap-x-8 gap-y-2 text-xs">
                                   <div>
-                                    <p className="text-xs font-medium text-gray-500 mb-1">
-                                      Last Deployed
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      {new Date(model.deployed_at).toLocaleString()}
-                                    </p>
+                                    <span className="text-gray-500">Trained by </span>
+                                    <span className="font-medium text-gray-700">
+                                      {model.trainer?.username || "—"}
+                                    </span>
                                   </div>
-                                )}
+                                  <div>
+                                    <span className="text-gray-500">Trained </span>
+                                    <span className="font-medium text-gray-700">
+                                      {model.trained_at
+                                        ? new Date(model.trained_at).toLocaleDateString()
+                                        : "—"}
+                                    </span>
+                                  </div>
+                                  {model.deployed_at && (
+                                    <div>
+                                      <span className="text-gray-500">Last deployed </span>
+                                      <span className="font-medium text-gray-700">
+                                        {new Date(model.deployed_at).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                                 {model.notes && (
-                                  <div className="sm:col-span-3">
-                                    <p className="text-xs font-medium text-gray-500 mb-1">
-                                      Notes
-                                    </p>
-                                    <p className="text-sm text-gray-600 break-words">
-                                      {model.notes}
-                                    </p>
-                                  </div>
+                                  <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-200">
+                                    <span className="font-medium text-gray-700">Notes:</span>{" "}
+                                    {model.notes}
+                                  </p>
                                 )}
                               </div>
-                            )}
 
-                            {/* Why a run failed. This was previously only visible
-                                as a toast while the page happened to be open, so
-                                reopening the page lost the reason entirely. */}
-                            {model.status === "failed" && (
-                              <div
-                                className="mt-3 pt-3"
-                                style={{ borderTop: `1px solid ${C.border}` }}
-                              >
-                                <p className="text-xs font-medium mb-1" style={{ color: C.red }}>
-                                  Training Error
-                                </p>
-                                <p
-                                  className="text-sm rounded-lg p-3"
-                                  style={{ background: "#fef2f2", color: "#b91c1c" }}
-                                >
-                                  {model.training_error || "No error detail was recorded."}
-                                </p>
-                              </div>
-                            )}
-
+                              {(model.training_error || model.letters?.training_error) && (
+                                <div className="border-t border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
+                                  <span className="font-semibold">Training issue:</span>{" "}
+                                  {model.training_error || model.letters?.training_error}
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -1375,11 +1332,7 @@ const ManageModel = () => {
                       (deployLetterCount ?? 0)}
                   </strong>{" "}
                   entries visible
-                  {/* The alphabet deploys with this model, and the word bank is
-                      the UNION of both — so counting only this row's list
-                      understated what deploy is about to do. Only an alphabet
-                      that will ACTUALLY deploy counts: deployCompanion skips one
-                      with no .tflite, so a failed half must not inflate this. */}
+                  {/* The word bank is the union of both required model rows. */}
                   {deployLetterCount != null && (
                     <>
                       {" "}
