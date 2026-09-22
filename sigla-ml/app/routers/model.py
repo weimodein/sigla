@@ -113,8 +113,9 @@ async def test_model(request: TestRequest):
 @router.post("/deploy")
 async def deploy_model(request: DeployRequest):
     """
-    Deploy a trained model — copies files to deployed/ folder in Supabase.
-    Called by Node.js backend when admin clicks Deploy Model.
+    Validate a trained model's immutable, version-specific artifacts.
+
+    The Node.js backend owns the atomic model_versions status transaction.
     """
     try:
         result = deploy(

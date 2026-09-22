@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const axios = require("axios");
 const crypto = require("crypto");
+const { sequelize } = require("../config/db.js");
 const {
   ModelVersion,
   Word,
@@ -11,25 +12,8 @@ const { logActivity } = require("../utils/activityLogger.js");
 require("dotenv").config();
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const SUPABASE_BUCKET_MODELS =
-  process.env.SUPABASE_BUCKET_MODELS || "model-files";
 
 // ── Supabase helper: upload buffer to storage ─────────────────
-async function uploadToSupabase(storagePath, buffer, contentType) {
-  const url = `${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
-  await axios.post(url, buffer, {
-    headers: {
-      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      "Content-Type": contentType,
-      "x-upsert": "true",
-    },
-    maxBodyLength: Infinity,
-  });
-  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${storagePath}`;
-}
-
 // ── Which words feed a training run ──────────────────────────
 // The eligibility filter mirrors mlController.getApprovedDataset, so the set
 // recorded here stays in lock-step with the classes the model actually learned
@@ -115,137 +99,216 @@ async function labelsForKind(kind) {
   return words.map((w) => w.label);
 }
 
-// Sequelize `where` fragment restricting Word to one kind's vocabulary.
-// Returned as a fragment rather than an id list so callers can spread it into a
-// larger where clause without a second query.
-async function wordIdScopeForKind(kind) {
-  // Reads the column directly rather than fetching every row to classify it.
-  // With no letters recorded this matches nothing for 'letters' and every row
-  // for 'words' — exactly the pre-split behaviour.
-  return { vocabulary: kind };
+// ── GET /api/models ───────────────────────────────────────────
+class ModelVersionError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
 }
 
-// ── Make Word.is_active match the deployed version ───────────
-// is_active was a one-way latch: deploy set it true and nothing ever set it
-// back, so every word ever deployed stayed visible and a revert never shrank the
-// word bank. Reconciling both directions keeps the admin "Active" count honest
-// and keeps the /word-bank fallback correct for rows with no trained_word_ids.
-//
-// A version with no recorded class list (trained before that column existed)
-// tells us nothing — skip rather than deactivating everything.
-async function reconcileActiveWords(model) {
-  const ids = Array.isArray(model.trained_word_ids)
-    ? model.trained_word_ids
-    : null;
-
-  if (!ids) {
-    console.warn(
-      `[reconcileActiveWords] version ${model.version_number} has no trained_word_ids — leaving is_active untouched`,
+function labelsUrlFor(model) {
+  if (!model.tflite_url || !model.tflite_url.includes("/")) {
+    throw new ModelVersionError(
+      `${model.model_kind} model has no valid .tflite URL. Train it first.`,
     );
-    return;
+  }
+  return `${model.tflite_url.slice(0, model.tflite_url.lastIndexOf("/"))}/labels_motion.json`;
+}
+
+function modelWithArtifactUrls(model) {
+  return {
+    ...model.toJSON(),
+    labels_motion_url: labelsUrlFor(model),
+  };
+}
+
+function requireCompletePair(rows, versionNumber) {
+  const words = rows.find((row) => row.model_kind === "words");
+  const letters = rows.find((row) => row.model_kind === "letters");
+  if (!words || !letters) {
+    const missing = words ? "letters" : "words";
+    throw new ModelVersionError(
+      `Version ${versionNumber} is incomplete: its ${missing} model is missing.`,
+    );
+  }
+  return { words, letters };
+}
+
+function parseLabels(buffer, model) {
+  let value;
+  try {
+    value = JSON.parse(buffer.toString("utf8"));
+  } catch {
+    throw new ModelVersionError(
+      `${model.model_kind} labels are not valid JSON.`,
+    );
   }
 
-  // Each kind owns only its own slice of is_active.
-  //
-  // This used to deactivate every word outside the deploying model's class
-  // list, which was right while one model covered the whole vocabulary. With a
-  // words model and a letters model deployed together it becomes a fight:
-  // deploying letters would deactivate all 50 words and deploying words would
-  // deactivate all 26 letters, each one hiding the other's vocabulary from the
-  // phone. Scoping the deactivation to the kind being deployed keeps a revert
-  // shrinking the right word bank without touching the other.
-  const kindScope = await wordIdScopeForKind(model.model_kind);
+  if (!value || Array.isArray(value) || typeof value !== "object") {
+    throw new ModelVersionError(
+      `${model.model_kind} labels must be a JSON object keyed by class index.`,
+    );
+  }
 
-  // Both clauses below constrain `id`, and so does kindScope. They are combined
-  // under Op.and rather than spread into one object: two `id` keys in the same
-  // literal collide, and the later spread silently wins — which would drop the
-  // class-list filter entirely and reconcile against the kind alone.
-  if (ids.length > 0) {
-    // Scoped by kind on the way IN as well, not just on the way out: a model
-    // whose class list disagrees with its kind (a bad train request, a manually
-    // edited row) would otherwise activate words belonging to the other model,
-    // which then has no way to deactivate them again.
+  const labels = [];
+  for (let index = 0; index < Object.keys(value).length; index += 1) {
+    const label = value[String(index)];
+    if (typeof label !== "string" || !label.trim()) {
+      throw new ModelVersionError(
+        `${model.model_kind} labels are missing class index ${index}.`,
+      );
+    }
+    labels.push(label);
+  }
+
+  if (labels.length === 0) {
+    throw new ModelVersionError(`${model.model_kind} labels are empty.`);
+  }
+  if (model.total_classes != null && labels.length !== model.total_classes) {
+    throw new ModelVersionError(
+      `${model.model_kind} label count (${labels.length}) does not match total_classes (${model.total_classes}).`,
+    );
+  }
+  return labels;
+}
+
+async function validateModelArtifact(model) {
+  if (!["trained", "inactive", "deployed"].includes(model.status)) {
+    throw new ModelVersionError(
+      `${model.model_kind} model is ${model.status}; both models must finish training before deployment.`,
+    );
+  }
+
+  const labelsUrl = labelsUrlFor(model);
+  let modelBuffer;
+  let labelsBuffer;
+  try {
+    const [modelResponse, labelsResponse] = await Promise.all([
+      axios.get(model.tflite_url, { responseType: "arraybuffer", timeout: 30000 }),
+      axios.get(labelsUrl, { responseType: "arraybuffer", timeout: 30000 }),
+    ]);
+    modelBuffer = Buffer.from(modelResponse.data);
+    labelsBuffer = Buffer.from(labelsResponse.data);
+  } catch (error) {
+    throw new ModelVersionError(
+      `Could not read the immutable ${model.model_kind} model artifacts: ${error.message}`,
+      502,
+    );
+  }
+
+  if (modelBuffer.length === 0) {
+    throw new ModelVersionError(`${model.model_kind} model file is empty.`);
+  }
+
+  const labels = parseLabels(labelsBuffer, model);
+  const words = await Word.findAll({
+    attributes: ["id", "label"],
+    where: {
+      label: { [Op.in]: labels },
+      vocabulary: model.model_kind,
+    },
+  });
+  const idsByLabel = new Map(words.map((word) => [word.label, word.id]));
+  const missingLabels = labels.filter((label) => !idsByLabel.has(label));
+  if (missingLabels.length > 0) {
+    throw new ModelVersionError(
+      `${model.model_kind} model contains labels not present in its vocabulary: ${missingLabels.join(", ")}`,
+    );
+  }
+
+  return {
+    id: model.id,
+    checksum: crypto.createHash("sha256").update(modelBuffer).digest("hex"),
+    trainedWordIds: labels.map((label) => idsByLabel.get(label)),
+  };
+}
+
+async function activateVersion(versionNumber) {
+  const candidates = await ModelVersion.findAll({
+    where: { version_number: versionNumber },
+  });
+  const pair = requireCompletePair(candidates, versionNumber);
+  const validated = await Promise.all([
+    validateModelArtifact(pair.words),
+    validateModelArtifact(pair.letters),
+  ]);
+  const validatedById = new Map(validated.map((item) => [item.id, item]));
+  const targetIds = validated.map((item) => item.id);
+  const activeWordIds = [...new Set(validated.flatMap((item) => item.trainedWordIds))];
+  const deployedAt = new Date();
+
+  await sequelize.transaction(async (transaction) => {
+    // Serializes deployment attempts without adding another table. The lock is
+    // released automatically on commit/rollback.
+    await sequelize.query(
+      "SELECT pg_advisory_xact_lock(hashtext('sigla:model-version-deploy'))",
+      { transaction },
+    );
+
+    const lockedRows = await ModelVersion.findAll({
+      where: { version_number: versionNumber },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    const lockedPair = requireCompletePair(lockedRows, versionNumber);
+    for (const model of [lockedPair.words, lockedPair.letters]) {
+      if (!["trained", "inactive", "deployed"].includes(model.status)) {
+        throw new ModelVersionError(
+          `${model.model_kind} model changed to ${model.status} during deployment.`,
+          409,
+        );
+      }
+    }
+
+    await ModelVersion.update(
+      { status: "inactive" },
+      {
+        where: { status: "deployed", id: { [Op.notIn]: targetIds } },
+        transaction,
+      },
+    );
+
+    for (const model of [lockedPair.words, lockedPair.letters]) {
+      const artifact = validatedById.get(model.id);
+      await model.update(
+        {
+          status: "deployed",
+          deployed_at: deployedAt,
+          checksum: artifact.checksum,
+          trained_word_ids: artifact.trainedWordIds,
+        },
+        { transaction },
+      );
+    }
+
+    await Word.update(
+      { is_active: false },
+      { where: { is_active: true }, transaction },
+    );
     await Word.update(
       { is_active: true },
-      {
-        where: {
-          [Op.and]: [{ id: { [Op.in]: ids } }, kindScope],
-          is_active: false,
-        },
-      },
+      { where: { id: { [Op.in]: activeWordIds } }, transaction },
     );
-  }
+  });
 
-  await Word.update(
-    { is_active: false },
-    {
-      where: {
-        is_active: true,
-        [Op.and]: [
-          kindScope,
-          ...(ids.length > 0 ? [{ id: { [Op.notIn]: ids } }] : []),
-        ],
-      },
-    },
-  );
+  const deployed = await ModelVersion.findAll({
+    where: { version_number: versionNumber },
+    order: [["model_kind", "DESC"]],
+  });
+  return requireCompletePair(deployed, versionNumber);
 }
 
-// ── Copy a model version's files into the fixed deployed/ folder + recompute its
-// checksum. The mobile app always downloads from this fixed path regardless of which
-// version is "active", and verifies it against the ModelVersion row's stored checksum
-// — so both deployModel AND revertModel must call this. A status-only flip (no file
-// copy) leaves the fixed path serving stale bytes that don't match the "new" active
-// row's checksum, which makes the mobile app correctly refuse the download and keep
-// running whatever was last downloaded, silently. Used by deployModel and revertModel.
-async function syncModelFilesToDeployed(model) {
-  if (!model.tflite_url) {
-    throw new Error("Model has no .tflite file. Train the model first.");
-  }
-
-  // Derive base URL from the motion tflite file (all files share the same folder)
-  const baseUrl = model.tflite_url.substring(0, model.tflite_url.lastIndexOf("/"));
-  const files = [
-    { url: model.tflite_url, name: "sign_model_motion.tflite", required: true },
-    { url: `${baseUrl}/labels_motion.json`, name: "labels_motion.json", required: true },
-  ];
-
-  // A letters model deploys into its own folder. Both kinds previously wrote
-  // deployed/sign_model_motion.tflite, so deploying one would overwrite the
-  // other's bytes while leaving that other row's checksum pointing at what used
-  // to be there — the app would then correctly refuse the download and silently
-  // keep running whatever it had.
-  //
-  // 'words' keeps the original unprefixed path so already-installed apps, which
-  // ask for deployed/ by that exact name, are unaffected by this change.
-  const deployDir =
-    model.model_kind === "letters" ? "deployed/letters" : "deployed";
-
-  for (const file of files) {
-    if (!file.url || file.url === "null") {
-      if (file.required) throw new Error(`Missing URL for required file: ${file.name}`);
-      console.warn(`Skipping optional file ${file.name} – no URL provided.`);
-      continue;
-    }
-
-    const response = await axios.get(file.url, { responseType: "arraybuffer", timeout: 30000 });
-    const buffer = Buffer.from(response.data);
-    const contentType =
-      response.headers["content-type"] ||
-      (file.name.endsWith(".tflite") ? "application/octet-stream" : "application/json");
-    await uploadToSupabase(`${deployDir}/${file.name}`, buffer, contentType);
-    console.log(
-      `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${deployDir}/${file.name}`,
-    );
-
-    if (file.name === "sign_model_motion.tflite") {
-      const checksumHex = crypto.createHash("sha256").update(buffer).digest("hex");
-      await model.update({ checksum: checksumHex });
-      console.log(`SHA256 checksum saved: ${checksumHex}`);
-    }
+async function logModelActivity(details) {
+  try {
+    await logActivity(details);
+  } catch (error) {
+    // Deployment has already committed. An audit logging outage must not make
+    // the API claim that deployment failed and invite a duplicate retry.
+    console.error("Model activity logging failed:", error.message);
   }
 }
 
-// ── GET /api/models ───────────────────────────────────────────
 // Get all model versions
 const getAllModels = async (req, res) => {
   try {
@@ -328,46 +391,43 @@ const getLatestModel = async (req, res) => {
       order: [["deployed_at", "DESC"]],
     });
 
-    // All file URLs point to a fixed folder in Supabase so the mobile app always
-    // fetches from a stable path regardless of version. Every model is a motion
-    // (LSTM) model; `letters` deploys to a subfolder so the two kinds do not
-    // overwrite each other's bytes.
-    const withUrls = (model) => {
-      const dir = model.model_kind === "letters" ? "deployed/letters" : "deployed";
-      const base = SUPABASE_URL
-        ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${dir}`
-        : null;
-      return {
-        ...model.toJSON(),
-        tflite_url: base ? `${base}/sign_model_motion.tflite` : model.tflite_url,
-        labels_motion_url: base ? `${base}/labels_motion.json` : null,
-      };
-    };
-
-    const words = deployed.find((m) => m.model_kind === "words") || null;
-    const letters = deployed.find((m) => m.model_kind === "letters") || null;
-
-    // `model` stays the WORDS model and keeps its exact former shape: installed
-    // apps read that key and know nothing about kinds, so moving or renaming it
-    // would break every phone in the field on the next update check. A 404 when
-    // no words model is deployed is likewise what those apps already expect.
-    if (!words) {
+    if (deployed.length === 0) {
       return res.status(404).json({ message: "No deployed model found" });
     }
 
+    const wordsRows = deployed.filter((model) => model.model_kind === "words");
+    const lettersRows = deployed.filter((model) => model.model_kind === "letters");
+    const words = wordsRows[0] || null;
+    const letters = lettersRows[0] || null;
+    if (
+      wordsRows.length !== 1 ||
+      lettersRows.length !== 1 ||
+      words.version_number !== letters.version_number
+    ) {
+      console.error(
+        "Inconsistent deployed model pair:",
+        deployed.map((model) => `${model.version_number}:${model.model_kind}`),
+      );
+      return res.status(503).json({
+        message: "The deployed model pair is inconsistent. Please deploy a complete version.",
+      });
+    }
+
     return res.status(200).json({
-      model: withUrls(words),
-      // New clients read this instead and pick up the alphabet when one is
-      // deployed. Absent letters, it carries only the words entry and the
-      // response is equivalent to the old one.
+      deployment_version: words.version_number,
+      // Kept for older app builds. It is the same immutable words artifact
+      // exposed under models.words.
+      model: modelWithArtifactUrls(words),
       models: {
-        words: withUrls(words),
-        ...(letters ? { letters: withUrls(letters) } : {}),
+        words: modelWithArtifactUrls(words),
+        letters: modelWithArtifactUrls(letters),
       },
     });
   } catch (err) {
     console.error("Get latest model error:", err);
-    return res.status(500).json({ message: "Server error" });
+    return res.status(err.status || 500).json({
+      message: err.status ? err.message : "Server error",
+    });
   }
 };
 
@@ -478,59 +538,10 @@ async function runTraining(record, version_number, kind) {
 // distinct one or it would overwrite the words model's .tflite and labels, and
 // a later deploy would read whichever landed last.
 //
-// Every call into the ML service must use this, not model.version_number:
-// train writes to it and deploy reads from it, so the two disagreeing means the
-// deploy silently fetches the wrong model's files.
+// Training must use this rather than the shared database version_number so the
+// two immutable artifact folders cannot overwrite one another.
 function mlVersionName(versionNumber, kind) {
   return kind === "letters" ? `${versionNumber}-letters` : versionNumber;
-}
-
-// ── Bring the other half of a version live alongside it ───────
-//
-// A version is a PAIR: the words model and the alphabet trained in the same
-// run. Activating only the one the admin clicked would leave the phone with a
-// words model from this version and an alphabet from whatever was live before
-// — the drift that training them together exists to prevent. Used by BOTH
-// deploy and revert, since reverting has exactly the same hazard in reverse.
-//
-// Non-fatal by design: the clicked model is already live and serving by the
-// time this runs, so a companion that never trained, or fails to sync, must not
-// turn a successful deploy into an error. Returns a note for the response, or
-// "" when there was nothing to do.
-async function deployCompanion(model) {
-  try {
-    const companion = await ModelVersion.findOne({
-      where: {
-        version_number: model.version_number,
-        model_kind: model.model_kind === "letters" ? "words" : "letters",
-        status: { [Op.ne]: "deployed" },
-      },
-    });
-    if (!companion || !companion.tflite_url) return "";
-
-    await syncModelFilesToDeployed(companion);
-    await ModelVersion.update(
-      { status: "inactive" },
-      { where: { status: "deployed", model_kind: companion.model_kind } },
-    );
-    await companion.update({ status: "deployed", deployed_at: new Date() });
-    if (!Array.isArray(companion.trained_word_ids)) {
-      await companion.update({
-        trained_word_ids: await getTrainedWordIds(companion.model_kind),
-      });
-    }
-    await reconcileActiveWords(companion);
-    console.log(
-      `[models] also activated ${companion.model_kind} model for ${model.version_number}`,
-    );
-    return ` (with its ${companion.model_kind} model)`;
-  } catch (companionErr) {
-    console.error(
-      "Companion model activation failed (non-fatal):",
-      companionErr.message,
-    );
-    return "";
-  }
 }
 
 // ── POST /api/models/train ────────────────────────────────────
@@ -565,32 +576,35 @@ const trainModel = async (req, res) => {
       return res.status(409).json({ message: "Version number already exists" });
     }
 
-    // Create record with status "training" — frontend polls this
-    const modelRecord = await ModelVersion.create({
-      version_number,
-      notes: notes || null,
-      trained_by: req.user.id,
-      status: "training",
-      model_kind: "words",
-    });
-
-    // The alphabet is trained in the SAME run, as a second row under the same
-    // version. Training them separately let the two drift — a words model from
-    // today against a letters model from last week, with nothing saying they
-    // disagreed — and made the alphabet easy to forget entirely.
-    //
-    // Only when there are letters to train on. On a deployment with none, this
-    // run produces exactly what it did before the split: one words model.
     const letterLabels = await labelsForKind("letters");
-    const lettersRecord = letterLabels.length > 0
-      ? await ModelVersion.create({
+    if (letterLabels.length === 0) {
+      return res.status(400).json({
+        message:
+          "No trainable letters were found. Add approved letter samples before training a paired version.",
+      });
+    }
+
+    // A version begins as a complete pair. Creating both rows in one database
+    // transaction prevents an orphaned words row if the second insert fails.
+    const { modelRecord, lettersRecord } = await sequelize.transaction(
+      async (transaction) => {
+        const words = await ModelVersion.create({
+          version_number,
+          notes: notes || null,
+          trained_by: req.user.id,
+          status: "training",
+          model_kind: "words",
+        }, { transaction });
+        const letters = await ModelVersion.create({
           version_number,
           notes: notes || null,
           trained_by: req.user.id,
           status: "training",
           model_kind: "letters",
-        })
-      : null;
+        }, { transaction });
+        return { modelRecord: words, lettersRecord: letters };
+      },
+    );
 
     // Respond immediately — do NOT await training
     res.status(202).json({
@@ -598,21 +612,19 @@ const trainModel = async (req, res) => {
       // The words row. Stays the top-level `model` because that is what the
       // caller polls and what every pre-split client reads.
       model: modelRecord,
-      // The alphabet trained in the same run, or null when there are no letters
-      // to train. Returned so the caller can poll it too and report a partial
-      // outcome — a failed alphabet is otherwise invisible until someone
-      // notices a "failed" row in the table.
+      // The required alphabet row from the same version, returned so the caller
+      // can poll both halves and keep the version incomplete if either fails.
       letters_model: lettersRecord,
     });
 
-    await logActivity({
+    await logModelActivity({
       administrator_id: req.user.id,
       action: "trained_model",
       target_type: "model",
       target_id: modelRecord.id,
       details:
         `Started training model version ${version_number}` +
-        (lettersRecord ? " (words + alphabet)" : " (words only — no letters recorded)"),
+        " (words + alphabet)",
     });
 
     // ── Background training job ───────────────────────────────
@@ -621,18 +633,11 @@ const trainModel = async (req, res) => {
       //
       // The order is not arbitrary. The words model is the expensive one (50
       // classes over ~1800 samples, tens of minutes) and the alphabet is small,
-      // so running words first means a letters failure cannot waste it — the
-      // words model is already recorded as trained and deployable by the time
-      // the alphabet starts.
+      // so running words first records its result before the smaller alphabet
+      // starts. The version is deployable only after both rows are trained.
       await runTraining(modelRecord, version_number, "words");
 
-      if (lettersRecord) {
-        // Deliberately not awaited inside the same try as the words model: a
-        // failed alphabet must leave the words model trained and usable, not
-        // drag the whole version down with it. runTraining records the failure
-        // on the letters row, where the admin can see it and retry.
-        await runTraining(lettersRecord, version_number, "letters");
-      }
+      await runTraining(lettersRecord, version_number, "letters");
     })();
   } catch (err) {
     console.error("Train model error:", err);
@@ -729,100 +734,41 @@ const testModel = async (req, res) => {
 // Admin deploys a trained model — makes it the active model
 const deployModel = async (req, res) => {
   try {
-    const { model_id } = req.body;
-
-    if (!model_id) {
-      return res.status(400).json({ message: "Model ID is required" });
+    let versionNumber = req.body.version_number;
+    let requestedModel = null;
+    if (!versionNumber && req.body.model_id) {
+      requestedModel = await ModelVersion.findByPk(req.body.model_id);
+      versionNumber = requestedModel?.version_number;
     }
-
-    const model = await ModelVersion.findOne({ where: { id: model_id } });
-
-    if (!model) {
-      return res.status(404).json({ message: "Model not found" });
-    }
-
-    if (!model.tflite_url) {
-      return res.status(400).json({
-        message: "Model has no .tflite file. Train the model first.",
+    if (!versionNumber) {
+      return res.status(requestedModel === null && req.body.model_id ? 404 : 400).json({
+        message: req.body.model_id ? "Model not found" : "Version number is required",
       });
     }
 
-    // Copy this version's files into deployed/ and recompute its checksum.
-    await syncModelFilesToDeployed(model);
+    const pair = await activateVersion(versionNumber);
 
-    // If the model is already deployed (e.g., stuck from a previous partial failure), skip ML call.
-    const alreadyDeployed = model.status === "deployed";
-    if (!alreadyDeployed) {
-      // Call FastAPI ML microservice to finalize deployment
-      try {
-        await axios.post(`${ML_SERVICE_URL}/deploy`, {
-          // Must match what training wrote, NOT model.version_number: the
-          // alphabet's artifacts live under a suffixed directory, so sending
-          // the bare version here made the deploy read the words model's files.
-          version_number: mlVersionName(model.version_number, model.model_kind),
-          model_id: model.id,
-          tflite_url: model.tflite_url,
-        }, { headers: { "ngrok-skip-browser-warning": "1" } });
-      } catch (mlErr) {
-        if (mlErr.response) {
-          const detail =
-            mlErr.response.data?.detail ||
-            mlErr.response.data?.message ||
-            mlErr.message;
-          console.error("ML service deploy error:", detail);
-          return res.status(mlErr.response.status).json({ message: detail });
-        }
-        console.error("ML service unreachable:", mlErr.message);
-        return res.status(503).json({
-          message: "ML service unavailable. Make sure sigla-ml is running.",
-        });
-      }
-
-      // Retire the other deployed model OF THIS KIND, then deploy this one.
-      // Unscoped, deploying the alphabet would retire the words model and leave
-      // the phone with no vocabulary at all.
-      await ModelVersion.update(
-        { status: "inactive" },
-        { where: { status: "deployed", model_kind: model.model_kind } },
-      );
-      await model.update({ status: "deployed", deployed_at: new Date() });
-    }
-
-    // ── Make the visible word bank match this version ────────────────────────
-    // Words this version was trained on become visible; words it was not trained
-    // on are hidden. Backfill trained_word_ids for versions trained before that
-    // column existed, so this deploy — and any later revert to it — has a class
-    // list to work from.
-    // Wrapped in try/catch — failure here must never leave the model stuck.
-    try {
-      if (!Array.isArray(model.trained_word_ids)) {
-        await model.update({
-          trained_word_ids: await getTrainedWordIds(model.model_kind),
-        });
-      }
-      await reconcileActiveWords(model);
-    } catch (wordErr) {
-      console.error("Word activation error (non-fatal):", wordErr.message);
-    }
-
-    const companionNote = await deployCompanion(model);
-
-    // Log activity
-    await logActivity({
+    await logModelActivity({
       administrator_id: req.user.id,
       action: "deployed_model",
       target_type: "model",
-      target_id: model.id,
-      details: `Deployed model version ${model.version_number}${companionNote}`,
+      target_id: pair.words.id,
+      details: `Deployed complete model version ${versionNumber} (words + alphabet)`,
     });
 
     return res.status(200).json({
-      message: `Model ${model.version_number} deployed successfully${companionNote}`,
-      model,
+      message: `Model version ${versionNumber} deployed successfully (words + alphabet)`,
+      deployment_version: versionNumber,
+      models: {
+        words: pair.words,
+        letters: pair.letters,
+      },
     });
   } catch (err) {
     console.error("Deploy model error:", err);
-    return res.status(500).json({ message: "Server error" });
+    return res.status(err.status || 500).json({
+      message: err.status ? err.message : "Server error",
+    });
   }
 };
 
@@ -830,81 +776,41 @@ const deployModel = async (req, res) => {
 // Admin reverts to a previous model version
 const revertModel = async (req, res) => {
   try {
-    const { model_id } = req.body;
-
-    if (!model_id) {
-      return res.status(400).json({ message: "Model ID is required" });
+    let versionNumber = req.body.version_number;
+    let requestedModel = null;
+    if (!versionNumber && req.body.model_id) {
+      requestedModel = await ModelVersion.findByPk(req.body.model_id);
+      versionNumber = requestedModel?.version_number;
     }
-
-    const model = await ModelVersion.findOne({ where: { id: model_id } });
-
-    if (!model) {
-      return res.status(404).json({ message: "Model not found" });
-    }
-
-    if (model.status === "deployed") {
-      return res.status(400).json({ message: "Model is already deployed" });
-    }
-
-    if (!model.tflite_url) {
-      return res.status(400).json({
-        message:
-          "This model version has no .tflite file and cannot be reverted to.",
+    if (!versionNumber) {
+      return res.status(requestedModel === null && req.body.model_id ? 404 : 400).json({
+        message: req.body.model_id ? "Model not found" : "Version number is required",
       });
     }
 
-    // Copy this version's files into deployed/ and recompute its checksum. Without
-    // this, the fixed deployed/ path keeps serving the previously-active version's
-    // bytes while this row's stale checksum no longer matches them — the mobile app's
-    // integrity check then correctly rejects the download and silently keeps running
-    // whatever was last verified, so the "revert" never actually reaches the phone.
-    await syncModelFilesToDeployed(model);
+    const pair = await activateVersion(versionNumber);
 
-    // Retire the other deployed model of this kind only — reverting the words
-    // model must not take the deployed alphabet down with it.
-    await ModelVersion.update(
-      { status: "inactive" },
-      { where: { status: "deployed", model_kind: model.model_kind } },
-    );
-
-    // Set selected model as deployed
-    await model.update({
-      status: "deployed",
-      deployed_at: new Date(),
-    });
-
-    // ── Roll the word bank back with the model ───────────────────────────────
-    // Without this the revert only swapped the .tflite: words added by a newer
-    // version stayed visible and the phone advertised words the restored model
-    // cannot predict. A version with no recorded class list is left alone.
-    try {
-      await reconcileActiveWords(model);
-    } catch (wordErr) {
-      console.error("Word reconciliation error (non-fatal):", wordErr.message);
-    }
-
-    // Roll the other half of this version back too. Without it, reverting the
-    // words model to an older version leaves the NEWER alphabet deployed beside
-    // it — the two halves of a pair from different runs, which is exactly what
-    // training them together is meant to rule out.
-    const companionNote = await deployCompanion(model);
-
-    // Log activity
-    await logActivity({
+    await logModelActivity({
       administrator_id: req.user.id,
       action: "reverted_model",
       target_type: "model",
-      target_id: model.id,
-      details: `Reverted to model version ${model.version_number}${companionNote}`,
+      target_id: pair.words.id,
+      details: `Reverted to complete model version ${versionNumber} (words + alphabet)`,
     });
 
     return res.status(200).json({
-      message: `Reverted to model version ${model.version_number} successfully${companionNote}`,
-      model,
+      message: `Reverted to model version ${versionNumber} successfully (words + alphabet)`,
+      deployment_version: versionNumber,
+      models: {
+        words: pair.words,
+        letters: pair.letters,
+      },
     });
   } catch (err) {
     console.error("Revert model error:", err);
-    return res.status(500).json({ message: "Server error" });
+    return res.status(err.status || 500).json({
+      message: err.status ? err.message : "Server error",
+    });
   }
 };
 
@@ -918,56 +824,36 @@ const deleteModel = async (req, res) => {
       return res.status(404).json({ message: "Model not found" });
     }
 
-    if (model.status === "deployed") {
+    const versionRows = await ModelVersion.findAll({
+      where: { version_number: model.version_number },
+    });
+    if (versionRows.some((row) => row.status === "deployed")) {
       return res.status(400).json({
         message:
-          "Cannot delete a deployed model. Revert to another version first.",
+          "Cannot delete a deployed model version. Deploy another version first.",
       });
     }
 
     const deletedModelId = model.id;
     const deletedModelVersion = model.version_number;
 
-    // A version is a PAIR — the words model and the alphabet trained in the
-    // same run — and they deploy together, so they delete together. Removing
-    // only the clicked row would leave an orphan: a letters model whose words
-    // half no longer exists, still listed and still deployable on its own.
-    //
-    // A DEPLOYED companion is left alone rather than deleted, for the same
-    // reason the check above refuses a deployed model: taking it out from under
-    // a running phone is not something a delete should do silently.
-    const companion = await ModelVersion.findOne({
-      where: {
-        version_number: model.version_number,
-        model_kind: model.model_kind === "letters" ? "words" : "letters",
-      },
+    await sequelize.transaction(async (transaction) => {
+      await ModelVersion.destroy({
+        where: { version_number: deletedModelVersion },
+        transaction,
+      });
     });
 
-    await model.destroy();
-
-    let companionNote = "";
-    if (companion) {
-      if (companion.status === "deployed") {
-        companionNote = ` (its ${companion.model_kind} model is deployed and was kept)`;
-        console.warn(
-          `[deleteModel] kept deployed ${companion.model_kind} model for ${deletedModelVersion}`,
-        );
-      } else {
-        await companion.destroy();
-        companionNote = ` (with its ${companion.model_kind} model)`;
-      }
-    }
-
-    await logActivity({
+    await logModelActivity({
       administrator_id: req.user.id,
       action: "deleted_model",
       target_type: "model",
       target_id: deletedModelId,
-      details: `Deleted model version ${deletedModelVersion}${companionNote}`,
+      details: `Deleted model version ${deletedModelVersion} (all model kinds)`,
     });
 
     return res.status(200).json({
-      message: `Model deleted successfully${companionNote}`,
+      message: "Model version deleted successfully",
     });
   } catch (err) {
     console.error("Delete model error:", err);

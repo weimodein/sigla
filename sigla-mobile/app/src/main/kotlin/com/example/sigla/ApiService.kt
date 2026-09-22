@@ -77,6 +77,7 @@ data class ModelInfo(
     // list from whichever version is deployed, so GET words/word-bank already
     // returns exactly this model's words.
     val accuracy: Double? = null,
+    val total_classes: Int? = null,
     val checksum: String? = null,
     val deployed_at: String? = null
 )
@@ -97,6 +98,7 @@ data class DeployedModels(
 data class ModelResponse(
     val model: ModelInfo,
     val models: DeployedModels? = null,
+    val deployment_version: String? = null,
 )
 
 data class MeResponse(val user: UserResponse)

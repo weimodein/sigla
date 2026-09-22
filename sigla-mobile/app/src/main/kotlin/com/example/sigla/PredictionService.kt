@@ -674,7 +674,7 @@ class PredictionService(private val context: Context) {
 
     // Load a model buffer from filesDir (downloaded) first, then bundled assets.
     private fun loadModelOrNull(filename: String): MappedByteBuffer? {
-        val local = File(context.filesDir, filename)
+        val local = ModelUpdateManager.getInstalledModelFile(context, filename)
         if (local.exists()) {
             return try {
                 Log.d(TAG, "Loading $filename from filesDir")
@@ -685,6 +685,9 @@ class PredictionService(private val context: Context) {
                 null
             }
         }
+        // Once a paired bundle is active, never fill a missing half from an
+        // APK asset belonging to another release.
+        if (ModelUpdateManager.hasActiveModelBundle(context)) return null
         return try {
             context.assets.openFd(filename).use { fd ->
                 FileInputStream(fd.fileDescriptor).channel
@@ -697,8 +700,9 @@ class PredictionService(private val context: Context) {
 
     private fun loadLabelsOrNull(filename: String): List<String>? {
         val text = try {
-            val local = File(context.filesDir, filename)
+            val local = ModelUpdateManager.getInstalledModelFile(context, filename)
             if (local.exists()) local.readText()
+            else if (ModelUpdateManager.hasActiveModelBundle(context)) return null
             else context.assets.open(filename).bufferedReader().use { it.readText() }
         } catch (_: Exception) {
             return null

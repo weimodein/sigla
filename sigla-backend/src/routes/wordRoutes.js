@@ -61,6 +61,24 @@ router.get("/word-bank", async (req, res) => {
       order: [["deployed_at", "DESC"]],
     });
 
+    if (deployedAll.length > 0) {
+      const wordsRows = deployedAll.filter((model) => model.model_kind === "words");
+      const lettersRows = deployedAll.filter((model) => model.model_kind === "letters");
+      if (
+        wordsRows.length !== 1 ||
+        lettersRows.length !== 1 ||
+        wordsRows[0].version_number !== lettersRows[0].version_number
+      ) {
+        console.error(
+          "Word bank refused an inconsistent deployed model pair:",
+          deployedAll.map((model) => `${model.version_number}:${model.model_kind}`),
+        );
+        return res.status(503).json({
+          message: "The deployed model pair is inconsistent. Please deploy a complete version.",
+        });
+      }
+    }
+
     // The browsable word bank is the union of what the phone can actually
     // recognise across both models.
     const trainedIds = deployedAll.some((m) => Array.isArray(m.trained_word_ids))

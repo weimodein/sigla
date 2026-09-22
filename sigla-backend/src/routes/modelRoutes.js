@@ -55,9 +55,9 @@ module.exports = router;
 // Body: { "model_id": 1 }
 
 // POST /api/models/deploy
-// Body: { "model_id": 1 }
+// Body: { "version_number": "1.0.0" }
 
 // POST /api/models/revert
-// Body: { "model_id": 1 }
+// Body: { "version_number": "1.0.0" }
 
 // DELETE /api/models/:id            → delete inactive model

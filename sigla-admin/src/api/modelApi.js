@@ -42,8 +42,8 @@ export const getModelStatus = async (id) => {
 // stays for a direct call or a future page rather than being deleted.
 export const testModel = withInvalidation(async (model_id) => (await api.post("/models/test", { model_id })).data, "model");
 
-export const deployModel = withInvalidation(async (model_id) => (await api.post("/models/deploy", { model_id })).data, "model");
+export const deployModel = withInvalidation(async (version_number) => (await api.post("/models/deploy", { version_number })).data, "model");
 
-export const revertModel = withInvalidation(async (model_id) => (await api.post("/models/revert", { model_id })).data, "model");
+export const revertModel = withInvalidation(async (version_number) => (await api.post("/models/revert", { version_number })).data, "model");
 
 export const deleteModel = withInvalidation(async (id) => (await api.delete(`/models/${id}`)).data, "model");

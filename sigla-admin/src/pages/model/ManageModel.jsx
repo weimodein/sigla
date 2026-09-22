@@ -50,6 +50,10 @@ const Badge = ({ value }) => {
     deployed: "#16a34a",
     trained: "#d97706",
     inactive: "#6b7280",
+    training: "#2563eb",
+    failed: "#dc2626",
+    incomplete: "#dc2626",
+    inconsistent: "#dc2626",
   };
   const bg = map[value] || C.muted;
   return (
@@ -268,10 +272,8 @@ const ManageModel = () => {
           setTrainingLettersId(null);
           showSuccess(`Model ${model.version_number} trained successfully`);
 
-          // What happened to the alphabet half decides the wording. A failure
-          // there is not fatal — the words model is trained and deployable —
-          // but it must be visible, since the only other trace is a "failed"
-          // row further down the table.
+          // The two rows are one deployable version. A failed alphabet leaves
+          // the version incomplete even when words training succeeded.
           // Keyed off `letters`, the row actually read this tick — not off the
           // captured id, which is null for a run this client did not start and
           // made the modal claim no alphabet was trained when one had been.
@@ -279,7 +281,7 @@ const ManageModel = () => {
             letters?.status === "trained"
               ? ` Alphabet model: ${fmt(letters.accuracy)} over ${letters.total_classes ?? "?"} letters.`
               : letters?.status === "failed"
-                ? ` The alphabet model FAILED (${letters.training_error || "unknown error"}) — this one is still fine to deploy.`
+                ? ` The alphabet model FAILED (${letters.training_error || "unknown error"}); this version cannot be deployed.`
                 : !lettersId
                   ? " No alphabet model was trained — there are no letters in the word list yet."
                   : "";
@@ -368,10 +370,21 @@ const ManageModel = () => {
       if (m.model_kind === "letters") continue;
       const companion = letters.get(m.version_number) || null;
       if (companion) claimed.add(companion.id);
-      rows.push({ ...m, letters: companion });
+      let pairStatus;
+      if (!companion) pairStatus = "incomplete";
+      else if (m.status === "deployed" && companion.status === "deployed") pairStatus = "deployed";
+      else if (m.status === "deployed" || companion.status === "deployed") pairStatus = "inconsistent";
+      else if (m.status === "training" || companion.status === "training") pairStatus = "training";
+      else if (m.status === "failed" || companion.status === "failed") pairStatus = "failed";
+      else if (m.status === "trained" && companion.status === "trained") pairStatus = "trained";
+      else if (m.status === "inactive" && companion.status === "inactive") pairStatus = "inactive";
+      else pairStatus = "incomplete";
+      rows.push({ ...m, words_status: m.status, status: pairStatus, letters: companion });
     }
     for (const m of letters.values()) {
-      if (!claimed.has(m.id)) rows.push({ ...m, letters: null });
+      if (!claimed.has(m.id)) {
+        rows.push({ ...m, words_status: null, status: "incomplete", letters: null });
+      }
     }
     return rows;
   })();
@@ -416,14 +429,12 @@ const ManageModel = () => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  // Letters this deploy will ACTUALLY add to the word bank, or null when none
-  // will. deployCompanion skips an alphabet with no .tflite — a failed or
-  // never-finished half — so counting its recorded ids would promise entries
-  // that never appear on the phone.
+  // A deployable version always includes its alphabet; the backend validates
+  // the same condition before changing any deployed rows.
   const deployLetterCount =
     deployModal?.letters &&
     deployModal.letters.tflite_url &&
-    deployModal.letters.status !== "failed" &&
+    deployModal.letters.status === "trained" &&
     Array.isArray(deployModal.letters.trained_word_ids)
       ? deployModal.letters.trained_word_ids.length
       : null;
@@ -472,7 +483,7 @@ const ManageModel = () => {
   const handleDeploy = async () => {
     setActionLoading(true);
     try {
-      await deployModel(deployModal.id);
+      await deployModel(deployModal.version_number);
       showSuccess(`Model ${deployModal.version_number} deployed successfully`);
       setDeployModal(null);
       fetchData();
@@ -491,7 +502,7 @@ const ManageModel = () => {
   const handleRevert = async () => {
     setActionLoading(true);
     try {
-      await revertModel(revertModal.id);
+      await revertModel(revertModal.version_number);
       showSuccess(`Reverted to model ${revertModal.version_number}`);
       setRevertModal(null);
       fetchData();
@@ -997,7 +1008,7 @@ const ManageModel = () => {
                             {/* A failed run produced no artifacts, so Revert is
                                 meaningless — but it still occupies a row, and
                                 without Delete those rows accumulate forever. */}
-                            {model.status === "failed" && (
+                            {["failed", "incomplete", "inconsistent"].includes(model.status) && (
                               <button
                                 onClick={() => handleDelete(model)}
                                 disabled={actionLoading}

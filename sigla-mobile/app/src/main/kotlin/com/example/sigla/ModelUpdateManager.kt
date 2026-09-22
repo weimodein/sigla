@@ -21,10 +21,9 @@ object ModelUpdateManager {
     private const val TAG = "ModelUpdateManager"
     private const val PREFS = "model_cache"
     private const val KEY_VERSION = "cached_version"
-    private const val KEY_STATIC_URL = "cached_static_url"
-    // Tracked separately from KEY_VERSION: the alphabet is deployed on its own
-    // schedule, so its version moves independently of the words model's and one
-    // key could not say whether either was current.
+    private const val KEY_ACTIVE_BUNDLE = "active_model_bundle"
+    private const val BUNDLE_ROOT = "model_bundles"
+    // Kept only so an upgrade can clean up the superseded independent version.
     private const val KEY_LETTERS_VERSION = "cached_letters_version"
     private const val WORD_BANK_CACHE_FILE = "word_bank_cache.json"
     private const val CATEGORIES_CACHE_FILE = "categories_cache.json"
@@ -49,18 +48,21 @@ object ModelUpdateManager {
     fun getCachedVersion(context: Context): String? =
         prefs(context).getString(KEY_VERSION, null)
 
-    private fun getCachedStaticUrl(context: Context): String? =
-        prefs(context).getString(KEY_STATIC_URL, null)
+    private fun activeBundleDir(context: Context): File? =
+        prefs(context).getString(KEY_ACTIVE_BUNDLE, null)?.let { name ->
+            File(File(context.filesDir, BUNDLE_ROOT), name)
+        }
 
-    // The motion model is the only model. hasLocalModel and hasLocalMotionModel
-    // are kept as aliases so existing callers compile unchanged.
-    //
-    // NOTE: this checks the .tflite ONLY. Labels are NOT optional — the word-bank
-    // fallback this comment used to describe was deleted, and PredictionService now
-    // refuses to load a model without labels_motion.json. Callers that need to know
-    // the model is actually usable must check hasLocalLabels() too.
+    /** Resolve a model file from the active bundle, falling back to legacy installs. */
+    fun getInstalledModelFile(context: Context, filename: String): File {
+        val bundle = activeBundleDir(context)
+        return if (bundle != null) File(bundle, filename) else File(context.filesDir, filename)
+    }
+
+    fun hasActiveModelBundle(context: Context): Boolean = activeBundleDir(context) != null
+
     fun hasLocalModel(context: Context): Boolean {
-        return File(context.filesDir, "sign_model_motion.tflite").exists()
+        return getInstalledModelFile(context, "sign_model_motion.tflite").exists()
     }
 
     /**
@@ -68,31 +70,15 @@ object ModelUpdateManager {
      * indices and only labels_motion.json says what those indices mean.
      */
     private fun hasLocalLabels(context: Context): Boolean =
-        File(context.filesDir, "labels_motion.json").exists()
+        getInstalledModelFile(context, "labels_motion.json").exists()
 
     fun hasLocalMotionModel(context: Context): Boolean = hasLocalModel(context)
 
-    /**
-     * Whether the locally-installed alphabet matches the deployed one.
-     *
-     * The words model being current does NOT mean the device is current: the
-     * alphabet is deployed on its own schedule and lives in its own files, so
-     * "up to date" has to account for both or a phone with the right words model
-     * never downloads the letters at all.
-     *
-     * A null `info` means the backend has no alphabet deployed, in which case
-     * having no local copy IS current — and having one means it must be removed.
-     */
-    private fun lettersUpToDate(context: Context, info: ModelInfo?): Boolean {
-        val modelFile  = File(context.filesDir, "sign_model_letters.tflite")
-        val labelsFile = File(context.filesDir, "labels_letters.json")
-        if (info == null || info.tflite_url.isNullOrBlank()) {
-            return !modelFile.exists() && !labelsFile.exists()
-        }
-        return info.version_number == prefs(context).getString(KEY_LETTERS_VERSION, null) &&
-            modelFile.exists() &&
-            labelsFile.exists()
-    }
+    private fun hasCompleteLocalPair(context: Context): Boolean =
+        hasLocalModel(context) &&
+            hasLocalLabels(context) &&
+            getInstalledModelFile(context, "sign_model_letters.tflite").exists() &&
+            getInstalledModelFile(context, "labels_letters.json").exists()
 
     /**
      * Set by [checkAndUpdate] when the deployed version differs from what this
@@ -146,214 +132,144 @@ object ModelUpdateManager {
         context: Context,
         token: String?,
         force: Boolean = false,
-    ): Boolean {
-        return withContext(Dispatchers.IO) {
-            // Reset per call — a failed check must not leave a stale "changed"
-            // flag from a previous launch telling the caller to refetch.
-            lastCheckChangedVersion = false
+    ): Boolean = withContext(Dispatchers.IO) {
+        lastCheckChangedVersion = false
+        val sinceLast = android.os.SystemClock.elapsedRealtime() - lastCheckAt
+        if (!force && lastCheckAt > 0L && sinceLast < CHECK_INTERVAL_MS && hasCompleteLocalPair(context)) {
+            return@withContext true
+        }
 
-            // Skip the round trip when a recent check already confirmed this
-            // device is current. Only when the model is actually USABLE: a
-            // device missing its .tflite or labels must keep asking, or a failed
-            // first download would leave it stuck with no model until the
-            // interval expired.
-            //
-            // Whether an ALPHABET is deployed cannot be known without asking, so
-            // a device that has none installed never skips. Otherwise a phone
-            // that was current before the alphabet existed would sit behind this
-            // throttle and never discover it. Once one is installed, a later
-            // change to it is picked up when the interval lapses.
-            val sinceLast = android.os.SystemClock.elapsedRealtime() - lastCheckAt
-            if (!force &&
-                lastCheckAt > 0L &&
-                sinceLast < CHECK_INTERVAL_MS &&
-                hasLocalModel(context) &&
-                hasLocalLabels(context) &&
-                File(context.filesDir, "sign_model_letters.tflite").exists() &&
-                File(context.filesDir, "labels_letters.json").exists()
+        try {
+            val response = ApiClient.get(token).getLatestModel()
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Failed to fetch model pair: ${response.code()}")
+                return@withContext hasCompleteLocalPair(context)
+            }
+
+            val body = response.body() ?: return@withContext hasCompleteLocalPair(context)
+            val words = body.models?.words ?: body.model
+            val letters = body.models?.letters
+            val deploymentVersion = body.deployment_version ?: words.version_number
+            if (letters == null ||
+                words.version_number != deploymentVersion ||
+                letters.version_number != deploymentVersion
             ) {
-                Log.i(TAG, "Skipping model check — last one was ${sinceLast / 1000}s ago")
+                Log.e(TAG, "Backend returned an incomplete or mixed model pair")
+                return@withContext hasCompleteLocalPair(context)
+            }
+
+            val current = getCachedVersion(context)
+            val wordsFile = getInstalledModelFile(context, "sign_model_motion.tflite")
+            val lettersFile = getInstalledModelFile(context, "sign_model_letters.tflite")
+            val checksumsMatch =
+                (words.checksum.isNullOrBlank() ||
+                    (wordsFile.exists() && computeSha256(wordsFile).equals(words.checksum, true))) &&
+                (letters.checksum.isNullOrBlank() ||
+                    (lettersFile.exists() && computeSha256(lettersFile).equals(letters.checksum, true)))
+
+            if (!force && current == deploymentVersion && hasCompleteLocalPair(context) && checksumsMatch) {
+                lastCheckAt = android.os.SystemClock.elapsedRealtime()
                 return@withContext true
             }
-            try {
-                Log.i(TAG, "Checking for model updates…")
-                val response = ApiClient.get(token).getLatestModel()
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "Failed to fetch model info: ${response.code()}")
-                    return@withContext hasLocalModel(context)
-                }
-                val model = response.body()?.model ?: run {
-                    Log.w(TAG, "No model info in response body")
-                    return@withContext hasLocalModel(context)
-                }
 
-                val remoteVersion = model.version_number
-                val cachedVersion = getCachedVersion(context)
-
-                // model.tflite_url is the (motion) LSTM model — the only model.
-                val remoteModelUrl = model.tflite_url
-                val localModelFile = File(context.filesDir, "sign_model_motion.tflite")
-                val expectedChecksum = model.checksum
-                val localChecksumMatches = expectedChecksum.isNullOrBlank() ||
-                    (localModelFile.exists() &&
-                        computeSha256(localModelFile).equals(expectedChecksum, ignoreCase = true))
-
-                // A matching version/URL is only "up to date" if BOTH files are
-                // present and the local model checksum still matches the deployed
-                // bytes. Retraining under the same version otherwise left the phone
-                // permanently using its old cached model.
-                // Without the labels check, a device missing labels_motion.json (the
-                // labels download used to be optional) would report itself current
-                // forever and never recover.
-                val lettersInfo = response.body()?.models?.letters
-
-                if (remoteVersion == cachedVersion &&
-                    remoteModelUrl == getCachedStaticUrl(context) &&
-                    hasLocalModel(context) &&
-                    hasLocalLabels(context) &&
-                    localChecksumMatches
-                ) {
-                    // The WORDS model is current — but the alphabet is deployed
-                    // separately and may not be. This early return used to fire
-                    // here and skip syncLettersModel entirely, so a phone with the
-                    // right words model never downloaded the letters at all.
-                    if (!lettersUpToDate(context, lettersInfo)) {
-                        Log.i(TAG, "Words model current but alphabet is not — syncing it")
-                        if (syncLettersModel(context, lettersInfo)) {
-                            lastCheckChangedVersion = true
-                            invalidateWordBankCache(context)
-                        }
-                    }
-                    Log.i(TAG, "Model up-to-date (v$remoteVersion)")
-                    // Timestamped only on a check that actually reached the
-                    // backend and found this device current, so a failed request
-                    // or a partial download never buys silence.
-                    lastCheckAt = android.os.SystemClock.elapsedRealtime()
-                    return@withContext true
-                }
-
-                Log.i(TAG, "New model version detected: $remoteVersion (cached: $cachedVersion) — downloading")
-
-                // A version change means the server-side word bank changed with
-                // it. Drop the cached list now so no code path can serve words
-                // belonging to the version being replaced; the caller refetches
-                // once the new model is in place. Note this fires on a REVERT
-                // too — remoteVersion simply differs from cachedVersion.
-                if (remoteVersion != cachedVersion) {
-                    lastCheckChangedVersion = true
-                    invalidateWordBankCache(context)
-                }
-
-                // ── Motion model (required) ───────────────────────────────────
-                if (remoteModelUrl.isNullOrBlank()) {
-                    Log.e(TAG, "Backend returned no model URL — check SUPABASE_URL on server")
-                    return@withContext hasLocalModel(context)
-                }
-                // ── Motion labels URL must exist before we download anything ──
-                // This file is the class-index → word map the model was trained
-                // with. There is no fallback: PredictionService refuses to load a
-                // model without it, because guessing the mapping from another
-                // source reports real predictions under the wrong words.
-                val labelsMotionUrl = model.labels_motion_url
-                if (labelsMotionUrl.isNullOrBlank()) {
-                    Log.e(TAG, "Backend returned no motion labels URL — cannot use this model version")
-                    return@withContext hasLocalModel(context) && hasLocalLabels(context)
-                }
-
-                // ── Stage BOTH files, verify BOTH, then swap BOTH in ─────────
-                // The model and its labels are a matched pair: index N only means
-                // the right word if both came from the same training run. This used
-                // to swap the model into place first and download labels after, so a
-                // failed labels download left a NEW model live against OLD labels —
-                // every prediction confidently mislabelled. PredictionService's count
-                // check only catches that when the class count also changed, which is
-                // exactly the case a word-swap retrain does not produce.
-                val modelDest  = localModelFile
-                val labelsDest = File(context.filesDir, "labels_motion.json")
-                val modelStaging  = File(context.filesDir, "sign_model_motion.tflite.staging")
-                val labelsStaging = File(context.filesDir, "labels_motion.json.staging")
-
-                if (!downloadAndVerifyToStaging(remoteModelUrl, modelStaging, expectedChecksum)) {
-                    Log.e(TAG, "Motion model download/verify failed — keeping existing model if any")
-                    modelStaging.delete()
-                    return@withContext hasLocalModel(context)
-                }
-                Log.i(TAG, "Motion TFLite downloaded + verified (staged)")
-
-                if (!downloadToFile(labelsMotionUrl, labelsStaging)) {
-                    Log.e(TAG, "Motion labels download failed — keeping the previous model/labels pair")
-                    modelStaging.delete()
-                    labelsStaging.delete()
-                    return@withContext hasLocalModel(context) && hasLocalLabels(context)
-                }
-                Log.i(TAG, "Motion labels downloaded (staged)")
-
-                // Both verified — commit them together.
-                if (!swapIntoPlace(modelStaging, modelDest)) {
-                    Log.e(TAG, "Failed to install staged model — keeping existing pair")
-                    modelStaging.delete()
-                    labelsStaging.delete()
-                    return@withContext hasLocalModel(context) && hasLocalLabels(context)
-                }
-                if (!swapIntoPlace(labelsStaging, labelsDest)) {
-                    // The model is already live and now outranks its labels. Delete the
-                    // labels so PredictionService refuses to load rather than pairing the
-                    // new model with the old map, and so the next check re-downloads both.
-                    Log.e(TAG, "Failed to install staged labels — removing labels to force a clean retry")
-                    labelsDest.delete()
-                    labelsStaging.delete()
-                    return@withContext false
-                }
-                Log.i(TAG, "Model + labels installed together")
-
-                // ── Alphabet model (optional) ────────────────────────────────
-                // Deployed separately from the words model, because a letter and
-                // the day sign built from it differ only in motion and separate
-                // too tightly to share a class list. Absent on any backend with
-                // no letters model deployed, and on older backends that do not
-                // send the `models` map at all — in both cases the app stays
-                // words-only and the toggle hides itself.
-                //
-                // Deliberately NOT fatal: the words model is already live and
-                // usable at this point, so a failed alphabet download must not
-                // make the whole update report failure and roll the user back to
-                // no recognition at all.
-                // The word bank is the UNION of both deployed models' words, so a
-                // changed alphabet invalidates it just as a changed words model
-                // does — otherwise letters never appear in browsing until the
-                // words version happens to move.
-                if (syncLettersModel(context, response.body()?.models?.letters)) {
-                    lastCheckChangedVersion = true
-                    invalidateWordBankCache(context)
-                }
-
-                // ── Save version + URL only after all required files succeeded ──
-                // Recorded last, and skipped entirely on any failure above, so a
-                // half-updated device retries instead of believing it is current.
-                prefs(context).edit()
-                    .putString(KEY_VERSION, remoteVersion)
-                    .putString(KEY_STATIC_URL, remoteModelUrl)
-                    .apply()
-                Log.i(TAG, "Model updated to $remoteVersion")
-                lastCheckAt = android.os.SystemClock.elapsedRealtime()
-                true
-            } catch (e: Exception) {
-                Log.e(TAG, "Model update failed: ${e.message}", e)
-                hasLocalModel(context)
+            val wordsUrl = words.tflite_url
+            val wordsLabelsUrl = words.labels_motion_url
+            val lettersUrl = letters.tflite_url
+            val lettersLabelsUrl = letters.labels_motion_url
+            if (wordsUrl.isNullOrBlank() || wordsLabelsUrl.isNullOrBlank() ||
+                lettersUrl.isNullOrBlank() || lettersLabelsUrl.isNullOrBlank()
+            ) {
+                Log.e(TAG, "Backend returned a model pair with missing artifact URLs")
+                return@withContext hasCompleteLocalPair(context)
             }
+
+            val root = File(context.filesDir, BUNDLE_ROOT).apply { mkdirs() }
+            val safeVersion = deploymentVersion.replace(Regex("[^A-Za-z0-9._-]"), "_")
+            val bundleName = "$safeVersion-${System.nanoTime()}"
+            val staging = File(root, ".$bundleName.staging")
+            if (staging.exists()) staging.deleteRecursively()
+            if (!staging.mkdirs()) {
+                Log.e(TAG, "Could not create model staging directory")
+                return@withContext hasCompleteLocalPair(context)
+            }
+
+            val stagedWords = File(staging, "sign_model_motion.tflite")
+            val stagedWordsLabels = File(staging, "labels_motion.json")
+            val stagedLetters = File(staging, "sign_model_letters.tflite")
+            val stagedLettersLabels = File(staging, "labels_letters.json")
+
+            val staged =
+                downloadAndVerifyToStaging(wordsUrl, stagedWords, words.checksum) &&
+                downloadToFile(wordsLabelsUrl, stagedWordsLabels) &&
+                downloadAndVerifyToStaging(lettersUrl, stagedLetters, letters.checksum) &&
+                downloadToFile(lettersLabelsUrl, stagedLettersLabels)
+            if (!staged ||
+                !labelsFileIsValid(stagedWordsLabels, words.total_classes) ||
+                !labelsFileIsValid(stagedLettersLabels, letters.total_classes)
+            ) {
+                Log.e(TAG, "Model pair download or validation failed; keeping the active bundle")
+                staging.deleteRecursively()
+                return@withContext hasCompleteLocalPair(context)
+            }
+
+            val installed = File(root, bundleName)
+            if (installed.exists() && !installed.deleteRecursively()) {
+                staging.deleteRecursively()
+                return@withContext hasCompleteLocalPair(context)
+            }
+            if (!staging.renameTo(installed)) {
+                Log.e(TAG, "Could not finalize the staged model bundle")
+                staging.deleteRecursively()
+                return@withContext hasCompleteLocalPair(context)
+            }
+
+            // One synchronous preference commit is the activation point. Until
+            // it succeeds, PredictionService continues resolving the old bundle.
+            val activated = prefs(context).edit()
+                .putString(KEY_ACTIVE_BUNDLE, bundleName)
+                .putString(KEY_VERSION, deploymentVersion)
+                .remove(KEY_LETTERS_VERSION)
+                .commit()
+            if (!activated) {
+                installed.deleteRecursively()
+                return@withContext hasCompleteLocalPair(context)
+            }
+
+            root.listFiles()?.forEach { candidate ->
+                if (candidate != installed) candidate.deleteRecursively()
+            }
+            lastCheckChangedVersion = current != deploymentVersion
+            if (lastCheckChangedVersion) invalidateWordBankCache(context)
+            lastCheckAt = android.os.SystemClock.elapsedRealtime()
+            Log.i(TAG, "Activated complete model pair $deploymentVersion")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Model pair update failed: ${e.message}", e)
+            hasCompleteLocalPair(context)
+        }
+    }
+
+    private fun labelsFileIsValid(file: File, expectedCount: Int?): Boolean {
+        return try {
+            val labels = org.json.JSONObject(file.readText())
+            if (labels.length() == 0 || (expectedCount != null && labels.length() != expectedCount)) {
+                return false
+            }
+            (0 until labels.length()).all { index ->
+                labels.has(index.toString()) && labels.optString(index.toString()).isNotBlank()
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 
     /**
      * Download [url] into [staging] and verify its SHA-256 against [expectedChecksum].
      *
-     * Leaves the verified bytes in [staging] WITHOUT installing them — the caller
-     * commits it with [swapIntoPlace] only once every file in the update has been
-     * verified, so the model and its labels always land together. No live file is
-     * touched here, so a bad or stale download cannot destroy the last-good model.
+     * Leaves verified bytes in [staging]. The bundle pointer changes only after
+     * every file has passed validation, so no live file is touched here.
      *
-     * On checksum mismatch it retries ONCE with a cache-busting query param, which
-     * defeats a stale Supabase CDN copy served at the fixed deployed/ path.
+     * On checksum mismatch it retries once with a cache-busting query parameter.
      *
      * Returns true only when [staging] holds verified bytes. If [expectedChecksum]
      * is blank, integrity checking is skipped but the download still lands in staging.
@@ -386,114 +302,6 @@ object ModelUpdateManager {
     }
 
     // Atomically move the verified staging file onto the live destination.
-    /**
-     * Installs (or removes) the optional alphabet model.
-     *
-     * Same staged matched-pair discipline as the words model: the .tflite and
-     * its labels are downloaded to staging, verified, and only then swapped in
-     * together, because index N only means the right letter if both came from
-     * the same training run.
-     *
-     * Never throws and never reports failure upward. It runs after the words
-     * model is already live, so a failed alphabet download leaves the app fully
-     * usable with words alone — turning that into an update failure would roll
-     * the user back to no recognition at all.
-     *
-     * A null `info` means the backend has no alphabet deployed (or predates the
-     * split). The local files are then DELETED rather than left behind, so
-     * reverting the alphabet server-side actually takes it off the phone instead
-     * of leaving a stale model the toggle still offers.
-     */
-    private fun syncLettersModel(context: Context, info: ModelInfo?): Boolean {
-        val modelDest  = File(context.filesDir, "sign_model_letters.tflite")
-        val labelsDest = File(context.filesDir, "labels_letters.json")
-
-        try {
-            val url = info?.tflite_url
-            val labelsUrl = info?.labels_motion_url
-            if (info == null || url.isNullOrBlank() || labelsUrl.isNullOrBlank()) {
-                if (modelDest.exists() || labelsDest.exists()) {
-                    Log.i(TAG, "No alphabet model deployed — removing the local copy")
-                    modelDest.delete()
-                    labelsDest.delete()
-                    prefs(context).edit().remove(KEY_LETTERS_VERSION).apply()
-                    // The alphabet just left the phone, so the word bank —
-                    // which is the union of both models — is now stale.
-                    return true
-                }
-                return false
-            }
-
-            // Up to date when the version matches AND both files are present —
-            // the same two-part check the words model uses, for the same reason:
-            // a version match alone would strand a device that lost one file.
-            if (info.version_number == prefs(context).getString(KEY_LETTERS_VERSION, null) &&
-                modelDest.exists() && labelsDest.exists()
-            ) {
-                Log.i(TAG, "Alphabet model up-to-date (v${info.version_number})")
-                return false
-            }
-
-            val modelStaging  = File(context.filesDir, "sign_model_letters.tflite.staging")
-            val labelsStaging = File(context.filesDir, "labels_letters.json.staging")
-
-            if (!downloadAndVerifyToStaging(url, modelStaging, info.checksum)) {
-                Log.w(TAG, "Alphabet model download/verify failed — keeping words-only")
-                modelStaging.delete()
-                return false
-            }
-            if (!downloadToFile(labelsUrl, labelsStaging)) {
-                Log.w(TAG, "Alphabet labels download failed — keeping words-only")
-                modelStaging.delete()
-                labelsStaging.delete()
-                return false
-            }
-            if (!swapIntoPlace(modelStaging, modelDest)) {
-                Log.w(TAG, "Failed to install staged alphabet model")
-                modelStaging.delete()
-                labelsStaging.delete()
-                return false
-            }
-            if (!swapIntoPlace(labelsStaging, labelsDest)) {
-                // The model is live and now outranks its labels. Delete BOTH so
-                // PredictionService skips the alphabet entirely rather than
-                // pairing it with a stale map, and the next check retries clean.
-                Log.w(TAG, "Failed to install staged alphabet labels — removing the pair")
-                modelDest.delete()
-                labelsStaging.delete()
-                // The pair was removed, so whatever the word bank held for the
-                // alphabet is no longer backed by a model on this device.
-                return true
-            }
-
-            prefs(context).edit()
-                .putString(KEY_LETTERS_VERSION, info.version_number)
-                .apply()
-            Log.i(TAG, "Alphabet model installed (v${info.version_number})")
-            return true
-        } catch (e: Exception) {
-            Log.w(TAG, "Alphabet sync failed — continuing words-only: ${e.message}")
-            return false
-        }
-    }
-
-    private fun swapIntoPlace(staging: File, dest: File): Boolean {
-        if (dest.exists()) dest.delete()
-        if (staging.renameTo(dest)) return true
-        // Cross-filesystem or existing-dest edge case: copy then clean up.
-        return try {
-            staging.inputStream().use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
-            }
-            staging.delete()
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to move verified model into place: ${e.message}", e)
-            staging.delete()
-            false
-        }
-    }
-
     // Append a cache-busting query param, preserving any existing query string.
     private fun appendCacheBuster(url: String): String {
         val sep = if (url.contains("?")) "&" else "?"
@@ -826,72 +634,6 @@ object ModelUpdateManager {
 
     // Add this function to ModelUpdateManager.kt
     suspend fun forceDownloadModel(context: Context, token: String?): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                Log.d(TAG, "=== FORCE DOWNLOADING MODEL ===")
-                val response = ApiClient.get(token).getLatestModel()
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "Failed to fetch model info: ${response.code()}")
-                    return@withContext false
-                }
-                
-                val model = response.body()?.model ?: run {
-                    Log.e(TAG, "No model in response")
-                    return@withContext false
-                }
-                
-                Log.d(TAG, "Model version: ${model.version_number}")
-                Log.d(TAG, "Model URL: ${model.tflite_url}")
-                Log.d(TAG, "Expected checksum: ${model.checksum}")
-                
-                // Download without checksum verification first
-                val modelUrl = model.tflite_url
-                if (modelUrl.isNullOrBlank()) {
-                    Log.e(TAG, "Model URL is null or blank")
-                    return@withContext false
-                }
-                
-                val modelDest = File(context.filesDir, "sign_model_motion.tflite")
-                Log.d(TAG, "Downloading to: ${modelDest.absolutePath}")
-                
-                // Download the model
-                val downloadSuccess = downloadToFile(modelUrl, modelDest)
-                if (!downloadSuccess) {
-                    Log.e(TAG, "Download failed!")
-                    return@withContext false
-                }
-                
-                Log.d(TAG, "Download successful! File size: ${modelDest.length()} bytes")
-                
-                // Check if file exists
-                if (!modelDest.exists()) {
-                    Log.e(TAG, "File doesn't exist after download!")
-                    return@withContext false
-                }
-                
-                // Download labels only if the backend provides a URL.
-                val labelsUrl = model.labels_motion_url
-                if (!labelsUrl.isNullOrBlank()) {
-                    val labelsDest = File(context.filesDir, "labels_motion.json")
-                    downloadToFile(labelsUrl, labelsDest)
-                    Log.d(TAG, "Labels downloaded: ${labelsDest.exists()}")
-                } else {
-                    Log.w(TAG, "No labels URL returned by backend; continuing")
-                }
-                
-                // Save version
-                prefs(context).edit()
-                    .putString(KEY_VERSION, model.version_number)
-                    .putString(KEY_STATIC_URL, modelUrl)
-                    .apply()
-                
-                Log.d(TAG, "=== MODEL DOWNLOAD COMPLETE ===")
-                return@withContext true
-                
-            } catch (e: Exception) {
-                Log.e(TAG, "Force download error: ${e.message}", e)
-                return@withContext false
-            }
-        }
+        return checkAndUpdate(context, token, force = true)
     }
 }
