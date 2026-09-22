@@ -1,6 +1,8 @@
 package com.example.sigla
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 
@@ -200,6 +202,46 @@ class FeatureParityTest {
 
     // ── Layout constant parity ───────────────────────────────────────────────
     // Cheap guard against one side's constants being edited alone.
+    // ── Corrupted-hand rejection ─────────────────────────────────────────
+    // Mirrored by the hand_extent_ok cases in sigla-ml tests/test_parity.py.
+    // These two MUST agree: a frame one side drops and the other keeps is the
+    // train/serve skew this file exists to prevent.
+
+    @Test
+    fun handExtentAcceptsANormalHand() {
+        val frame = makeSequence(3, 1, true, 0)[0]
+        normalizeFrame(frame)
+        assertTrue(handExtentOk(frame))
+    }
+
+    @Test
+    fun handExtentAcceptsAnAbsentHand() {
+        // The 63-zero sentinel is "no hand", not a hand of size zero — judging
+        // it would reject every one-handed sign.
+        val frame = makeSequence(3, 1, true, 0)[0]
+        normalizeFrame(frame)
+        for (k in 63 until 126) frame[k] = 0f
+        assertTrue(handExtentOk(frame))
+    }
+
+    @Test
+    fun handExtentRejectsACollapsedDetection() {
+        // The real failure: a near-zero wrist->MCP9 divisor scales the whole
+        // hand up. The normalization invariants still hold — wrist at origin,
+        // |w->MCP9| exactly 1 — which is why nothing else catches it.
+        val frame = makeSequence(3, 1, true, 0)[0]
+        frame[9 * 3] = frame[0] + 1e-4f
+        frame[9 * 3 + 1] = frame[1]
+        normalizeFrame(frame)
+        assertFalse(handExtentOk(frame))
+    }
+
+    @Test
+    fun handExtentThresholdIsTheDocumentedValue() {
+        // Pinned so a change has to be made deliberately in BOTH languages.
+        assertEquals(5.0f, MAX_HAND_EXTENT)
+    }
+
     @Test
     fun layoutConstantParity() {
         assertEquals(147, FEATURE_SIZE)

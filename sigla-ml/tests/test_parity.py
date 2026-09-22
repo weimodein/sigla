@@ -26,12 +26,14 @@ import pytest
 
 from app.utils.preprocessor import (
     FEATURE_SIZE,
+    MAX_HAND_EXTENT,
     SEQUENCE_LENGTH,
     _POSE_BASE,
     _POSE_LSHOULDER,
     _POSE_RSHOULDER,
     center_on_peak_velocity,
     frame_velocity,
+    hand_extent_ok,
     normalize_frame,
     peak_velocity_index,
 )
@@ -193,7 +195,7 @@ def test_normalize_frame_leaves_absent_blocks_zero():
     """An absent hand is the 63-zero sentinel and must survive normalization
     untouched -- the model reads all-zero as 'no hand', so perturbing it would
     invent a hand that was never detected."""
-    frame = make_sequence(1, 0, pose=True, slot=0)[0]
+    frame = make_sequence(3, 1, pose=True, slot=0)[0]
     out = normalize_frame(frame)
     assert not np.any(out[63:126]), "absent hand slot 1 must stay zero"
 
@@ -212,3 +214,41 @@ def test_normalize_frame_is_translation_invariant():
 
     np.testing.assert_allclose(normalize_frame(frame), normalize_frame(shifted),
                                rtol=1e-4, atol=2e-5)
+
+
+# ── Corrupted-hand rejection ─────────────────────────────────────────────────
+# Mirrored by handExtentOk cases in FeatureParityTest.kt. These two MUST agree:
+# a frame one side drops and the other keeps is train/serve skew of exactly the
+# kind this file exists to prevent.
+
+def test_hand_extent_accepts_a_normal_hand():
+    """A real hand spans ~1-2 hand-widths after normalization, by construction."""
+    frame = normalize_frame(make_sequence(3, 1, pose=True, slot=0)[0])
+    assert hand_extent_ok(frame)
+
+
+def test_hand_extent_accepts_an_absent_hand():
+    """The 63-zero sentinel is 'no hand', not a hand of size zero — it must not
+    be judged, or every one-handed sign would be rejected."""
+    frame = normalize_frame(make_sequence(3, 1, pose=True, slot=0)[0])
+    frame[63:126] = 0.0
+    assert hand_extent_ok(frame)
+
+
+def test_hand_extent_rejects_a_collapsed_detection():
+    """The real failure: a near-zero wrist->MCP9 divisor scales the whole hand
+    up. The normalization invariants still hold — wrist at origin, |w->MCP9|
+    exactly 1 — which is why nothing else catches it."""
+    frame = make_sequence(3, 1, pose=True, slot=0)[0].copy()
+    wx, wy = frame[0], frame[1]
+    # Collapse landmark 9 onto the wrist, leaving the other landmarks where they
+    # are: d becomes tiny and every landmark divided by it explodes.
+    frame[9 * 3] = wx + 1e-4
+    frame[9 * 3 + 1] = wy
+    out = normalize_frame(frame)
+    assert not hand_extent_ok(out), "a ~100x-scaled hand must be rejected"
+
+
+def test_hand_extent_threshold_is_the_documented_value():
+    """Pinned so a change here has to be made deliberately in BOTH languages."""
+    assert MAX_HAND_EXTENT == 5.0

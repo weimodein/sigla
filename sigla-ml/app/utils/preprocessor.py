@@ -198,6 +198,47 @@ def fetch_approved_samples() -> dict:
     return dataset
 
 
+# Largest plausible hand extent, in hand-widths, AFTER normalization.
+#
+# Normalization divides every landmark by the 2D wrist→middle-MCP distance, so a
+# real hand spans about 1-2 by construction; measured across the dataset, normal
+# frames sit near 1.2. The `d < 1e-6` clamp in normalize_frame catches an exactly
+# degenerate hand but not a merely small one: when MediaPipe returns a collapsed
+# detection, d lands near 0.01 and the whole hand is scaled ~100x. The result is
+# still perfectly normalized — wrist at the origin, |wrist→MCP9| exactly 1.000 —
+# so nothing downstream notices, and 2.19% of stored hand-frames carry it (TODAY
+# 31.8%, SLOW 18.6%). See artifacts/device_tests/landmark_corruption.md.
+#
+# 5 is far above any real hand and far below the corrupted ones (which reach 96),
+# so the threshold does not need to be precise to separate them.
+#
+# MUST stay identical to MAX_HAND_EXTENT in HandLandmarkHelper.kt.
+MAX_HAND_EXTENT = float(os.getenv("MAX_HAND_EXTENT", 5.0))
+
+
+def hand_extent_ok(frame: np.ndarray) -> bool:
+    """
+    True when every PRESENT hand in an already-normalized frame is a plausible
+    size.
+
+    Takes a normalized frame: the check is meaningless on raw image coordinates,
+    where the scale is the frame rather than the hand.
+
+    MUST stay identical to handExtentOk in HandLandmarkHelper.kt.
+    """
+    for hand in range(2):
+        base = hand * 63
+        block = frame[base:base + 63]
+        if not np.any(block):
+            continue  # absent hand — nothing to judge
+        xs = block[0:63:3]
+        ys = block[1:63:3]
+        if (float(xs.max() - xs.min()) > MAX_HAND_EXTENT or
+                float(ys.max() - ys.min()) > MAX_HAND_EXTENT):
+            return False
+    return True
+
+
 def normalize_frame(frame: np.ndarray) -> np.ndarray:
     """
     Make a 147-float frame position- and scale-invariant:

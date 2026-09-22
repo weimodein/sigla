@@ -439,6 +439,52 @@ internal fun normalizeFrame(features: FloatArray) {
     normalizePoseBlock(features)
 }
 
+// Largest plausible hand extent, in hand-widths, AFTER normalization.
+//
+// Normalization divides every landmark by the 2D wrist→MCP9 distance, so a real
+// hand spans about 1-2 by construction; measured across the dataset, normal
+// frames sit near 1.2. The 1e-6 clamp in normalizeHandBlock catches an exactly
+// degenerate hand but not a merely small one: when MediaPipe returns a collapsed
+// detection, d lands near 0.01 and the whole hand is scaled ~100x. The output is
+// still perfectly normalized — wrist at the origin, |wrist→MCP9| exactly 1.000 —
+// so no existing gate sees it. hasSufficientPoseCoverage and hasSufficientMotion
+// both pass it straight into the LSTM.
+//
+// MUST equal MAX_HAND_EXTENT in sigla-ml preprocessor.py.
+internal const val MAX_HAND_EXTENT = 5.0f
+
+/**
+ * True when every PRESENT hand in an already-normalized frame is a plausible size.
+ *
+ * Takes a normalized frame: on raw image coordinates the scale is the frame
+ * rather than the hand, and the check would mean nothing.
+ *
+ * MUST stay identical to hand_extent_ok in sigla-ml preprocessor.py.
+ */
+internal fun handExtentOk(features: FloatArray): Boolean {
+    for (hand in 0..1) {
+        val base = hand * 63
+        var present = false
+        for (k in base until base + 63) {
+            if (features[k] != 0f) { present = true; break }
+        }
+        if (!present) continue  // absent hand — nothing to judge
+
+        var minX = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE
+        var minY = Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
+        for (j in 0..20) {
+            val x = features[base + j * 3]
+            val y = features[base + j * 3 + 1]
+            if (x < minX) minX = x
+            if (x > maxX) maxX = x
+            if (y < minY) minY = y
+            if (y > maxY) maxY = y
+        }
+        if (maxX - minX > MAX_HAND_EXTENT || maxY - minY > MAX_HAND_EXTENT) return false
+    }
+    return true
+}
+
 // Normalize one hand's 63-float block in place: wrist-center (landmark 0) + scale
 // by the 2D wrist→landmark-9 distance. Must match sigla-ml normalize_frame exactly.
 // File-level (not class) so plain JUnit parity tests can call it without a Context.

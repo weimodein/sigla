@@ -10,6 +10,8 @@ from mediapipe.tasks.python import vision
 from app.utils.preprocessor import (
     center_on_peak_velocity,
     frame_velocity,
+    hand_extent_ok,
+    normalize_frame,
     normalize_sequence,
     FEATURE_SIZE,
     SEQUENCE_LENGTH,
@@ -350,6 +352,10 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
         analyzed_frames = 0
         detected_hand_frames = 0
         detected_pose_frames = 0
+        # Frames dropped for an implausibly large normalized hand — a collapsed
+        # MediaPipe detection. Counted so the log can say why a clip came up
+        # short rather than leaving it looking like plain poor framing.
+        corrupt_frames = 0
         # Longest run of consecutive analyzed frames with no detected hand, counted
         # only once the sequence has started (leading hand-less frames are not a gap).
         current_gap = 0
@@ -376,7 +382,35 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
                     )
                     if pose_landmarks is not None:
                         detected_pose_frames += 1
-                    sequence.append(_build_feature_vector(result.hand_landmarks, pose_landmarks))
+
+                    frame_vec = _build_feature_vector(result.hand_landmarks, pose_landmarks)
+
+                    # Drop a frame whose hand is implausibly large once
+                    # normalized — a collapsed MediaPipe detection scaled ~100x
+                    # by a near-zero wrist→MCP9 divisor. The output is correctly
+                    # normalized garbage, so no later gate sees it: it passes the
+                    # motion and pose checks and trains as if it were signal.
+                    #
+                    # Dropped exactly like a hands-less frame rather than
+                    # rejecting the clip, so the coverage and consecutive-gap
+                    # gates below decide: a clip with two bad frames quietly
+                    # loses them, one that is mostly bad fails coverage. That
+                    # reuses thresholds already tuned instead of inventing a
+                    # second policy.
+                    if not hand_extent_ok(normalize_frame(np.asarray(frame_vec, dtype=np.float32))):
+                        corrupt_frames += 1
+                        # Undo the increments above. A dropped frame must not
+                        # count as one where a hand was visible, or a clip that
+                        # is mostly corrupted still clears MIN_HAND_COVERAGE and
+                        # the gate never fires on the case it now exists for.
+                        detected_hand_frames -= 1
+                        if pose_landmarks is not None:
+                            detected_pose_frames -= 1
+                        if sequence:
+                            current_gap += 1
+                        continue
+
+                    sequence.append(frame_vec)
                     if current_gap > max_consecutive_gap:
                         max_consecutive_gap = current_gap
                     current_gap = 0
@@ -405,10 +439,19 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
 
         hand_coverage = detected_hand_frames / max(analyzed_frames, 1)
         if hand_coverage < MIN_HAND_COVERAGE:
+            # Say so when corruption is what ate the coverage. Otherwise this
+            # reads as "keep your hands in frame" to a signer who did exactly
+            # that, and the real cause — a detection the tracker mangled — is
+            # invisible.
+            corrupt_note = (
+                f" {corrupt_frames} frame(s) were dropped for an implausible hand "
+                "shape, which is a tracking failure rather than framing."
+                if corrupt_frames else ""
+            )
             raise ExtractionQualityError(
                 f"A hand was visible in only {hand_coverage:.0%} of analyzed frames; "
                 f"at least {MIN_HAND_COVERAGE:.0%} is required. Keep the signing "
-                "hand(s) inside the frame for the whole clip."
+                f"hand(s) inside the frame for the whole clip.{corrupt_note}"
             )
 
         pose_coverage = detected_pose_frames / max(detected_hand_frames, 1)

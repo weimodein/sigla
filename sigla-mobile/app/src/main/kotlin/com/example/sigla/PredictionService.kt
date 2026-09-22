@@ -747,6 +747,14 @@ class PredictionService(private val context: Context) {
     fun processFrame(features: FloatArray, handsDetected: Int) {
         if (!isReady) return
 
+        // A hand scaled ~100x by a collapsed MediaPipe detection is correctly
+        // normalized garbage: it passes hasSufficientPoseCoverage and
+        // hasSufficientMotion and reaches the LSTM as though it were signal.
+        // Offline extraction now drops these frames, so the model is not trained
+        // on them; treating one as hands-less here is the live equivalent, and
+        // keeps the two pipelines seeing the same thing.
+        val usable = if (handsDetected > 0 && !handExtentOk(features)) 0 else handsDetected
+
         var notifyNoHands  = false
         var collectingState: CollectingState? = null
         var pending: PendingFire? = null
@@ -772,7 +780,9 @@ class PredictionService(private val context: Context) {
             }
 
             // No hands — count towards a timeout, then notify + reset.
-            if (handsDetected == 0) {
+            // `usable`, not handsDetected: a frame rejected for an implausible
+            // hand extent is not a frame with a hand in it.
+            if (usable == 0) {
                 noHandFrames++
                 if (noHandFrames >= NO_HAND_TIMEOUT && (collecting || frameBuffer.isNotEmpty())) {
                     // Flush: a FAST sign may have ended before the sliding window fired.
