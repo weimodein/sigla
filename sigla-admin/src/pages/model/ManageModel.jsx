@@ -496,9 +496,16 @@ const ManageModel = () => {
 
   // ── Delete ────────────────────────────────────────────────
   const handleDelete = async (model) => {
+    // Say that BOTH halves go. The backend deletes a version's words model and
+    // its alphabet together — they are trained and deployed as a pair — and this
+    // is irreversible, so a prompt naming only one of them understates it.
+    const alsoLetters =
+      model.letters && model.letters.status !== "deployed"
+        ? " Its alphabet model will be deleted too."
+        : "";
     if (
       !window.confirm(
-        `Delete model ${model.version_number}? This cannot be undone.`,
+        `Delete model ${model.version_number}?${alsoLetters} This cannot be undone.`,
       )
     )
       return;
@@ -1327,9 +1334,26 @@ const ManageModel = () => {
               {Array.isArray(deployModal.trained_word_ids) ? (
                 <>
                   The mobile word bank will match this version:{" "}
-                  <strong>{deployModal.trained_word_ids.length}</strong> word
-                  {deployModal.trained_word_ids.length !== 1 ? "s" : ""} visible.
-                  Words this version was not trained on become hidden.
+                  <strong>
+                    {deployModal.trained_word_ids.length +
+                      (Array.isArray(deployModal.letters?.trained_word_ids)
+                        ? deployModal.letters.trained_word_ids.length
+                        : 0)}
+                  </strong>{" "}
+                  entries visible
+                  {/* The alphabet deploys with this model, and the word bank is
+                      the UNION of both — so counting only this row's list
+                      understated what deploy is about to do. */}
+                  {Array.isArray(deployModal.letters?.trained_word_ids) && (
+                    <>
+                      {" "}
+                      ({deployModal.trained_word_ids.length} word
+                      {deployModal.trained_word_ids.length !== 1 ? "s" : ""} +{" "}
+                      {deployModal.letters.trained_word_ids.length} letter
+                      {deployModal.letters.trained_word_ids.length !== 1 ? "s" : ""})
+                    </>
+                  )}
+                  . Words this version was not trained on become hidden.
                 </>
               ) : (
                 <>
@@ -1365,6 +1389,13 @@ const ManageModel = () => {
               This will revert the active model back to{" "}
               <strong>{revertModal.version_number}</strong>. The current
               deployed model will become inactive.
+              {/* Reverting brings this version's alphabet back too. Saying so
+                  matters: the letters model changes under the user's feet
+                  otherwise, and a version's two halves are only ever deployed
+                  as a pair. */}
+              {revertModal.letters && (
+                <> Its alphabet model reverts with it.</>
+              )}
             </p>
           </div>
         </AppModal>
