@@ -158,8 +158,13 @@ const Dashboard = () => {
   // returns created_at DESC, so listing it as-is read backwards in time under a
   // "by version" heading. Slicing before the sort keeps this the 8 most RECENT
   // versions rather than the 8 oldest.
+  // Words models only. A run also produces an alphabet model sharing the version
+  // number, so an unfiltered list showed two "v1.7.0" bars — both flagged
+  // deployed, indistinguishable — and the 8-item slice was half spent on
+  // duplicates. The alphabet's accuracy is not comparable anyway (98% over 5
+  // letters against 81% over 50 words); Manage Model shows it per version.
   const modelsWithAccuracy = (allModels || [])
-    .filter((m) => m.accuracy != null)
+    .filter((m) => m.accuracy != null && m.model_kind !== "letters")
     .slice(0, 8)
     .sort(
       (a, b) =>

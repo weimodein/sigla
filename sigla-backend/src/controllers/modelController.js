@@ -265,14 +265,23 @@ const getAllModels = async (req, res) => {
 // Get model statistics for dashboard
 const getModelStats = async (req, res) => {
   try {
+    // Counted per VERSION, not per row. A training run writes two rows — the
+    // words model and the alphabet — under one version number, so raw row
+    // counts told the admin there were 10 versions when 9 had been trained, and
+    // that 2 models were deployed when one pair was. The pair is one thing to
+    // deploy, revert and delete, so it is one thing to count.
+    //
+    // Scoped to the words row rather than counting DISTINCT version_number: an
+    // alphabet row only exists alongside a words row, and a version whose words
+    // half failed should not be reported as trained just because its alphabet
+    // succeeded.
     const [total, deployed, trained] = await Promise.all([
-      ModelVersion.count(),
-      ModelVersion.count({ where: { status: "deployed" } }),
-      ModelVersion.count({ where: { status: "trained" } }),
+      ModelVersion.count({ where: { model_kind: "words" } }),
+      ModelVersion.count({ where: { status: "deployed", model_kind: "words" } }),
+      ModelVersion.count({ where: { status: "trained", model_kind: "words" } }),
     ]);
 
-    // `deployed` may now be 2 — one words model and one alphabet model. The
-    // dashboard's "current model" stays the WORDS one rather than whichever was
+    // The dashboard's "current model" is the WORDS one rather than whichever was
     // deployed most recently, which would otherwise flip to the alphabet the
     // moment it was deployed and report its much smaller class count as the
     // system's. The letters model is reported separately.
@@ -601,7 +610,9 @@ const trainModel = async (req, res) => {
       action: "trained_model",
       target_type: "model",
       target_id: modelRecord.id,
-      details: `Started training model version ${version_number}`,
+      details:
+        `Started training model version ${version_number}` +
+        (lettersRecord ? " (words + alphabet)" : " (words only — no letters recorded)"),
     });
 
     // ── Background training job ───────────────────────────────

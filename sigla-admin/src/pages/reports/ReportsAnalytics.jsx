@@ -303,22 +303,37 @@ const ReportsAnalytics = () => {
   //   • Sorted oldest→newest. getAllModels returns created_at DESC and nothing
   //     re-sorted it, so a chart titled "per Version" ran backwards in time and a
   //     rising accuracy trend read as a regression.
-  const modelAccuracyData = useMemo(
-    () =>
+  //   • One point per VERSION, not per row. A run produces a words model and an
+  //     alphabet model sharing a version number, so plotting every row put two
+  //     points at the same x — 81% and 98% for 1.7.0 — and the line jumped
+  //     between them as though accuracy had swung. The words model carries the
+  //     line because it is the system's headline number; the alphabet rides
+  //     along as a separate series.
+  const modelAccuracyData = useMemo(() => {
+    const letters = new Map(
       models
-        .filter((m) => m.accuracy != null)
-        .slice()
-        .sort(
-          (a, b) =>
-            new Date(a.trained_at || a.created_at || 0) -
-            new Date(b.trained_at || b.created_at || 0),
-        )
-        .map((m) => ({
+        .filter((m) => m.model_kind === "letters" && m.accuracy != null)
+        .map((m) => [m.version_number, m.accuracy]),
+    );
+    return models
+      .filter((m) => m.model_kind !== "letters" && m.accuracy != null)
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.trained_at || a.created_at || 0) -
+          new Date(b.trained_at || b.created_at || 0),
+      )
+      .map((m) => {
+        const l = letters.get(m.version_number);
+        return {
           name: m.version_number,
           accuracy: parseFloat((m.accuracy * 100).toFixed(1)),
-        })),
-    [models]
-  );
+          ...(l != null
+            ? { alphabet: parseFloat((l * 100).toFixed(1)) }
+            : {}),
+        };
+      });
+  }, [models]);
 
   // Sample counts are cumulative per word, not per-period, so this intentionally
   // uses the full list rather than wordsInRange — restricting it to a date window
@@ -340,13 +355,31 @@ const ReportsAnalytics = () => {
     [words]
   );
 
-  // Current model accuracy = the deployed model's accuracy (fallback: best model)
+  // Current model accuracy = the deployed WORDS model's accuracy.
+  //
+  // Scoped to the words model deliberately. A training run now also produces an
+  // alphabet model, which is deployed alongside it and scores far higher over
+  // far fewer classes (98% over 5 letters against 81% over 50 words). An
+  // unscoped find() returns whichever row came back first, and the accuracy
+  // fallback sorts by value — so both would happily report the alphabet's 98%
+  // as the system's accuracy.
   const currentModelAccuracy = useMemo(() => {
-    if (!models.length) return "—";
-    const deployed = models.find((m) => m.status === "deployed");
-    const best = [...models].sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0))[0];
+    const wordModels = models.filter((m) => m.model_kind !== "letters");
+    if (!wordModels.length) return "—";
+    const deployed = wordModels.find((m) => m.status === "deployed");
+    const best = [...wordModels].sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0))[0];
     const m = deployed || best;
     return m?.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : "—";
+  }, [models]);
+
+  // The alphabet's accuracy, reported separately rather than mixed in — the two
+  // are not comparable, and averaging or replacing one with the other hides
+  // whichever is worse.
+  const currentLettersAccuracy = useMemo(() => {
+    const m = models.find(
+      (x) => x.model_kind === "letters" && x.status === "deployed",
+    );
+    return m?.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : null;
   }, [models]);
 
   const toggleSection = (key) =>
@@ -439,13 +472,27 @@ const ReportsAnalytics = () => {
       if (reportSections.model_accuracy) {
         addSectionTitle("Model Accuracy per Version");
         autoTable(doc, {
+          // One row per VERSION. A run produces a words model and an alphabet
+          // model under the same number, so listing rows put two identical
+          // "1.7.0" lines in the report with nothing to tell them apart. The
+          // alphabet gets its own column instead.
           startY: y,
-          head: [["Version", "Accuracy", "Status"]],
-          body: models.map((m) => [
-            m.version_number,
-            m.accuracy ? `${(m.accuracy * 100).toFixed(1)}%` : "N/A",
-            m.status === "deployed" ? "Deployed" : (m.status || "—"),
-          ]),
+          head: [["Version", "Accuracy", "Alphabet", "Status"]],
+          body: models
+            .filter((m) => m.model_kind !== "letters")
+            .map((m) => {
+              const l = models.find(
+                (x) =>
+                  x.model_kind === "letters" &&
+                  x.version_number === m.version_number,
+              );
+              return [
+                m.version_number,
+                m.accuracy ? `${(m.accuracy * 100).toFixed(1)}%` : "N/A",
+                l?.accuracy ? `${(l.accuracy * 100).toFixed(1)}%` : "—",
+                m.status === "deployed" ? "Deployed" : (m.status || "—"),
+              ];
+            }),
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
