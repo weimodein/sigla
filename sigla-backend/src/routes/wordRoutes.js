@@ -51,14 +51,33 @@ const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize
 // or when nothing is deployed at all, so existing data behaves exactly as before.
 router.get("/word-bank", async (req, res) => {
   try {
-    const deployed = await ModelVersion.findOne({
+    // Every deployed model, not just one: the words model and the alphabet
+    // model are deployed side by side, and a findOne here would pick whichever
+    // the database returned first and show the word bank as only that model's
+    // vocabulary — with the alphabet winning, a five-entry word bank.
+    const deployedAll = await ModelVersion.findAll({
       where: { status: "deployed" },
-      attributes: ["id", "version_number", "trained_word_ids"],
+      attributes: ["id", "version_number", "trained_word_ids", "model_kind"],
+      order: [["deployed_at", "DESC"]],
     });
 
-    const trainedIds = Array.isArray(deployed?.trained_word_ids)
-      ? deployed.trained_word_ids
+    // The browsable word bank is the union of what the phone can actually
+    // recognise across both models.
+    const trainedIds = deployedAll.some((m) => Array.isArray(m.trained_word_ids))
+      ? [
+          ...new Set(
+            deployedAll.flatMap((m) =>
+              Array.isArray(m.trained_word_ids) ? m.trained_word_ids : [],
+            ),
+          ),
+        ]
       : null;
+
+    // The words model names the version, since that is what the pre-split
+    // response meant and what a client comparing versions expects to move when
+    // the main vocabulary changes.
+    const deployed =
+      deployedAll.find((m) => m.model_kind === "words") || deployedAll[0] || null;
 
     const where = trainedIds
       ? { id: { [Op.in]: trainedIds } }

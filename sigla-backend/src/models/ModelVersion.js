@@ -43,6 +43,22 @@ const ModelVersion = sequelize.define(
       type: DataTypes.JSONB,
       allowNull: true,
     },
+    // Which vocabulary this version covers. One version of each kind may be
+    // deployed at a time, so the phone can run the words model and the alphabet
+    // model side by side and switch between them — see migration 005 for why
+    // the two cannot share a class list.
+    //
+    // Requires a manual migration:
+    //   ALTER TABLE model_versions ADD COLUMN model_kind TEXT NOT NULL
+    //     DEFAULT 'words';
+    model_kind: {
+      type: DataTypes.STRING(16),
+      allowNull: false,
+      defaultValue: "words",
+      validate: {
+        isIn: [["words", "letters"]],
+      },
+    },
     trained_by: {
       type: DataTypes.INTEGER,
       allowNull: true,

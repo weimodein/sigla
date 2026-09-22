@@ -63,6 +63,69 @@ async function getTrainedWordIds() {
   return [...new Set(trainedSamples.map((s) => s.word_id))];
 }
 
+// ── Which words belong to a model kind ───────────────────────
+// A letters model covers the fingerspelling alphabet, a words model covers
+// everything else. The split is by LABEL rather than by category: categories are
+// admin-editable free text (the imported letters landed in "additional words"
+// rather than a category of their own), so keying the vocabularies to them would
+// let an admin silently move a word between models by renaming its category.
+// A single A-Z character is unambiguous and cannot drift.
+const LETTER_LABEL = /^[A-Z]$/;
+
+function isLetterLabel(label) {
+  return typeof label === "string" && LETTER_LABEL.test(label.trim());
+}
+
+// Word ids for a list of labels, as reported by the ML service after training.
+// A label with no matching row is dropped with a warning rather than failing the
+// run: training has already succeeded and the model file exists, so refusing to
+// record the version here would lose it entirely.
+async function wordIdsForLabels(labels) {
+  const rows = await Word.findAll({
+    attributes: ["id", "label"],
+    where: { label: { [Op.in]: labels } },
+  });
+  const byLabel = new Map(rows.map((w) => [w.label, w.id]));
+  const missing = labels.filter((l) => !byLabel.has(l));
+  if (missing.length > 0) {
+    console.warn(
+      `[trainModel] ${missing.length} trained label(s) have no Word row and are ` +
+        `absent from trained_word_ids: ${missing.join(", ")}`,
+    );
+  }
+  return labels.map((l) => byLabel.get(l)).filter((id) => id !== undefined);
+}
+
+// Training-eligible labels belonging to one kind, for the ML service's
+// word_labels. Mirrors the eligibility rule in getTrainedWordIds — a word with
+// no usable samples is not a class and must not be requested, or training warns
+// about a label it cannot find.
+async function labelsForKind(kind) {
+  const words = await Word.findAll({
+    attributes: ["label"],
+    where: { [Op.or]: [{ status: "approved" }, { is_active: true }] },
+  });
+  return words
+    .map((w) => w.label)
+    .filter((label) => (kind === "letters" ? isLetterLabel(label) : !isLetterLabel(label)));
+}
+
+// Sequelize `where` fragment restricting Word to one kind's vocabulary.
+// Returned as a fragment rather than an id list so callers can spread it into a
+// larger where clause without a second query.
+async function wordIdScopeForKind(kind) {
+  const words = await Word.findAll({ attributes: ["id", "label"] });
+  const ids = words.filter((w) => isLetterLabel(w.label)).map((w) => w.id);
+
+  if (kind === "letters") {
+    return { id: { [Op.in]: ids } };
+  }
+  // A words model owns everything that is not a letter. With no letters
+  // recorded yet this is an empty NOT IN, which Postgres treats as "all rows" —
+  // exactly the pre-split behaviour.
+  return ids.length > 0 ? { id: { [Op.notIn]: ids } } : {};
+}
+
 // ── Make Word.is_active match the deployed version ───────────
 // is_active was a one-way latch: deploy set it true and nothing ever set it
 // back, so every word ever deployed stayed visible and a revert never shrank the
@@ -83,10 +146,34 @@ async function reconcileActiveWords(model) {
     return;
   }
 
+  // Each kind owns only its own slice of is_active.
+  //
+  // This used to deactivate every word outside the deploying model's class
+  // list, which was right while one model covered the whole vocabulary. With a
+  // words model and a letters model deployed together it becomes a fight:
+  // deploying letters would deactivate all 50 words and deploying words would
+  // deactivate all 26 letters, each one hiding the other's vocabulary from the
+  // phone. Scoping the deactivation to the kind being deployed keeps a revert
+  // shrinking the right word bank without touching the other.
+  const kindScope = await wordIdScopeForKind(model.model_kind);
+
+  // Both clauses below constrain `id`, and so does kindScope. They are combined
+  // under Op.and rather than spread into one object: two `id` keys in the same
+  // literal collide, and the later spread silently wins — which would drop the
+  // class-list filter entirely and reconcile against the kind alone.
   if (ids.length > 0) {
+    // Scoped by kind on the way IN as well, not just on the way out: a model
+    // whose class list disagrees with its kind (a bad train request, a manually
+    // edited row) would otherwise activate words belonging to the other model,
+    // which then has no way to deactivate them again.
     await Word.update(
       { is_active: true },
-      { where: { id: { [Op.in]: ids }, is_active: false } },
+      {
+        where: {
+          [Op.and]: [{ id: { [Op.in]: ids } }, kindScope],
+          is_active: false,
+        },
+      },
     );
   }
 
@@ -95,7 +182,10 @@ async function reconcileActiveWords(model) {
     {
       where: {
         is_active: true,
-        ...(ids.length > 0 ? { id: { [Op.notIn]: ids } } : {}),
+        [Op.and]: [
+          kindScope,
+          ...(ids.length > 0 ? [{ id: { [Op.notIn]: ids } }] : []),
+        ],
       },
     },
   );
@@ -120,6 +210,17 @@ async function syncModelFilesToDeployed(model) {
     { url: `${baseUrl}/labels_motion.json`, name: "labels_motion.json", required: true },
   ];
 
+  // A letters model deploys into its own folder. Both kinds previously wrote
+  // deployed/sign_model_motion.tflite, so deploying one would overwrite the
+  // other's bytes while leaving that other row's checksum pointing at what used
+  // to be there — the app would then correctly refuse the download and silently
+  // keep running whatever it had.
+  //
+  // 'words' keeps the original unprefixed path so already-installed apps, which
+  // ask for deployed/ by that exact name, are unaffected by this change.
+  const deployDir =
+    model.model_kind === "letters" ? "deployed/letters" : "deployed";
+
   for (const file of files) {
     if (!file.url || file.url === "null") {
       if (file.required) throw new Error(`Missing URL for required file: ${file.name}`);
@@ -132,9 +233,9 @@ async function syncModelFilesToDeployed(model) {
     const contentType =
       response.headers["content-type"] ||
       (file.name.endsWith(".tflite") ? "application/octet-stream" : "application/json");
-    await uploadToSupabase(`deployed/${file.name}`, buffer, contentType);
+    await uploadToSupabase(`${deployDir}/${file.name}`, buffer, contentType);
     console.log(
-      `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed/${file.name}`,
+      `Uploaded ${file.name} -> ${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${deployDir}/${file.name}`,
     );
 
     if (file.name === "sign_model_motion.tflite") {
@@ -171,16 +272,28 @@ const getModelStats = async (req, res) => {
       ModelVersion.count({ where: { status: "trained" } }),
     ]);
 
-    const deployedModel = await ModelVersion.findOne({
-      where: { status: "deployed" },
-      order: [["deployed_at", "DESC"]],
-    });
+    // `deployed` may now be 2 — one words model and one alphabet model. The
+    // dashboard's "current model" stays the WORDS one rather than whichever was
+    // deployed most recently, which would otherwise flip to the alphabet the
+    // moment it was deployed and report its much smaller class count as the
+    // system's. The letters model is reported separately.
+    const [deployedModel, deployedLetters] = await Promise.all([
+      ModelVersion.findOne({
+        where: { status: "deployed", model_kind: "words" },
+        order: [["deployed_at", "DESC"]],
+      }),
+      ModelVersion.findOne({
+        where: { status: "deployed", model_kind: "letters" },
+        order: [["deployed_at", "DESC"]],
+      }),
+    ]);
 
     return res.status(200).json({
       total,
       deployed,
       trained,
       current_model: deployedModel || null,
+      current_letters_model: deployedLetters || null,
     });
   } catch (err) {
     console.error("Get model stats error:", err);
@@ -192,7 +305,7 @@ const getModelStats = async (req, res) => {
 // Mobile app: get the latest deployed model info + all file URLs
 const getLatestModel = async (req, res) => {
   try {
-    const model = await ModelVersion.findOne({
+    const deployed = await ModelVersion.findAll({
       where: { status: "deployed" },
       attributes: [
         "id",
@@ -202,26 +315,46 @@ const getLatestModel = async (req, res) => {
         "deployed_at",
         "total_classes",
         "checksum",
+        "model_kind",
       ],
       order: [["deployed_at", "DESC"]],
     });
 
-    if (!model) {
-      return res.status(404).json({ message: "No deployed model found" });
-    }
-
-    // All file URLs point to the fixed deployed/ folder in Supabase
-    // so the mobile always fetches from a stable path regardless of version.
-    // Every model is a motion (LSTM) model.
-    const base = SUPABASE_URL
-      ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/deployed`
-      : null;
-
-    return res.status(200).json({
-      model: {
+    // All file URLs point to a fixed folder in Supabase so the mobile app always
+    // fetches from a stable path regardless of version. Every model is a motion
+    // (LSTM) model; `letters` deploys to a subfolder so the two kinds do not
+    // overwrite each other's bytes.
+    const withUrls = (model) => {
+      const dir = model.model_kind === "letters" ? "deployed/letters" : "deployed";
+      const base = SUPABASE_URL
+        ? `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET_MODELS}/${dir}`
+        : null;
+      return {
         ...model.toJSON(),
         tflite_url: base ? `${base}/sign_model_motion.tflite` : model.tflite_url,
         labels_motion_url: base ? `${base}/labels_motion.json` : null,
+      };
+    };
+
+    const words = deployed.find((m) => m.model_kind === "words") || null;
+    const letters = deployed.find((m) => m.model_kind === "letters") || null;
+
+    // `model` stays the WORDS model and keeps its exact former shape: installed
+    // apps read that key and know nothing about kinds, so moving or renaming it
+    // would break every phone in the field on the next update check. A 404 when
+    // no words model is deployed is likewise what those apps already expect.
+    if (!words) {
+      return res.status(404).json({ message: "No deployed model found" });
+    }
+
+    return res.status(200).json({
+      model: withUrls(words),
+      // New clients read this instead and pick up the alphabet when one is
+      // deployed. Absent letters, it carries only the words entry and the
+      // response is equivalent to the old one.
+      models: {
+        words: withUrls(words),
+        ...(letters ? { letters: withUrls(letters) } : {}),
       },
     });
   } catch (err) {
@@ -257,9 +390,16 @@ const getModelById = async (req, res) => {
 const trainModel = async (req, res) => {
   try {
     const { version_number, notes } = req.body;
+    const modelKind = (req.body.model_kind || "words").trim();
 
     if (!version_number) {
       return res.status(400).json({ message: "Version number is required" });
+    }
+
+    if (!["words", "letters"].includes(modelKind)) {
+      return res.status(400).json({
+        message: `model_kind must be "words" or "letters", got "${modelKind}"`,
+      });
     }
 
     // Only allow characters that are safe in Supabase storage paths
@@ -282,6 +422,7 @@ const trainModel = async (req, res) => {
       notes: notes || null,
       trained_by: req.user.id,
       status: "training",
+      model_kind: modelKind,
     });
 
     // Respond immediately — do NOT await training
@@ -301,9 +442,23 @@ const trainModel = async (req, res) => {
     // ── Background training job ───────────────────────────────
     (async () => {
       try {
+        // Both kinds send an explicit list. A words model must NOT fall back to
+        // "no list": that means every approved class, which would pull the
+        // alphabet back into the words model and undo the split. The one case
+        // that still sends nothing is a words model on a deployment with no
+        // letters recorded, where the list would be every class anyway — there
+        // the null keeps the request byte-identical to a pre-split one.
+        const wordLabels = await labelsForKind(modelKind);
+        const sendLabels =
+          modelKind === "letters" || (await labelsForKind("letters")).length > 0;
+
         const response = await axios.post(
           `${ML_SERVICE_URL}/train`,
-          { version_number, model_id: modelRecord.id },
+          {
+            version_number,
+            model_id: modelRecord.id,
+            ...(sendLabels ? { word_labels: wordLabels } : {}),
+          },
           {
             // TensorFlow training can exceed 20 minutes, especially now that the
             // deployment model is refit on the complete dataset. Axios interprets
@@ -319,7 +474,17 @@ const trainModel = async (req, res) => {
         // at deploy time would read a dataset that may have gained or lost
         // samples since, so a reverted model would advertise words it was never
         // trained on. This is the set labels_motion.json names.
-        const trainedWordIds = await getTrainedWordIds();
+        //
+        // Prefer the labels the ML service reports over re-deriving them here.
+        // getTrainedWordIds() answers "every training-eligible word", which is
+        // only the same thing for a model trained on everything — a
+        // subset-trained model would be credited with the whole vocabulary and
+        // would then hide or show words it never saw. The fallback keeps
+        // working against an ML service that predates trained_labels.
+        const trainedLabels = r.trained_labels;
+        const trainedWordIds = Array.isArray(trainedLabels)
+          ? await wordIdsForLabels(trainedLabels)
+          : await getTrainedWordIds();
 
         await modelRecord.update({
           status:            "trained",
@@ -483,10 +648,12 @@ const deployModel = async (req, res) => {
         });
       }
 
-      // Set all other deployed models to inactive, then deploy this one
+      // Retire the other deployed model OF THIS KIND, then deploy this one.
+      // Unscoped, deploying the alphabet would retire the words model and leave
+      // the phone with no vocabulary at all.
       await ModelVersion.update(
         { status: "inactive" },
-        { where: { status: "deployed" } },
+        { where: { status: "deployed", model_kind: model.model_kind } },
       );
       await model.update({ status: "deployed", deployed_at: new Date() });
     }
@@ -559,10 +726,11 @@ const revertModel = async (req, res) => {
     // whatever was last verified, so the "revert" never actually reaches the phone.
     await syncModelFilesToDeployed(model);
 
-    // Set all other deployed models to inactive
+    // Retire the other deployed model of this kind only — reverting the words
+    // model must not take the deployed alphabet down with it.
     await ModelVersion.update(
       { status: "inactive" },
-      { where: { status: "deployed" } },
+      { where: { status: "deployed", model_kind: model.model_kind } },
     );
 
     // Set selected model as deployed
