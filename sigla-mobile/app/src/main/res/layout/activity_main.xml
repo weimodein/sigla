@@ -380,46 +380,67 @@
 
                 </FrameLayout>
 
-                <!-- Filipino toggle. Lives here rather than inside cardResult: that card is
-                     invisible except for ~2s after each recognition, which made the toggle
-                     unreachable most of the time. -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnToggleFilipino"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                <!-- Toggle row. These live here rather than inside cardResult: that
+                     card is invisible except for ~2s after each recognition, which
+                     made the Filipino toggle unreachable most of the time.
+
+                     Side by side rather than stacked — two full-width-feeling
+                     buttons on their own lines pushed the camera view down for
+                     controls that are both short and rarely touched. -->
+                <LinearLayout
                     android:layout_width="wrap_content"
-                    android:layout_height="32dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
                     android:layout_gravity="start"
                     android:layout_marginTop="12dp"
-                    android:layout_marginBottom="4dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="Show Filipino"
-                    android:textColor="@color/sig_accent"
-                    android:textSize="11sp"
-                    android:fontFamily="@font/poppins_medium"
-                    app:strokeColor="@color/sig_accent"
-                    app:cornerRadius="16dp" />
+                    android:layout_marginBottom="4dp">
 
-                <!-- Words / letters vocabulary switch.
-                     Starts GONE and is only shown when an alphabet model is
-                     actually loaded, so a build or a backend without one looks
-                     exactly as it did before. -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnToggleVocabulary"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="32dp"
-                    android:layout_gravity="start"
-                    android:layout_marginBottom="4dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="Spell letters"
-                    android:textColor="@color/sig_accent"
-                    android:textSize="11sp"
-                    android:visibility="gone"
-                    android:fontFamily="@font/poppins_medium"
-                    app:strokeColor="@color/sig_accent"
-                    app:cornerRadius="16dp" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnToggleFilipino"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="30dp"
+                        android:minWidth="0dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:text="Filipino"
+                        android:textColor="@color/sig_accent"
+                        android:textSize="11sp"
+                        android:textAllCaps="false"
+                        android:letterSpacing="0"
+                        android:fontFamily="@font/poppins_medium"
+                        app:strokeColor="@color/sig_accent"
+                        app:strokeWidth="1dp"
+                        app:cornerRadius="15dp" />
+
+                    <!-- Words / letters switch. GONE until an alphabet model is
+                         actually loaded, so a build or a backend without one looks
+                         exactly as it did before. -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnToggleVocabulary"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="8dp"
+                        android:minWidth="0dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:text="Letters"
+                        android:textColor="@color/sig_accent"
+                        android:textSize="11sp"
+                        android:textAllCaps="false"
+                        android:letterSpacing="0"
+                        android:visibility="gone"
+                        android:fontFamily="@font/poppins_medium"
+                        app:strokeColor="@color/sig_accent"
+                        app:strokeWidth="1dp"
+                        app:cornerRadius="15dp" />
+
+                </LinearLayout>
 
                 <!-- Green detection loader -->
                 <TextView

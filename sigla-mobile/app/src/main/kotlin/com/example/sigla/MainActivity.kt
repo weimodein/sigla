@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Matrix
 import android.os.Bundle
 import android.os.SystemClock
@@ -30,6 +31,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.example.sigla.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -846,9 +848,11 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "Emergency alert played", Toast.LENGTH_LONG).show()
     }
 
+    // Both toggles in the row read as a STATE rather than an action, and are
+    // filled when on. Mixing the two — one saying what it will do, the other what
+    // it is — made the pair ambiguous once they sat side by side.
     private fun updateFilipinoToggleLabel() {
-        binding.btnToggleFilipino.text =
-            if (showFilipino) "Hide Filipino" else "Show Filipino"
+        applyToggleStyle(binding.btnToggleFilipino, showFilipino)
     }
 
     /**
@@ -867,12 +871,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
         binding.btnToggleVocabulary.visibility = View.VISIBLE
-        binding.btnToggleVocabulary.text =
-            if (predictor.currentVocabulary() == PredictionService.Vocabulary.LETTERS) {
-                "Sign words"
-            } else {
-                "Spell letters"
-            }
+        applyToggleStyle(
+            binding.btnToggleVocabulary,
+            predictor.currentVocabulary() == PredictionService.Vocabulary.LETTERS,
+        )
+    }
+
+    /**
+     * Fills a toggle when its mode is on, outlines it when off.
+     *
+     * The accent-on-transparent outline both states used to share said nothing
+     * about which one you were in — the only clue was reading the verb.
+     */
+    private fun applyToggleStyle(button: MaterialButton, on: Boolean) {
+        val accent = ContextCompat.getColor(this, R.color.sig_accent)
+        if (on) {
+            button.setBackgroundColor(accent)
+            button.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+        } else {
+            button.setBackgroundColor(Color.TRANSPARENT)
+            button.setTextColor(accent)
+        }
     }
 
     // Updated to use cached translations from backend
