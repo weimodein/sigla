@@ -37,6 +37,24 @@ const Word = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    // Which model this word is trained into: the main vocabulary, or the
+    // fingerspelling alphabet. The two are separate models because a letter and
+    // the day sign built from it differ only in motion.
+    //
+    // Explicit rather than inferred from the label. A ^[A-Z]$ rule fits the
+    // 26-letter English alphabet and breaks on FSL's Ñ and NG — "NG" is one
+    // letter but two characters, so it would have been trained as an ordinary
+    // word. It also means a misfiled word can be corrected without renaming it.
+    //
+    // Requires a manual migration (007).
+    vocabulary: {
+      type: DataTypes.STRING(16),
+      allowNull: false,
+      defaultValue: "words",
+      validate: {
+        isIn: [["words", "letters"]],
+      },
+    },
     status: {
       type: DataTypes.STRING(20),
       allowNull: false,

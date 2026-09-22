@@ -20,6 +20,8 @@ psql "$PG_URI" -f migrations/001_model_versions_trained_word_ids.sql
 | `003_upload_jobs.sql` | **not yet** | Clip upload becomes a tracked background job |
 | `004_gesture_samples_dedupe_guard.sql` | **not yet** | Reject duplicate and cross-labelled samples |
 | `005_model_versions_model_kind.sql` | yes — 2026-09-22 | Words and alphabet deploy as separate models |
+| `006_model_versions_version_unique_per_kind.sql` | yes — 2026-09-22 | One version names a words+letters pair |
+| `007_words_vocabulary.sql` | yes — 2026-09-22 | Word carries its model explicitly, not by label shape |
 
 `psql` is not always on PATH, and the database is Supabase-hosted. Two alternatives that
 need no extra tooling: paste the file into the **Supabase SQL Editor**, or run it through

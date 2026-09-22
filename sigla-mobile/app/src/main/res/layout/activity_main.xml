@@ -400,6 +400,27 @@
                     app:strokeColor="@color/sig_accent"
                     app:cornerRadius="16dp" />
 
+                <!-- Words / letters vocabulary switch.
+                     Starts GONE and is only shown when an alphabet model is
+                     actually loaded, so a build or a backend without one looks
+                     exactly as it did before. -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleVocabulary"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:layout_gravity="start"
+                    android:layout_marginBottom="4dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="Spell letters"
+                    android:textColor="@color/sig_accent"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    android:fontFamily="@font/poppins_medium"
+                    app:strokeColor="@color/sig_accent"
+                    app:cornerRadius="16dp" />
+
                 <!-- Green detection loader -->
                 <TextView
                     android:layout_width="wrap_content"

@@ -81,7 +81,23 @@ data class ModelInfo(
     val deployed_at: String? = null
 )
 
-data class ModelResponse(val model: ModelInfo)
+/**
+ * Every deployed model, keyed by vocabulary.
+ *
+ * `words` duplicates [ModelResponse.model]; both are sent so an app built
+ * before the alphabet existed keeps reading the single `model` field it knows,
+ * while this one carries the alphabet when a letters model is deployed. Null
+ * against a backend that predates the split.
+ */
+data class DeployedModels(
+    val words: ModelInfo? = null,
+    val letters: ModelInfo? = null,
+)
+
+data class ModelResponse(
+    val model: ModelInfo,
+    val models: DeployedModels? = null,
+)
 
 data class MeResponse(val user: UserResponse)
 

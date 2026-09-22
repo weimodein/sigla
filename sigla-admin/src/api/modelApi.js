@@ -24,6 +24,12 @@ export const getLatestModel = async () => {
   return response.data;
 };
 
+// One call trains BOTH models for this version: the words model and the
+// fingerspelling alphabet. They are separate models because a letter and the day
+// sign built from it differ only in motion — M and MONDAY separate at 1.06,
+// tighter than any day-to-day pair — so one class list carrying both would
+// confuse them; but they are trained together so the two cannot drift apart.
+// The response's `model` is the words row, which is what the caller polls.
 export const trainModel = withInvalidation(async (version_number, notes) => (await api.post("/models/train", { version_number, notes })).data, "model");
 
 export const getModelStatus = async (id) => {
@@ -31,6 +37,9 @@ export const getModelStatus = async (id) => {
   return response.data;
 };
 
+// No longer called from the UI — the Test button was removed, since a trained
+// model goes straight to Deploy. The endpoint still exists and works, so this
+// stays for a direct call or a future page rather than being deleted.
 export const testModel = withInvalidation(async (model_id) => (await api.post("/models/test", { model_id })).data, "model");
 
 export const deployModel = withInvalidation(async (model_id) => (await api.post("/models/deploy", { model_id })).data, "model");

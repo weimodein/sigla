@@ -115,6 +115,12 @@ def find_or_create_word(client: httpx.Client, label: str) -> int:
             "sign_type": "FSL",
             "category": CATEGORY,
             "description": f"FSL fingerspelling letter {label}",
+            # Marks the word as belonging to the alphabet model rather than the
+            # main vocabulary. Stated explicitly rather than left to the backend
+            # to infer from the label: FSL's NG is a single letter spelled with
+            # two characters, so no spelling rule can classify the alphabet
+            # correctly on its own.
+            "vocabulary": "letters",
         },
         timeout=30.0,
     )

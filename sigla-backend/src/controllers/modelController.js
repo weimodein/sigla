@@ -38,7 +38,12 @@ async function uploadToSupabase(storagePath, buffer, contentType) {
 // Called at TRAINING time and stored on the version row. It is deliberately not
 // re-derived at deploy time: the dataset can change between training and deploy,
 // and a reverted model must advertise the words it was trained on, not today's.
-async function getTrainedWordIds() {
+// `kind` restricts the result to one vocabulary. Without it this answers "every
+// training-eligible word", which is only right for a model trained on
+// everything — used as a letters model's class list it would claim the whole
+// word bank, and reconcileActiveWords would then activate words inside the
+// alphabet's slice. Omitted, it keeps the original whole-dataset behaviour.
+async function getTrainedWordIds(kind = null) {
   const trainedSamples = await GestureSample.findAll({
     attributes: ["word_id"],
     where: {
@@ -55,6 +60,7 @@ async function getTrainedWordIds() {
         required: true,
         where: {
           [Op.or]: [{ status: "approved" }, { is_active: true }],
+          ...(kind ? { vocabulary: kind } : {}),
         },
       },
     ],
@@ -65,16 +71,14 @@ async function getTrainedWordIds() {
 
 // ── Which words belong to a model kind ───────────────────────
 // A letters model covers the fingerspelling alphabet, a words model covers
-// everything else. The split is by LABEL rather than by category: categories are
-// admin-editable free text (the imported letters landed in "additional words"
-// rather than a category of their own), so keying the vocabularies to them would
-// let an admin silently move a word between models by renaming its category.
-// A single A-Z character is unambiguous and cannot drift.
-const LETTER_LABEL = /^[A-Z]$/;
-
-function isLetterLabel(label) {
-  return typeof label === "string" && LETTER_LABEL.test(label.trim());
-}
+// everything else, and Word.vocabulary says which — set when the word is
+// created rather than inferred from its label.
+//
+// This used to match ^[A-Z]$. That is correct for the 26-letter English
+// alphabet and wrong for FSL as it grows: the Filipino alphabet also has Ñ and
+// NG, and "NG" is a single letter spelled with two characters, so it would have
+// been trained as an ordinary word sitting right beside the vocabulary it is
+// meant to be held apart from.
 
 // Word ids for a list of labels, as reported by the ML service after training.
 // A label with no matching row is dropped with a warning rather than failing the
@@ -103,27 +107,22 @@ async function wordIdsForLabels(labels) {
 async function labelsForKind(kind) {
   const words = await Word.findAll({
     attributes: ["label"],
-    where: { [Op.or]: [{ status: "approved" }, { is_active: true }] },
+    where: {
+      vocabulary: kind,
+      [Op.or]: [{ status: "approved" }, { is_active: true }],
+    },
   });
-  return words
-    .map((w) => w.label)
-    .filter((label) => (kind === "letters" ? isLetterLabel(label) : !isLetterLabel(label)));
+  return words.map((w) => w.label);
 }
 
 // Sequelize `where` fragment restricting Word to one kind's vocabulary.
 // Returned as a fragment rather than an id list so callers can spread it into a
 // larger where clause without a second query.
 async function wordIdScopeForKind(kind) {
-  const words = await Word.findAll({ attributes: ["id", "label"] });
-  const ids = words.filter((w) => isLetterLabel(w.label)).map((w) => w.id);
-
-  if (kind === "letters") {
-    return { id: { [Op.in]: ids } };
-  }
-  // A words model owns everything that is not a letter. With no letters
-  // recorded yet this is an empty NOT IN, which Postgres treats as "all rows" —
-  // exactly the pre-split behaviour.
-  return ids.length > 0 ? { id: { [Op.notIn]: ids } } : {};
+  // Reads the column directly rather than fetching every row to classify it.
+  // With no letters recorded this matches nothing for 'letters' and every row
+  // for 'words' — exactly the pre-split behaviour.
+  return { vocabulary: kind };
 }
 
 // ── Make Word.is_active match the deployed version ───────────
@@ -383,6 +382,148 @@ const getModelById = async (req, res) => {
   }
 };
 
+// Trains ONE model row and records the outcome on it.
+//
+// Extracted so the words model and the alphabet can run through identical
+// logic in one request. Never throws: a failure is written to the row as
+// status "failed" plus training_error, so one kind failing cannot abort the
+// other or leave the caller's background task rejecting unhandled.
+async function runTraining(record, version_number, kind) {
+  try {
+    // Both kinds send an explicit list. A words model must NOT fall back to
+    // "no list": that means every approved class, which would pull the
+    // alphabet back into the words model and undo the split. The one case
+    // that still sends nothing is a words model on a deployment with no
+    // letters recorded, where the list would be every class anyway — there
+    // the null keeps the request byte-identical to a pre-split one.
+    const wordLabels = await labelsForKind(kind);
+    const sendLabels =
+      kind === "letters" || (await labelsForKind("letters")).length > 0;
+
+    const response = await axios.post(
+      `${ML_SERVICE_URL}/train`,
+      {
+        // See mlVersionName: the ML service keys its storage directory off
+        // this, so the alphabet needs a name of its own.
+        version_number: mlVersionName(version_number, kind),
+        model_id: record.id,
+        ...(sendLabels ? { word_labels: wordLabels } : {}),
+      },
+      {
+        // TensorFlow training can exceed 20 minutes, especially now that the
+        // deployment model is refit on the complete dataset. Axios interprets
+        // zero as no client-side timeout; the job remains tracked through the
+        // model row and the admin continues polling its status.
+        timeout: 0,
+        headers: { "ngrok-skip-browser-warning": "1" },
+      },
+    );
+    const r = response.data;
+
+    // Capture the class list NOW, while it is still true. Deriving it later
+    // at deploy time would read a dataset that may have gained or lost
+    // samples since, so a reverted model would advertise words it was never
+    // trained on. This is the set labels_motion.json names.
+    //
+    // Prefer the labels the ML service reports over re-deriving them here.
+    // getTrainedWordIds() answers "every training-eligible word", which is
+    // only the same thing for a model trained on everything — a
+    // subset-trained model would be credited with the whole vocabulary and
+    // would then hide or show words it never saw. The fallback keeps
+    // working against an ML service that predates trained_labels.
+    const trainedLabels = r.trained_labels;
+    const trainedWordIds = Array.isArray(trainedLabels)
+      ? await wordIdsForLabels(trainedLabels)
+      : await getTrainedWordIds(record.model_kind);
+
+    await record.update({
+      status:            "trained",
+      accuracy:          r.accuracy           || null,
+      total_classes:     r.total_classes       || null,
+      tflite_url:        r.tflite_url          || null,
+      h5_url:            r.h5_url              || null,
+      trained_at:        new Date(),
+      training_error:    null,
+      trained_word_ids:  trainedWordIds,
+    });
+    console.log(`[trainModel] version ${version_number} (${kind}) training complete`);
+    return true;
+  } catch (mlErr) {
+    const detail =
+      mlErr.response?.data?.detail ||
+      mlErr.response?.data?.message ||
+      mlErr.message ||
+      "Unknown training error";
+    console.error(`[trainModel] background training failed (${kind}): ${detail}`);
+    await record
+      .update({ status: "failed", training_error: detail })
+      .catch(() => {});
+    return false;
+  }
+}
+
+// The name the ML service stores a version's artifacts under.
+//
+// Both kinds of a version share a version_number in the database, but the ML
+// service keys its storage directory off this string — so the alphabet needs a
+// distinct one or it would overwrite the words model's .tflite and labels, and
+// a later deploy would read whichever landed last.
+//
+// Every call into the ML service must use this, not model.version_number:
+// train writes to it and deploy reads from it, so the two disagreeing means the
+// deploy silently fetches the wrong model's files.
+function mlVersionName(versionNumber, kind) {
+  return kind === "letters" ? `${versionNumber}-letters` : versionNumber;
+}
+
+// ── Bring the other half of a version live alongside it ───────
+//
+// A version is a PAIR: the words model and the alphabet trained in the same
+// run. Activating only the one the admin clicked would leave the phone with a
+// words model from this version and an alphabet from whatever was live before
+// — the drift that training them together exists to prevent. Used by BOTH
+// deploy and revert, since reverting has exactly the same hazard in reverse.
+//
+// Non-fatal by design: the clicked model is already live and serving by the
+// time this runs, so a companion that never trained, or fails to sync, must not
+// turn a successful deploy into an error. Returns a note for the response, or
+// "" when there was nothing to do.
+async function deployCompanion(model) {
+  try {
+    const companion = await ModelVersion.findOne({
+      where: {
+        version_number: model.version_number,
+        model_kind: model.model_kind === "letters" ? "words" : "letters",
+        status: { [Op.ne]: "deployed" },
+      },
+    });
+    if (!companion || !companion.tflite_url) return "";
+
+    await syncModelFilesToDeployed(companion);
+    await ModelVersion.update(
+      { status: "inactive" },
+      { where: { status: "deployed", model_kind: companion.model_kind } },
+    );
+    await companion.update({ status: "deployed", deployed_at: new Date() });
+    if (!Array.isArray(companion.trained_word_ids)) {
+      await companion.update({
+        trained_word_ids: await getTrainedWordIds(companion.model_kind),
+      });
+    }
+    await reconcileActiveWords(companion);
+    console.log(
+      `[models] also activated ${companion.model_kind} model for ${model.version_number}`,
+    );
+    return ` (with its ${companion.model_kind} model)`;
+  } catch (companionErr) {
+    console.error(
+      "Companion model activation failed (non-fatal):",
+      companionErr.message,
+    );
+    return "";
+  }
+}
+
 // ── POST /api/models/train ────────────────────────────────────
 // Admin triggers model training via FastAPI ML microservice.
 // Returns 202 immediately so Render's 30-second proxy timeout is never hit.
@@ -390,16 +531,9 @@ const getModelById = async (req, res) => {
 const trainModel = async (req, res) => {
   try {
     const { version_number, notes } = req.body;
-    const modelKind = (req.body.model_kind || "words").trim();
 
     if (!version_number) {
       return res.status(400).json({ message: "Version number is required" });
-    }
-
-    if (!["words", "letters"].includes(modelKind)) {
-      return res.status(400).json({
-        message: `model_kind must be "words" or "letters", got "${modelKind}"`,
-      });
     }
 
     // Only allow characters that are safe in Supabase storage paths
@@ -410,8 +544,14 @@ const trainModel = async (req, res) => {
       });
     }
 
-    // Check if version number already exists
-    const existing = await ModelVersion.findOne({ where: { version_number } });
+    // Check if version number already exists.
+    //
+    // A version now names a PAIR of rows (words + letters), so this checks the
+    // words row specifically rather than any row with the number: the letters
+    // row legitimately shares it.
+    const existing = await ModelVersion.findOne({
+      where: { version_number, model_kind: "words" },
+    });
     if (existing) {
       return res.status(409).json({ message: "Version number already exists" });
     }
@@ -422,13 +562,38 @@ const trainModel = async (req, res) => {
       notes: notes || null,
       trained_by: req.user.id,
       status: "training",
-      model_kind: modelKind,
+      model_kind: "words",
     });
+
+    // The alphabet is trained in the SAME run, as a second row under the same
+    // version. Training them separately let the two drift — a words model from
+    // today against a letters model from last week, with nothing saying they
+    // disagreed — and made the alphabet easy to forget entirely.
+    //
+    // Only when there are letters to train on. On a deployment with none, this
+    // run produces exactly what it did before the split: one words model.
+    const letterLabels = await labelsForKind("letters");
+    const lettersRecord = letterLabels.length > 0
+      ? await ModelVersion.create({
+          version_number,
+          notes: notes || null,
+          trained_by: req.user.id,
+          status: "training",
+          model_kind: "letters",
+        })
+      : null;
 
     // Respond immediately — do NOT await training
     res.status(202).json({
       message: "Training started. Poll /api/models/:id/status for progress.",
+      // The words row. Stays the top-level `model` because that is what the
+      // caller polls and what every pre-split client reads.
       model: modelRecord,
+      // The alphabet trained in the same run, or null when there are no letters
+      // to train. Returned so the caller can poll it too and report a partial
+      // outcome — a failed alphabet is otherwise invisible until someone
+      // notices a "failed" row in the table.
+      letters_model: lettersRecord,
     });
 
     await logActivity({
@@ -441,72 +606,21 @@ const trainModel = async (req, res) => {
 
     // ── Background training job ───────────────────────────────
     (async () => {
-      try {
-        // Both kinds send an explicit list. A words model must NOT fall back to
-        // "no list": that means every approved class, which would pull the
-        // alphabet back into the words model and undo the split. The one case
-        // that still sends nothing is a words model on a deployment with no
-        // letters recorded, where the list would be every class anyway — there
-        // the null keeps the request byte-identical to a pre-split one.
-        const wordLabels = await labelsForKind(modelKind);
-        const sendLabels =
-          modelKind === "letters" || (await labelsForKind("letters")).length > 0;
+      // Words first, then the alphabet.
+      //
+      // The order is not arbitrary. The words model is the expensive one (50
+      // classes over ~1800 samples, tens of minutes) and the alphabet is small,
+      // so running words first means a letters failure cannot waste it — the
+      // words model is already recorded as trained and deployable by the time
+      // the alphabet starts.
+      await runTraining(modelRecord, version_number, "words");
 
-        const response = await axios.post(
-          `${ML_SERVICE_URL}/train`,
-          {
-            version_number,
-            model_id: modelRecord.id,
-            ...(sendLabels ? { word_labels: wordLabels } : {}),
-          },
-          {
-            // TensorFlow training can exceed 20 minutes, especially now that the
-            // deployment model is refit on the complete dataset. Axios interprets
-            // zero as no client-side timeout; the job remains tracked through the
-            // model row and the admin continues polling its status.
-            timeout: 0,
-            headers: { "ngrok-skip-browser-warning": "1" },
-          },
-        );
-        const r = response.data;
-
-        // Capture the class list NOW, while it is still true. Deriving it later
-        // at deploy time would read a dataset that may have gained or lost
-        // samples since, so a reverted model would advertise words it was never
-        // trained on. This is the set labels_motion.json names.
-        //
-        // Prefer the labels the ML service reports over re-deriving them here.
-        // getTrainedWordIds() answers "every training-eligible word", which is
-        // only the same thing for a model trained on everything — a
-        // subset-trained model would be credited with the whole vocabulary and
-        // would then hide or show words it never saw. The fallback keeps
-        // working against an ML service that predates trained_labels.
-        const trainedLabels = r.trained_labels;
-        const trainedWordIds = Array.isArray(trainedLabels)
-          ? await wordIdsForLabels(trainedLabels)
-          : await getTrainedWordIds();
-
-        await modelRecord.update({
-          status:            "trained",
-          accuracy:          r.accuracy           || null,
-          total_classes:     r.total_classes       || null,
-          tflite_url:        r.tflite_url          || null,
-          h5_url:            r.h5_url              || null,
-          trained_at:        new Date(),
-          training_error:    null,
-          trained_word_ids:  trainedWordIds,
-        });
-        console.log(`[trainModel] version ${version_number} training complete`);
-      } catch (mlErr) {
-        const detail =
-          mlErr.response?.data?.detail ||
-          mlErr.response?.data?.message ||
-          mlErr.message ||
-          "Unknown training error";
-        console.error(`[trainModel] background training failed: ${detail}`);
-        await modelRecord
-          .update({ status: "failed", training_error: detail })
-          .catch(() => {});
+      if (lettersRecord) {
+        // Deliberately not awaited inside the same try as the words model: a
+        // failed alphabet must leave the words model trained and usable, not
+        // drag the whole version down with it. runTraining records the failure
+        // on the letters row, where the admin can see it and retry.
+        await runTraining(lettersRecord, version_number, "letters");
       }
     })();
   } catch (err) {
@@ -555,7 +669,9 @@ const testModel = async (req, res) => {
     let testResult;
     try {
       const response = await axios.post(`${ML_SERVICE_URL}/test`, {
-        version_number: model.version_number,
+        // Same reason as deploy: the alphabet's artifacts live under a suffixed
+        // directory, so the bare version would test the words model's files.
+        version_number: mlVersionName(model.version_number, model.model_kind),
         model_id: model.id,
       }, { headers: { "ngrok-skip-browser-warning": "1" } });
       testResult = response.data;
@@ -629,7 +745,10 @@ const deployModel = async (req, res) => {
       // Call FastAPI ML microservice to finalize deployment
       try {
         await axios.post(`${ML_SERVICE_URL}/deploy`, {
-          version_number: model.version_number,
+          // Must match what training wrote, NOT model.version_number: the
+          // alphabet's artifacts live under a suffixed directory, so sending
+          // the bare version here made the deploy read the words model's files.
+          version_number: mlVersionName(model.version_number, model.model_kind),
           model_id: model.id,
           tflite_url: model.tflite_url,
         }, { headers: { "ngrok-skip-browser-warning": "1" } });
@@ -666,12 +785,16 @@ const deployModel = async (req, res) => {
     // Wrapped in try/catch — failure here must never leave the model stuck.
     try {
       if (!Array.isArray(model.trained_word_ids)) {
-        await model.update({ trained_word_ids: await getTrainedWordIds() });
+        await model.update({
+          trained_word_ids: await getTrainedWordIds(model.model_kind),
+        });
       }
       await reconcileActiveWords(model);
     } catch (wordErr) {
       console.error("Word activation error (non-fatal):", wordErr.message);
     }
+
+    const companionNote = await deployCompanion(model);
 
     // Log activity
     await logActivity({
@@ -679,11 +802,11 @@ const deployModel = async (req, res) => {
       action: "deployed_model",
       target_type: "model",
       target_id: model.id,
-      details: `Deployed model version ${model.version_number}`,
+      details: `Deployed model version ${model.version_number}${companionNote}`,
     });
 
     return res.status(200).json({
-      message: `Model ${model.version_number} deployed successfully`,
+      message: `Model ${model.version_number} deployed successfully${companionNote}`,
       model,
     });
   } catch (err) {
@@ -749,17 +872,23 @@ const revertModel = async (req, res) => {
       console.error("Word reconciliation error (non-fatal):", wordErr.message);
     }
 
+    // Roll the other half of this version back too. Without it, reverting the
+    // words model to an older version leaves the NEWER alphabet deployed beside
+    // it — the two halves of a pair from different runs, which is exactly what
+    // training them together is meant to rule out.
+    const companionNote = await deployCompanion(model);
+
     // Log activity
     await logActivity({
       administrator_id: req.user.id,
       action: "reverted_model",
       target_type: "model",
       target_id: model.id,
-      details: `Reverted to model version ${model.version_number}`,
+      details: `Reverted to model version ${model.version_number}${companionNote}`,
     });
 
     return res.status(200).json({
-      message: `Reverted to model version ${model.version_number} successfully`,
+      message: `Reverted to model version ${model.version_number} successfully${companionNote}`,
       model,
     });
   } catch (err) {
@@ -788,17 +917,47 @@ const deleteModel = async (req, res) => {
     const deletedModelId = model.id;
     const deletedModelVersion = model.version_number;
 
+    // A version is a PAIR — the words model and the alphabet trained in the
+    // same run — and they deploy together, so they delete together. Removing
+    // only the clicked row would leave an orphan: a letters model whose words
+    // half no longer exists, still listed and still deployable on its own.
+    //
+    // A DEPLOYED companion is left alone rather than deleted, for the same
+    // reason the check above refuses a deployed model: taking it out from under
+    // a running phone is not something a delete should do silently.
+    const companion = await ModelVersion.findOne({
+      where: {
+        version_number: model.version_number,
+        model_kind: model.model_kind === "letters" ? "words" : "letters",
+      },
+    });
+
     await model.destroy();
+
+    let companionNote = "";
+    if (companion) {
+      if (companion.status === "deployed") {
+        companionNote = ` (its ${companion.model_kind} model is deployed and was kept)`;
+        console.warn(
+          `[deleteModel] kept deployed ${companion.model_kind} model for ${deletedModelVersion}`,
+        );
+      } else {
+        await companion.destroy();
+        companionNote = ` (with its ${companion.model_kind} model)`;
+      }
+    }
 
     await logActivity({
       administrator_id: req.user.id,
       action: "deleted_model",
       target_type: "model",
       target_id: deletedModelId,
-      details: `Deleted model version ${deletedModelVersion}`,
+      details: `Deleted model version ${deletedModelVersion}${companionNote}`,
     });
 
-    return res.status(200).json({ message: "Model deleted successfully" });
+    return res.status(200).json({
+      message: `Model deleted successfully${companionNote}`,
+    });
   } catch (err) {
     console.error("Delete model error:", err);
     return res.status(500).json({ message: "Server error" });

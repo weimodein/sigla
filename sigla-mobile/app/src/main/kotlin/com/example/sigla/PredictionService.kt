@@ -389,10 +389,74 @@ class PredictionService(private val context: Context) {
     // that the Kotlin `catch` cannot intercept.
     private val lock = Any()
 
-    // Model — @Volatile so isReady/motionInterp reads outside the lock see writes
+    /**
+     * One loaded vocabulary: its interpreter, its labels, and the output buffer
+     * sized to its class count. The three are only ever correct together — a
+     * labels list from one model against another's interpreter mislabels every
+     * prediction — so they are swapped as a unit rather than as three fields.
+     *
+     * `outputArr` is per-model because the class counts differ: the words model
+     * has 50, the alphabet 26.
+     */
+    private class LoadedModel(
+        val interp: Interpreter,
+        val labels: List<String>,
+        val outputArr: Array<FloatArray>,
+    )
+
+    /**
+     * Which vocabulary the camera is currently interpreting.
+     *
+     * The FSL day signs are the first letter of the word plus a circular
+     * motion, so M and MONDAY differ only in movement and separate at 1.06 —
+     * below every day-to-day pair and just under TOMORROW/TEN, which already
+     * confuses the deployed model. The two vocabularies are therefore separate
+     * models, and the user says which one they are signing.
+     */
+    enum class Vocabulary { WORDS, LETTERS }
+
+    // Models — @Volatile so isReady/active reads outside the lock see writes
     // from init()'s coroutine promptly.
-    @Volatile private var motionInterp: Interpreter? = null
-    private var motionLabels: List<String> = emptyList()
+    @Volatile private var wordsModel: LoadedModel? = null
+    @Volatile private var lettersModel: LoadedModel? = null
+
+    /**
+     * The model runMotionInference actually runs. Starts on WORDS, which is the
+     * only vocabulary when no alphabet model is deployed.
+     */
+    @Volatile private var vocabulary: Vocabulary = Vocabulary.WORDS
+
+    /**
+     * The model pinned for the current processFrame pass.
+     *
+     * `vocabulary` is @Volatile and the UI thread flips it from a toggle tap, so
+     * reading it separately in each step of one pass could run the words
+     * interpreter and then read the alphabet's output buffer — different class
+     * counts, so the consensus would index one model's probabilities as the
+     * other's labels. processFrame pins the model once under [lock] and every
+     * step of that pass uses this.
+     *
+     * Written ONLY at the top of processFrame, under [lock], and never from the
+     * UI thread — a write from there is the mid-pass swap this exists to
+     * prevent. Not cleared when the pass ends: the locked block has several
+     * early exits and clearing at each would be easy to miss on a later edit,
+     * and leaving it set is harmless because it is overwritten at the top of
+     * every pass and always names a genuinely loaded model.
+     *
+     * Null before the first pass, where [activeModel] resolves live instead.
+     */
+    private var pinnedModel: LoadedModel? = null
+
+    private val activeModel: LoadedModel?
+        get() = pinnedModel
+            ?: if (vocabulary == Vocabulary.LETTERS) lettersModel else wordsModel
+
+    // Kept as properties so the call sites below read unchanged. Both follow the
+    // active model, so neither is meaningful without one.
+    private val motionInterp: Interpreter?
+        get() = activeModel?.interp
+    private val motionLabels: List<String>
+        get() = activeModel?.labels ?: emptyList()
 
     @Volatile var isReady = false
         private set
@@ -416,18 +480,20 @@ class PredictionService(private val context: Context) {
     // Cooldown between detections
     private var lastDetectionTime = 0L
 
-    // Pre-allocated output array, sized from the MODEL's class count in init().
+    // Pre-allocated output array, sized from the MODEL's class count when that
+    // model is loaded, and carried on the LoadedModel so it can never be paired
+    // with a different model's interpreter.
     //
-    // Written once in init() without holding `lock`, then read/written by
-    // runMotionInference under the lock. That is safe only because of publication
-    // ordering: it is assigned BEFORE the `isReady = true` volatile write, and
-    // processFrame returns early unless it observes isReady == true. A volatile write
-    // publishes every preceding write, so any thread that sees isReady also sees the
-    // correctly-sized array.
+    // Built before the owning LoadedModel is published to its @Volatile field,
+    // and processFrame returns early unless it observes isReady == true. A
+    // volatile write publishes every preceding write, so any thread that sees a
+    // model also sees its correctly-sized array.
     //
-    // Keep the assignment before `isReady = true`. Moving it after would leave the
-    // 1-element placeholder visible to an in-flight frame and overflow on interp.run().
-    private var motionOutputArr: Array<FloatArray> = arrayOf(FloatArray(1))
+    // The placeholder covers the window before any model is loaded; every real
+    // read goes through the active model.
+    private val placeholderOutputArr: Array<FloatArray> = arrayOf(FloatArray(1))
+    private val motionOutputArr: Array<FloatArray>
+        get() = activeModel?.outputArr ?: placeholderOutputArr
 
     /**
      * Reused input tensor, shape [1, SEQUENCE_LENGTH, FEATURE_SIZE].
@@ -453,7 +519,12 @@ class PredictionService(private val context: Context) {
     private val frameSnapshot = ArrayList<FloatArray>(BUFFER_CAPACITY)
 
     // ── Init ──────────────────────────────────────────────────────────────────
-    fun getLabelCount(): Int = motionLabels.size
+    // Reads the live vocabulary rather than the pinned one: callers are on the
+    // UI thread and expect this to follow a toggle immediately, not from the
+    // next camera frame.
+    fun getLabelCount(): Int =
+        (if (vocabulary == Vocabulary.LETTERS) lettersModel else wordsModel)
+            ?.labels?.size ?: 0
 
     /**
      * Loads the interpreter and waits for labels to arrive.
@@ -465,73 +536,140 @@ class PredictionService(private val context: Context) {
     suspend fun init() {
         try {
             Log.d(TAG, "=== INIT START ===")
-            // 4 threads, not 2. The LSTM pass is the single heaviest step in the
-            // per-frame budget and runs on MediaPipe's callback thread; every
-            // current target device is at least octa-core, so 2 left measurable
-            // headroom unused. Overridable for A/B on low-core hardware.
-            val options = Interpreter.Options().apply { numThreads = INTERPRETER_THREADS }
 
-            // Load the model from assets or internal storage
-            val motionBuf = withContext(Dispatchers.IO) {
-                loadModelOrNull("sign_model_motion.tflite")
-            }
-            if (motionBuf == null) {
+            // The words model is required — without it there is nothing to
+            // recognise and the screen has no reason to open.
+            wordsModel = loadVocabulary(
+                modelFile  = "sign_model_motion.tflite",
+                labelsFile = "labels_motion.json",
+                kind       = "words",
+            ) ?: run {
                 Log.e(TAG, "Motion model not found")
                 return
             }
-            val interp = Interpreter(motionBuf, options)
-            motionInterp = interp
-            Log.d(TAG, "Interpreter created")
 
-            val labels = withContext(Dispatchers.IO) { loadTrainedLabels() }
-            if (labels == null) {
-                interp.close()
-                motionInterp = null
-                return
-            }
+            // The alphabet is optional and absent on any install that predates
+            // it or whose backend has no letters model deployed. A missing one
+            // leaves the app exactly as it was: words only, toggle hidden.
+            lettersModel = loadVocabulary(
+                modelFile  = "sign_model_letters.tflite",
+                labelsFile = "labels_letters.json",
+                kind       = "letters",
+            )
 
-            // The model is the authority on how many classes exist. Sizing the
-            // output buffer from the label list instead meant a labels/model
-            // mismatch either threw into a silent catch or — when the counts
-            // happened to agree but the contents didn't — mislabelled every
-            // prediction with no warning at all.
-            val outClasses = interp.getOutputTensor(0).shape().last()
-            if (outClasses != labels.size) {
-                Log.e(TAG, "Label/model mismatch: model has $outClasses classes but " +
-                    "labels_motion.json has ${labels.size} — refusing to load rather than " +
-                    "report wrong words. The labels file does not belong to this model.")
-                interp.close()
-                motionInterp = null
-                return
-            }
-
-            // The input shape must be validated too, not just the class count.
-            // SEQUENCE_LENGTH/FEATURE_SIZE are compile-time constants here but are
-            // env-driven on the training side (sigla-ml preprocessor.py reads
-            // FEATURE_SIZE/SEQUENCE_LENGTH from .env, and .env.example shipped 126 for
-            // a long time). A model trained at a different width used to pass this
-            // init untouched and then fail per-frame inside runMotionInference's bare
-            // catch — returning null forever with no diagnostic. Fail loudly at load.
-            val inShape = interp.getInputTensor(0).shape()   // expected [1, 30, 147]
-            val inSeq   = inShape.getOrNull(inShape.size - 2) ?: -1
-            val inFeat  = inShape.lastOrNull() ?: -1
-            if (inSeq != SEQUENCE_LENGTH || inFeat != FEATURE_SIZE) {
-                Log.e(TAG, "Model input shape mismatch: model expects " +
-                    "${inShape.joinToString("x")} but this build feeds " +
-                    "1x${SEQUENCE_LENGTH}x$FEATURE_SIZE — refusing to load. Retrain with " +
-                    "matching FEATURE_SIZE/SEQUENCE_LENGTH or update the app constants.")
-                interp.close()
-                motionInterp = null
-                return
-            }
-
-            motionLabels    = labels
-            motionOutputArr = arrayOf(FloatArray(outClasses))
+            vocabulary = Vocabulary.WORDS
             isReady = true
-            Log.i(TAG, "✅ Motion model loaded — $outClasses classes")
+            Log.i(TAG, "✅ Motion model loaded — ${wordsModel?.labels?.size} classes" +
+                (lettersModel?.let { "; alphabet loaded — ${it.labels.size} classes" }
+                    ?: "; no alphabet model"))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load motion model: ${e.message}", e)
         }
+    }
+
+    /**
+     * Loads one vocabulary and validates it against this build, or returns null.
+     *
+     * Every check here used to guard the single motion model and applies just as
+     * much to a second one — a mismatched alphabet would mislabel letters as
+     * silently as a mismatched words model mislabels words.
+     */
+    private suspend fun loadVocabulary(
+        modelFile: String,
+        labelsFile: String,
+        kind: String,
+    ): LoadedModel? {
+        // 4 threads, not 2. The LSTM pass is the single heaviest step in the
+        // per-frame budget and runs on MediaPipe's callback thread; every
+        // current target device is at least octa-core, so 2 left measurable
+        // headroom unused. Overridable for A/B on low-core hardware.
+        val options = Interpreter.Options().apply { numThreads = INTERPRETER_THREADS }
+
+        val buf = withContext(Dispatchers.IO) { loadModelOrNull(modelFile) } ?: return null
+        val interp = Interpreter(buf, options)
+        Log.d(TAG, "Interpreter created ($kind)")
+
+        val labels = withContext(Dispatchers.IO) { loadTrainedLabels(labelsFile) }
+        if (labels == null) {
+            interp.close()
+            return null
+        }
+
+        // The model is the authority on how many classes exist. Sizing the
+        // output buffer from the label list instead meant a labels/model
+        // mismatch either threw into a silent catch or — when the counts
+        // happened to agree but the contents didn't — mislabelled every
+        // prediction with no warning at all.
+        val outClasses = interp.getOutputTensor(0).shape().last()
+        if (outClasses != labels.size) {
+            Log.e(TAG, "Label/model mismatch ($kind): model has $outClasses classes but " +
+                "$labelsFile has ${labels.size} — refusing to load rather than " +
+                "report wrong words. The labels file does not belong to this model.")
+            interp.close()
+            return null
+        }
+
+        // The input shape must be validated too, not just the class count.
+        // SEQUENCE_LENGTH/FEATURE_SIZE are compile-time constants here but are
+        // env-driven on the training side (sigla-ml preprocessor.py reads
+        // FEATURE_SIZE/SEQUENCE_LENGTH from .env, and .env.example shipped 126 for
+        // a long time). A model trained at a different width used to pass this
+        // init untouched and then fail per-frame inside runMotionInference's bare
+        // catch — returning null forever with no diagnostic. Fail loudly at load.
+        val inShape = interp.getInputTensor(0).shape()   // expected [1, 30, 147]
+        val inSeq   = inShape.getOrNull(inShape.size - 2) ?: -1
+        val inFeat  = inShape.lastOrNull() ?: -1
+        if (inSeq != SEQUENCE_LENGTH || inFeat != FEATURE_SIZE) {
+            Log.e(TAG, "Model input shape mismatch ($kind): model expects " +
+                "${inShape.joinToString("x")} but this build feeds " +
+                "1x${SEQUENCE_LENGTH}x$FEATURE_SIZE — refusing to load. Retrain with " +
+                "matching FEATURE_SIZE/SEQUENCE_LENGTH or update the app constants.")
+            interp.close()
+            return null
+        }
+
+        return LoadedModel(interp, labels, arrayOf(FloatArray(outClasses)))
+    }
+
+    /** Whether an alphabet model is loaded, so the UI can hide the toggle. */
+    fun hasLetters(): Boolean = lettersModel != null
+
+    fun currentVocabulary(): Vocabulary = vocabulary
+
+    /**
+     * Switches the active vocabulary and drops everything buffered for the old
+     * one.
+     *
+     * Resetting is not optional. The frame buffer may hold half of a gesture the
+     * user began in the other mode, and probabilityHistory holds softmax rows
+     * whose width is the OTHER model's class count — consensus across a switch
+     * would read one model's probabilities as the other's classes and index out
+     * of its label list.
+     */
+    fun setVocabulary(next: Vocabulary) {
+        if (next == vocabulary) return
+        if (next == Vocabulary.LETTERS && lettersModel == null) {
+            Log.w(TAG, "Alphabet requested but no letters model is loaded — staying on words")
+            return
+        }
+        // Deliberately does NOT take [lock], for the same reason [reset] does
+        // not: this runs on the UI thread from a toggle tap, and an LSTM pass
+        // holds that lock on MediaPipe's callback thread, so acquiring it here
+        // would block the tap for a full inference.
+        //
+        // Order matters. `reset()` only FLAGS the clear, honoured at the top of
+        // the next processFrame, so an inference already in flight finishes
+        // against whichever model it started with — every read of the active
+        // model inside one pass goes through the same @Volatile read. Setting
+        // the flag before the switch means the stale buffer cannot outlive it.
+        reset()
+        vocabulary = next
+        // The pin is NOT repointed here. It is read by an in-flight pass on
+        // MediaPipe's thread, and writing it from the UI thread is the exact
+        // mid-pass swap [pinnedModel] exists to prevent — the interpreter and
+        // the output buffer would come from different models within one frame.
+        // The next processFrame picks the new vocabulary up under the lock.
+        Log.i(TAG, "Vocabulary switched to $next")
     }
 
     // Load a model buffer from filesDir (downloaded) first, then bundled assets.
@@ -614,6 +752,16 @@ class PredictionService(private val context: Context) {
         var pending: PendingFire? = null
 
         synchronized(lock) {
+            // Pin the vocabulary for this whole pass. `vocabulary` is @Volatile
+            // and the toggle flips it from the UI thread, so without this the
+            // interpreter and the output buffer could come from different models
+            // within one frame — see [pinnedModel].
+            //
+            // Read AFTER the reset flag is honoured below would be too late: the
+            // reset clears probabilityHistory, whose rows must belong to the same
+            // model as the run that follows them.
+            pinnedModel = if (vocabulary == Vocabulary.LETTERS) lettersModel else wordsModel
+
             // Honour a reset requested from the UI thread since the last frame.
             // Cleared before the buffers are touched so a request arriving during
             // this block is not swallowed — it will be seen on the next frame.
@@ -947,9 +1095,14 @@ class PredictionService(private val context: Context) {
         // Under the lock so we cannot free the interpreter while runMotionInference
         // is mid-run() on MediaPipe's thread — that frees native memory out from
         // under an in-flight call, and the resulting SIGSEGV is not catchable.
+        //
+        // BOTH vocabularies are released. The inactive one still holds native
+        // memory, and leaking it would grow with every camera-screen open.
         isReady = false
-        motionInterp?.close()
-        motionInterp = null
+        wordsModel?.interp?.close()
+        wordsModel = null
+        lettersModel?.interp?.close()
+        lettersModel = null
         resetBuffers()
     }
 
@@ -971,14 +1124,14 @@ class PredictionService(private val context: Context) {
      * every later launch. There is no safe way to reconstruct this map from
      * another table: no labels file means the model cannot be used.
      */
-    private fun loadTrainedLabels(): List<String>? {
-        val labels = loadLabelsOrNull("labels_motion.json")
+    private fun loadTrainedLabels(filename: String = "labels_motion.json"): List<String>? {
+        val labels = loadLabelsOrNull(filename)
         if (labels.isNullOrEmpty()) {
-            Log.e(TAG, "labels_motion.json missing or empty — cannot map model outputs to words. " +
+            Log.e(TAG, "$filename missing or empty — cannot map model outputs to words. " +
                 "It is downloaded with the model by ModelUpdateManager.")
             return null
         }
-        Log.d(TAG, "Loaded ${labels.size} trained labels")
+        Log.d(TAG, "Loaded ${labels.size} trained labels from $filename")
         return labels
     }
 }

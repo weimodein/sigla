@@ -1,0 +1,106 @@
+{
+  "pairs": [
+    {
+      "pair": [
+        "M",
+        "MONDAY"
+      ],
+      "ratio": 1.06,
+      "within_class_spread": 38.9,
+      "between_class_distance": 41.2,
+      "n_samples": [
+        39,
+        37
+      ],
+      "n_signers": [
+        4,
+        4
+      ]
+    },
+    {
+      "pair": [
+        "T",
+        "TUESDAY"
+      ],
+      "ratio": 1.13,
+      "within_class_spread": 17.1,
+      "between_class_distance": 19.4,
+      "n_samples": [
+        28,
+        39
+      ],
+      "n_signers": [
+        3,
+        4
+      ]
+    },
+    {
+      "pair": [
+        "W",
+        "WEDNESDAY"
+      ],
+      "ratio": 1.26,
+      "within_class_spread": 17.2,
+      "between_class_distance": 21.7,
+      "n_samples": [
+        30,
+        37
+      ],
+      "n_signers": [
+        3,
+        4
+      ]
+    },
+    {
+      "pair": [
+        "F",
+        "FRIDAY"
+      ],
+      "ratio": 1.12,
+      "within_class_spread": 15.6,
+      "between_class_distance": 17.5,
+      "n_samples": [
+        30,
+        40
+      ],
+      "n_signers": [
+        3,
+        4
+      ]
+    },
+    {
+      "pair": [
+        "S",
+        "SATURDAY"
+      ],
+      "ratio": 1.45,
+      "within_class_spread": 32.8,
+      "between_class_distance": 47.7,
+      "n_samples": [
+        29,
+        39
+      ],
+      "n_signers": [
+        3,
+        4
+      ]
+    },
+    {
+      "pair": [
+        "S",
+        "SUNDAY"
+      ],
+      "ratio": 1.87,
+      "within_class_spread": 27.8,
+      "between_class_distance": 52.1,
+      "n_samples": [
+        29,
+        40
+      ],
+      "n_signers": [
+        3,
+        4
+      ]
+    }
+  ]
+}

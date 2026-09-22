@@ -412,6 +412,9 @@ class MainActivity : AppCompatActivity() {
                         binding.tvStatus.text = "Models loaded"
                         binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
                         Log.d(TAG, "Model ready with ${service.getLabelCount()} classes")
+                        // Only now is it known whether an alphabet model loaded,
+                        // so this is where the vocabulary switch appears.
+                        updateVocabularyToggleLabel()
                     } else {
                         binding.tvStatus.text = "Failed to load words from database"
                         binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
@@ -777,6 +780,28 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Words / letters vocabulary switch.
+        //
+        // The two vocabularies are separate models because a letter and the day
+        // sign built from it differ only in motion — M and MONDAY separate at
+        // 1.06, tighter than any day-to-day pair — so one class list carrying
+        // both would confuse them. The user says which they are signing.
+        binding.btnToggleVocabulary.setOnClickListener {
+            val predictor = this.predictor ?: return@setOnClickListener
+            val next = if (predictor.currentVocabulary() == PredictionService.Vocabulary.LETTERS) {
+                PredictionService.Vocabulary.WORDS
+            } else {
+                PredictionService.Vocabulary.LETTERS
+            }
+            predictor.setVocabulary(next)
+            updateVocabularyToggleLabel()
+            // The partially-collected gesture belongs to the old vocabulary and
+            // setVocabulary already dropped it. Clear the on-screen progress the
+            // same way the end of a gesture does, so the buffer bar does not
+            // appear to carry on across the switch.
+            predictor.onNoHands?.invoke()
+        }
+
         // Emergency — hold 2 seconds
         binding.btnEmergency.setOnTouchListener { _, event ->
             when (event.action) {
@@ -802,6 +827,30 @@ class MainActivity : AppCompatActivity() {
     private fun updateFilipinoToggleLabel() {
         binding.btnToggleFilipino.text =
             if (showFilipino) "Hide Filipino" else "Show Filipino"
+    }
+
+    /**
+     * Shows the vocabulary switch only when an alphabet model is actually
+     * loaded, and labels it with the mode it switches TO.
+     *
+     * Hidden otherwise, so an install whose backend has no letters model
+     * deployed — or that has not downloaded one yet — looks exactly as it did
+     * before the alphabet existed, rather than offering a button that would
+     * refuse to do anything.
+     */
+    private fun updateVocabularyToggleLabel() {
+        val predictor = this.predictor
+        if (predictor == null || !predictor.hasLetters()) {
+            binding.btnToggleVocabulary.visibility = View.GONE
+            return
+        }
+        binding.btnToggleVocabulary.visibility = View.VISIBLE
+        binding.btnToggleVocabulary.text =
+            if (predictor.currentVocabulary() == PredictionService.Vocabulary.LETTERS) {
+                "Sign words"
+            } else {
+                "Spell letters"
+            }
     }
 
     // Updated to use cached translations from backend

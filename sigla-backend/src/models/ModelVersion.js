@@ -9,10 +9,15 @@ const ModelVersion = sequelize.define(
       autoIncrement: true,
       primaryKey: true,
     },
+    // Unique per KIND, not outright: one training run produces both a words
+    // model and an alphabet model under the same version, so "1.7.0" exists
+    // twice — once per kind — and the two are always a matched pair.
+    //
+    // Requires a manual migration (006) replacing UNIQUE(version_number) with
+    // UNIQUE(version_number, model_kind).
     version_number: {
       type: DataTypes.STRING(20),
       allowNull: false,
-      unique: true,
     },
     tflite_url: {
       type: DataTypes.TEXT,

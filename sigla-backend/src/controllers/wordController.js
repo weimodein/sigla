@@ -16,6 +16,19 @@ const { sequelize } = require("../config/db.js");
 // Resolve a category *name* (what the form and mobile send) to its id, or null
 // when the name is blank or matches no category. Case-insensitive, mirroring the
 // old text join. Returns the FK the words table now stores.
+// Which model a word trains into. Only "letters" opts out of the main
+// vocabulary; anything else — including undefined, which is every pre-existing
+// caller — is an ordinary word.
+//
+// A typo'd value silently becoming "words" is the right failure here rather
+// than a 400: the caller gets a word that trains where words train, which is
+// visible and correctable in the admin panel, instead of a rejected import.
+const VOCABULARIES = ["words", "letters"];
+const vocabularyFor = (value) => {
+  const v = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return VOCABULARIES.includes(v) ? v : "words";
+};
+
 const resolveCategoryId = async (name) => {
   if (!name || !String(name).trim()) return null;
   const cat = await Category.findOne({
@@ -628,6 +641,11 @@ const adminAddWord = async (req, res) => {
       approved_sample_count: 0,
       reviewed_by: req.user.id,
       reviewed_at: new Date(),
+      // Which model this word trains into. Defaults to the main vocabulary, so
+      // every existing caller keeps producing ordinary words; the alphabet
+      // import passes "letters" explicitly. Deliberately NOT guessed from the
+      // label — FSL's NG is one letter spelled with two characters.
+      vocabulary: vocabularyFor(req.body.vocabulary),
     });
 
     await logActivity({

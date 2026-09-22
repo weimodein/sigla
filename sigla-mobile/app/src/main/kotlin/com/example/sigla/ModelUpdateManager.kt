@@ -22,6 +22,10 @@ object ModelUpdateManager {
     private const val PREFS = "model_cache"
     private const val KEY_VERSION = "cached_version"
     private const val KEY_STATIC_URL = "cached_static_url"
+    // Tracked separately from KEY_VERSION: the alphabet is deployed on its own
+    // schedule, so its version moves independently of the words model's and one
+    // key could not say whether either was current.
+    private const val KEY_LETTERS_VERSION = "cached_letters_version"
     private const val WORD_BANK_CACHE_FILE = "word_bank_cache.json"
     private const val CATEGORIES_CACHE_FILE = "categories_cache.json"
 
@@ -202,6 +206,27 @@ object ModelUpdateManager {
                 }
                 Log.i(TAG, "Model + labels installed together")
 
+                // ── Alphabet model (optional) ────────────────────────────────
+                // Deployed separately from the words model, because a letter and
+                // the day sign built from it differ only in motion and separate
+                // too tightly to share a class list. Absent on any backend with
+                // no letters model deployed, and on older backends that do not
+                // send the `models` map at all — in both cases the app stays
+                // words-only and the toggle hides itself.
+                //
+                // Deliberately NOT fatal: the words model is already live and
+                // usable at this point, so a failed alphabet download must not
+                // make the whole update report failure and roll the user back to
+                // no recognition at all.
+                // The word bank is the UNION of both deployed models' words, so a
+                // changed alphabet invalidates it just as a changed words model
+                // does — otherwise letters never appear in browsing until the
+                // words version happens to move.
+                if (syncLettersModel(context, response.body()?.models?.letters)) {
+                    lastCheckChangedVersion = true
+                    invalidateWordBankCache(context)
+                }
+
                 // ── Save version + URL only after all required files succeeded ──
                 // Recorded last, and skipped entirely on any failure above, so a
                 // half-updated device retries instead of believing it is current.
@@ -260,6 +285,97 @@ object ModelUpdateManager {
     }
 
     // Atomically move the verified staging file onto the live destination.
+    /**
+     * Installs (or removes) the optional alphabet model.
+     *
+     * Same staged matched-pair discipline as the words model: the .tflite and
+     * its labels are downloaded to staging, verified, and only then swapped in
+     * together, because index N only means the right letter if both came from
+     * the same training run.
+     *
+     * Never throws and never reports failure upward. It runs after the words
+     * model is already live, so a failed alphabet download leaves the app fully
+     * usable with words alone — turning that into an update failure would roll
+     * the user back to no recognition at all.
+     *
+     * A null `info` means the backend has no alphabet deployed (or predates the
+     * split). The local files are then DELETED rather than left behind, so
+     * reverting the alphabet server-side actually takes it off the phone instead
+     * of leaving a stale model the toggle still offers.
+     */
+    private fun syncLettersModel(context: Context, info: ModelInfo?): Boolean {
+        val modelDest  = File(context.filesDir, "sign_model_letters.tflite")
+        val labelsDest = File(context.filesDir, "labels_letters.json")
+
+        try {
+            val url = info?.tflite_url
+            val labelsUrl = info?.labels_motion_url
+            if (info == null || url.isNullOrBlank() || labelsUrl.isNullOrBlank()) {
+                if (modelDest.exists() || labelsDest.exists()) {
+                    Log.i(TAG, "No alphabet model deployed — removing the local copy")
+                    modelDest.delete()
+                    labelsDest.delete()
+                    prefs(context).edit().remove(KEY_LETTERS_VERSION).apply()
+                    // The alphabet just left the phone, so the word bank —
+                    // which is the union of both models — is now stale.
+                    return true
+                }
+                return false
+            }
+
+            // Up to date when the version matches AND both files are present —
+            // the same two-part check the words model uses, for the same reason:
+            // a version match alone would strand a device that lost one file.
+            if (info.version_number == prefs(context).getString(KEY_LETTERS_VERSION, null) &&
+                modelDest.exists() && labelsDest.exists()
+            ) {
+                Log.i(TAG, "Alphabet model up-to-date (v${info.version_number})")
+                return false
+            }
+
+            val modelStaging  = File(context.filesDir, "sign_model_letters.tflite.staging")
+            val labelsStaging = File(context.filesDir, "labels_letters.json.staging")
+
+            if (!downloadAndVerifyToStaging(url, modelStaging, info.checksum)) {
+                Log.w(TAG, "Alphabet model download/verify failed — keeping words-only")
+                modelStaging.delete()
+                return false
+            }
+            if (!downloadToFile(labelsUrl, labelsStaging)) {
+                Log.w(TAG, "Alphabet labels download failed — keeping words-only")
+                modelStaging.delete()
+                labelsStaging.delete()
+                return false
+            }
+            if (!swapIntoPlace(modelStaging, modelDest)) {
+                Log.w(TAG, "Failed to install staged alphabet model")
+                modelStaging.delete()
+                labelsStaging.delete()
+                return false
+            }
+            if (!swapIntoPlace(labelsStaging, labelsDest)) {
+                // The model is live and now outranks its labels. Delete BOTH so
+                // PredictionService skips the alphabet entirely rather than
+                // pairing it with a stale map, and the next check retries clean.
+                Log.w(TAG, "Failed to install staged alphabet labels — removing the pair")
+                modelDest.delete()
+                labelsStaging.delete()
+                // The pair was removed, so whatever the word bank held for the
+                // alphabet is no longer backed by a model on this device.
+                return true
+            }
+
+            prefs(context).edit()
+                .putString(KEY_LETTERS_VERSION, info.version_number)
+                .apply()
+            Log.i(TAG, "Alphabet model installed (v${info.version_number})")
+            return true
+        } catch (e: Exception) {
+            Log.w(TAG, "Alphabet sync failed — continuing words-only: ${e.message}")
+            return false
+        }
+    }
+
     private fun swapIntoPlace(staging: File, dest: File): Boolean {
         if (dest.exists()) dest.delete()
         if (staging.renameTo(dest)) return true

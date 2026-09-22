@@ -9,7 +9,6 @@ import {
   getModelStats,
   trainModel,
   getModelStatus,
-  testModel,
   deployModel,
   revertModel,
   deleteModel,
@@ -122,7 +121,6 @@ const ManageModel = () => {
 
   // Modal state
   const [trainModal, setTrainModal] = useState(false);
-  const [testModal, setTestModal] = useState(null);
   const [deployModal, setDeployModal] = useState(null);
   const [revertModal, setRevertModal] = useState(null);
   const [resultModal, setResultModal] = useState(null);
@@ -133,6 +131,10 @@ const ManageModel = () => {
   // Async training poll state
   const [trainingModelId, setTrainingModelId] = useState(null);
   const [trainingVersion, setTrainingVersion] = useState("");
+  // The alphabet row trained alongside the words model in the same run. Polled
+  // together with it so a failed alphabet is reported rather than sitting
+  // unnoticed as a "failed" row in the table.
+  const [trainingLettersId, setTrainingLettersId] = useState(null);
   const pollingRef = useRef(null);
 
   // ── Fetch data ──────────────────────────────────────────────
@@ -159,10 +161,25 @@ const ManageModel = () => {
       // Without this, returning to the page showed no banner, re-enabled the
       // Train button, and never reported the outcome: the run looked stuck at
       // "training" forever even though the server had finished it.
-      const inFlight = list.find((m) => m.status === "training");
+      // Prefer the WORDS row as the one to track: a run produces both, the
+      // words model is the long half, and the poll reads the alphabet through
+      // trainingLettersId rather than tracking it directly.
+      const training = list.filter((m) => m.status === "training");
+      const inFlight =
+        training.find((m) => m.model_kind !== "letters") || training[0];
       setTrainingModelId((current) => {
         if (inFlight) {
           setTrainingVersion(inFlight.version_number || "");
+          // Re-adopt the alphabet row of the same version too, so a reload
+          // mid-run still reports the alphabet's outcome instead of declaring
+          // the run finished when only the words half is done.
+          const companion = list.find(
+            (m) =>
+              m.version_number === inFlight.version_number &&
+              m.model_kind === "letters" &&
+              m.id !== inFlight.id,
+          );
+          setTrainingLettersId(companion?.id ?? null);
           return inFlight.id;
         }
         // Only clear when we were tracking a run the server no longer reports as
@@ -201,6 +218,7 @@ const ManageModel = () => {
         clearInterval(pollingRef.current);
         setTrainingModelId(null);
         setTrainingVersion("");
+        setTrainingLettersId(null);
         showError(
           "Stopped tracking this training run — it has not reported back. Reload to check its status.",
         );
@@ -209,18 +227,71 @@ const ManageModel = () => {
       }
       try {
         const { model } = await getModelStatus(trainingModelId);
+
+        // The alphabet trains after the words model in the same run, so the
+        // words row reaching "trained" does NOT mean the run is over. Keep
+        // polling until the alphabet settles too, otherwise the modal appears
+        // mid-run and a later alphabet failure is never reported.
+        // Resolve the alphabet row by VERSION from the list, not only from the
+        // id captured when this client started the run. A run started from
+        // another tab, or adopted after a reload, has no captured id — and
+        // without this the modal reported "no alphabet model was trained" for a
+        // run whose alphabet had in fact trained fine.
+        const lettersId =
+          trainingLettersId ??
+          models.find(
+            (m) =>
+              m.version_number === model.version_number &&
+              m.model_kind === "letters",
+          )?.id ??
+          null;
+
+        let letters = null;
+        if (lettersId) {
+          try {
+            letters = (await getModelStatus(lettersId)).model;
+          } catch {
+            // Treat an unreadable letters row as still running rather than as a
+            // failure; the next tick retries, and the poll timeout is the
+            // backstop if it never resolves.
+            letters = null;
+          }
+          if (model.status === "trained" && letters && letters.status === "training") {
+            return;
+          }
+        }
+
         if (model.status === "trained") {
           clearInterval(pollingRef.current);
           setTrainingModelId(null);
           setTrainingVersion("");
+          setTrainingLettersId(null);
           showSuccess(`Model ${model.version_number} trained successfully`);
+
+          // What happened to the alphabet half decides the wording. A failure
+          // there is not fatal — the words model is trained and deployable —
+          // but it must be visible, since the only other trace is a "failed"
+          // row further down the table.
+          // Keyed off `letters`, the row actually read this tick — not off the
+          // captured id, which is null for a run this client did not start and
+          // made the modal claim no alphabet was trained when one had been.
+          const lettersNote =
+            letters?.status === "trained"
+              ? ` Alphabet model: ${fmt(letters.accuracy)} over ${letters.total_classes ?? "?"} letters.`
+              : letters?.status === "failed"
+                ? ` The alphabet model FAILED (${letters.training_error || "unknown error"}) — this one is still fine to deploy.`
+                : !lettersId
+                  ? " No alphabet model was trained — there are no letters in the word list yet."
+                  : "";
+
           // Flattened to the shape the results modal reads. Passing the raw
           // model object left every field unreadable, so the modal rendered
           // nothing but a title and a Close button.
           setResultModal({
             title: "Training Results",
             message:
-              "Training finished. Test the model to measure its accuracy before deploying it.",
+              "Training finished." +
+              lettersNote,
             accuracy: model.accuracy ?? null,
             totalClasses: model.total_classes ?? null,
             versionNumber: model.version_number,
@@ -234,6 +305,7 @@ const ManageModel = () => {
           clearInterval(pollingRef.current);
           setTrainingModelId(null);
           setTrainingVersion("");
+          setTrainingLettersId(null);
           showError(`Training failed: ${model.training_error || "Unknown error"}`);
           invalidate("models:");
           fetchData();
@@ -247,12 +319,22 @@ const ManageModel = () => {
           clearInterval(pollingRef.current);
           setTrainingModelId(null);
           setTrainingVersion("");
+          setTrainingLettersId(null);
           fetchData();
         }
       }
     }, 5000);
     return () => clearInterval(pollingRef.current);
-  }, [trainingModelId]);
+    // trainingLettersId is a dependency, not just a closed-over value: the
+    // re-adoption path in fetchData can set it AFTER this effect has started
+    // (a reload mid-run learns the words row first), and without it the
+    // interval would keep reading the stale null and declare the run finished
+    // as soon as the words half completed.
+    //
+    // `models` likewise: the fallback lookup by version reads it, and a list
+    // fetched after this effect started is the one that actually contains the
+    // alphabet row for a run in progress.
+  }, [trainingModelId, trainingLettersId, models]);
 
   // ── Sort ────────────────────────────────────────────────────
   const handleSort = (field) => {
@@ -264,7 +346,37 @@ const ManageModel = () => {
     }
   };
 
-  const sortedModels = [...models].sort((a, b) => {
+  // ── Pair each version's two models into ONE row ─────────────
+  // A training run produces a words model and an alphabet model under the same
+  // version. They are two database rows because they are two .tflite files with
+  // different class lists, but they are one THING to an administrator: trained
+  // together, deployed together, deleted together. Listing both put two
+  // identical "1.7.0" rows in the table with only a tag between them.
+  //
+  // The words row represents the pair and carries the alphabet as `letters`;
+  // the expanded panel shows both models' numbers. An alphabet row with no
+  // words half (a failed or half-deleted version) still lists on its own rather
+  // than vanishing.
+  const pairedModels = (() => {
+    const letters = new Map();
+    for (const m of models) {
+      if (m.model_kind === "letters") letters.set(m.version_number, m);
+    }
+    const claimed = new Set();
+    const rows = [];
+    for (const m of models) {
+      if (m.model_kind === "letters") continue;
+      const companion = letters.get(m.version_number) || null;
+      if (companion) claimed.add(companion.id);
+      rows.push({ ...m, letters: companion });
+    }
+    for (const m of letters.values()) {
+      if (!claimed.has(m.id)) rows.push({ ...m, letters: null });
+    }
+    return rows;
+  })();
+
+  const sortedModels = [...pairedModels].sort((a, b) => {
     let va = a[sortField];
     let vb = b[sortField];
 
@@ -329,6 +441,7 @@ const ManageModel = () => {
       // Backend returns 202 — training is running in background, start polling
       setTrainingModelId(result.model.id);
       setTrainingVersion(result.model.version_number);
+      setTrainingLettersId(result.letters_model?.id ?? null);
       setTrainModal(false);
       setTrainForm({ version_number: "", notes: "" });
       fetchData();
@@ -337,35 +450,6 @@ const ManageModel = () => {
         err.response?.data?.message ||
           err.response?.data?.detail ||
           "Training failed",
-      );
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // ── Test ──────────────────────────────────────────────────
-  const handleTest = async () => {
-    setActionLoading(true);
-    try {
-      const result = await testModel(testModal.id);
-      const tested = testModal;
-      showSuccess("Model evaluation complete");
-      setTestModal(null);
-      // The API returns the metrics under `test_result` — the modal used to read
-      // `result`, which never existed, so accuracy and class count never showed.
-      setResultModal({
-        title: "Test Results",
-        message: result?.message || "Model evaluation complete.",
-        accuracy: result?.test_result?.accuracy ?? null,
-        totalClasses: result?.test_result?.total_classes ?? null,
-        versionNumber: tested?.version_number,
-      });
-      fetchData();
-    } catch (err) {
-      showError(
-        err.response?.data?.message ||
-          err.response?.data?.detail ||
-          "Test failed",
       );
     } finally {
       setActionLoading(false);
@@ -752,8 +836,28 @@ const ManageModel = () => {
                             style={{ color: C.muted }}
                           />
                         </td>
+                        {/* One row per version. The tag says an alphabet model
+                            came with it — its numbers are in the expanded panel
+                            — or marks a lone alphabet row, which only happens
+                            when its words half failed or was deleted. */}
                         <td className="px-4 py-3 font-semibold text-gray-800">
                           {model.version_number}
+                          {model.letters && (
+                            <span
+                              className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold align-middle"
+                              style={{ background: "#ede9fe", color: "#5b21b6" }}
+                            >
+                              + alphabet
+                            </span>
+                          )}
+                          {model.model_kind === "letters" && (
+                            <span
+                              className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold align-middle"
+                              style={{ background: "#ede9fe", color: "#5b21b6" }}
+                            >
+                              alphabet only
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <Badge value={model.status} />
@@ -778,24 +882,6 @@ const ManageModel = () => {
                           <div className="flex gap-1.5 flex-wrap">
                             {model.status === "trained" && (
                               <>
-                                <button
-                                  onClick={() => setTestModal(model)}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
-                                  style={{
-                                    background: "#fde68a",
-                                    color: "#92400e",
-                                  }}
-                                  onMouseEnter={(e) =>
-                                    (e.currentTarget.style.background =
-                                      "#fcd34d")
-                                  }
-                                  onMouseLeave={(e) =>
-                                    (e.currentTarget.style.background =
-                                      "#fde68a")
-                                  }
-                                >
-                                  Test
-                                </button>
                                 <button
                                   onClick={() => setDeployModal(model)}
                                   className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
@@ -961,6 +1047,68 @@ const ManageModel = () => {
                               />
                             </div>
 
+                            {/* The alphabet model trained in the same run. Its
+                                accuracy is not comparable to the words model's
+                                — far fewer classes over far fewer samples — so
+                                it is shown in its own band rather than averaged
+                                in or displayed as though the two were one
+                                number. */}
+                            {model.letters && (
+                              <div
+                                className="mt-3 pt-3"
+                                style={{ borderTop: `1px solid ${C.border}` }}
+                              >
+                                <p
+                                  className="text-xs font-semibold mb-2"
+                                  style={{ color: "#5b21b6" }}
+                                >
+                                  Alphabet model
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
+                                  <MetricBox
+                                    label="Letters"
+                                    value={model.letters.total_classes ?? "—"}
+                                    color={C.text}
+                                  />
+                                  <MetricBox
+                                    label="Accuracy"
+                                    value={fmt(model.letters.accuracy)}
+                                    color={
+                                      model.letters.accuracy == null
+                                        ? C.muted
+                                        : getMetricColor(model.letters.accuracy)
+                                    }
+                                  />
+                                  <MetricBox
+                                    label="Status"
+                                    value={model.letters.status}
+                                    color={
+                                      model.letters.status === "failed"
+                                        ? C.red
+                                        : C.text
+                                    }
+                                  />
+                                  <MetricBox
+                                    label="Trained"
+                                    value={
+                                      model.letters.trained_at
+                                        ? new Date(
+                                            model.letters.trained_at,
+                                          ).toLocaleDateString()
+                                        : "—"
+                                    }
+                                    color={C.text}
+                                  />
+                                </div>
+                                {model.letters.status === "failed" &&
+                                  model.letters.training_error && (
+                                    <p className="text-xs mt-2" style={{ color: C.red }}>
+                                      {model.letters.training_error}
+                                    </p>
+                                  )}
+                              </div>
+                            )}
+
                             {/* Deployment + notes. The integrity checksum is
                                 deliberately not surfaced: it is verified on the
                                 device before a downloaded model replaces the
@@ -1104,10 +1252,6 @@ const ManageModel = () => {
           }
         >
           <div className="space-y-3">
-            <p className="text-sm text-gray-500">
-              This will fetch all approved gesture samples from Supabase and
-              train a new model. Training may take several minutes.
-            </p>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 Version Number <span className="text-red-500">*</span>
@@ -1140,32 +1284,6 @@ const ManageModel = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
             </div>
-          </div>
-        </AppModal>
-      )}
-
-      {/* Test Modal */}
-      {testModal && (
-        <AppModal
-          title={`Test Model: ${testModal.version_number}`}
-          onClose={() => setTestModal(null)}
-          onEnter={() => { if (!actionLoading) handleTest(); }}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setTestModal(null)}>
-                Cancel
-              </Button>
-              <Button onClick={handleTest} loading={actionLoading}>
-                {actionLoading ? "Evaluating..." : "Run Evaluation"}
-              </Button>
-            </>
-          }
-        >
-          <div className="space-y-3">
-            <p className="text-sm text-gray-500">
-              This will evaluate <strong>{testModal.version_number}</strong>{" "}
-              against the approved dataset and return accuracy metrics.
-            </p>
           </div>
         </AppModal>
       )}
