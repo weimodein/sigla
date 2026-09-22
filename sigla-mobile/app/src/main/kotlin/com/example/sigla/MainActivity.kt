@@ -170,6 +170,10 @@ class MainActivity : AppCompatActivity() {
     // Held so teardown can cancel an in-flight model load rather than letting it
     // complete against a predictor that has already been closed.
     private var modelInitJob: Job? = null
+    // This screen's landmark callback, installed on the shared HandLandmarkHelper.
+    // Kept so stopVision can release exactly this one rather than whatever sink
+    // happens to be current — a later screen may already own it.
+    private var landmarkSink: ((LandmarkResult) -> Unit)? = null
     // Reused per frame instead of allocating a Matrix for every camera frame.
     private val frameMatrix = Matrix()
 
@@ -324,7 +328,10 @@ class MainActivity : AppCompatActivity() {
                 // uploads them to the GPU delegate. applicationContext, not the
                 // Activity — a late-finishing build must not retain a destroyed
                 // Activity.
-                val helper = HandLandmarkHelper(applicationContext) { result ->
+                // Named, so stopVision can tell Cache.release WHICH screen's sink
+                // it is dropping — a late release from a replaced screen must not
+                // silence the one that replaced it.
+                val sink: (LandmarkResult) -> Unit = { result ->
                     val c0 = if (PIPELINE_PROFILING) System.nanoTime() else 0L
                     // Canonical slot order FIRST (RIGHT→slot0, LEFT→slot1)
                     val ordered = canonicalizeSlots(result.features, result.handedness, result.handsDetected)
@@ -348,15 +355,24 @@ class MainActivity : AppCompatActivity() {
                     // fields by the time this block runs.
                     enqueueOverlayUpdate(result)
                 }
+                landmarkSink = sink
+
+                // Shared across screens: building this parses ~14 MB of MediaPipe
+                // assets and uploads them to the GPU, which is the "Loading hand
+                // tracking..." wait. Only the FIRST entry pays it.
+                val helper = HandLandmarkHelper.Cache.acquire(applicationContext, sink)
 
                 val service = PredictionService(applicationContext)
 
                 // Publish both only if the screen is still active. Navigating away
-                // mid-load cancels this job, and an orphaned helper would leak its
-                // GPU context if we just dropped the reference.
+                // mid-load cancels this job, and an orphaned predictor would leak
+                // its interpreters if we just dropped the reference.
                 val published = withContext(Dispatchers.Main) {
                     if (!visionActive) {
-                        helper.close()
+                        // Release this screen's sink, do NOT close the helper —
+                        // it is shared, and closing it here would tear down the
+                        // GPU context for every screen that comes after.
+                        HandLandmarkHelper.Cache.release(sink)
                         service.close()
                         false
                     } else {
@@ -453,14 +469,20 @@ class MainActivity : AppCompatActivity() {
         // frames, so nothing can reach either object once it is handed to the executor.
         // Both close() implementations are idempotent and hold applicationContext, so a
         // late-finishing close cannot retain this Activity.
-        val doomedPredictor  = predictor
-        val doomedLandmarker = landmarker
-        predictor  = null
+        // The landmarker is NOT closed — it is shared across screens so the
+        // ~14 MB asset parse and GPU upload happen once per process rather than
+        // on every entry. Dropping this screen's sink is enough: no frames reach
+        // a dead Activity, and unbindAll() above has already stopped the camera
+        // feeding it. See HandLandmarkHelper.Cache.
+        HandLandmarkHelper.Cache.release(landmarkSink)
+        landmarkSink = null
         landmarker = null
-        if (doomedPredictor != null || doomedLandmarker != null) {
+
+        val doomedPredictor = predictor
+        predictor = null
+        if (doomedPredictor != null) {
             teardownExecutor.execute {
-                doomedPredictor?.close()
-                doomedLandmarker?.close()
+                doomedPredictor.close()
             }
         }
     }

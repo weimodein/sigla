@@ -73,6 +73,28 @@ object ModelUpdateManager {
     fun hasLocalMotionModel(context: Context): Boolean = hasLocalModel(context)
 
     /**
+     * Whether the locally-installed alphabet matches the deployed one.
+     *
+     * The words model being current does NOT mean the device is current: the
+     * alphabet is deployed on its own schedule and lives in its own files, so
+     * "up to date" has to account for both or a phone with the right words model
+     * never downloads the letters at all.
+     *
+     * A null `info` means the backend has no alphabet deployed, in which case
+     * having no local copy IS current — and having one means it must be removed.
+     */
+    private fun lettersUpToDate(context: Context, info: ModelInfo?): Boolean {
+        val modelFile  = File(context.filesDir, "sign_model_letters.tflite")
+        val labelsFile = File(context.filesDir, "labels_letters.json")
+        if (info == null || info.tflite_url.isNullOrBlank()) {
+            return !modelFile.exists() && !labelsFile.exists()
+        }
+        return info.version_number == prefs(context).getString(KEY_LETTERS_VERSION, null) &&
+            modelFile.exists() &&
+            labelsFile.exists()
+    }
+
+    /**
      * Set by [checkAndUpdate] when the deployed version differs from what this
      * device last cached — including a REVERT to an older version, which changes
      * the word bank just as much as an upgrade does.
@@ -87,11 +109,72 @@ object ModelUpdateManager {
     var lastCheckChangedVersion: Boolean = false
         private set
 
-    suspend fun checkAndUpdate(context: Context, token: String?): Boolean {
+    /**
+     * elapsedRealtime of the last check that actually reached the backend, or 0
+     * when none has. Process-level rather than per-Activity, so leaving the
+     * camera screen and coming back does not reset it.
+     */
+    @Volatile
+    private var lastCheckAt: Long = 0L
+
+    /**
+     * How long a successful check stays good for.
+     *
+     * The camera screen releases its models in onStop and rebuilds them in
+     * onStart, so every return to it used to make a fresh /models/latest round
+     * trip before anything could load — a network wait on a path where nothing
+     * has usually changed. A deploy is a deliberate, infrequent act by an
+     * administrator, so a few minutes of staleness costs nothing and the check
+     * still happens often enough to pick one up within a session.
+     */
+    private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L
+
+    /**
+     * Drops the throttle so the next [checkAndUpdate] talks to the backend.
+     *
+     * For the cases where waiting minutes would be wrong: a fresh login, or a
+     * user explicitly asking to check for updates.
+     */
+    fun invalidateCheckThrottle() {
+        lastCheckAt = 0L
+    }
+
+    /**
+     * @param force skip the throttle and always reach the backend.
+     */
+    suspend fun checkAndUpdate(
+        context: Context,
+        token: String?,
+        force: Boolean = false,
+    ): Boolean {
         return withContext(Dispatchers.IO) {
             // Reset per call — a failed check must not leave a stale "changed"
             // flag from a previous launch telling the caller to refetch.
             lastCheckChangedVersion = false
+
+            // Skip the round trip when a recent check already confirmed this
+            // device is current. Only when the model is actually USABLE: a
+            // device missing its .tflite or labels must keep asking, or a failed
+            // first download would leave it stuck with no model until the
+            // interval expired.
+            //
+            // Whether an ALPHABET is deployed cannot be known without asking, so
+            // a device that has none installed never skips. Otherwise a phone
+            // that was current before the alphabet existed would sit behind this
+            // throttle and never discover it. Once one is installed, a later
+            // change to it is picked up when the interval lapses.
+            val sinceLast = android.os.SystemClock.elapsedRealtime() - lastCheckAt
+            if (!force &&
+                lastCheckAt > 0L &&
+                sinceLast < CHECK_INTERVAL_MS &&
+                hasLocalModel(context) &&
+                hasLocalLabels(context) &&
+                File(context.filesDir, "sign_model_letters.tflite").exists() &&
+                File(context.filesDir, "labels_letters.json").exists()
+            ) {
+                Log.i(TAG, "Skipping model check — last one was ${sinceLast / 1000}s ago")
+                return@withContext true
+            }
             try {
                 Log.i(TAG, "Checking for model updates…")
                 val response = ApiClient.get(token).getLatestModel()
@@ -122,13 +205,30 @@ object ModelUpdateManager {
                 // Without the labels check, a device missing labels_motion.json (the
                 // labels download used to be optional) would report itself current
                 // forever and never recover.
+                val lettersInfo = response.body()?.models?.letters
+
                 if (remoteVersion == cachedVersion &&
                     remoteModelUrl == getCachedStaticUrl(context) &&
                     hasLocalModel(context) &&
                     hasLocalLabels(context) &&
                     localChecksumMatches
                 ) {
+                    // The WORDS model is current — but the alphabet is deployed
+                    // separately and may not be. This early return used to fire
+                    // here and skip syncLettersModel entirely, so a phone with the
+                    // right words model never downloaded the letters at all.
+                    if (!lettersUpToDate(context, lettersInfo)) {
+                        Log.i(TAG, "Words model current but alphabet is not — syncing it")
+                        if (syncLettersModel(context, lettersInfo)) {
+                            lastCheckChangedVersion = true
+                            invalidateWordBankCache(context)
+                        }
+                    }
                     Log.i(TAG, "Model up-to-date (v$remoteVersion)")
+                    // Timestamped only on a check that actually reached the
+                    // backend and found this device current, so a failed request
+                    // or a partial download never buys silence.
+                    lastCheckAt = android.os.SystemClock.elapsedRealtime()
                     return@withContext true
                 }
 
@@ -235,6 +335,7 @@ object ModelUpdateManager {
                     .putString(KEY_STATIC_URL, remoteModelUrl)
                     .apply()
                 Log.i(TAG, "Model updated to $remoteVersion")
+                lastCheckAt = android.os.SystemClock.elapsedRealtime()
                 true
             } catch (e: Exception) {
                 Log.e(TAG, "Model update failed: ${e.message}", e)

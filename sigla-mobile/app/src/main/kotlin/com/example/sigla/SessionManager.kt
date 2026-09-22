@@ -126,6 +126,10 @@ class SessionManager(private val appContext: Context) {
         // The shared HTTP client caches the token, so it has to be dropped too
         // or signed-out requests would keep sending the old credential.
         ApiClient.clearToken()
+        // The model check is throttled per process, so without this the next
+        // user to sign in would inherit the previous session's window and could
+        // run for minutes against a model check that was never made for them.
+        ModelUpdateManager.invalidateCheckThrottle()
     }
 
     // ── Onboarding ─────────────────────────────────────────────────

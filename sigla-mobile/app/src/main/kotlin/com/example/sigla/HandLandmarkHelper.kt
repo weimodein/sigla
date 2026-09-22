@@ -75,6 +75,22 @@ class HandLandmarkHelper(
     // Callback invoked on the MediaPipe internal thread — caller must marshal to UI thread if needed
     private val onResult: ((LandmarkResult) -> Unit)? = null
 ) {
+    /**
+     * Where live results are actually delivered, swappable after construction.
+     *
+     * `onResult` has to stay a constructor parameter because its nullness picks
+     * the RunningMode, and that is fixed when the native graph is built. But the
+     * callback captures the Activity that installed it, so a helper kept alive
+     * across screens would pin a destroyed one.
+     *
+     * The listener forwards through this instead, so [Cache] can hand the same
+     * helper to a new Activity: the new one installs its sink, and the old one's
+     * is dropped. @Volatile because MediaPipe delivers on its own thread while
+     * the UI thread swaps it.
+     */
+    @Volatile
+    var resultSink: ((LandmarkResult) -> Unit)? = onResult
+
     private var landmarker: HandLandmarker? = null
     private var poseLandmarker: PoseLandmarker? = null
 
@@ -115,7 +131,11 @@ class HandLandmarkHelper(
             .setMinHandPresenceConfidence(0.5f)
             .setMinTrackingConfidence(0.5f)
         if (onResult != null) {
-            builder.setResultListener { result, _ -> onResult?.invoke(parseResult(result, lastPoseResult)) }
+            // Through resultSink, not onResult: the constructor's callback pins
+            // the Activity that created this helper, and a cached helper outlives
+            // it. A null sink means no screen is currently listening, and the
+            // frame is simply dropped.
+            builder.setResultListener { result, _ -> resultSink?.invoke(parseResult(result, lastPoseResult)) }
             builder.setErrorListener { e -> Log.e(TAG, "MediaPipe error: ${e.message}") }
         }
         return HandLandmarker.createFromOptions(context, builder.build())
@@ -327,6 +347,74 @@ class HandLandmarkHelper(
         poseLandmarker?.close()
         poseLandmarker = null
         lastPoseResult = null
+    }
+
+    /**
+     * Keeps one live-stream helper alive for the whole process.
+     *
+     * Building one parses ~14 MB of MediaPipe assets and uploads them to the GPU
+     * — the "Loading hand tracking..." wait. The camera screen used to do that on
+     * every entry, because it released the helper in onStop.
+     *
+     * Holding it until onDestroy instead is NOT the fix and was tried before:
+     * Android runs onDestroy AFTER the next Activity's onCreate, so navigating
+     * away left two MediaPipe GPU contexts alive at once and made switching
+     * screens stall. A single process-wide instance has the opposite property —
+     * there is only ever one context, no matter how the screens overlap.
+     *
+     * Holds applicationContext, so it cannot retain an Activity; the per-screen
+     * callback goes through [resultSink] for the same reason.
+     */
+    object Cache {
+        private var instance: HandLandmarkHelper? = null
+
+        /**
+         * The shared helper, built on first use. Must be called off the main
+         * thread the first time — that call does the asset parse and GPU upload.
+         */
+        @Synchronized
+        fun acquire(
+            context: Context,
+            onResult: (LandmarkResult) -> Unit,
+        ): HandLandmarkHelper {
+            val existing = instance
+            if (existing != null) {
+                existing.resultSink = onResult
+                return existing
+            }
+            val created = HandLandmarkHelper(context.applicationContext, onResult)
+            instance = created
+            return created
+        }
+
+        /**
+         * Stops delivering to this screen's callback, WITHOUT tearing the helper
+         * down — the point of the cache.
+         *
+         * `sink` guards against a late release from a screen that has already
+         * been replaced: if the current sink is not the one being released, a
+         * newer screen owns it and must keep receiving frames.
+         */
+        @Synchronized
+        fun release(sink: ((LandmarkResult) -> Unit)?) {
+            val current = instance ?: return
+            if (sink == null || current.resultSink === sink) {
+                current.resultSink = null
+            }
+        }
+
+        /**
+         * Actually frees the native resources. Nothing calls this in normal use:
+         * the helper is meant to live as long as the process, and Android
+         * reclaims it when the process dies. Here for tests and for a deliberate
+         * teardown (e.g. logout) if one is ever wanted.
+         */
+        @Synchronized
+        fun destroy() {
+            instance?.resultSink = null
+            instance?.close()
+            instance = null
+        }
     }
 }
 
