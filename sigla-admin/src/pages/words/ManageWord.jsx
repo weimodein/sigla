@@ -865,7 +865,7 @@ const ManageWord = () => {
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
             Manage Words
           </h2>
-          <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "4px 0 0" }}>
             Manage vocabulary, training clips, and demonstration videos
           </p>
         </div>
@@ -876,7 +876,7 @@ const ManageWord = () => {
               display: "inline-flex", alignItems: "center", gap: "6px",
               padding: "8px 16px", background: "white", color: C.primary,
               border: `1px solid ${C.primary}`, borderRadius: "8px",
-              fontSize: "0.85rem", fontWeight: 500, cursor: "pointer",
+              fontSize: "0.875rem", fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit",
             }}
           >
@@ -888,7 +888,7 @@ const ManageWord = () => {
               display: "inline-flex", alignItems: "center", gap: "6px",
               padding: "8px 16px", background: C.primary, color: "white",
               border: "none", borderRadius: "8px",
-              fontSize: "0.85rem", fontWeight: 500, cursor: "pointer",
+              fontSize: "0.875rem", fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit",
             }}
           >
@@ -1009,7 +1009,7 @@ const ManageWord = () => {
       >
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Vocabulary entries</h3>
+            <h3 className="text-base font-semibold text-gray-900">Vocabulary entries</h3>
             <p className="mt-0.5 text-xs text-gray-500">Training coverage and deployed availability</p>
           </div>
           <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
@@ -1020,24 +1020,23 @@ const ManageWord = () => {
           {/* The proportional columns consume the full card width. The desktop
               minimum keeps all five actions on one line; smaller viewports use
               the existing horizontal scroll instead of compressing the row. */}
-          <table className="w-full text-left" style={{ minWidth: 1100, fontSize: "0.875rem", tableLayout: "fixed" }}>
+          <table className="w-full text-left text-sm" style={{ minWidth: 1100, tableLayout: "fixed" }}>
             <colgroup>
-              {/* Allocate space by information density. Actions are right-aligned
-                  so the final control anchors to the card edge instead of leaving
-                  a visually empty strip on wide screens. */}
-              <col style={{ width: "24%" }} />
-              <col style={{ width: "17%" }} />
-              <col style={{ width: "15%" }} />
+              {/* Allocate space by information density. Actions begin at their
+                  column boundary so they stay visually connected to Availability. */}
+              <col style={{ width: "220px" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "14%" }} />
               <col style={{ width: "12%" }} />
-              <col style={{ width: "32%" }} />
+              <col />
             </colgroup>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Vocabulary</span></th>
                 <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Category</span></th>
-                <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Training samples</span></th>
-                <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Availability</span></th>
-                <th className="px-5 py-3 text-right"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Actions</span></th>
+                <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Samples</span></th>
+                <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Status</span></th>
+                <th className="px-5 py-3 text-left"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -1085,7 +1084,7 @@ const ManageWord = () => {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center", justifyContent: "flex-start", whiteSpace: "nowrap" }}>
                       {/* Disabled while a batch is extracting — the server also
                           rejects a concurrent batch with 409, since two would race
                           on the same sample counters. */}
@@ -1094,13 +1093,13 @@ const ManageWord = () => {
                         onClick={() => setUploadWord(word)}
                         disabled={!!uploadJob}
                         aria-label={`Upload training clips for ${word.label}`}
-                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${C.border}`, background: "white", cursor: uploadJob ? "not-allowed" : "pointer", fontSize: "0.78rem", fontWeight: 500, color: "#374151", opacity: uploadJob ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
-                        <Upload size={14} /> Training clips
+                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${C.border}`, background: "white", cursor: uploadJob ? "not-allowed" : "pointer", fontSize: "0.75rem", fontWeight: 500, color: "#374151", opacity: uploadJob ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                        <Upload size={14} /> Clips
                       </button>
                       <button title="Set the single demonstration video shown in the mobile app" onClick={() => setDemoVideoWord(word)}
                         aria-label={`Set demonstration video for ${word.label}`}
-                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${word.video_url ? "#bbf7d0" : C.border}`, background: word.video_url ? "#f0fdf4" : "white", cursor: "pointer", fontSize: "0.78rem", fontWeight: 500, color: word.video_url ? "#166534" : "#374151", whiteSpace: "nowrap", flexShrink: 0 }}>
-                        <Film size={14} /> Demo video
+                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${word.video_url ? "#bbf7d0" : C.border}`, background: word.video_url ? "#f0fdf4" : "white", cursor: "pointer", fontSize: "0.75rem", fontWeight: 500, color: word.video_url ? "#166534" : "#374151", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        <Film size={14} /> Demo
                       </button>
                       <button title="Edit word" aria-label={`Edit ${word.label}`} onClick={() => setEditWord(word)}
                         style={{ width: "32px", height: "32px", padding: 0, borderRadius: "7px", border: `1px solid ${C.border}`, background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -1137,7 +1136,7 @@ const ManageWord = () => {
         {/* Pagination */}
         {total > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-2" style={{ padding: "12px 20px", borderTop: `1px solid ${C.border}`, background: "#f9fafb" }}>
-            <span style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+            <span className="text-xs text-gray-500">
               Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
             </span>
             <div style={{ display: "flex", gap: "8px" }}>
@@ -1145,7 +1144,7 @@ const ManageWord = () => {
                 style={{ padding: "6px 12px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.5 : 1, display: "flex", alignItems: "center" }}>
                 <ChevronLeft size={16} />
               </button>
-              <span style={{ padding: "6px 12px", fontSize: "0.85rem", color: "#374151" }}>{page} / {totalPages}</span>
+              <span className="px-3 py-1.5 text-xs text-gray-700">{page} / {totalPages}</span>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
                 style={{ padding: "6px 12px", borderRadius: "6px", border: `1px solid ${C.border}`, background: "white", cursor: page === totalPages ? "not-allowed" : "pointer", opacity: page === totalPages ? 0.5 : 1, display: "flex", alignItems: "center" }}>
                 <ChevronRight size={16} />
