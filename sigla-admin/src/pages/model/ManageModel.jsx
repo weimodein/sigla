@@ -904,9 +904,9 @@ const ManageModel = () => {
                           <p className="font-semibold" style={{ color: getMetricColor(model.accuracy) }}>
                             {fmt(model.accuracy)}
                           </p>
-                          <p className="mt-0.5 text-xs text-gray-400">
-                            {model.total_classes == null ? "Not trained" : `${model.total_classes} classes`}
-                          </p>
+                          {model.total_classes == null && (
+                            <p className="mt-0.5 text-xs text-gray-400">Not trained</p>
+                          )}
                         </td>
                         <td className="px-5 py-3">
                           <p
@@ -919,11 +919,9 @@ const ManageModel = () => {
                           >
                             {fmt(model.letters?.accuracy)}
                           </p>
-                          <p className="mt-0.5 text-xs text-gray-400">
-                            {model.letters?.total_classes == null
-                              ? "Not trained"
-                              : `${model.letters.total_classes} classes`}
-                          </p>
+                          {model.letters?.total_classes == null && (
+                            <p className="mt-0.5 text-xs text-gray-400">Not trained</p>
+                          )}
                         </td>
                         <td className="px-5 py-3">
                           <Badge value={model.status} />
