@@ -80,7 +80,7 @@ const ActionBadge = ({ action }) => {
         display: "inline-block",
         padding: "3px 10px",
         borderRadius: 999,
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: 600,
         background: color + "18",
         color,
@@ -429,7 +429,7 @@ const ActivityLogs = () => {
                     <td className="px-5 py-3.5" style={{ color: "#4b5563", maxWidth: 380 }}>
                       {log.details || "—"}
                     </td>
-                    <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 13, whiteSpace: "nowrap" }}>
+                    <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 15, whiteSpace: "nowrap" }}>
                       {formatDateTime(log.created_at)}
                     </td>
                   </tr>

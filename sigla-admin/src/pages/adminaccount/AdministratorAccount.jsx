@@ -75,14 +75,14 @@ const StepIndicator = ({ steps, current }) => {
       {steps.map((step, index) => (
         <div
           key={step.key}
-          className={`flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-medium ${
+          className={`flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium ${
             index <= currentIndex
               ? "bg-blue-50 text-blue-900"
               : "bg-gray-50 text-gray-400"
           }`}
         >
           <span
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] ${
               index <= currentIndex
                 ? "bg-blue-900 text-white"
                 : "bg-gray-200 text-gray-500"
@@ -399,11 +399,11 @@ const AdministratorAccount = () => {
                   {user.email ? maskEmail(user.email) : "No email linked"}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-900">
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[13px] font-semibold uppercase tracking-wide text-blue-900">
                     {user.role?.replace("_", " ") || "Administrator"}
                   </span>
                   <span
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
+                    className={`rounded-full px-2.5 py-1 text-[13px] font-semibold capitalize ${
                       user.status === "active"
                         ? "bg-emerald-50 text-emerald-700"
                         : user.status
@@ -532,7 +532,7 @@ const AdministratorAccount = () => {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-semibold text-gray-800">Email address</h4>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${
                         user.email
                           ? "bg-emerald-50 text-emerald-700"
                           : "bg-amber-50 text-amber-700"

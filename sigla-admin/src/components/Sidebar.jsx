@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { createElement, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { navItems } from "./navItems.js";
@@ -194,7 +194,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
           </span>
           <span
             style={{
-              fontSize: "1.375rem",
+              fontSize: "1.5rem",
               fontWeight: 700,
               color: TEXT,
               whiteSpace: "nowrap",
@@ -243,7 +243,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
           gap: "4px",
         }}
       >
-        {visibleNavItems.map(({ label, path, icon: Icon }) => (
+        {visibleNavItems.map(({ label, path, icon }) => (
           <NavLink
             key={path}
             to={path}
@@ -267,7 +267,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
               fontWeight: isActive ? 600 : 500,
             })}
           >
-            <Icon size={20} style={{ flexShrink: 0 }} />
+            {createElement(icon, { size: 20, style: { flexShrink: 0 } })}
             {!isCollapsed && (
               <span
                 style={{

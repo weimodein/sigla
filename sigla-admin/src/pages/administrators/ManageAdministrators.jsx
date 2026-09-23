@@ -59,7 +59,7 @@ const chipStyle = (bg) => ({
   display: "inline-block",
   padding: "3px 10px",
   borderRadius: 999,
-  fontSize: 12,
+  fontSize: 14,
   fontWeight: 600,
   background: bg + "18",
   color: bg,
@@ -590,7 +590,7 @@ const ManageAdministrators = () => {
       >
         <td
           className="px-5 py-3.5 font-mono"
-          style={{ color: C.muted, fontSize: 13 }}
+          style={{ color: C.muted, fontSize: 15 }}
         >
           {u.id}
         </td>
@@ -603,7 +603,7 @@ const ManageAdministrators = () => {
         <td className="px-5 py-3.5">
           <StatusBadge status={u.status} />
         </td>
-        <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 13 }}>
+        <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 15 }}>
           {u.created_at ? new Date(u.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—"}
         </td>
         <td className="px-5 py-3.5">
@@ -642,7 +642,7 @@ const ManageAdministrators = () => {
               </>
             )}
             {activeTab === "deleted" && (
-              <span style={{ color: C.muted, fontSize: 13 }}>—</span>
+              <span style={{ color: C.muted, fontSize: 15 }}>—</span>
             )}
           </div>
         </td>
@@ -905,7 +905,7 @@ const ManageAdministrators = () => {
                   color: C.text,
                 }}
               />
-              <p className="text-[11px] mt-1" style={{ color: C.muted }}>
+              <p className="text-[13px] mt-1" style={{ color: C.muted }}>
                 Changing this notifies the administrator at both the old and the
                 new address.
               </p>
@@ -1010,7 +1010,7 @@ const ManageAdministrators = () => {
                   color: C.text,
                 }}
               />
-              <p className="text-[11px] mt-1" style={{ color: C.muted }}>
+              <p className="text-[13px] mt-1" style={{ color: C.muted }}>
                 At least 8 characters, including a letter and a number.
               </p>
             </div>
@@ -1117,7 +1117,7 @@ const ManageAdministrators = () => {
                   color: C.text,
                 }}
               />
-              <p className="text-[11px] mt-1" style={{ color: C.muted }}>
+              <p className="text-[13px] mt-1" style={{ color: C.muted }}>
                 At least 8 characters, including a letter and a number.
               </p>
             </div>
@@ -1180,7 +1180,7 @@ const ManageAdministrators = () => {
                 " Because this account has no linked email yet, they will also be asked to link one."}
             </p>
             {resetModal.email && (
-              <p className="text-[11px] leading-relaxed" style={{ color: C.muted }}>
+              <p className="text-[13px] leading-relaxed" style={{ color: C.muted }}>
                 They will be notified at {maskEmail(resetModal.email)}. For
                 security, the temporary password is not included in that email —
                 give it to them yourself.

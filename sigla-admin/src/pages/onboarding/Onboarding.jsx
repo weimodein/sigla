@@ -263,7 +263,7 @@ const Onboarding = () => {
                 />
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: 600,
                     color: step >= s ? C.primary : C.muted,
                     display: "flex",
@@ -366,7 +366,7 @@ const Onboarding = () => {
                 className={inputCls}
               />
               {!emailStepNeeded && (
-                <p className="text-[11px] text-gray-400 mt-1">
+                <p className="text-[13px] text-gray-400 mt-1">
                   Keep this as it is unless you want to change it.
                 </p>
               )}
@@ -382,7 +382,7 @@ const Onboarding = () => {
                 placeholder="New password"
                 className={inputCls}
               />
-              <p className="text-[11px] text-gray-400 mt-1">
+              <p className="text-[13px] text-gray-400 mt-1">
                 At least 8 characters, including a letter and a number.
               </p>
             </div>

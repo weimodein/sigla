@@ -213,7 +213,7 @@ const Layout = ({ children }) => {
             </button>
             <span
               style={{
-                fontSize: "1.125rem",
+                fontSize: "1.25rem",
                 fontWeight: 700,
                 color: "#1f2937",
                 letterSpacing: "0.02em",

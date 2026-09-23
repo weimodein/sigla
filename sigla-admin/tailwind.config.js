@@ -20,16 +20,16 @@ export default {
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"],
       },
-      // One restrained step above Tailwind's defaults. These values align the
-      // utility classes with the semantic typography tokens in index.css.
+      // Larger application-wide scale. These values align the utility classes
+      // with the semantic typography tokens in index.css.
       fontSize: {
-        xs: ["0.8125rem", { lineHeight: "1.125rem" }],
-        sm: ["0.9375rem", { lineHeight: "1.375rem" }],
-        base: ["1.0625rem", { lineHeight: "1.625rem" }],
-        lg: ["1.1875rem", { lineHeight: "1.75rem" }],
-        xl: ["1.3125rem", { lineHeight: "1.875rem" }],
-        "2xl": ["1.625rem", { lineHeight: "2rem" }],
-        "3xl": ["2rem", { lineHeight: "2.375rem" }],
+        xs: ["0.9375rem", { lineHeight: "1.25rem" }],
+        sm: ["1.0625rem", { lineHeight: "1.5rem" }],
+        base: ["1.125rem", { lineHeight: "1.625rem" }],
+        lg: ["1.3125rem", { lineHeight: "1.875rem" }],
+        xl: ["1.5rem", { lineHeight: "2rem" }],
+        "2xl": ["1.875rem", { lineHeight: "2.25rem" }],
+        "3xl": ["2.25rem", { lineHeight: "2.625rem" }],
       },
       // Mirrors the motion tokens in index.css so utility classes and
       // hand-written CSS draw from one scale. Use duration-fast / duration-base

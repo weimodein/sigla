@@ -990,8 +990,8 @@ const ReportsAnalytics = () => {
               <ResponsiveContainer width="100%" height={240} debounce={200}>
                 <LineChart data={submissionTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 14 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 14 }} tickLine={false} axisLine={false} allowDecimals={false} />
                   <Tooltip />
                   <Line
                     type="monotone"
@@ -1034,7 +1034,7 @@ const ReportsAnalytics = () => {
                   </div>
                 ) : (
                   <span
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    className={`rounded-full px-2.5 py-1 text-[13px] font-semibold ${
                       deploymentSummary.state === "warning"
                         ? "bg-amber-50 text-amber-700"
                         : deploymentSummary.state === "error"
@@ -1057,8 +1057,8 @@ const ReportsAnalytics = () => {
               <ResponsiveContainer width="100%" height={240} debounce={200}>
                 <LineChart data={modelAccuracyData} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                  <XAxis dataKey="version" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" />
+                  <XAxis dataKey="version" tick={{ fontSize: 14 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 14 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" />
                   <Tooltip formatter={(value, name) => [`${value}%`, name]} />
                   <Line
                     type="monotone"
@@ -1100,17 +1100,17 @@ const ReportsAnalytics = () => {
               <ResponsiveContainer width="100%" height={220} debounce={200}>
                 <BarChart data={samplesPerWord} layout="vertical" margin={{ left: 8, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <XAxis type="number" tick={{ fontSize: 14 }} tickLine={false} axisLine={false} />
                   <YAxis
                     dataKey="name"
                     type="category"
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 14 }}
                     tickLine={false}
                     axisLine={false}
                     width={72}
                   />
                   <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 14 }} />
                   <Bar
                     dataKey="samples"
                     fill="#bfdbfe"
@@ -1308,7 +1308,7 @@ const ReportsAnalytics = () => {
                 />
                 <span>
                   <span className="block text-xs font-semibold text-gray-700">{label}</span>
-                  <span className="mt-0.5 block text-[11px] text-gray-400">{description}</span>
+                  <span className="mt-0.5 block text-[13px] text-gray-400">{description}</span>
                 </span>
               </label>
             ))}

@@ -59,7 +59,7 @@ const ActivityBadge = ({ action }) => {
   else if (/(updated|tested|trained|uploaded)/.test(a))
     cls = "bg-blue-100 text-blue-700";
   return (
-    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${cls}`}>
+    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[13px] font-semibold uppercase tracking-wide ${cls}`}>
       {humanizeAction(a)}
     </span>
   );
@@ -272,7 +272,7 @@ const Dashboard = () => {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium text-gray-700">v{m.version_number}</span>
                     {isDeployed && (
-                      <span className="text-[11px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                      <span className="text-[13px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
                         deployed
                       </span>
                     )}
@@ -316,7 +316,7 @@ const Dashboard = () => {
                       <ActivityBadge action={item.action} />
                     </div>
                     <p className="text-xs text-gray-500 truncate">{item.description}</p>
-                    <span className="text-[11px] text-gray-400">{formatActivityDate(item.date)}</span>
+                    <span className="text-[13px] text-gray-400">{formatActivityDate(item.date)}</span>
                   </div>
                 </div>
               ))}
