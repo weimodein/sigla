@@ -3,21 +3,14 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import Button from "../../components/Button.jsx";
-import { useModalKeys } from "../../components/useModalKeys.js";
+import AppModal from "../../components/AppModal.jsx";
 import {
   requestEmailCode,
   verifyEmailCode,
   completeSetup,
 } from "../../api/authApi.js";
-import { Mail, UserCog, Check, AlertTriangle } from "lucide-react";
+import { AlertTriangle, LogOut } from "lucide-react";
 import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
-
-const C = {
-  text: "#1f2937",
-  primary: "#1e3a8a",
-  muted: "#9ca3af",
-  border: "#e5e7eb",
-};
 
 const isValidPassword = (pw) =>
   pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
@@ -57,23 +50,24 @@ const Onboarding = () => {
   // Email flow
   const [emailPhase, setEmailPhase] = useState("enter"); // "enter" | "verify"
   const [newEmail, setNewEmail] = useState("");
-  const [emailCode, setEmailCode] = useState("");
+  const [emailCode, setEmailCode] = useState(() => Array(6).fill(""));
   const [emailLoading, setEmailLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [emailError, setEmailError] = useState("");
+  const [codeError, setCodeError] = useState("");
   // Set when the address is well formed but its domain is unfamiliar — the user
   // confirms before a code is sent to a possibly mistyped address.
   const [confirmEmail, setConfirmEmail] = useState(false);
-  // Lets the keyboard hook above the early returns reach sendEmailCode, which is
-  // declared further down the body.
-  const sendEmailCodeRef = useRef(null);
 
   // Credentials flow. Username is seeded from the account: an administrator
   // who is only here because their password was reset should not have to
   // invent a new name. Changing it stays optional.
   const [username, setUsername] = useState(user?.username || "");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [credentialErrors, setCredentialErrors] = useState({});
   const [credLoading, setCredLoading] = useState(false);
+  const otpRefs = useRef([]);
 
   // Ref + unmount cleanup: completing setup navigates away while the cooldown may
   // still be running, which otherwise leaves a 1 Hz timer on an unmounted page.
@@ -98,16 +92,6 @@ const Onboarding = () => {
     if (cooldownRef.current) clearInterval(cooldownRef.current);
   }, []);
 
-  // Hand-rolled overlay, not an AppModal — wire the keyboard contract explicitly.
-  // Must sit above the early returns below to keep hook order stable; sendEmailCode
-  // is declared later in the body, so it is reached through a lazy call that only
-  // ever runs from a keypress.
-  useModalKeys({
-    onEscape: () => setConfirmEmail(false),
-    onEnter: () => sendEmailCodeRef.current?.(),
-    enabled: () => confirmEmail,
-  });
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -123,9 +107,10 @@ const Onboarding = () => {
   // unfamiliar. A typo like "gmail.com" -> "gmaasdasd.com" is syntactically
   // valid, so only a second look catches it.
   const handleRequestEmailCode = () => {
-    const emailError = validateEmail(newEmail);
-    if (emailError) {
-      toast.error(emailError);
+    setEmailError("");
+    const validationError = validateEmail(newEmail);
+    if (validationError) {
+      setEmailError(validationError);
       return;
     }
     if (!isKnownDomain(newEmail)) {
@@ -136,12 +121,14 @@ const Onboarding = () => {
   };
 
   const sendEmailCode = async () => {
+    if (emailLoading) return;
     setConfirmEmail(false);
     setEmailLoading(true);
     try {
       await requestEmailCode(newEmail);
       toast.success(`Verification code sent to ${newEmail}. Valid for 5 minutes.`);
       setEmailPhase("verify");
+      setCodeError("");
       startCooldown();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to send verification code");
@@ -149,8 +136,6 @@ const Onboarding = () => {
       setEmailLoading(false);
     }
   };
-  sendEmailCodeRef.current = sendEmailCode;
-
   const handleResend = async () => {
     if (cooldown > 0) return;
     try {
@@ -162,35 +147,76 @@ const Onboarding = () => {
     }
   };
 
+  const updateOtp = (index, rawValue) => {
+    setCodeError("");
+    const digits = rawValue.replace(/\D/g, "");
+    if (!digits) {
+      setEmailCode((current) => current.map((digit, i) => (i === index ? "" : digit)));
+      return;
+    }
+
+    setEmailCode((current) => {
+      const next = [...current];
+      digits.slice(0, 6 - index).split("").forEach((digit, offset) => {
+        next[index + offset] = digit;
+      });
+      return next;
+    });
+    otpRefs.current[Math.min(index + digits.length, 5)]?.focus();
+  };
+
+  const handleOtpKeyDown = (index, event) => {
+    if (event.key === "Backspace" && !emailCode[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (event.key === "ArrowRight" && index < 5) {
+      event.preventDefault();
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (event) => {
+    const digits = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!digits) return;
+    event.preventDefault();
+    setCodeError("");
+    setEmailCode(Array.from({ length: 6 }, (_, index) => digits[index] || ""));
+    otpRefs.current[Math.min(digits.length, 5)]?.focus();
+  };
+
   const handleVerifyEmail = async () => {
-    if (emailCode.length !== 6) {
-      toast.error("Please enter the 6-digit verification code");
+    setCodeError("");
+    if (emailCode.some((digit) => !digit)) {
+      setCodeError("Enter the complete 6-digit verification code.");
       return;
     }
     setEmailLoading(true);
     try {
-      await verifyEmailCode(newEmail, emailCode);
+      await verifyEmailCode(newEmail, emailCode.join(""));
       await refreshUser();
       toast.success("Email linked. Now update your credentials.");
       setStep(2);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Invalid or expired code");
+      setCodeError(err.response?.data?.message || "The code is invalid or has expired.");
     } finally {
       setEmailLoading(false);
     }
   };
 
   const handleCompleteSetup = async () => {
+    const errors = {};
     if (!username.trim()) {
-      toast.error("Username cannot be empty");
-      return;
+      errors.username = "Enter a username.";
     }
     if (!isValidPassword(password)) {
-      toast.error("Password must be at least 8 characters and include a letter and a number");
-      return;
+      errors.password = "Use at least 8 characters, including a letter and a number.";
     }
-    if (password !== confirm) {
-      toast.error("Passwords do not match");
+    setCredentialErrors(errors);
+    if (Object.keys(errors).length) {
       return;
     }
     setCredLoading(true);
@@ -206,292 +232,296 @@ const Onboarding = () => {
     }
   };
 
-  const inputCls =
-    "w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900";
+  const inputCls = "onboarding-input";
+  const screen = step === 1
+    ? emailPhase === "enter"
+      ? {
+          eyebrow: "Step 1 of 2",
+          title: "Add your email address",
+          description: "We’ll use this address for account recovery and important security notices.",
+        }
+      : {
+          eyebrow: "Step 1 of 2",
+          title: "Check your email",
+          description: `Enter the six-digit code we sent to ${newEmail}.`,
+        }
+    : {
+        eyebrow: emailStepNeeded ? "Step 2 of 2" : "Account security",
+        title: emailStepNeeded ? "Create your sign-in details" : "Create a new password",
+        description: emailStepNeeded
+          ? "Choose the username and password you’ll use to access SIGLA."
+          : "Choose a secure password to regain access to your account.",
+      };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f3f4f6",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 460,
-          background: "#fff",
-          borderRadius: 16,
-          boxShadow: "0 10px 40px rgba(0,0,0,0.08)",
-          padding: 32,
-        }}
-      >
+    <main className="onboarding-page">
+      <section className="onboarding-card" aria-labelledby="onboarding-title">
         {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <img
-            src="/logo_without_text_official.png"
-            alt="SIGLA"
-            style={{ width: 56, height: 56, objectFit: "contain", margin: "0 auto 8px" }}
-          />
-          <h1 className="page-title">
-            {emailStepNeeded ? "Complete Your Account Setup" : "Set a New Password"}
+        <header className="onboarding-header">
+          <p className="onboarding-step-label">{screen.eyebrow}</p>
+          <h1 id="onboarding-title" className="page-title">
+            {screen.title}
           </h1>
-          <p className="page-subtitle" style={{ marginTop: 6 }}>
-            {emailStepNeeded
-              ? "For security, link an email and set your own credentials before continuing."
-              : "Your password was reset. Choose a new one to continue."}
-          </p>
-        </div>
-
-        {/* Step indicator — only meaningful when there is more than one step.
-            An account that already has an email never sees the email step, so
-            showing a "Link Email" pill it cannot act on would just confuse. */}
-        {emailStepNeeded && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-            {[1, 2].map((s) => (
-              <div key={s} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-                <div
-                  style={{
-                    height: 4,
-                    borderRadius: 2,
-                    background: step >= s ? C.primary : C.border,
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: step >= s ? C.primary : C.muted,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                  }}
-                >
-                  {s === 1 ? <Mail size={12} /> : <UserCog size={12} />}
-                  {s === 1 ? "Link Email" : "Set Credentials"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+          <p className="page-subtitle">{screen.description}</p>
+        </header>
 
         {/* Step 1 — Email */}
         {step === 1 && (
-          <div className="space-y-3">
+          <form
+            className="onboarding-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (emailPhase === "enter") handleRequestEmailCode();
+              else handleVerifyEmail();
+            }}
+          >
             {emailPhase === "enter" ? (
               <>
-                <label className="block text-xs font-medium text-gray-600">
-                  Email Address
+                <label className="onboarding-label" htmlFor="onboarding-email">
+                  Email address
                 </label>
                 <input
+                  id="onboarding-email"
+                  name="email"
                   type="email"
                   value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    setEmailError("");
+                  }}
+                  autoComplete="email"
+                  spellCheck="false"
+                  enterKeyHint="send"
                   className={inputCls}
+                  aria-invalid={emailError ? "true" : undefined}
+                  aria-describedby={emailError ? "onboarding-email-error" : undefined}
+                  autoFocus
+                  required
                 />
-                <p className="small-text text-gray-400">
-                  A 6-digit verification code will be sent to this address.
-                </p>
-                <button
-                  onClick={handleRequestEmailCode}
-                  disabled={emailLoading}
-                  className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50"
+                {emailError && (
+                  <p id="onboarding-email-error" className="onboarding-error" role="alert">
+                    {emailError}
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  className="onboarding-submit"
+                  loading={emailLoading}
+                  aria-keyshortcuts="Enter"
                 >
-                  {emailLoading ? "Sending..." : "Send Verification Code"}
-                </button>
+                  Send verification code
+                </Button>
               </>
             ) : (
               <>
-                <p className="small-text text-gray-500">
-                  Enter the 6-digit code sent to{" "}
-                  <span className="font-medium">{newEmail}</span>.
-                </p>
-                <input
-                  type="text"
-                  value={emailCode}
-                  onChange={(e) =>
-                    setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                <fieldset
+                  className="onboarding-otp-fieldset"
+                  aria-describedby={
+                    codeError
+                      ? "onboarding-code-hint onboarding-code-error"
+                      : "onboarding-code-hint"
                   }
-                  maxLength={6}
-                  placeholder="• • • • • •"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-lg tracking-[0.5em] text-center focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-                <button
-                  onClick={handleVerifyEmail}
-                  disabled={emailLoading || emailCode.length !== 6}
-                  className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50"
                 >
-                  {emailLoading ? "Verifying..." : "Verify & Continue"}
-                </button>
-                <div className="flex justify-between">
+                  <legend>Verification code</legend>
+                  <p id="onboarding-code-hint" className="onboarding-help">
+                    The code expires after 5 minutes.
+                  </p>
+                  <div className="onboarding-otp" onPaste={handleOtpPaste}>
+                    {emailCode.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(node) => { otpRefs.current[index] = node; }}
+                        type="text"
+                        value={digit}
+                        onChange={(event) => updateOtp(index, event.target.value)}
+                        onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                        inputMode="numeric"
+                        pattern="[0-9]"
+                        maxLength={index === 0 ? 6 : 1}
+                        autoComplete={index === 0 ? "one-time-code" : "off"}
+                        aria-invalid={codeError ? "true" : undefined}
+                        aria-label={`Verification code digit ${index + 1}`}
+                        autoFocus={index === 0}
+                      />
+                    ))}
+                  </div>
+                </fieldset>
+                {codeError && (
+                  <p id="onboarding-code-error" className="onboarding-error" role="alert">
+                    {codeError}
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  className="onboarding-submit"
+                  loading={emailLoading}
+                  aria-keyshortcuts="Enter"
+                >
+                  Verify and continue
+                </Button>
+                <div className="onboarding-form-links">
                   <button
+                    type="button"
                     onClick={() => {
                       setEmailPhase("enter");
-                      setEmailCode("");
+                      setEmailCode(Array(6).fill(""));
+                      setCodeError("");
                     }}
-                    className="text-sm text-gray-500 hover:text-gray-700"
                   >
                     Change email
                   </button>
                   <button
+                    type="button"
                     onClick={handleResend}
                     disabled={cooldown > 0}
-                    className="text-sm text-blue-900 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
                   >
                     {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
                   </button>
                 </div>
               </>
             )}
-          </div>
+          </form>
         )}
 
         {/* Step 2 — Credentials */}
         {step === 2 && (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {emailStepNeeded ? "New Username" : "Username"}
+          <form
+            className="onboarding-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleCompleteSetup();
+            }}
+          >
+            <div className="onboarding-field">
+              <label htmlFor="onboarding-username">
+                {emailStepNeeded ? "Create a username" : "Username"}
               </label>
               <input
+                id="onboarding-username"
+                name="username"
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Choose a username"
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setCredentialErrors((current) => ({ ...current, username: "" }));
+                }}
+                autoComplete="username"
                 className={inputCls}
+                aria-invalid={credentialErrors.username ? "true" : undefined}
+                aria-describedby={credentialErrors.username ? "onboarding-username-error" : undefined}
+                required
               />
+              {credentialErrors.username && (
+                <p id="onboarding-username-error" className="onboarding-error" role="alert">
+                  {credentialErrors.username}
+                </p>
+              )}
               {!emailStepNeeded && (
-                <p className="text-[13px] text-gray-400 mt-1">
+                <p className="onboarding-help">
                   Keep this as it is unless you want to change it.
                 </p>
               )}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                New Password
+            <div className="onboarding-field">
+              <label htmlFor="onboarding-password">
+                Create a password
               </label>
               <input
-                type="password"
+                id="onboarding-password"
+                name="new-password"
+                type={showPasswords ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="New password"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setCredentialErrors((current) => ({ ...current, password: "" }));
+                }}
+                autoComplete="new-password"
                 className={inputCls}
+                aria-invalid={credentialErrors.password ? "true" : undefined}
+                aria-describedby={
+                  credentialErrors.password
+                    ? "onboarding-password-hint onboarding-password-error"
+                    : "onboarding-password-hint"
+                }
+                required
               />
-              <p className="text-[13px] text-gray-400 mt-1">
+              <p id="onboarding-password-hint" className="onboarding-help">
                 At least 8 characters, including a letter and a number.
               </p>
+              {credentialErrors.password && (
+                <p id="onboarding-password-error" className="onboarding-error" role="alert">
+                  {credentialErrors.password}
+                </p>
+              )}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Confirm Password
-              </label>
+            <label className="onboarding-show-passwords">
               <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Confirm password"
-                className={inputCls}
+                type="checkbox"
+                checked={showPasswords}
+                onChange={(event) => setShowPasswords(event.target.checked)}
               />
-            </div>
-            <button
-              onClick={handleCompleteSetup}
-              disabled={credLoading}
-              className="w-full flex items-center justify-center gap-1.5 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50"
+              Show passwords
+            </label>
+            <Button
+              type="submit"
+              className="onboarding-submit"
+              loading={credLoading}
+              aria-keyshortcuts="Enter"
             >
-              <Check size={15} />
-              {credLoading
-                ? "Finishing..."
-                : emailStepNeeded
-                  ? "Finish Setup"
-                  : "Save New Password"}
-            </button>
-          </div>
+              {emailStepNeeded ? "Finish setup" : "Save new password"}
+            </Button>
+          </form>
         )}
 
         {/* Sign out escape hatch */}
-        <div style={{ textAlign: "center", marginTop: 20 }}>
+        <footer className="onboarding-footer">
           <button
+            type="button"
             onClick={() => {
               logout();
               navigate("/login");
             }}
-            className="text-sm text-gray-400 hover:text-gray-600"
           >
+            <LogOut size={14} aria-hidden="true" />
             Sign out
           </button>
-        </div>
-      </div>
+        </footer>
+      </section>
 
-      {/* Unfamiliar-domain confirmation — the code can only be sent once per
-          minute, so a mistyped address is costly to recover from. */}
       {confirmEmail && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            background: "rgba(0,0,0,0.4)",
-          }}
-          onClick={() => setConfirmEmail(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "white",
-              borderRadius: 16,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-              width: "100%",
-              maxWidth: 420,
-              padding: 24,
-            }}
-          >
-            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-              <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
-              <h3 className="section-title">
-                Double-check this email address
-              </h3>
-            </div>
-            <p style={{ fontSize: "var(--type-body)", color: "#6b7280", margin: "0 0 8px" }}>
-              The verification code will be sent to:
-            </p>
-            <p
-              style={{
-                fontSize: "var(--type-body)",
-                fontWeight: 600,
-                color: C.text,
-                wordBreak: "break-all",
-                background: "#f9fafb",
-                border: `1px solid ${C.border}`,
-                borderRadius: 8,
-                padding: "10px 12px",
-                margin: "0 0 12px",
-              }}
-            >
-              {newEmail}
-            </p>
-            <p style={{ fontSize: "var(--type-meta)", color: "#6b7280", margin: "0 0 20px" }}>
-              If this is mistyped you will not receive the code, and a new one
-              cannot be sent for 1 minute.
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <AppModal
+          title="Double-check this email address"
+          onClose={() => setConfirmEmail(false)}
+          onEnter={sendEmailCode}
+          footer={
+            <>
               <Button variant="secondary" onClick={() => setConfirmEmail(false)}>
                 Go back and edit
               </Button>
-              <Button onClick={sendEmailCode}>Send code</Button>
+              <Button onClick={sendEmailCode} loading={emailLoading}>
+                Send code
+              </Button>
+            </>
+          }
+        >
+          <div className="onboarding-confirmation">
+            <span aria-hidden="true">
+              <AlertTriangle size={18} />
+            </span>
+            <div>
+              <p>
+              The verification code will be sent to:
+              </p>
+              <strong>{newEmail}</strong>
+              <small>
+                Check for spelling errors. You’ll need to wait one minute before
+                requesting another code.
+              </small>
             </div>
           </div>
-        </div>
+        </AppModal>
       )}
-    </div>
+    </main>
   );
 };
 
