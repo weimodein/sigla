@@ -180,7 +180,10 @@ const getReportWords = async () => {
     allWords.push(...(nextPage.words || []));
   }
 
-  return { ...firstPage, words: allWords };
+  const uniqueWords = [
+    ...new Map(allWords.map((entry) => [entry.id, entry])).values(),
+  ];
+  return { ...firstPage, words: uniqueWords };
 };
 
 // Start of the window for each range option, or null for "all time".
@@ -210,10 +213,13 @@ const rangeStart = (range) => {
 const ReportsAnalytics = () => {
   const toast = useToast();
   const navigate = useNavigate();
-  const { isSuper } = useAuth();
+  const { isSuper, user } = useAuth();
   const [filter, setFilter] = useState("month");
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [modelLoadFailed, setModelLoadFailed] = useState(false);
+  const [dataAsOf, setDataAsOf] = useState(null);
 
   const [wordStats, setWordStats] = useState(null);
   const [deactivatedUsers, setDeactivatedUsers] = useState([]);
@@ -238,6 +244,8 @@ const ReportsAnalytics = () => {
   // ── Fetch ───────────────────────────────────────────────────
   const fetchAll = async () => {
     setLoading(true);
+    setLoadError(false);
+    setModelLoadFailed(false);
     try {
       // The deactivated/deleted rosters are super-only. Regular admins skip them
       // and simply don't see those tables.
@@ -248,11 +256,11 @@ const ReportsAnalytics = () => {
       // render empty no matter how many accounts had been deleted.
       const [wStats, deactivatedData, deletedData, wordsData, catsData] =
         await Promise.all([
-          getWordStats(),
+          getWordStats({ force: true }),
           isSuper ? getDeactivatedAdministrators() : Promise.resolve({ administrators: [] }),
           isSuper ? getDeletedAdministrators() : Promise.resolve({ administrators: [] }),
           getReportWords(),
-          getCategories(),
+          getCategories({ force: true }),
         ]);
 
       setWordStats(wStats);
@@ -268,12 +276,16 @@ const ReportsAnalytics = () => {
       );
 
       try {
-        const mData = await getModelVersions();
+        const mData = await getModelVersions({ force: true });
         setModels(mData.models || []);
       } catch {
         setModels([]);
+        setModelLoadFailed(true);
       }
+      setDataAsOf(new Date());
     } catch {
+      setLoadError(true);
+      setDataAsOf(null);
       toast.error("Failed to load reports data");
     } finally {
       setLoading(false);
@@ -358,12 +370,17 @@ const ReportsAnalytics = () => {
         words: null,
         letters: null,
         timestamp: 0,
+        trainedTimestamp: 0,
       };
       const kind = model.model_kind === "letters" ? "letters" : "words";
       pair[kind] = model;
       pair.timestamp = Math.max(
         pair.timestamp,
         new Date(model.trained_at || model.created_at || 0).getTime() || 0,
+      );
+      pair.trainedTimestamp = Math.max(
+        pair.trainedTimestamp,
+        new Date(model.trained_at || 0).getTime() || 0,
       );
       grouped.set(version, pair);
     });
@@ -406,6 +423,9 @@ const ReportsAnalytics = () => {
   // Current means one version whose words and alphabet rows are both deployed.
   // Never fall back to the highest-scoring row: that is not necessarily live.
   const deploymentSummary = useMemo(() => {
+    if (modelLoadFailed) {
+      return { state: "error", label: "Model data unavailable", pair: null };
+    }
     const withDeployedRows = modelPairs.filter(
       (pair) =>
         pair.words?.status === "deployed" || pair.letters?.status === "deployed",
@@ -432,7 +452,7 @@ const ReportsAnalytics = () => {
       };
     }
     return { state: "empty", label: "No active model pair", pair: null };
-  }, [modelPairs]);
+  }, [modelPairs, modelLoadFailed]);
 
   const toggleSection = (key) =>
     setReportSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -441,111 +461,377 @@ const ReportsAnalytics = () => {
   const handleGenerateReport = async () => {
     setGenerating(true);
     try {
-      const doc = new jsPDF();
-      const dateStr = new Date().toLocaleDateString("en-US", {
-        year: "numeric", month: "long", day: "numeric",
-      });
-      // Name the actual window, not just the option. The header used to read
-      // "Filter: Week" over all-time data, which made every export misleading.
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const generatedAt = new Date();
       const rangeFrom = rangeStart(filter);
-      const filterLabel = rangeFrom
-        ? `${filter.charAt(0).toUpperCase() + filter.slice(1)} (since ${rangeFrom.toLocaleDateString("en-PH")})`
-        : "All time";
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 16;
+      const navy = [30, 58, 138];
+      const muted = [100, 116, 139];
 
-      // ── Header ───────────────────────────────────────────────
-      doc.setFontSize(18);
+      const formatDate = (value) => {
+        if (value == null) return "N/A";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime())
+          ? "N/A"
+          : date.toLocaleDateString("en-PH", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            });
+      };
+      const formatDateTime = (value) => {
+        if (value == null || value === 0) return "N/A";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime())
+          ? "N/A"
+          : date.toLocaleString("en-PH", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            });
+      };
+      const pdfAccuracy = (value) => {
+        const percent = asPercent(value);
+        return percent == null ? "N/A" : `${percent.toFixed(1)}%`;
+      };
+      const titleCase = (value) =>
+        String(value || "N/A")
+          .replaceAll("_", " ")
+          .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+      const activityRangeLabel = `${formatDate(rangeFrom)} to ${formatDate(generatedAt)}`;
+      const sectionNames = [
+        reportSections.word_stats && "Vocabulary statistics",
+        reportSections.sample_counts && "Gesture sample counts",
+        reportSections.model_accuracy && "Model accuracy",
+      ].filter(Boolean);
+
+      doc.setProperties({
+        title: "SigLa System Report",
+        subject: "Reports and analytics export",
+        author: user?.username || "SigLa administrator",
+        creator: "SigLa Administrator Platform",
+      });
+
+      // Report header and scope metadata.
+      doc.setFillColor(...navy);
+      doc.rect(0, 0, pageWidth, 34, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
-      doc.text("SigLa System Report", 14, 20);
-      doc.setFontSize(11);
+      doc.text("SIGLA ADMINISTRATOR PLATFORM", margin, 11);
+      doc.setFontSize(20);
+      doc.text("Reports & Analytics", margin, 24);
+      doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(`Activity range: ${filterLabel}   |   Generated: ${dateStr}`, 14, 28);
-      doc.setLineWidth(0.5);
-      doc.line(14, 32, 196, 32);
+      doc.text(`Generated ${formatDateTime(generatedAt)}`, pageWidth - margin, 15, {
+        align: "right",
+      });
+      doc.text(`By ${user?.username || "Administrator"}`, pageWidth - margin, 22, {
+        align: "right",
+      });
+      doc.text(`Data as of ${formatDateTime(dataAsOf || generatedAt)}`, pageWidth - margin, 29, {
+        align: "right",
+      });
 
-      let y = 40;
+      doc.setTextColor(31, 41, 55);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Activity range", margin, 44);
+      doc.text("Included sections", margin, 51);
+      doc.setFont("helvetica", "normal");
+      doc.text(activityRangeLabel, 48, 44);
+      doc.text(sectionNames.join(", "), 48, 51);
+      doc.setTextColor(...muted);
+      doc.text(
+        "The activity range applies only to new vocabulary entries. Inventory, sample, and model values are current all-time data.",
+        margin,
+        59,
+      );
+
+      let y = 69;
       const sectionGap = 10;
 
-      // A heading plus at least one table row needs roughly 25mm. The old
-      // threshold of 265 let a title be drawn near the foot of a page while
-      // autoTable pushed its table to the next one, orphaning the heading.
-      const addSectionTitle = (title) => {
-        if (y > 250) { doc.addPage(); y = 20; }
-        doc.setFontSize(13);
-        doc.setFont("helvetica", "bold");
-        doc.text(title, 14, y);
-        y += 6;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
+      const ensureSpace = (required = 28) => {
+        if (y + required > pageHeight - 16) {
+          doc.addPage();
+          y = 18;
+        }
       };
 
+      const addSectionTitle = (title, description) => {
+        // Reserve enough room for the heading and the first part of its table so
+        // a section title is not orphaned at the foot of a page.
+        ensureSpace(description ? 50 : 38);
+        doc.setTextColor(...navy);
+        doc.setFontSize(13);
+        doc.setFont("helvetica", "bold");
+        doc.text(title, margin, y);
+        y += 5;
+        if (description) {
+          doc.setTextColor(...muted);
+          doc.setFontSize(8.5);
+          doc.setFont("helvetica", "normal");
+          const lines = doc.splitTextToSize(description, pageWidth - margin * 2);
+          doc.text(lines, margin, y);
+          y += lines.length * 4;
+        }
+        y += 2;
+      };
+
+      const addNote = (message) => {
+        const lines = doc.splitTextToSize(message, pageWidth - margin * 2 - 8);
+        const height = Math.max(10, lines.length * 4 + 5);
+        ensureSpace(height + 5);
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(margin, y, pageWidth - margin * 2, height, 2, 2, "FD");
+        doc.setTextColor(...muted);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text(lines, margin + 4, y + 6);
+        y += height + 5;
+      };
+
+      const tableDefaults = {
+        theme: "grid",
+        margin: { left: margin, right: margin, top: 16, bottom: 18 },
+        styles: {
+          font: "helvetica",
+          fontSize: 8,
+          cellPadding: 2.5,
+          textColor: [51, 65, 85],
+          lineColor: [226, 232, 240],
+          lineWidth: 0.15,
+          overflow: "linebreak",
+          valign: "middle",
+        },
+        headStyles: {
+          fillColor: navy,
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          lineColor: navy,
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+      };
+
+      const wordVocabularyCount = words.filter(
+        (entry) => entry.vocabulary !== "letters",
+      ).length;
+      const alphabetVocabularyCount = words.filter(
+        (entry) => entry.vocabulary === "letters",
+      ).length;
+      const approvedSampleTotal = words.reduce(
+        (sum, entry) => sum + Number(entry.approved_sample_count || 0),
+        0,
+      );
+      const entriesWithSamples = words.filter(
+        (entry) => Number(entry.total_samples || 0) > 0,
+      ).length;
+
       if (reportSections.word_stats) {
-        addSectionTitle("Vocabulary Statistics (All Time)");
+        addSectionTitle(
+          "1. Vocabulary overview",
+          "Current inventory totals are separated from newly created entries in the selected activity range.",
+        );
         autoTable(doc, {
+          ...tableDefaults,
           startY: y,
-          head: [["Metric", "Count"]],
+          head: [["Metric", "Value", "Metric", "Value"]],
           body: [
-            ["Total Entries", wordStats?.total ?? 0],
-            ["Active Entries", wordStats?.active ?? 0],
-            ["New Entries in Activity Range", wordsInRange.length],
-            ["Total Categories", categoryCount ?? 0],
-            ["Total Gesture Samples", wordStats?.total_samples ?? 0],
+            ["Total entries", wordStats?.total ?? 0, "Active entries", wordStats?.active ?? 0],
+            ["Words vocabulary", wordVocabularyCount, "Alphabet vocabulary", alphabetVocabularyCount],
+            ["Pending review", wordStats?.pending ?? 0, "Approved", wordStats?.approved ?? 0],
+            ["Rejected", wordStats?.rejected ?? 0, "Approved but inactive", wordStats?.ready_to_activate ?? 0],
+            ["Categories", categoryCount ?? 0, "Gesture samples", wordStats?.total_samples ?? 0],
+            ["New entries in activity range", wordsInRange.length, "Activity range", activityRangeLabel],
           ],
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
+          columnStyles: {
+            0: { fontStyle: "bold", cellWidth: 55 },
+            1: { cellWidth: 70 },
+            2: { fontStyle: "bold", cellWidth: 55 },
+          },
         });
         y = doc.lastAutoTable.finalY + sectionGap;
       }
 
       if (reportSections.sample_counts) {
-        addSectionTitle("Gesture Samples per Vocabulary Entry");
-        // State the truncation rather than presenting a capped subset as the
-        // complete picture.
-        if (wordTotal > words.length) {
-          doc.setFontSize(9);
-          doc.text(
-            `Showing ${words.length} of ${wordTotal} words (most recent first).`,
-            14,
-            y,
-          );
-          doc.setFontSize(11);
-          y += 5;
-        }
+        addSectionTitle(
+          `${reportSections.word_stats ? "2" : "1"}. Gesture sample coverage`,
+          "Sample counts are current all-time database counts. Approved samples are shown separately from total submitted samples.",
+        );
         autoTable(doc, {
+          ...tableDefaults,
           startY: y,
-          head: [["Entry", "Total Samples", "Approved Samples"]],
-          body: words.map((w) => [w.label, w.total_samples || 0, w.approved_sample_count || 0]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
+          head: [["Metric", "Value", "Metric", "Value"]],
+          body: [
+            ["Total gesture samples", wordStats?.total_samples ?? 0, "Approved samples", approvedSampleTotal],
+            ["Entries with samples", entriesWithSamples, "Entries without samples", Math.max(0, words.length - entriesWithSamples)],
+          ],
+          columnStyles: {
+            0: { fontStyle: "bold", cellWidth: 55 },
+            1: { cellWidth: 70 },
+            2: { fontStyle: "bold", cellWidth: 55 },
+          },
         });
-        y = doc.lastAutoTable.finalY + sectionGap;
+        y = doc.lastAutoTable.finalY + 6;
+
+        if (wordTotal > words.length) {
+          addNote(
+            `The API returned ${words.length} of ${wordTotal} vocabulary entries. The detail table below is partial; all-time totals above remain server-calculated.`,
+          );
+        }
+
+        const sampleRows = [...words]
+          .sort((a, b) => {
+            const vocabularyOrder = String(a.vocabulary || "words").localeCompare(
+              String(b.vocabulary || "words"),
+            );
+            return vocabularyOrder || String(a.label).localeCompare(String(b.label));
+          })
+          .map((entry) => [
+            entry.label,
+            entry.vocabulary === "letters" ? "Alphabet" : "Words",
+            titleCase(entry.status),
+            entry.category || "Uncategorized",
+            Number(entry.approved_sample_count || 0),
+            Number(entry.total_samples || 0),
+          ]);
+
+        if (sampleRows.length > 0) {
+          autoTable(doc, {
+            ...tableDefaults,
+            startY: y,
+            head: [["Entry", "Vocabulary", "Status", "Category", "Approved", "Total"]],
+            body: sampleRows,
+            columnStyles: {
+              0: { fontStyle: "bold", cellWidth: 55 },
+              1: { cellWidth: 30 },
+              2: { cellWidth: 30 },
+              3: { cellWidth: 65 },
+              4: { halign: "right", cellWidth: 30 },
+              5: { halign: "right", cellWidth: 30 },
+            },
+          });
+          y = doc.lastAutoTable.finalY + sectionGap;
+        } else {
+          addNote("No vocabulary entries are available for the sample coverage table.");
+        }
       }
 
       if (reportSections.model_accuracy) {
-        addSectionTitle("Model Accuracy per Version");
-        autoTable(doc, {
-          // One row per VERSION. A run produces a words model and an alphabet
-          // model under the same number, so listing rows put two identical
-          // "1.7.0" lines in the report with nothing to tell them apart. The
-          // alphabet gets its own column instead.
-          startY: y,
-          head: [["Version", "Words", "Alphabet", "Pair status"]],
-          body: [...modelPairs].reverse().map((pair) => [
+        const sectionNumber =
+          Number(reportSections.word_stats) + Number(reportSections.sample_counts) + 1;
+        addSectionTitle(
+          `${sectionNumber}. Model pair accuracy`,
+          "Words and alphabet are separate models under one version. Their evaluation accuracies are reported independently and are never averaged.",
+        );
+
+        if (modelLoadFailed) {
+          addNote(
+            "Model data could not be loaded when this report snapshot was created. No deployment status or accuracy is reported because an empty result would be misleading.",
+          );
+        } else if (deploymentSummary.pair) {
+          const pair = deploymentSummary.pair;
+          const deployedAt = Math.max(
+            new Date(pair.words?.deployed_at || 0).getTime() || 0,
+            new Date(pair.letters?.deployed_at || 0).getTime() || 0,
+          );
+          autoTable(doc, {
+            ...tableDefaults,
+            startY: y,
+            head: [["Current deployment", "Value", "Current deployment", "Value"]],
+            body: [
+              ["Version", pair.version, "Pair status", "Active"],
+              ["Words accuracy", pdfAccuracy(pair.words?.accuracy), "Alphabet accuracy", pdfAccuracy(pair.letters?.accuracy)],
+              ["Words classes", pair.words?.total_classes ?? "N/A", "Alphabet classes", pair.letters?.total_classes ?? "N/A"],
+              ["Deployed", deployedAt ? formatDateTime(deployedAt) : "N/A", "Trainer", pair.words?.trainer?.username || pair.letters?.trainer?.username || "N/A"],
+            ],
+            columnStyles: {
+              0: { fontStyle: "bold", cellWidth: 55 },
+              1: { cellWidth: 70 },
+              2: { fontStyle: "bold", cellWidth: 55 },
+            },
+          });
+          y = doc.lastAutoTable.finalY + 6;
+        } else {
+          addNote(
+            deploymentSummary.state === "warning"
+              ? "Deployment consistency warning: deployed words and alphabet rows do not form one complete version pair. No accuracy is labeled as current."
+              : "There is no currently deployed words-and-alphabet model pair.",
+          );
+        }
+
+        if (!modelLoadFailed) {
+          addNote(
+            "Accuracy is the stored evaluation result from model training/testing. It is not a measurement of live-user recognition success.",
+          );
+
+          const modelRows = [...modelPairs].reverse().map((pair) => [
             pair.version,
-            formatAccuracy(pair.words?.accuracy),
-            formatAccuracy(pair.letters?.accuracy),
             pairState(pair).label,
-          ]),
-          theme: "striped",
-          headStyles: { fillColor: [59, 130, 246] },
-          margin: { left: 14, right: 14 },
-        });
-        y = doc.lastAutoTable.finalY + sectionGap;
+            pdfAccuracy(pair.words?.accuracy),
+            pair.words?.total_classes ?? "N/A",
+            pdfAccuracy(pair.letters?.accuracy),
+            pair.letters?.total_classes ?? "N/A",
+            pair.trainedTimestamp ? formatDate(pair.trainedTimestamp) : "N/A",
+            pair.words?.trainer?.username || pair.letters?.trainer?.username || "N/A",
+          ]);
+
+          if (modelRows.length > 0) {
+            autoTable(doc, {
+              ...tableDefaults,
+              startY: y,
+              head: [[
+                "Version",
+                "Pair status",
+                "Words accuracy",
+                "Words classes",
+                "Alphabet accuracy",
+                "Alphabet classes",
+                "Trained",
+                "Trainer",
+              ]],
+              body: modelRows,
+              columnStyles: {
+                0: { fontStyle: "bold", cellWidth: 28 },
+                1: { cellWidth: 34 },
+                2: { halign: "right", cellWidth: 31 },
+                3: { halign: "right", cellWidth: 28 },
+                4: { halign: "right", cellWidth: 35 },
+                5: { halign: "right", cellWidth: 31 },
+                6: { cellWidth: 33 },
+                7: { cellWidth: 32 },
+              },
+            });
+            y = doc.lastAutoTable.finalY + sectionGap;
+          } else {
+            addNote("No model versions are available.");
+          }
+        }
       }
 
-      const filename = `sigla_report_${filter}_${new Date().toISOString().split("T")[0]}.pdf`;
-      doc.save(filename);
+      // Add stable page numbering only after every autoTable has created pages.
+      const pageCount = doc.getNumberOfPages();
+      for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+        doc.setPage(pageNumber);
+        doc.setDrawColor(226, 232, 240);
+        doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+        doc.setTextColor(...muted);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text("SigLa system report", margin, pageHeight - 7);
+        doc.text(`Page ${pageNumber} of ${pageCount}`, pageWidth - margin, pageHeight - 7, {
+          align: "right",
+        });
+      }
+
+      const dateKey = generatedAt.toISOString().split("T")[0];
+      doc.save(`sigla_system_report_${filter}_${dateKey}.pdf`);
       toast.success("Report downloaded successfully");
     } catch {
       toast.error("Failed to generate report");
@@ -677,6 +963,8 @@ const ReportsAnalytics = () => {
                     ? "bg-emerald-500"
                     : deploymentSummary.state === "warning"
                       ? "bg-amber-500"
+                      : deploymentSummary.state === "error"
+                        ? "bg-red-500"
                       : "bg-gray-300"
                 }`}
               />
@@ -748,7 +1036,7 @@ const ReportsAnalytics = () => {
           <div className="dash-card-body">
             {modelAccuracyData.length === 0 ? (
               <div className="flex h-[240px] items-center justify-center text-sm text-gray-400">
-                No measured model versions
+                {modelLoadFailed ? "Model data unavailable" : "No measured model versions"}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={240} debounce={200}>
@@ -959,7 +1247,7 @@ const ReportsAnalytics = () => {
           <button
             onClick={handleGenerateReport}
             disabled={
-              generating || !Object.values(reportSections).some(Boolean)
+              generating || loadError || !Object.values(reportSections).some(Boolean)
             }
             className="flex items-center gap-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50"
           >
@@ -990,11 +1278,17 @@ const ReportsAnalytics = () => {
               </label>
             ))}
           </div>
-          <p className="text-xs text-gray-400 mt-3">
-            Activity range:{" "}
-            <strong className="text-gray-600 capitalize">{filter}</strong>
-            {" · "}Summary totals remain all time · Exported as PDF
-          </p>
+          {loadError ? (
+            <p className="mt-3 text-xs text-red-600">
+              Report generation is unavailable because the current data did not load.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400 mt-3">
+              Activity range:{" "}
+              <strong className="text-gray-600 capitalize">{filter}</strong>
+              {" · "}Summary totals remain all time · Exported as PDF
+            </p>
+          )}
         </div>
       </div>
     </div>
