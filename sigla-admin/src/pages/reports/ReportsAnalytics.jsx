@@ -982,8 +982,8 @@ const ReportsAnalytics = () => {
               <ResponsiveContainer width="100%" height={240} debounce={200}>
                 <LineChart data={submissionTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} allowDecimals={false} />
                   <Tooltip />
                   <Line
                     type="monotone"
@@ -1049,8 +1049,8 @@ const ReportsAnalytics = () => {
               <ResponsiveContainer width="100%" height={240} debounce={200}>
                 <LineChart data={modelAccuracyData} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                  <XAxis dataKey="version" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" />
+                  <XAxis dataKey="version" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" />
                   <Tooltip formatter={(value, name) => [`${value}%`, name]} />
                   <Line
                     type="monotone"
@@ -1092,17 +1092,17 @@ const ReportsAnalytics = () => {
               <ResponsiveContainer width="100%" height={220} debounce={200}>
                 <BarChart data={samplesPerWord} layout="vertical" margin={{ left: 8, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <XAxis type="number" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
                   <YAxis
                     dataKey="name"
                     type="category"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 12 }}
                     tickLine={false}
                     axisLine={false}
                     width={72}
                   />
                   <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar
                     dataKey="samples"
                     fill="#bfdbfe"

@@ -72,7 +72,7 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
         <div>
-          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Name *</label>
+          <label style={{ fontSize: "var(--type-meta)", fontWeight: 600, color: "#374151" }}>Name *</label>
           {/* maxLength matches Category.name's VARCHAR(50) so the limit is visible
               instead of arriving as a 500. Enter-to-submit is handled modal-wide by
               AppModal's onEnter. */}
@@ -81,16 +81,16 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             maxLength={50}
             placeholder="e.g. greeting, food, color"
-            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", marginTop: "4px", boxSizing: "border-box" }}
           />
         </div>
         <div>
-          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Description</label>
+          <label style={{ fontSize: "var(--type-meta)", fontWeight: 600, color: "#374151" }}>Description</label>
           <textarea
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             rows={3}
-            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", resize: "vertical", boxSizing: "border-box" }}
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", marginTop: "4px", resize: "vertical", boxSizing: "border-box" }}
           />
         </div>
       </div>
@@ -197,7 +197,7 @@ const ManageCategories = () => {
             display: "inline-flex", alignItems: "center", gap: "6px",
             padding: "8px 16px", background: C.primary, color: "white",
             border: "none", borderRadius: "8px",
-            fontSize: "0.875rem", fontWeight: 600, cursor: "pointer",
+            fontSize: "var(--type-body)", fontWeight: 600, cursor: "pointer",
             fontFamily: "inherit",
           }}
         >
@@ -280,7 +280,7 @@ const ManageCategories = () => {
                   <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937", textTransform: "capitalize" }}>{cat.name}</td>
                   <td className="px-5 py-3" style={{ color: "#6b7280" }}>{cat.description || "—"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>
-                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 600,
+                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "var(--type-meta)", fontWeight: 600,
                       background: cat.word_count > 0 ? "#eff6ff" : "#f3f4f6",
                       color: cat.word_count > 0 ? "#1e40af" : "#6b7280" }}>
                       {cat.word_count}
@@ -386,7 +386,7 @@ const ManageCategories = () => {
             </>
           }
         >
-          <p style={{ fontSize: "0.875rem", color: "#374151", marginBottom: "12px" }}>
+          <p style={{ fontSize: "var(--type-body)", color: "#374151", marginBottom: "12px" }}>
             Delete category <strong>"{deleteTarget.name}"</strong>?
           </p>
           {/* A category still in use cannot be deleted, so the button is
@@ -395,7 +395,7 @@ const ManageCategories = () => {
               clickable). The rule is enforced server-side in
               categoryController.deleteCategory. */}
           {deleteTarget.word_count > 0 && (
-            <p style={{ fontSize: "0.875rem", color: C.red }}>
+            <p style={{ fontSize: "var(--type-body)", color: C.red }}>
               ⚠ This category is used by {deleteTarget.word_count} word(s). Move
               those words to another category, or delete them first.
             </p>

@@ -58,7 +58,7 @@ const chipStyle = (bg) => ({
   display: "inline-block",
   padding: "3px 10px",
   borderRadius: 999,
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   background: bg + "18",
   color: bg,
@@ -594,7 +594,7 @@ const ManageAdministrators = () => {
       >
         <td
           className="px-5 py-3.5 font-mono"
-          style={{ color: C.muted, fontSize: 12 }}
+          style={{ color: C.muted, fontSize: 13 }}
         >
           {u.id}
         </td>
@@ -607,7 +607,7 @@ const ManageAdministrators = () => {
         <td className="px-5 py-3.5">
           <StatusBadge status={u.status} />
         </td>
-        <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 12 }}>
+        <td className="px-5 py-3.5" style={{ color: C.muted, fontSize: 13 }}>
           {u.created_at ? new Date(u.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—"}
         </td>
         <td className="px-5 py-3.5">
@@ -646,7 +646,7 @@ const ManageAdministrators = () => {
               </>
             )}
             {activeTab === "deleted" && (
-              <span style={{ color: C.muted, fontSize: 12 }}>—</span>
+              <span style={{ color: C.muted, fontSize: 13 }}>—</span>
             )}
           </div>
         </td>
@@ -678,7 +678,7 @@ const ManageAdministrators = () => {
             color: "white",
             border: "none",
             borderRadius: "8px",
-            fontSize: "0.875rem",
+            fontSize: "var(--type-body)",
             fontWeight: 600,
             cursor: "pointer",
             transition: "background 0.2s",

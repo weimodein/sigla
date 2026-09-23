@@ -263,7 +263,7 @@ const Onboarding = () => {
                 />
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 600,
                     color: step >= s ? C.primary : C.muted,
                     display: "flex",
@@ -460,12 +460,12 @@ const Onboarding = () => {
                 Double-check this email address
               </h3>
             </div>
-            <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "0 0 8px" }}>
+            <p style={{ fontSize: "var(--type-body)", color: "#6b7280", margin: "0 0 8px" }}>
               The verification code will be sent to:
             </p>
             <p
               style={{
-                fontSize: "0.875rem",
+                fontSize: "var(--type-body)",
                 fontWeight: 600,
                 color: C.text,
                 wordBreak: "break-all",
@@ -478,7 +478,7 @@ const Onboarding = () => {
             >
               {newEmail}
             </p>
-            <p style={{ fontSize: "0.75rem", color: "#6b7280", margin: "0 0 20px" }}>
+            <p style={{ fontSize: "var(--type-meta)", color: "#6b7280", margin: "0 0 20px" }}>
               If this is mistyped you will not receive the code, and a new one
               cannot be sent for 1 minute.
             </p>

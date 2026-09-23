@@ -108,7 +108,7 @@ const Login = () => {
       .sigla-input:focus + label,
       .sigla-input:not(:placeholder-shown) + label {
         top: -10px !important;
-        font-size: 0.75rem !important;
+        font-size: var(--type-meta) !important;
         font-weight: 500 !important;
         color: ${C.primary} !important;
       }
@@ -277,7 +277,7 @@ const S = {
     color: C.text,
   },
   heading: {
-    fontSize: "1.75rem",
+    fontSize: "var(--type-page-title)",
     fontWeight: 700,
     marginBottom: "30px",
     marginTop: 0,
@@ -296,7 +296,7 @@ const S = {
     border: "none",
     borderBottom: "2px solid #ccc",
     background: "transparent",
-    fontSize: "0.875rem",
+    fontSize: "var(--type-body)",
     color: C.text,
     outline: "none",
     transition: "border-color 0.3s ease, box-shadow 0.3s ease",
@@ -309,7 +309,7 @@ const S = {
     left: "10px",
     top: "12px",
     color: "#888",
-    fontSize: "0.875rem",
+    fontSize: "var(--type-body)",
     pointerEvents: "none",
     transition: "0.3s ease",
   },
@@ -343,7 +343,7 @@ const S = {
     display: "flex",
     justifyContent: "flex-end",
     alignItems: "center",
-    fontSize: "0.75rem",
+    fontSize: "var(--type-meta)",
     marginTop: "16px",
     marginBottom: "20px",
     color: C.text,
@@ -361,7 +361,7 @@ const S = {
     border: "none",
     padding: "10px 20px",
     borderRadius: "25px",
-    fontSize: "0.875rem",
+    fontSize: "var(--type-body)",
     fontWeight: 600,
     cursor: "pointer",
     transition: "0.3s",
@@ -374,7 +374,7 @@ const S = {
   footer: {
     marginTop: "16px",
     color: C.text,
-    fontSize: "0.875rem",
+    fontSize: "var(--type-body)",
     textAlign: "center",
     display: "flex",
     alignItems: "center",
@@ -388,7 +388,7 @@ const S = {
     background: "none",
     border: "none",
     cursor: "pointer",
-    fontSize: "0.875rem",
+    fontSize: "var(--type-body)",
     fontFamily: "inherit",
     padding: 0,
   },
