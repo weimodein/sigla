@@ -282,7 +282,7 @@ const ManageCategories = () => {
                   <td className="px-5 py-3" style={{ fontWeight: 600, color: "#1f2937", textTransform: "capitalize" }}>{cat.name}</td>
                   <td className="px-5 py-3" style={{ color: "#6b7280" }}>{cat.description || "—"}</td>
                   <td className="px-5 py-3" style={{ color: "#374151" }}>
-                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "var(--type-meta)", fontWeight: 600,
+                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "var(--type-small)", fontWeight: 600,
                       background: cat.word_count > 0 ? "#eff6ff" : "#f3f4f6",
                       color: cat.word_count > 0 ? "#1e40af" : "#6b7280" }}>
                       {cat.word_count}

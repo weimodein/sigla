@@ -590,7 +590,7 @@ const AdministratorAccount = () => {
                           placeholder="you@example.com"
                           className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
                         />
-                        <p className="mt-1.5 text-xs text-gray-400">
+                        <p className="small-text mt-1.5 text-gray-400">
                           We will send a six-digit verification code to this address.
                         </p>
                       </div>
@@ -638,7 +638,7 @@ const AdministratorAccount = () => {
                           placeholder="000000"
                           className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-center text-lg tracking-[0.45em] focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
                         />
-                        <p className="mt-1.5 break-all text-xs text-gray-400">
+                        <p className="small-text mt-1.5 break-all text-gray-400">
                           Sent to {newEmail}
                         </p>
                       </div>
@@ -685,7 +685,7 @@ const AdministratorAccount = () => {
                   </div>
                   <div className="min-w-0">
                     <h4 className="text-sm font-semibold text-gray-800">Password</h4>
-                    <p className="mt-0.5 text-xs text-gray-500">
+                    <p className="small-text mt-0.5 text-gray-500">
                       Changes are recorded in the activity logs
                     </p>
                   </div>
@@ -707,7 +707,7 @@ const AdministratorAccount = () => {
               </div>
 
               {!user.email && !passStep && (
-                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <p className="small-text mt-3 rounded-lg bg-amber-50 px-3 py-2 text-amber-700">
                   Add and verify an email address before changing your password.
                 </p>
               )}
@@ -731,7 +731,7 @@ const AdministratorAccount = () => {
                         handleRequestCode();
                       }}
                     >
-                      <p className="text-xs text-gray-500">
+                      <p className="small-text text-gray-500">
                         Send a six-digit verification code to {maskEmail(user.email)}.
                       </p>
                       <div className="flex justify-end gap-2">
@@ -844,7 +844,7 @@ const AdministratorAccount = () => {
                           onChange={(event) => setConfirm(event.target.value)}
                           className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
                         />
-                        <p className="mt-1.5 text-xs text-gray-400">
+                        <p className="small-text mt-1.5 text-gray-400">
                           Use at least 8 characters with one letter and one number.
                         </p>
                       </div>
@@ -903,7 +903,7 @@ const AdministratorAccount = () => {
             <p className="break-all rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold text-gray-800">
               {newEmail}
             </p>
-            <p className="mt-3 text-xs leading-5 text-gray-500">
+            <p className="small-text mt-3 text-gray-500">
               If this is mistyped you will not receive the code, and a new one
               cannot be sent for 1 minute.
             </p>

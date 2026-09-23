@@ -918,7 +918,7 @@ const ReportsAnalytics = () => {
                 type="button"
                 aria-pressed={filter === f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition capitalize ${
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition capitalize ${
                   filter === f
                     ? "bg-white text-blue-900 shadow-sm"
                     : "interactive text-gray-500 hover:text-gray-700"
@@ -1314,11 +1314,11 @@ const ReportsAnalytics = () => {
             ))}
           </div>
           {loadError ? (
-            <p className="mt-3 text-xs text-red-600">
+            <p className="small-text mt-3 text-red-600">
               Report generation is unavailable because the current data did not load.
             </p>
           ) : (
-            <p className="text-xs text-gray-400 mt-3">
+            <p className="small-text mt-3 text-gray-400">
               Activity range:{" "}
               <strong className="text-gray-600 capitalize">{filter}</strong>
               {" · "}Summary totals remain all time · Exported as PDF

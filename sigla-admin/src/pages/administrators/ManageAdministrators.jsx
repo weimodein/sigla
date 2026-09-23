@@ -59,7 +59,7 @@ const chipStyle = (bg) => ({
   display: "inline-block",
   padding: "3px 10px",
   borderRadius: 999,
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 600,
   background: bg + "18",
   color: bg,
@@ -214,7 +214,7 @@ const ActionBtn = ({ label, bg, onClick, disabled, title }) => (
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+    className="text-sm font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
     style={{
       background: bg + "18",
       color: bg,
@@ -582,7 +582,7 @@ const ManageAdministrators = () => {
     return paginatedAdmins.map((u, i) => (
       <tr
         key={u.id}
-        className="border-t row-interactive list-item-in text-sm"
+        className="border-t row-interactive list-item-in"
         style={{
           borderTop: `1px solid ${C.border}`,
           ...listStagger(i),
@@ -703,7 +703,7 @@ const ManageAdministrators = () => {
           </p>
           <button
             onClick={fetchStats}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap"
+            className="text-sm font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap"
             style={{ background: "#b91c1c", color: "#fff" }}
           >
             Retry
@@ -935,7 +935,7 @@ const ManageAdministrators = () => {
                     setEditModal(null);
                     handleResetOpen(target);
                   }}
-                  className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition whitespace-nowrap"
+                  className="flex items-center gap-1.5 text-sm font-semibold px-2.5 py-1.5 rounded-lg transition whitespace-nowrap"
                   style={{ background: C.orange + "18", color: C.orange }}
                 >
                   <KeyRound size={13} />

@@ -294,7 +294,7 @@ const Onboarding = () => {
                   placeholder="you@example.com"
                   className={inputCls}
                 />
-                <p className="text-xs text-gray-400">
+                <p className="small-text text-gray-400">
                   A 6-digit verification code will be sent to this address.
                 </p>
                 <button
@@ -307,7 +307,7 @@ const Onboarding = () => {
               </>
             ) : (
               <>
-                <p className="text-xs text-gray-500">
+                <p className="small-text text-gray-500">
                   Enter the 6-digit code sent to{" "}
                   <span className="font-medium">{newEmail}</span>.
                 </p>
@@ -420,7 +420,7 @@ const Onboarding = () => {
               logout();
               navigate("/login");
             }}
-            className="text-xs text-gray-400 hover:text-gray-600"
+            className="text-sm text-gray-400 hover:text-gray-600"
           >
             Sign out
           </button>

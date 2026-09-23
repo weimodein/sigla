@@ -68,7 +68,7 @@ const Badge = ({ value }) => {
   const bg = map[value] || C.muted;
   return (
     <span
-      className="px-2.5 py-1 rounded-full text-xs font-semibold"
+      className="small-text px-2.5 py-1 rounded-full font-semibold"
       style={{ background: bg + "18", color: bg }}
     >
       {labels[value] || value}
@@ -601,7 +601,7 @@ const ManageModel = () => {
             <p className="text-sm font-semibold text-blue-800">
               Training <span className="font-mono">{trainingVersion}</span> in progress…
             </p>
-            <p className="text-xs text-blue-500">This may take several minutes. You can safely navigate away — this page will update automatically.</p>
+            <p className="small-text text-blue-500">This may take several minutes. You can safely navigate away — this page will update automatically.</p>
           </div>
         </div>
       )}
@@ -878,7 +878,7 @@ const ManageModel = () => {
                     <Fragment key={model.id}>
                       {/* Main row */}
                       <tr
-                        className="border-t row-interactive list-item-in text-sm"
+                        className="border-t row-interactive list-item-in"
                         style={{
                           cursor: "pointer",
                           ...listStagger(i),
@@ -935,7 +935,7 @@ const ManageModel = () => {
                           <Badge value={model.status} />
                         </td>
                         <td className="px-5 py-3">
-                          <p className="text-sm font-medium text-gray-700">
+                          <p className="font-medium text-gray-700">
                             {model.trainer?.username || "—"}
                           </p>
                           <p className="text-xs text-gray-500 mt-0.5">
@@ -953,7 +953,7 @@ const ManageModel = () => {
                               <>
                                 <button
                                   onClick={() => setDeployModal(model)}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  className="text-sm font-medium px-3 py-1.5 rounded-lg transition"
                                   style={{
                                     background: "#bbf7d0",
                                     color: "#14532d",
@@ -972,7 +972,7 @@ const ManageModel = () => {
                                 <button
                                   onClick={() => handleDelete(model)}
                                   disabled={actionLoading}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="text-sm font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
                                     background: "#fff",
                                     color: "#991b1b",
@@ -994,7 +994,7 @@ const ManageModel = () => {
                               <>
                                 <button
                                   onClick={() => setRevertModal(model)}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition"
+                                  className="text-sm font-medium px-3 py-1.5 rounded-lg transition"
                                   style={{
                                     background: "#bfdbfe",
                                     color: "#1e3a8a",
@@ -1013,7 +1013,7 @@ const ManageModel = () => {
                                 <button
                                   onClick={() => handleDelete(model)}
                                   disabled={actionLoading}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="text-sm font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
                                     background: "#fff",
                                     color: "#991b1b",
@@ -1038,7 +1038,7 @@ const ManageModel = () => {
                               <button
                                 onClick={() => handleDelete(model)}
                                 disabled={actionLoading}
-                                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="text-sm font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{
                                   background: "#fff",
                                   color: "#991b1b",
@@ -1209,7 +1209,7 @@ const ManageModel = () => {
                       setPageSize(Number(e.target.value));
                       setPage(1);
                     }}
-                    className="border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-900"
+                    className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-900"
                   >
                     <option value={5}>5 / page</option>
                     <option value={10}>10 / page</option>
@@ -1280,7 +1280,7 @@ const ManageModel = () => {
                 placeholder="e.g. 1.0.2"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="small-text mt-1 text-gray-400">
                 Use MAJOR.MINOR.PATCH with no prefix — e.g. 1.0.2. The UI adds the
                 &quot;v&quot; when displaying, so typing one here shows as &quot;vv1.0.2&quot;.
               </p>
@@ -1326,7 +1326,7 @@ const ManageModel = () => {
               it the active model. All users will be notified to update.
             </p>
             {stats?.current_model && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-700">
+              <div className="small-text rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-yellow-700">
                 Current deployed model{" "}
                 <strong>{stats.current_model.version_number}</strong> will
                 become inactive.
@@ -1338,7 +1338,7 @@ const ManageModel = () => {
                 bank to exactly THIS version's trained_word_ids. Deploying an older
                 version therefore activated none of those words and hid others,
                 while the dialog promised the opposite. */}
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
+            <div className="small-text rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-indigo-700">
               {Array.isArray(deployModal.trained_word_ids) ? (
                 <>
                   The mobile word bank will match this version:{" "}
@@ -1445,7 +1445,7 @@ const ManageModel = () => {
               </div>
             )}
             {resultModal.versionNumber && (
-              <p className="text-gray-500 text-xs">
+              <p className="small-text text-gray-500">
                 Version <strong>{resultModal.versionNumber}</strong>
               </p>
             )}

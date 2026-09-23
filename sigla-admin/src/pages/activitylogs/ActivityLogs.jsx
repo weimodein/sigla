@@ -80,7 +80,7 @@ const ActionBadge = ({ action }) => {
         display: "inline-block",
         padding: "3px 10px",
         borderRadius: 999,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: 600,
         background: color + "18",
         color,
@@ -105,7 +105,7 @@ const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) =
       <select
         value={pageSize}
         onChange={(e) => onPageSize(+e.target.value)}
-        className="rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+        className="rounded-lg px-2.5 py-1.5 text-sm focus:outline-none"
         style={{ border: `1px solid ${C.border}` }}
       >
         <option value={10}>10 / page</option>
@@ -405,7 +405,7 @@ const ActivityLogs = () => {
                 logs.map((log, i) => (
                   <tr
                     key={log.id}
-                    className="row-interactive list-item-in text-sm"
+                    className="row-interactive list-item-in"
                     style={{ borderTop: `1px solid ${C.border}`, ...listStagger(i) }}
                   >
                     <td className="px-5 py-3.5 font-semibold" style={{ color: C.text }}>

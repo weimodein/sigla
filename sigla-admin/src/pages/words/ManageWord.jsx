@@ -924,7 +924,7 @@ const ManageWord = () => {
                 }}
               />
             </div>
-            <p className="text-xs text-blue-500">
+            <p className="small-text text-blue-500">
               This may take a few minutes. You can safely navigate away — this page
               will update automatically.
             </p>
@@ -1084,7 +1084,7 @@ const ManageWord = () => {
                     {word.approved_sample_count ?? 0}
                   </td>
                   <td className="px-5 py-3">
-                    <span title="Words become active automatically when a model is deployed" style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "var(--type-meta)", fontWeight: 600,
+                    <span title="Words become active automatically when a model is deployed" style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "var(--type-small)", fontWeight: 600,
                       background: word.is_active ? "#dcfce7" : "#f3f4f6",
                       color: word.is_active ? "#166534" : "#6b7280" }}>
                       {word.is_active ? "Active" : "Not deployed"}
@@ -1100,12 +1100,12 @@ const ManageWord = () => {
                         onClick={() => setUploadWord(word)}
                         disabled={!!uploadJob}
                         aria-label={`Upload training clips for ${word.label}`}
-                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${C.border}`, background: "white", cursor: uploadJob ? "not-allowed" : "pointer", fontSize: "var(--type-meta)", fontWeight: 500, color: "#374151", opacity: uploadJob ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${C.border}`, background: "white", cursor: uploadJob ? "not-allowed" : "pointer", fontSize: "var(--type-body)", fontWeight: 500, color: "#374151", opacity: uploadJob ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
                         <Upload size={14} /> Clips
                       </button>
                       <button title="Set the single demonstration video shown in the mobile app" onClick={() => setDemoVideoWord(word)}
                         aria-label={`Set demonstration video for ${word.label}`}
-                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${word.video_url ? "#bbf7d0" : C.border}`, background: word.video_url ? "#f0fdf4" : "white", cursor: "pointer", fontSize: "var(--type-meta)", fontWeight: 500, color: word.video_url ? "#166534" : "#374151", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 10px", borderRadius: "7px", border: `1px solid ${word.video_url ? "#bbf7d0" : C.border}`, background: word.video_url ? "#f0fdf4" : "white", cursor: "pointer", fontSize: "var(--type-body)", fontWeight: 500, color: word.video_url ? "#166534" : "#374151", whiteSpace: "nowrap", flexShrink: 0 }}>
                         <Film size={14} /> Demo
                       </button>
                       <button title="Edit word" aria-label={`Edit ${word.label}`} onClick={() => setEditWord(word)}
