@@ -186,8 +186,8 @@ const Dashboard = () => {
 
       {/* ── Header ── */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Welcome back! Here's what's happening today.</p>
+        <h1 className="page-title">Admin Dashboard</h1>
+        <p className="page-subtitle">Welcome back! Here's what's happening today.</p>
       </div>
 
       {/* ── Stat cards — 3-col grid, model version spans both rows on the right ── */}
@@ -231,8 +231,8 @@ const Dashboard = () => {
       {/* ── Model accuracy by version ── */}
       <div className="dash-card">
         <div className="dash-card-header">
-          <h2 className="text-lg font-semibold text-gray-800">Model Accuracy</h2>
-          <p className="text-sm text-gray-500 mt-0.5">By version</p>
+          <h2 className="section-title">Model Accuracy</h2>
+          <p className="section-subtitle">By version</p>
         </div>
         <div className="dash-card-body space-y-4 max-h-72 overflow-y-auto">
           {modelsWithAccuracy.length === 0 ? (
@@ -270,8 +270,8 @@ const Dashboard = () => {
         <div className="dash-card-header flex items-center gap-2">
           <Activity size={18} className="text-gray-400 shrink-0" />
           <div>
-            <h2 className="text-lg font-semibold text-gray-800">Recent Activity</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Your latest actions in the system</p>
+            <h2 className="section-title">Recent Activity</h2>
+            <p className="section-subtitle">Your latest actions in the system</p>
           </div>
         </div>
         <div className="dash-card-body max-h-80 overflow-y-auto">

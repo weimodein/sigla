@@ -414,7 +414,7 @@ const ForgotPassword = () => {
           >
             <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
               <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: C.text, margin: 0 }}>
+              <h3 className="section-title">
                 Double-check this email address
               </h3>
             </div>
@@ -423,7 +423,7 @@ const ForgotPassword = () => {
             </p>
             <p
               style={{
-                fontSize: "0.95rem", fontWeight: 600, color: C.text,
+                fontSize: "0.875rem", fontWeight: 600, color: C.text,
                 wordBreak: "break-all", background: "#f9fafb",
                 border: "1px solid #e5e7eb", borderRadius: 8,
                 padding: "10px 12px", margin: "0 0 12px",
@@ -431,7 +431,7 @@ const ForgotPassword = () => {
             >
               {email}
             </p>
-            <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 20px" }}>
+            <p style={{ fontSize: "0.75rem", color: "#6b7280", margin: "0 0 20px" }}>
               If this is mistyped you will not receive the code, and a new one
               cannot be sent for 1 minute.
             </p>
@@ -483,7 +483,7 @@ const S = {
     color: C.text,
   },
   subtitle: {
-    fontSize: "0.83rem",
+    fontSize: "0.875rem",
     color: "#6b7280",
     marginTop: 0,
     marginBottom: "26px",
@@ -502,7 +502,7 @@ const S = {
     border: "none",
     borderBottom: "2px solid #ccc",
     background: "transparent",
-    fontSize: "0.9rem",
+    fontSize: "0.875rem",
     color: C.text,
     outline: "none",
     transition: "border-color 0.3s ease, box-shadow 0.3s ease",
@@ -515,7 +515,7 @@ const S = {
     left: "10px",
     top: "12px",
     color: "#888",
-    fontSize: "0.9rem",
+    fontSize: "0.875rem",
     pointerEvents: "none",
     transition: "0.3s ease",
   },
@@ -552,7 +552,7 @@ const S = {
     border: "none",
     padding: "10px 20px",
     borderRadius: "25px",
-    fontSize: "0.9rem",
+    fontSize: "0.875rem",
     fontWeight: 600,
     cursor: "pointer",
     transition: "0.3s",
@@ -565,7 +565,7 @@ const S = {
   footer: {
     marginTop: "16px",
     color: C.text,
-    fontSize: "0.85rem",
+    fontSize: "0.875rem",
     textAlign: "center",
     display: "flex",
     alignItems: "center",
@@ -579,7 +579,7 @@ const S = {
     background: "none",
     border: "none",
     cursor: "pointer",
-    fontSize: "0.9rem",
+    fontSize: "0.875rem",
     fontFamily: "inherit",
     padding: 0,
   },
@@ -595,7 +595,7 @@ const S = {
     color: C.primary,
     fontWeight: "bold",
     cursor: "pointer",
-    fontSize: "0.85rem",
+    fontSize: "0.875rem",
     fontFamily: "inherit",
     padding: 0,
   },
@@ -605,7 +605,7 @@ const S = {
     fontWeight: 400,
   },
   matchHint: {
-    fontSize: "0.78rem",
+    fontSize: "0.75rem",
     marginTop: "6px",
     marginLeft: "4px",
     fontWeight: 500,

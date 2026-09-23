@@ -275,7 +275,7 @@ const Layout = ({ children }) => {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
+              <h3 className="section-title" style={{ color: "#1f2937", margin: 0 }}>
                 Sign Out
               </h3>
               <button
@@ -286,7 +286,7 @@ const Layout = ({ children }) => {
                 <X size={18} />
               </button>
             </div>
-            <p style={{ fontSize: "0.9rem", color: "#6b7280", marginBottom: "24px" }}>
+            <p className="text-sm" style={{ color: "#6b7280", marginBottom: "24px" }}>
               Are you sure you want to sign out? Any unsaved changes will be lost.
             </p>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>

@@ -94,8 +94,8 @@ const ActionBadge = ({ action }) => {
 // ── Pagination ───────────────────────────────────────────────
 const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) => (
   <div
-    className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5"
-    style={{ borderTop: `1px solid ${C.border}`, fontSize: 13, color: "#6b7280" }}
+    className="meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
+    style={{ borderTop: `1px solid ${C.border}` }}
   >
     <div className="flex items-center gap-3">
       <span>
@@ -253,10 +253,10 @@ const ActivityLogs = () => {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
+        <h2 className="page-title">
           Activity Logs
         </h2>
-        <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
+        <p className="page-subtitle">
           A permanent, read-only record of significant actions in the system
         </p>
       </div>
@@ -372,7 +372,7 @@ const ActivityLogs = () => {
         }}
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-left" style={{ minWidth: 760 }}>
+          <table className="table-text w-full text-left" style={{ minWidth: 760 }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 {["User", "Action", "Affected Item", "Description", "Date & Time"].map((h) => (
@@ -392,7 +392,7 @@ const ActivityLogs = () => {
                 <SkeletonRows rows={8} cols={5} />
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-10" style={{ color: C.muted, fontSize: 13 }}>
+                  <td colSpan={5} className="py-10 text-center text-sm" style={{ color: C.muted }}>
                     No activity found
                   </td>
                 </tr>

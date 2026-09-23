@@ -366,10 +366,10 @@ const AdministratorAccount = () => {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="m-0 text-[1.75rem] font-bold text-gray-800">
+          <h1 className="page-title">
             Administrator Account
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="page-subtitle">
             Profile, contact information, and account security
           </p>
         </div>
@@ -487,8 +487,8 @@ const AdministratorAccount = () => {
       <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]">
         <section className="dash-card !mb-0 h-full">
           <div className="dash-card-header">
-            <h3 className="text-sm font-semibold text-gray-800">Account details</h3>
-            <p className="mt-0.5 text-xs text-gray-400">Read-only account information</p>
+            <h3 className="section-title">Account details</h3>
+            <p className="section-subtitle">Read-only account information</p>
           </div>
           <div className="dash-card-body grid gap-3 sm:grid-cols-2">
             <AccountFact icon={<Calendar size={16} />} label="Member since">
@@ -519,8 +519,8 @@ const AdministratorAccount = () => {
 
         <section className="dash-card !mb-0 h-full">
           <div className="dash-card-header">
-            <h3 className="text-sm font-semibold text-gray-800">Security & access</h3>
-            <p className="mt-0.5 text-xs text-gray-400">Verified contact and password controls</p>
+            <h3 className="section-title">Security & access</h3>
+            <p className="section-subtitle">Verified contact and password controls</p>
           </div>
           <div className="divide-y divide-gray-100">
             <div className="p-5 sm:p-6">

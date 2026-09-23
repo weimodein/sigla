@@ -72,7 +72,7 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
         <div>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Name *</label>
+          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Name *</label>
           {/* maxLength matches Category.name's VARCHAR(50) so the limit is visible
               instead of arriving as a 500. Enter-to-submit is handled modal-wide by
               AppModal's onEnter. */}
@@ -85,7 +85,7 @@ const CategoryFormModal = ({ open, onClose, onSubmit, initial, title, submitLabe
           />
         </div>
         <div>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Description</label>
+          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Description</label>
           <textarea
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -184,10 +184,10 @@ const ManageCategories = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
+          <h2 className="page-title">
             Manage Categories
           </h2>
-          <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
+          <p className="page-subtitle">
             Organize words into categories
           </p>
         </div>
@@ -197,7 +197,7 @@ const ManageCategories = () => {
             display: "inline-flex", alignItems: "center", gap: "6px",
             padding: "8px 16px", background: C.primary, color: "white",
             border: "none", borderRadius: "8px",
-            fontSize: "0.85rem", fontWeight: 500, cursor: "pointer",
+            fontSize: "0.875rem", fontWeight: 600, cursor: "pointer",
             fontFamily: "inherit",
           }}
         >
@@ -245,7 +245,7 @@ const ManageCategories = () => {
         }}
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-left" style={{ minWidth: 600, fontSize: "0.875rem" }}>
+          <table className="table-text w-full text-left" style={{ minWidth: 600 }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 {["Name", "Description", "Words", "Actions"].map(h => (
@@ -307,8 +307,8 @@ const ManageCategories = () => {
         {/* Pagination */}
         {!loading && categories.length > PAGE_SIZE && (
           <div
-            className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5"
-            style={{ borderTop: `1px solid ${C.border}`, fontSize: 13, color: "#6b7280" }}
+            className="meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
+            style={{ borderTop: `1px solid ${C.border}` }}
           >
             <span>
               Showing {(page - 1) * PAGE_SIZE + 1}–
@@ -386,7 +386,7 @@ const ManageCategories = () => {
             </>
           }
         >
-          <p style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "12px" }}>
+          <p style={{ fontSize: "0.875rem", color: "#374151", marginBottom: "12px" }}>
             Delete category <strong>"{deleteTarget.name}"</strong>?
           </p>
           {/* A category still in use cannot be deleted, so the button is
@@ -395,7 +395,7 @@ const ManageCategories = () => {
               clickable). The rule is enforced server-side in
               categoryController.deleteCategory. */}
           {deleteTarget.word_count > 0 && (
-            <p style={{ fontSize: "0.85rem", color: C.red }}>
+            <p style={{ fontSize: "0.875rem", color: C.red }}>
               ⚠ This category is used by {deleteTarget.word_count} word(s). Move
               those words to another category, or delete them first.
             </p>

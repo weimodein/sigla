@@ -130,12 +130,8 @@ const Pagination = ({
   total,
 }) => (
   <div
-    className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5"
-    style={{
-      borderTop: `1px solid ${C.border}`,
-      fontSize: 13,
-      color: "#6b7280",
-    }}
+    className="meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
+    style={{ borderTop: `1px solid ${C.border}` }}
   >
     <div className="flex items-center gap-3">
       <span>
@@ -578,8 +574,8 @@ const ManageAdministrators = () => {
         <tr>
           <td
             colSpan={6}
-            className="text-center py-10"
-            style={{ color: C.muted, fontSize: 13 }}
+            className="py-10 text-center text-sm"
+            style={{ color: C.muted }}
           >
             No records found
           </td>
@@ -664,10 +660,10 @@ const ManageAdministrators = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: C.text, margin: 0 }}>
+          <h2 className="page-title">
             Manage Administrators
           </h2>
-          <p style={{ fontSize: "0.9rem", color: "#6b7280", margin: "4px 0 0" }}>
+          <p className="page-subtitle">
             Create and manage administrator accounts
           </p>
         </div>
@@ -682,8 +678,8 @@ const ManageAdministrators = () => {
             color: "white",
             border: "none",
             borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: 500,
+            fontSize: "0.875rem",
+            fontWeight: 600,
             cursor: "pointer",
             transition: "background 0.2s",
             fontFamily: "inherit",
@@ -802,7 +798,7 @@ const ManageAdministrators = () => {
       >
         {loading ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left" style={{ minWidth: 640 }}>
+            <table className="table-text w-full text-left" style={{ minWidth: 640 }}>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
                   {["ID", "Username", "Email", "Status", "Registered", "Actions"].map((h) => (
@@ -820,7 +816,7 @@ const ManageAdministrators = () => {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-left" style={{ minWidth: 640 }}>
+              <table className="table-text w-full text-left" style={{ minWidth: 640 }}>
                 <thead style={{ background: "#f9fafb" }}>
                   <tr>
                     <SortableHeader label="ID" sortKey="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />

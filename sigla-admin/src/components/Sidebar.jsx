@@ -271,7 +271,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
             {!isCollapsed && (
               <span
                 style={{
-                  fontSize: "0.92rem",
+                  fontSize: "0.875rem",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   flex: 1,
@@ -324,7 +324,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
         >
           <LogOut size={20} style={{ flexShrink: 0 }} />
           {!isCollapsed && (
-            <span style={{ fontWeight: 500, fontSize: "0.92rem" }}>
+            <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>
               Logout
             </span>
           )}

@@ -575,23 +575,10 @@ const ManageModel = () => {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
-          <h1
-            style={{
-              fontSize: "1.75rem",
-              fontWeight: 700,
-              color: C.text,
-              margin: 0,
-            }}
-          >
+          <h1 className="page-title">
             Manage Model
           </h1>
-          <p
-            style={{
-              fontSize: "0.9rem",
-              color: "#6b7280",
-              margin: "4px 0 0",
-            }}
-          >
+          <p className="page-subtitle">
             Train, test, and deploy sign language models
           </p>
         </div>
@@ -669,10 +656,7 @@ const ManageModel = () => {
           >
             Currently Deployed
           </p>
-          <div
-            className="grid grid-cols-2 sm:grid-cols-4 gap-4"
-            style={{ fontSize: "0.9rem" }}
-          >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
                 Version
@@ -726,10 +710,10 @@ const ManageModel = () => {
           }}
         >
           <div>
-            <h3 className="text-base font-semibold text-gray-800" style={{ margin: 0 }}>
+            <h3 className="section-title">
               Model Versions
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="section-subtitle">
               Words and alphabet models are managed as one version.
             </p>
           </div>
@@ -761,7 +745,7 @@ const ManageModel = () => {
 
         {loading ? (
           <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm" style={{ minWidth: 1040, tableLayout: "fixed" }}>
+          <table className="table-text w-full text-left" style={{ minWidth: 1040, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "44px" }} />
               <col style={{ width: "13%" }} />
@@ -823,7 +807,7 @@ const ManageModel = () => {
           <>
             {/* Table header row */}
             <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm" style={{ minWidth: 1040, tableLayout: "fixed" }}>
+            <table className="table-text w-full text-left" style={{ minWidth: 1040, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "44px" }} />
               <col style={{ width: "13%" }} />
@@ -853,8 +837,8 @@ const ManageModel = () => {
                   <tr>
                     <td
                       colSpan={7}
-                      className="text-center py-10"
-                      style={{ color: C.muted, fontSize: "0.85rem" }}
+                      className="py-10 text-center text-sm"
+                      style={{ color: C.muted }}
                     >
                       {searchTerm
                         ? "No models match your search."
@@ -1184,10 +1168,8 @@ const ManageModel = () => {
             {/* Pagination */}
             {filteredModels.length > pageSize && (
               <div
-                className="dash-card-footer flex flex-wrap items-center justify-between gap-2"
+                className="dash-card-footer meta-text flex flex-wrap items-center justify-between gap-2 text-gray-500"
                 style={{
-                  fontSize: "0.8rem",
-                  color: "#6b7280",
                   paddingTop: "12px",
                   borderTop: `1px solid ${C.border}`,
                 }}

@@ -237,10 +237,10 @@ const Onboarding = () => {
             alt="SIGLA"
             style={{ width: 56, height: 56, objectFit: "contain", margin: "0 auto 8px" }}
           />
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: C.text, margin: 0 }}>
+          <h1 className="page-title">
             {emailStepNeeded ? "Complete Your Account Setup" : "Set a New Password"}
           </h1>
-          <p style={{ fontSize: "0.85rem", color: C.muted, margin: "6px 0 0" }}>
+          <p className="page-subtitle" style={{ marginTop: 6 }}>
             {emailStepNeeded
               ? "For security, link an email and set your own credentials before continuing."
               : "Your password was reset. Choose a new one to continue."}
@@ -456,7 +456,7 @@ const Onboarding = () => {
           >
             <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
               <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: C.text, margin: 0 }}>
+              <h3 className="section-title">
                 Double-check this email address
               </h3>
             </div>
@@ -465,7 +465,7 @@ const Onboarding = () => {
             </p>
             <p
               style={{
-                fontSize: "0.95rem",
+                fontSize: "0.875rem",
                 fontWeight: 600,
                 color: C.text,
                 wordBreak: "break-all",
@@ -478,7 +478,7 @@ const Onboarding = () => {
             >
               {newEmail}
             </p>
-            <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 20px" }}>
+            <p style={{ fontSize: "0.75rem", color: "#6b7280", margin: "0 0 20px" }}>
               If this is mistyped you will not receive the code, and a new one
               cannot be sent for 1 minute.
             </p>

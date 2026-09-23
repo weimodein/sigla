@@ -127,7 +127,7 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
         <div>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Label *</label>
+          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Label *</label>
           {/* maxLength matches Word.label's VARCHAR(100) — an over-long paste
               previously reached Postgres and returned a bare 500. Enter-to-submit
               is handled modal-wide by AppModal's onEnter. */}
@@ -140,7 +140,7 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
           />
         </div>
         <div>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Category</label>
+          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Category</label>
           <select
             value={form.category}
             onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
@@ -162,7 +162,7 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
           )}
         </div>
         <div>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Filipino Translation</label>
+          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Filipino Translation</label>
           <input
             value={form.filipino_translation}
             onChange={e => setForm(f => ({ ...f, filipino_translation: e.target.value.toUpperCase() }))}
@@ -171,7 +171,7 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
           />
         </div>
         <div>
-          <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>Description</label>
+          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>Description</label>
           <textarea
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -196,14 +196,14 @@ const ClipResultsList = ({ results }) => (
       const statusLabel =
         r.status === "ok" ? "OK" : r.status === "skipped" ? "Skipped" : "Failed";
       return (
-        <div key={i} style={{ padding: "6px 12px", borderBottom: `1px solid ${C.border}`, fontSize: "0.8rem" }}>
+        <div key={i} style={{ padding: "6px 12px", borderBottom: `1px solid ${C.border}`, fontSize: "0.75rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
             <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
               {r.file}
             </span>
             <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
               {r.type && r.type !== "unknown" && (
-                <span style={{ padding: "1px 6px", borderRadius: "8px", fontSize: "0.65rem", fontWeight: 600, background: r.type === "image" ? "#fef3c7" : "#eff6ff", color: r.type === "image" ? "#92400e" : "#1e40af", textTransform: "uppercase" }}>
+                <span style={{ padding: "1px 6px", borderRadius: "8px", fontSize: "0.75rem", fontWeight: 600, background: r.type === "image" ? "#fef3c7" : "#eff6ff", color: r.type === "image" ? "#92400e" : "#1e40af", textTransform: "uppercase" }}>
                   {r.type}
                 </span>
               )}
@@ -211,7 +211,7 @@ const ClipResultsList = ({ results }) => (
             </div>
           </div>
           {(r.reason || r.error) && (
-            <p style={{ marginTop: "2px", fontSize: "0.7rem", color: C.muted }}>
+            <p style={{ marginTop: "2px", fontSize: "0.75rem", color: C.muted }}>
               {r.reason || r.error}
             </p>
           )}
@@ -271,7 +271,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
       }
     >
       <div style={{ marginBottom: "16px" }}>
-        <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>
+        <label style={{ fontSize: "0.75rem", fontWeight: 600, color: "#374151" }}>
           Signer ID
         </label>
         <input
@@ -282,7 +282,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
           disabled={sending}
           style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "0.875rem", marginTop: "4px", boxSizing: "border-box" }}
         />
-        <p style={{ fontSize: "0.72rem", color: C.muted, marginTop: "4px" }}>
+        <p style={{ fontSize: "0.75rem", color: C.muted, marginTop: "4px" }}>
           Reuse this ID across every word and batch from the same person. Never put
           clips from different people in one batch; signer-held-out evaluation depends on it.
         </p>
@@ -321,7 +321,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
           which reads the job row rather than guessing. */}
       {sending && (
         <div style={{ marginBottom: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#6b7280", marginBottom: "4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "#6b7280", marginBottom: "4px" }}>
             <span>Uploading files...</span>
             <span>{progress}%</span>
           </div>
@@ -526,7 +526,7 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
       {fileError && (
         <p
           style={{
-            fontSize: "0.8rem", color: "#b91c1c", background: "#fef2f2",
+            fontSize: "0.75rem", color: "#b91c1c", background: "#fef2f2",
             border: "1px solid #fecaca", borderRadius: "8px",
             padding: "8px 12px", marginBottom: "12px",
           }}
@@ -548,7 +548,7 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
             <div style={{ minWidth: 0, flex: 1 }}>
               <p
                 style={{
-                  fontSize: "0.85rem", fontWeight: 600, color: "#374151",
+                  fontSize: "0.875rem", fontWeight: 600, color: "#374151",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
                 title={file.name}
@@ -588,7 +588,7 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
           {/* Chrome and Firefox cannot play QuickTime inline. Say so here rather
               than letting a blank player read as a broken upload. */}
           {selectedExt === "mov" && (
-            <p style={{ fontSize: "0.72rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "6px 8px", marginTop: "8px" }}>
+            <p style={{ fontSize: "0.75rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "6px 8px", marginTop: "8px" }}>
               MOV files may not preview in this browser. The upload still works.
             </p>
           )}
@@ -862,10 +862,10 @@ const ManageWord = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
+          <h2 className="page-title">
             Manage Words
           </h2>
-          <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "4px 0 0" }}>
+          <p className="page-subtitle">
             Manage vocabulary, training clips, and demonstration videos
           </p>
         </div>
@@ -1009,8 +1009,8 @@ const ManageWord = () => {
       >
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Vocabulary entries</h3>
-            <p className="mt-0.5 text-xs text-gray-500">Training coverage and deployed availability</p>
+            <h3 className="section-title">Vocabulary entries</h3>
+            <p className="section-subtitle">Training coverage and deployed availability</p>
           </div>
           <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
             {total} {total === 1 ? "entry" : "entries"}
@@ -1020,7 +1020,7 @@ const ManageWord = () => {
           {/* The proportional columns consume the full card width. The desktop
               minimum keeps all five actions on one line; smaller viewports use
               the existing horizontal scroll instead of compressing the row. */}
-          <table className="w-full text-left text-sm" style={{ minWidth: 1100, tableLayout: "fixed" }}>
+          <table className="table-text w-full text-left" style={{ minWidth: 1100, tableLayout: "fixed" }}>
             <colgroup>
               {/* Allocate space by information density. Actions begin at their
                   column boundary so they stay visually connected to Availability. */}
@@ -1196,7 +1196,7 @@ const ManageWord = () => {
             .
           </p>
           {uploadResults.status === "failed" && (
-            <p style={{ fontSize: "0.8rem", color: C.red, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", padding: "8px 10px", marginBottom: "12px" }}>
+            <p style={{ fontSize: "0.75rem", color: C.red, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", padding: "8px 10px", marginBottom: "12px" }}>
               The batch stopped early: {uploadResults.error || "Unknown error"}
             </p>
           )}
@@ -1231,7 +1231,7 @@ const ManageWord = () => {
             </>
           }
         >
-          <p style={{ fontSize: "0.9rem", color: "#374151" }}>
+          <p style={{ fontSize: "0.875rem", color: "#374151" }}>
             Are you sure you want to delete <strong>"{deleteConfirm.label}"</strong>? This will also remove all its gesture samples.
           </p>
         </AppModal>
@@ -1254,18 +1254,18 @@ const ManageWord = () => {
             </>
           }
         >
-          <p style={{ fontSize: "0.9rem", color: "#374151" }}>
+          <p style={{ fontSize: "0.875rem", color: "#374151" }}>
             Permanently delete all{" "}
             <strong>{clearSamplesConfirm.total_samples}</strong> training sample
             {clearSamplesConfirm.total_samples === 1 ? "" : "s"} for{" "}
             <strong>"{clearSamplesConfirm.label}"</strong>?
           </p>
-          <p style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: "10px" }}>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: "10px" }}>
             The word itself is kept, so you can re-upload clips for it later. This
             cannot be undone — the samples are not recoverable from the app.
           </p>
           {clearSamplesConfirm.is_active && (
-            <p style={{ fontSize: "0.85rem", color: "#c2410c", marginTop: "10px" }}>
+            <p style={{ fontSize: "0.875rem", color: "#c2410c", marginTop: "10px" }}>
               This word is <strong>active</strong> in the deployed model. Clearing
               its samples does not change what the app currently recognises, but
               the word will be dropped from the next model you train.

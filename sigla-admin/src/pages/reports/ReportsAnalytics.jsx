@@ -39,9 +39,9 @@ import {
 const SectionHeader = ({ title, description, count, aside }) => (
   <div className="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+      <h3 className="section-title">{title}</h3>
       {description && (
-        <p className="mt-0.5 text-xs text-gray-400">{description}</p>
+        <p className="section-subtitle">{description}</p>
       )}
     </div>
     {aside || (count !== undefined && (
@@ -91,7 +91,7 @@ const pairState = (pair) => {
 // ── Simple Table ──────────────────────────────────────────────
 const SimpleTable = ({ headers, rows, emptyMessage }) => (
   <div className="overflow-x-auto rounded-lg border border-gray-200">
-    <table className="w-full text-left text-sm">
+    <table className="table-text w-full text-left">
       <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
         <tr>
           {headers.map((h) => (
@@ -892,10 +892,10 @@ const ReportsAnalytics = () => {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: 700, color: "#1f2937", margin: 0 }}>
+          <h1 className="page-title">
             Reports & Analytics
           </h1>
-          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: 4 }}>
+          <p className="page-subtitle">
             System activity overview and data exports
           </p>
         </div>
@@ -1245,10 +1245,10 @@ const ReportsAnalytics = () => {
       <div className="dash-card !mb-0">
         <div className="dash-card-header flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-gray-800">
+            <h3 className="section-title">
               Export system report
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="section-subtitle">
               Choose the sections to include in the PDF
             </p>
           </div>
