@@ -39,7 +39,6 @@ class CategoryWordListActivity : AppCompatActivity() {
     private lateinit var emptyState: LinearLayout
     private lateinit var progressLoading: ProgressBar
     private lateinit var adapter: SimpleWordAdapter
-    private lateinit var session: SessionManager
     private lateinit var favoritesManager: FavoritesManager
 
     private var categoryName = "All Categories"
@@ -56,7 +55,6 @@ class CategoryWordListActivity : AppCompatActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
 
-        session = SessionManager.getInstance(this)
         favoritesManager = FavoritesManager.getInstance(this)
         categoryName = intent.getStringExtra(EXTRA_CATEGORY_NAME) ?: "All Categories"
         isFavorites = intent.getBooleanExtra(EXTRA_IS_FAVORITES, false)
@@ -121,7 +119,7 @@ class CategoryWordListActivity : AppCompatActivity() {
             }
 
             try {
-                val response = ApiClient.get(session.token ?: "").getWordBank()
+                val response = ApiClient.get().getWordBank()
                 if (response.isSuccessful) {
                     val fresh = response.body()?.words ?: emptyList()
                     if (fresh.isNotEmpty() && fresh != allWords) {

@@ -407,7 +407,7 @@ class HandLandmarkHelper(
          * Actually frees the native resources. Nothing calls this in normal use:
          * the helper is meant to live as long as the process, and Android
          * reclaims it when the process dies. Here for tests and for a deliberate
-         * teardown (e.g. logout) if one is ever wanted.
+         * process-wide teardown if one is ever wanted.
          */
         @Synchronized
         fun destroy() {

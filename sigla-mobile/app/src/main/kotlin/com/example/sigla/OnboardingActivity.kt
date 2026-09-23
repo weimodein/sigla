@@ -84,8 +84,7 @@ class OnboardingActivity : AppCompatActivity() {
     }
 
     private fun completeOnboarding() {
-        val session = SessionManager.getInstance(this)
-        session.isOnboardingDone = true
+        AppSettings.getInstance(this).isOnboardingDone = true
         startActivity(Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK))
         finish()

@@ -14,8 +14,6 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
 import com.google.android.material.button.MaterialButton
 
 /**
@@ -32,7 +30,6 @@ import com.google.android.material.button.MaterialButton
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var drawer: DrawerLayout
-    private lateinit var session: SessionManager
     private lateinit var appSettings: AppSettings
 
     // In-memory state, mirrors AppSettings (the store MainActivity/WordDetailActivity's
@@ -45,7 +42,6 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
-        session = SessionManager.getInstance(this)
         appSettings = AppSettings.getInstance(this)
         drawer = findViewById(R.id.drawerLayout)
 
@@ -59,38 +55,6 @@ class SettingsActivity : AppCompatActivity() {
         bindReplayTutorial()
     }
 
-    override fun onResume() {
-        super.onResume()
-        refreshSidebarAuthState()
-    }
-    // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
-
-    private fun refreshSidebarAuthState() {
-        val sidebar = drawer.getChildAt(1) ?: return
-        val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
-        val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
-        val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        if (session.isLoggedIn) {
-            tvUsername?.text = session.username ?: "User"
-            tvEmail?.text = session.email ?: ""
-            btnSignIn?.visibility = View.GONE
-        } else {
-            tvUsername?.text = "Guest User"
-            tvEmail?.text = "Not signed in"
-            btnSignIn?.visibility = View.VISIBLE
-        }
-    }  
-
-    private fun openAuthDialog() {
-        val dialog = AuthDialogFragment()
-        dialog.onSignedIn = {
-            refreshSidebarAuthState()
-            // Optional: reload data that requires login
-            // finish()
-            // startActivity(intent)
-        }
-        dialog.show(supportFragmentManager, "auth")
-    }
     // ── Top bar ───────────────────────────────────────────────────────────────
 
     private fun setupTopBar() {
@@ -101,78 +65,8 @@ class SettingsActivity : AppCompatActivity() {
     // ── Sidebar ───────────────────────────────────────────────────────────────
 
     private fun setupSidebar() {
-        refreshSidebarAuthState()
-        setActiveNavItem(R.id.navSettings)
-
-        findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
-        }
-        findViewById<View>(R.id.navWordBank)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, WordBankActivity::class.java))
-            finish()
-        }
-        findViewById<View>(R.id.navTranslationHistory)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, TranslationHistoryActivity::class.java))
-            finish()
-        }
-
-        findViewById<View>(R.id.navNotifications)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, NotificationsActivity::class.java))
-            finish()
-        }
-        findViewById<View>(R.id.navProfile)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
-                startActivity(Intent(this, ProfileActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()                         // ← ADD THIS
-            }
-        }
-        findViewById<View>(R.id.navSettings)?.setOnClickListener {
-            drawer.closeDrawer(GravityCompat.START)
-        }
-        findViewById<View>(R.id.btnSidebarSignIn)?.setOnClickListener {
-            drawer.closeDrawers()
-            openAuthDialog()  // ← You need to add openAuthDialog method
-        }
-    }
-
-
-    private fun setActiveNavItem(activeId: Int) {
-        val navIds = listOf(
-            R.id.navMainInterface,
-            R.id.navWordBank,
-            R.id.navTranslationHistory,
-            R.id.navNotifications,
-            R.id.navProfile,
-            R.id.navSettings
-        )
-        navIds.forEach { id ->
-            val view = findViewById<LinearLayout>(id)
-            if (id == activeId) {
-                view?.setBackgroundResource(R.drawable.bg_nav_item_selected)
-                (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                    android.content.res.ColorStateList.valueOf(0xFF4A90E2.toInt())
-                (view?.getChildAt(1) as? TextView)?.apply {
-                    setTextColor(0xFF4A90E2.toInt())
-                    setTypeface(null, android.graphics.Typeface.BOLD)
-                }
-            } else {
-                view?.setBackgroundResource(R.drawable.bg_nav_item_default)
-                (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                    android.content.res.ColorStateList.valueOf(0xFF6C757D.toInt())
-                (view?.getChildAt(1) as? TextView)?.apply {
-                    setTextColor(0xFF6C757D.toInt())
-                    setTypeface(null, android.graphics.Typeface.NORMAL)
-                }
-            }
-        }
+        val sidebar = findViewById<View>(R.id.sidebarDrawer)
+        NavigationHelper.setup(this, drawer, sidebar, Screen.SETTINGS)
     }
 
     // ── Load saved preferences ────────────────────────────────────────────────
@@ -307,7 +201,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun bindReplayTutorial() {
         findViewById<View>(R.id.rowReplayTutorial).setOnClickListener {
-            session.isOnboardingDone = false
+            appSettings.isOnboardingDone = false
             startActivity(Intent(this, OnboardingActivity::class.java))
             finish()
         }

@@ -83,9 +83,6 @@ dependencies {
     // Glide for images
     implementation("com.github.bumptech.glide:glide:4.16.0")
 
-    // EncryptedSharedPreferences
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     

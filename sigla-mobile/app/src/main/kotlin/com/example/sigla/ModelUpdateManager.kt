@@ -118,8 +118,7 @@ object ModelUpdateManager {
     /**
      * Drops the throttle so the next [checkAndUpdate] talks to the backend.
      *
-     * For the cases where waiting minutes would be wrong: a fresh login, or a
-     * user explicitly asking to check for updates.
+     * Used when a caller explicitly asks to check for updates.
      */
     fun invalidateCheckThrottle() {
         lastCheckAt = 0L
@@ -130,7 +129,6 @@ object ModelUpdateManager {
      */
     suspend fun checkAndUpdate(
         context: Context,
-        token: String?,
         force: Boolean = false,
     ): Boolean = withContext(Dispatchers.IO) {
         lastCheckChangedVersion = false
@@ -140,7 +138,7 @@ object ModelUpdateManager {
         }
 
         try {
-            val response = ApiClient.get(token).getLatestModel()
+            val response = ApiClient.get().getLatestModel()
             if (!response.isSuccessful) {
                 Log.w(TAG, "Failed to fetch model pair: ${response.code()}")
                 return@withContext hasCompleteLocalPair(context)
@@ -633,7 +631,7 @@ object ModelUpdateManager {
     }
 
     // Add this function to ModelUpdateManager.kt
-    suspend fun forceDownloadModel(context: Context, token: String?): Boolean {
-        return checkAndUpdate(context, token, force = true)
+    suspend fun forceDownloadModel(context: Context): Boolean {
+        return checkAndUpdate(context, force = true)
     }
 }

@@ -19,18 +19,6 @@ object ApiClient {
     }
 
     /**
-     * Auth token for outgoing requests.
-     *
-     * The token used to be baked into a per-call OkHttpClient, which is why a
-     * whole HTTP stack was rebuilt for every request. Holding it here instead
-     * lets a single client serve every caller: the interceptor below reads it
-     * at request time. Volatile because requests are issued from several
-     * threads (IO dispatchers, CameraX executor).
-     */
-    @Volatile
-    private var authToken: String? = null
-
-    /**
      * One client for the whole process. Building an OkHttpClient allocates a
      * connection pool, a dispatcher and a thread pool, so a per-call instance
      * meant connections were never reused and every request paid a fresh
@@ -49,12 +37,6 @@ object ApiClient {
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .addInterceptor(logging)
-            .addInterceptor { chain ->
-                val request = chain.request().newBuilder().apply {
-                    authToken?.let { addHeader("Authorization", "Bearer $it") }
-                }.build()
-                chain.proceed(request)
-            }
             .build()
     }
 
@@ -68,18 +50,5 @@ object ApiClient {
             .create(ApiService::class.java)
     }
 
-    /**
-     * Returns the shared service, updating the token used for subsequent
-     * requests. Signature is unchanged from the per-call-client version so
-     * existing callers keep working.
-     */
-    fun get(token: String? = null): ApiService {
-        if (token != null) authToken = token
-        return service
-    }
-
-    /** Drop the cached token on sign-out so later requests go out unauthenticated. */
-    fun clearToken() {
-        authToken = null
-    }
+    fun get(): ApiService = service
 }

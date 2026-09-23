@@ -9,7 +9,6 @@ import android.text.InputType
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -50,7 +49,6 @@ class WordBankActivity : AppCompatActivity() {
     private lateinit var tvEntryCount: TextView
     private lateinit var progressLoading: ProgressBar
     private lateinit var adapter: SimpleWordAdapter
-    private lateinit var session: SessionManager
     private lateinit var categoryGridContainer: LinearLayout
     private lateinit var rvCategoryGrid: RecyclerView
     private lateinit var gridAdapter: CategoryGridAdapter
@@ -101,7 +99,6 @@ class WordBankActivity : AppCompatActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
 
-        session = SessionManager.getInstance(this)    // ← ADD THIS
         drawerLayout = findViewById(R.id.drawerLayout) // ← ADD THIS
         favoritesManager = FavoritesManager.getInstance(this)
 
@@ -127,41 +124,11 @@ class WordBankActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshSidebarAuthState()  // ← UPDATE SIDEBAR WHEN ACTIVITY RESUMES
         // Favorites membership may have changed in the word detail screen.
         if (allWords.isNotEmpty()) {
             if (isGridMode) refreshCategoryGrid() else applyFilters()
         }
     }
-    // ── Refresh Sidebar ───────────────────────────────────────────────────────────────
-
-    private fun refreshSidebarAuthState() {
-        val sidebar = drawerLayout.getChildAt(1) ?: return
-        val tvUsername = sidebar.findViewById<TextView>(R.id.tvSidebarUsername)
-        val tvEmail = sidebar.findViewById<TextView>(R.id.tvSidebarEmail)
-        val btnSignIn = sidebar.findViewById<MaterialButton>(R.id.btnSidebarSignIn)
-        if (session.isLoggedIn) {
-            tvUsername?.text = session.username ?: "User"
-            tvEmail?.text = session.email ?: ""
-            btnSignIn?.visibility = View.GONE
-        } else {
-            tvUsername?.text = "Guest User"
-            tvEmail?.text = "Not signed in"
-            btnSignIn?.visibility = View.VISIBLE
-        }
-    }
-
-        private fun openAuthDialog() {
-        val dialog = AuthDialogFragment()
-        dialog.onSignedIn = {
-            refreshSidebarAuthState()
-            // Optional: reload data that requires login
-            // finish()
-            // startActivity(intent)
-        }
-        dialog.show(supportFragmentManager, "auth")
-    }
-
     private fun bindViews() {
         drawerLayout = findViewById(R.id.drawerLayout)
         btnSidebar = findViewById(R.id.btnSidebar)
@@ -279,81 +246,8 @@ class WordBankActivity : AppCompatActivity() {
     // ── Sidebar ───────────────────────────────────────────────────────────────
 
     private fun setupSidebar() {
-        refreshSidebarAuthState()
-        setActiveNavItem(R.id.navWordBank)
-
-        findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
-        }
-        findViewById<View>(R.id.navWordBank)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-        }
-        findViewById<View>(R.id.navTranslationHistory)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, TranslationHistoryActivity::class.java))
-            finish()
-        }
-
-        // For Notifications - ADD LOGIN CHECK
-        findViewById<View>(R.id.navNotifications)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
-                startActivity(Intent(this, NotificationsActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()                         // ← ADD THIS
-            }
-        }
-
-        // For Profile - ADD LOGIN CHECK
-        findViewById<View>(R.id.navProfile)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            if (session.isLoggedIn) {                    // ← ADD THIS CHECK
-                startActivity(Intent(this, ProfileActivity::class.java))
-                finish()
-            } else {
-                openAuthDialog()                         // ← ADD THIS
-            }
-        }
-        findViewById<View>(R.id.navSettings)?.setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.START)
-            startActivity(Intent(this, SettingsActivity::class.java))
-            finish()
-        }
-
-        findViewById<View>(R.id.btnSidebarSignIn)?.setOnClickListener {
-            drawerLayout.closeDrawers()
-            openAuthDialog()
-        }
-    }
-
-    private fun setActiveNavItem(activeId: Int) {
-        val navIds = listOf(
-            R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
-            R.id.navNotifications, R.id.navProfile, R.id.navSettings
-        )
-        navIds.forEach { id ->
-            val view = findViewById<LinearLayout>(id)
-            if (id == activeId) {
-                view?.setBackgroundResource(R.drawable.bg_nav_item_selected)
-                (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                    android.content.res.ColorStateList.valueOf(0xFF4A90E2.toInt())
-                (view?.getChildAt(1) as? TextView)?.apply {
-                    setTextColor(0xFF4A90E2.toInt())
-                    setTypeface(null, android.graphics.Typeface.BOLD)
-                }
-            } else {
-                view?.setBackgroundResource(R.drawable.bg_nav_item_default)
-                (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                    android.content.res.ColorStateList.valueOf(0xFF6C757D.toInt())
-                (view?.getChildAt(1) as? TextView)?.apply {
-                    setTextColor(0xFF6C757D.toInt())
-                    setTypeface(null, android.graphics.Typeface.NORMAL)
-                }
-            }
-        }
+        val sidebar = findViewById<View>(R.id.sidebarDrawer)
+        NavigationHelper.setup(this, drawerLayout, sidebar, Screen.WORD_BANK)
     }
 
     // ── Load Words from Backend ───────────────────────────────────────────────
@@ -381,7 +275,7 @@ class WordBankActivity : AppCompatActivity() {
 
             // Fetch fresh data from API
             try {
-                val response = ApiClient.get(session.token ?: "").getWordBank()
+                val response = ApiClient.get().getWordBank()
                 if (response.isSuccessful) {
                     val fresh = response.body()?.words ?: emptyList()
                     if (fresh.isNotEmpty() && fresh != allWords) {
@@ -427,7 +321,7 @@ class WordBankActivity : AppCompatActivity() {
             }
 
             try {
-                val response = ApiClient.get(session.token ?: "").getCategories()
+                val response = ApiClient.get().getCategories()
                 if (response.isSuccessful) {
                     val fresh = response.body()?.categories ?: emptyList()
                     if (fresh.isNotEmpty() && fresh != dbCategories) {

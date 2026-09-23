@@ -152,8 +152,7 @@ class MainActivity : AppCompatActivity() {
     private var predictor : PredictionService? = null
     private var landmarker: HandLandmarkHelper? = null
 
-    // Backend-related managers
-    private lateinit var session: SessionManager
+    // Device-local state
     private lateinit var historyManager: TranslationHistoryManager
     private lateinit var appSettings: AppSettings
     private var tts: TextToSpeech? = null
@@ -236,11 +235,6 @@ class MainActivity : AppCompatActivity() {
     // immediately instead of waiting for the next recognition.
     private var lastLabel: String? = null
 
-    // ── Auth state ────────────────────────────────────────────────────────────
-    private var isSignedIn      = false
-    private var currentUsername = ""
-    private var currentEmail    = ""
-
     // ─────────────────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -248,7 +242,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Initialize managers
-        session = SessionManager.getInstance(this)
         historyManager = TranslationHistoryManager.getInstance(this)
         appSettings = AppSettings.getInstance(this)
         showFilipino = appSettings.showFilipino
@@ -257,13 +250,9 @@ class MainActivity : AppCompatActivity() {
         // the untrained orientation. See FORCE_BACK_CAMERA_ONLY.
         isFrontCamera = if (FORCE_BACK_CAMERA_ONLY) false else appSettings.isFrontCamera
 
-        // Check first launch / onboarding
-        if (session.isFirstLaunch) {
-            session.isFirstLaunch = false
-            if (!session.isOnboardingDone) {
-                startActivity(Intent(this, OnboardingActivity::class.java))
-                return  // Exit onCreate, onboarding will start MainActivity when done
-            }
+        if (!appSettings.isOnboardingDone) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            return  // Exit onCreate, onboarding will start MainActivity when done
         }
 
         // Everything below ran; onStart() may now bring the camera up. Without
@@ -285,8 +274,6 @@ class MainActivity : AppCompatActivity() {
         setupSidebar()
         updateFilipinoToggleLabel()
 
-        // Check if user is already signed in
-        checkAuthState()
     }
 
     /**
@@ -395,7 +382,7 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     binding.tvStatus.text = "Checking for model updates..."
                 }
-                val hasModel = ModelUpdateManager.checkAndUpdate(this@MainActivity, session.token)
+                val hasModel = ModelUpdateManager.checkAndUpdate(this@MainActivity)
                 if (!hasModel) {
                     withContext(Dispatchers.Main) {
                         binding.tvStatus.text = "⚠ Failed to download model"
@@ -555,7 +542,7 @@ class MainActivity : AppCompatActivity() {
         // word_bank_cache.json existed the elvis chain short-circuited and the API
         // was never called again.
         val words: List<WordBankWord> = try {
-            val fresh = ApiClient.get(session.token).getWordBank().body()?.words
+            val fresh = ApiClient.get().getWordBank().body()?.words
             if (!fresh.isNullOrEmpty()) {
                 ModelUpdateManager.cacheWordBank(this@MainActivity, fresh)
                 fresh
@@ -595,35 +582,6 @@ class MainActivity : AppCompatActivity() {
         withContext(Dispatchers.Main) {
             filipinoMap = map
             Log.i(TAG, "Loaded ${map.size} Filipino translation(s)")
-        }
-    }
-
-    private fun checkAuthState() {
-        // The token read is an AES decrypt (SessionManager is backed by
-        // EncryptedSharedPreferences), so it happens inside the coroutine
-        // rather than on the main thread during onCreate.
-        lifecycleScope.launch(Dispatchers.IO) {
-            // First touch of the encrypted store, and so where Keystore init lands.
-            // Carries the onboarding flags over for users upgrading from a build that
-            // kept them there.
-            session.migrateOnboardingFlags()
-
-            val token = session.token
-            if (token.isNullOrEmpty()) return@launch
-            try {
-                val response = ApiClient.get(token).getMe()
-                if (response.isSuccessful) {
-                    val user = response.body()?.user
-                    if (user != null) {
-                        isSignedIn = true
-                        currentUsername = user.username
-                        currentEmail = user.email
-                    }
-                }
-            } catch (e: Exception) {
-                // Token might be expired
-                session.clearSession()
-            }
         }
     }
 
@@ -932,17 +890,9 @@ private fun setupSidebar() {
         finish()
     }
 
-    // navProfile / navNotifications / btnSidebarSignIn are deliberately absent:
-    // those ids exist only in the orphaned drawer_sidebar.xml, which nothing
-    // inflates, so the lookups always missed — and a *failed* findViewById walks
-    // the entire ~85-view hierarchy before returning null. Profile and
-    // Notifications are unreachable from this screen either way; restoring them
-    // means adding the rows to nav_sidebar.xml.
 }
 
 private fun setActiveNavItem(activeId: Int) {
-    // Only the ids nav_sidebar.xml actually defines — navNotifications and
-    // navProfile were full-hierarchy misses on every call.
     val navIds = listOf(
         R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
         R.id.navSettings
@@ -968,12 +918,6 @@ private fun setActiveNavItem(activeId: Int) {
         }
     }
 }
-    // refreshSidebarAuthState() and openAuthDialog() removed: the former wrote to
-    // tvSidebarUsername / tvSidebarEmail / btnSidebarSignIn, none of which exist
-    // in nav_sidebar.xml, so all three lookups were full-hierarchy misses — paid
-    // on both onCreate and onResume. The latter was only reachable from the dead
-    // sidebar handlers. Sign-in from this screen needs those views added to
-    // nav_sidebar.xml first.
 
     // ── Camera ────────────────────────────────────────────────────────────────
 

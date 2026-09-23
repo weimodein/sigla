@@ -17,10 +17,10 @@ class CustomCategoryManager private constructor(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("sigla_custom_categories", Context.MODE_PRIVATE)
     private val gson = Gson()
-    private val session = SessionManager.getInstance(context)
 
     companion object {
         @Volatile private var INSTANCE: CustomCategoryManager? = null
+        private const val PREF_KEY = "categories_guest"
 
         fun getInstance(context: Context): CustomCategoryManager =
             INSTANCE ?: synchronized(this) {
@@ -28,14 +28,8 @@ class CustomCategoryManager private constructor(context: Context) {
             }
     }
 
-    private val prefKey: String
-        get() {
-            val uid = session.userId
-            return if (uid == -1) "categories_guest" else "categories_$uid"
-        }
-
     fun getAll(): List<CustomCategory> {
-        val json = prefs.getString(prefKey, null) ?: return emptyList()
+        val json = prefs.getString(PREF_KEY, null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<CustomCategory>>() {}.type
             gson.fromJson<List<CustomCategory>>(json, type) ?: emptyList()
@@ -81,6 +75,6 @@ class CustomCategoryManager private constructor(context: Context) {
     fun get(id: String): CustomCategory? = getAll().find { it.id == id }
 
     private fun save(categories: List<CustomCategory>) {
-        prefs.edit().putString(prefKey, gson.toJson(categories)).apply()
+        prefs.edit().putString(PREF_KEY, gson.toJson(categories)).apply()
     }
 }

@@ -72,12 +72,8 @@
         <activity android:name=".WordBankActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
         <activity android:name=".CategoryWordListActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".WordDetailActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".NotificationsActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
-        <activity android:name=".ProfileActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
         <activity android:name=".SettingsActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
-        <activity android:name=".TermsActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".AuthActivity" android:exported="false" android:screenOrientation="portrait" />
         
 
     </application>

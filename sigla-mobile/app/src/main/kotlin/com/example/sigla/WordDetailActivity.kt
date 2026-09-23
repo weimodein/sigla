@@ -42,7 +42,6 @@ class WordDetailActivity : AppCompatActivity() {
     private lateinit var playOverlay: FrameLayout
     private lateinit var tvMediaCaption: TextView
     private lateinit var btnAddToFavorites: MaterialButton
-    private lateinit var session: SessionManager
     private lateinit var favoritesManager: FavoritesManager
 
     private var word: WordBankWord? = null
@@ -58,7 +57,6 @@ class WordDetailActivity : AppCompatActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
 
-        session = SessionManager.getInstance(this)
         favoritesManager = FavoritesManager.getInstance(this)
 
         bindViews()
@@ -95,7 +93,7 @@ class WordDetailActivity : AppCompatActivity() {
 
             if (found == null) {
                 try {
-                    val response = ApiClient.get(session.token ?: "").getWordBank()
+                    val response = ApiClient.get().getWordBank()
                     if (response.isSuccessful) {
                         found = response.body()?.words?.find { it.id == wordId }
                     }

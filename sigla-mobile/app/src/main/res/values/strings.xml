@@ -1,46 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SIGLA</string>
-
-
-    <!-- Suggest Word Screen -->
-    <string name="suggest_a_word_title">Suggest a Word</string>
-    <string name="back_button_desc">Go back</string>
-    <string name="help_button_desc">Help</string>
-    <string name="sparkle_desc">Sparkle decoration</string>
-
-    <string name="word_details_header">Word Details</string>
-    <string name="info_desc">More information</string>
-    <string name="word_hint">e.g. Magandang umaga</string>
-    <string name="category_hint">Select a category</string>
-    <string name="category_desc">Category selector dropdown</string>
-    <string name="description_hint">Describe how or when this sign is used…</string>
-
-    <string name="gesture_config_header">Gesture Configuration</string>
-    <string name="gesture_icon_desc">Gesture icon</string>
-    <string name="number_of_hands_label">Number of Hands</string>
-    <string name="one_hand_label">One Hand</string>
-    <string name="one_hand_desc">Select one hand gesture</string>
-    <string name="two_hands_label">Two Hands</string>
-    <string name="two_hands_desc">Select two hands gesture</string>
-
-    <string name="gesture_type_label">Gesture Type</string>
-    <string name="static_label">Static</string>
-    <string name="static_gesture_desc">Select static gesture type</string>
-    <string name="motion_label">Motion</string>
-    <string name="motion_gesture_desc">Select motion gesture type</string>
-
-    <string name="gesture_hint_static">A held hand position with no movement.</string>
-    <string name="gesture_hint_motion">A gesture that involves hand movement.</string>
-
-    <string name="suggestion_review_note">Your suggestion will be reviewed by our team before being added to the word bank. Thank you for helping grow SIGLA!</string>
-    <string name="terms_label">I have read and agree to the Terms and Conditions</string>
-    <string name="submit_button_label">Start Collecting</string>
-
     <string name="skip">Skip</string>
     <string name="next">Next</string>
     <string name="get_started">Get Started</string>
-
     <string name="app_brand_mark">SigLa</string>
-    <string name="step_count_format">%1$d/%2$d</string>
 </resources>

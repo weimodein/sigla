@@ -7,6 +7,8 @@ class AppSettings(context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("sigla_settings", Context.MODE_PRIVATE)
+    private val onboardingPrefs: SharedPreferences =
+        context.getSharedPreferences("sigla_onboarding", Context.MODE_PRIVATE)
 
     companion object {
         private const val KEY_VOLUME = "volume"
@@ -14,6 +16,7 @@ class AppSettings(context: Context) {
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_SHOW_FILIPINO = "show_filipino"
         private const val KEY_FRONT_CAMERA = "front_camera"
+        private const val KEY_ONBOARDING = "onboarding_done"
 
         const val VOICE_FEMALE = "female"
         const val VOICE_MALE = "male"
@@ -46,6 +49,10 @@ class AppSettings(context: Context) {
     var isFrontCamera: Boolean
         get() = prefs.getBoolean(KEY_FRONT_CAMERA, false)
         set(v) = prefs.edit().putBoolean(KEY_FRONT_CAMERA, v).apply()
+
+    var isOnboardingDone: Boolean
+        get() = onboardingPrefs.getBoolean(KEY_ONBOARDING, false)
+        set(v) = onboardingPrefs.edit().putBoolean(KEY_ONBOARDING, v).apply()
 
     fun resetToDefault() {
         prefs.edit()
