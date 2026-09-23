@@ -67,7 +67,9 @@ private val PIPELINE_PROFILING = BuildConfig.DEBUG
 // 24 fps means the timer fires before the evidence gate can ever open and every
 // prediction has to wait for END_OF_GESTURE. Keep this floor at or above 24, and
 // treat a device that cannot hold it as a latency bug rather than lowering it.
-private const val MIN_ACCEPTABLE_FPS = 24
+// internal, not private: CaptureRateMonitor watches the achieved rate
+// against this same floor, and two copies of it could drift apart.
+internal const val MIN_ACCEPTABLE_FPS = 24
 
 /**
  * Runs the blocking close() calls in stopVision() off the main thread.
@@ -465,6 +467,10 @@ class MainActivity : AppCompatActivity() {
         // feeding it. See HandLandmarkHelper.Cache.
         HandLandmarkHelper.Cache.release(landmarkSink)
         landmarkSink = null
+        // The low-rate callback captures this Activity, and the monitor is a
+        // process-level object — leaving it set would pin a destroyed screen
+        // and pop a toast against it.
+        CaptureRateMonitor.onLowCaptureRate = null
         landmarker = null
 
         val doomedPredictor = predictor
@@ -977,6 +983,23 @@ private fun setActiveNavItem(activeId: Int) {
     private fun bindCamera() {
         val provider = cameraProvider ?: return
 
+        // The gap spanning a rebind is not a real inter-frame time, and the
+        // lighting the user just moved into may be different anyway.
+        CaptureRateMonitor.reset()
+        CaptureRateMonitor.onLowCaptureRate = { fps ->
+            runOnUiThread {
+                // Once per session. A camera that cannot reach the rate the
+                // model expects makes every gesture arrive stretched, and the
+                // user is the only one who can fix the cause — the light.
+                Toast.makeText(
+                    this,
+                    "Camera is running at %.0f fps. Recognition needs brighter light to work well."
+                        .format(fps),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+
         // Pin the auto-exposure frame-rate floor.
         //
         // The MediaTek HAL defaults this to [5, 30]: in anything short of bright
@@ -1026,6 +1049,9 @@ private fun setActiveNavItem(activeId: Int) {
             // Submit every available frame. CameraX and MediaPipe already apply
             // keep-latest/flow-limiting backpressure, so manually discarding half
             // the stream only removes temporal evidence from fast signs.
+            // Before any work, so the measured gap is the rate frames ARRIVE at,
+            // not the rate this block manages to process them.
+            CaptureRateMonitor.onFrame()
             val t0              = if (PIPELINE_PROFILING) System.nanoTime() else 0L
             val bitmap          = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
