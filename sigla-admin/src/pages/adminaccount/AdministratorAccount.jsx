@@ -40,74 +40,62 @@ const maskEmail = (email) => {
   return `${masked}@${domain}`;
 };
 
-// ── Color Palette ──
-const C = {
-  text: "#1f2937",
-  background: "#f3f4f6",
-  primary: "#1e3a8a",
-  secondary: "#1d4ed8",
-  muted: "#9ca3af",
-  border: "#e5e7eb",
-};
-
 // ── Avatar initial display ──
 const Avatar = ({ name, size = 72 }) => (
   <div
+    className="flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-900 to-blue-700 font-bold text-white"
     style={{
       width: size,
       height: size,
-      borderRadius: "50%",
-      background: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      color: "#fff",
       fontSize: size * 0.36,
-      fontWeight: 700,
-      flexShrink: 0,
     }}
   >
     {(name?.[0] || "A").toUpperCase()}
   </div>
 );
 
-// ── Read-only detail row (icon tile + label + value) ──
-const DetailRow = ({ icon: Icon, label, children, last = false }) => (
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "14px",
-      padding: "14px 0",
-      borderBottom: last ? "none" : `1px solid ${C.border}`,
-    }}
-  >
-    <div
-      style={{
-        width: 36,
-        minWidth: 36,
-        padding: "8px",
-        borderRadius: "8px",
-        background: "#f3f4f6",
-        color: C.muted,
-        display: "flex",
-      }}
-    >
-      <Icon size={16} />
+const AccountFact = ({ icon, label, children }) => (
+  <div className="flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-4">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-gray-400 shadow-sm">
+      {icon}
     </div>
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <p className="text-xs" style={{ color: C.muted, margin: 0 }}>
-        {label}
-      </p>
-      <div
-        className="text-sm font-medium"
-        style={{ color: C.text, marginTop: "2px" }}
-      >
+    <div className="min-w-0">
+      <p className="text-xs text-gray-400">{label}</p>
+      <div className="mt-0.5 truncate text-sm font-semibold text-gray-800">
         {children}
       </div>
     </div>
   </div>
 );
+
+const StepIndicator = ({ steps, current }) => {
+  const currentIndex = steps.findIndex((step) => step.key === current);
+  return (
+    <div className="flex gap-2" aria-label="Progress">
+      {steps.map((step, index) => (
+        <div
+          key={step.key}
+          className={`flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-medium ${
+            index <= currentIndex
+              ? "bg-blue-50 text-blue-900"
+              : "bg-gray-50 text-gray-400"
+          }`}
+        >
+          <span
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] ${
+              index <= currentIndex
+                ? "bg-blue-900 text-white"
+                : "bg-gray-200 text-gray-500"
+            }`}
+          >
+            {index + 1}
+          </span>
+          <span className="hidden truncate sm:block">{step.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // Format a date for display, guarding against a missing/invalid value.
 const formatJoinDate = (value) => {
@@ -341,6 +329,13 @@ const AdministratorAccount = () => {
     }
   };
 
+  const cancelPasswordFlow = () => {
+    setPassStep(null);
+    setCode("");
+    setNewPass("");
+    setConfirm("");
+  };
+
   const handleUpdateProfile = async () => {
     if (!profileForm.username.trim()) {
       toast.error("Username cannot be empty");
@@ -368,673 +363,553 @@ const AdministratorAccount = () => {
   if (!user) return null;
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ marginBottom: "24px" }}>
-        <h1
-          style={{
-            fontSize: "1.75rem",
-            fontWeight: 700,
-            color: C.text,
-            margin: 0,
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-[1.75rem] font-bold text-gray-800">
+            Administrator Account
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Profile, contact information, and account security
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            logout();
+            navigate("/login");
           }}
+          className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
         >
-          Administrator Account
-        </h1>
-        <p
-          style={{
-            fontSize: "0.9rem",
-            color: "#6b7280",
-            margin: "4px 0 0",
-          }}
-        >
-          Manage your account information and password
-        </p>
+          <LogOut size={16} />
+          Sign out
+        </button>
       </div>
 
-      {/* ── Top Section: Profile + Actions (two-column) ── */}
-      {/* Tailwind rather than an inline gridTemplateColumns so the fixed 320px
-          sidebar column can stack below the profile on narrow screens. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
-        {/* Left: Profile Information + Account Details */}
-        <div>
-        {!isEditing ? (
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3 className="text-base font-semibold text-gray-800">
-                Profile Information
-              </h3>
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1.5 text-xs font-semibold text-blue-900 hover:underline"
-              >
-                <Pencil size={14} />
-                Edit
-              </button>
-            </div>
-            <div className="dash-card-body">
-              {/* Avatar + Name */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                }}
-              >
-                <Avatar name={user?.username} />
-                <div>
-                  <p
-                    className="text-base font-semibold"
-                    style={{ color: C.text, margin: 0 }}
-                  >
-                    {user?.username}
-                  </p>
-                  <p
-                    className="text-sm"
-                    style={{ color: C.muted, margin: "2px 0 0" }}
-                  >
-                    {user?.email ? maskEmail(user.email) : "No email linked"}
-                  </p>
+      <section className="dash-card !mb-0">
+        <div className="dash-card-body">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <Avatar name={user.username} size={64} />
+              <div className="min-w-0">
+                <h2 className="truncate text-xl font-bold text-gray-900">
+                  {user.username}
+                </h2>
+                <p className="mt-0.5 truncate text-sm text-gray-500">
+                  {user.email ? maskEmail(user.email) : "No email linked"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-900">
+                    {user.role?.replace("_", " ") || "Administrator"}
+                  </span>
                   <span
-                    className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full mt-1"
-                    style={{
-                      background: `${C.primary}22`,
-                      color: C.primary,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${
+                      user.status === "active"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : user.status
+                          ? "bg-red-50 text-red-700"
+                          : "bg-gray-100 text-gray-500"
+                    }`}
                   >
-                    {user?.role?.replace("_", " ")}
+                    {user.status || "Unknown status"}
                   </span>
                 </div>
               </div>
-
             </div>
-          </div>
-        ) : (
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3 className="text-base font-semibold text-gray-800">
-                Edit Profile
-              </h3>
+            {!isEditing ? (
               <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-900"
+              >
+                <Pencil size={15} />
+                Edit username
+              </button>
+            ) : (
+              <button
+                type="button"
                 onClick={handleCancelEdit}
-                className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:underline"
+                className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-semibold text-gray-500 transition hover:bg-gray-50"
               >
-                <X size={14} />
-                Cancel
+                <X size={15} />
+                Cancel editing
               </button>
-            </div>
-            <div className="dash-card-body">
-              {/* Avatar + Name preview */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                  marginBottom: "20px",
-                  paddingBottom: "20px",
-                  borderBottom: `1px solid ${C.border}`,
-                }}
-              >
-                <Avatar name={user?.username} />
+            )}
+          </div>
+
+          {isEditing && (
+            <form
+              className="mt-5 border-t border-gray-100 pt-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleUpdateProfile();
+              }}
+            >
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                 <div>
-                  <p
-                    className="text-base font-semibold"
-                    style={{ color: C.text, margin: 0 }}
+                  <label htmlFor="account-username" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                    Username
+                  </label>
+                  <input
+                    id="account-username"
+                    type="text"
+                    autoComplete="username"
+                    value={profileForm.username}
+                    onChange={(event) =>
+                      setProfileForm({ ...profileForm, username: event.target.value })
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                   >
-                    {user?.username}
-                  </p>
-                  <p
-                    className="text-sm"
-                    style={{ color: C.muted, margin: "2px 0 0" }}
+                    Discard
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={profileLoading}
+                    className="flex items-center gap-2 rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
                   >
-                    Updating account details
-                  </p>
+                    <Check size={15} />
+                    {profileLoading ? "Saving..." : "Save"}
+                  </button>
                 </div>
               </div>
+            </form>
+          )}
+        </div>
+      </section>
 
-              {/* Edit Fields — username only; email is changed via its own verified flow */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={profileForm.username}
-                  onChange={(e) =>
-                    setProfileForm({
-                      ...profileForm,
-                      username: e.target.value,
-                    })
-                  }
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-                <p className="text-xs text-gray-400 mt-2">
-                  To change your email address, use the Email section on the right.
-                </p>
-              </div>
-
-              {/* Save Bar */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "8px",
-                  marginTop: "20px",
-                  paddingTop: "16px",
-                  borderTop: `1px solid ${C.border}`,
-                }}
-              >
-                <button
-                  onClick={handleCancelEdit}
-                  className="px-4 border border-gray-300 text-gray-600 text-sm font-semibold py-2 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Discard Changes
-                </button>
-                <button
-                  onClick={handleUpdateProfile}
-                  disabled={profileLoading}
-                  className="flex items-center gap-1.5 px-4 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                >
-                  <Check size={14} />
-                  {profileLoading ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Account Details — read-only facts about this account. Sits outside
-            the edit/read ternary so it stays visible while editing. */}
-        <div className="dash-card">
+      <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]">
+        <section className="dash-card !mb-0 h-full">
           <div className="dash-card-header">
-            <h3 className="text-base font-semibold text-gray-800">
-              Account Details
-            </h3>
+            <h3 className="text-sm font-semibold text-gray-800">Account details</h3>
+            <p className="mt-0.5 text-xs text-gray-400">Read-only account information</p>
           </div>
-          <div className="dash-card-body" style={{ paddingTop: "4px", paddingBottom: "8px" }}>
-            <DetailRow icon={Calendar} label="Member since">
-              {formatJoinDate(user?.created_at)}
-            </DetailRow>
-
-            <DetailRow icon={ShieldCheck} label="Account status">
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                {/* Three states, not two. A two-way ternary painted a MISSING
-                    status red, so an account whose status had not loaded looked
-                    deactivated. Grey means "unknown", red means genuinely not
-                    active. */}
+          <div className="dash-card-body grid gap-3 sm:grid-cols-2">
+            <AccountFact icon={<Calendar size={16} />} label="Member since">
+              {formatJoinDate(user.created_at)}
+            </AccountFact>
+            <AccountFact icon={<ShieldCheck size={16} />} label="Account status">
+              <span className="inline-flex items-center gap-2 capitalize">
                 <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: !user?.status
-                      ? "#9ca3af"
-                      : user.status === "active"
-                        ? "#22c55e"
-                        : "#ef4444",
-                    flexShrink: 0,
-                  }}
+                  className={`h-2 w-2 rounded-full ${
+                    user.status === "active"
+                      ? "bg-emerald-500"
+                      : user.status
+                        ? "bg-red-500"
+                        : "bg-gray-300"
+                  }`}
                 />
-                <span style={{ textTransform: "capitalize" }}>
-                  {user?.status || "—"}
-                </span>
+                {user.status || "Unknown"}
               </span>
-            </DetailRow>
-
-            <DetailRow icon={Shield} label="Role">
-              <span style={{ textTransform: "capitalize" }}>
-                {user?.role ? user.role.replace("_", " ") : "—"}
-              </span>
-            </DetailRow>
-
-            <DetailRow icon={Hash} label="Account ID" last>
-              {user?.id != null ? `#${user.id}` : "—"}
-            </DetailRow>
+            </AccountFact>
+            <AccountFact icon={<Shield size={16} />} label="Role">
+              <span className="capitalize">{user.role?.replace("_", " ") || "—"}</span>
+            </AccountFact>
+            <AccountFact icon={<Hash size={16} />} label="Account ID">
+              {user.id != null ? `#${user.id}` : "—"}
+            </AccountFact>
           </div>
-        </div>
-        </div>
+        </section>
 
-        {/* Right: Quick Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* Email Card — add/change with 6-digit verification */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3 className="text-base font-semibold text-gray-800">Email Address</h3>
-            </div>
-            <div className="dash-card-body">
-              {!emailStep ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "8px",
-                        background: `${C.primary}15`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: C.primary,
-                      }}
-                    >
-                      <Mail size={16} />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p className="text-sm font-medium" style={{ color: C.text, margin: 0 }}>
-                        {user?.email ? maskEmail(user.email) : "No email linked"}
-                      </p>
-                      <p className="text-xs" style={{ color: C.muted, margin: "1px 0 0" }}>
-                        {user?.email ? "Verified" : "Add an email to enable password recovery"}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setEmailStep("enter")}
-                    className="w-full text-sm font-semibold py-2 rounded-lg transition bg-blue-900 hover:bg-blue-800 text-white"
-                  >
-                    {user?.email ? "Change Email" : "Add Email Address"}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Step indicator */}
-                  <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
-                    {["enter", "verify"].map((s, i) => (
-                      <div
-                        key={s}
-                        style={{
-                          flex: 1,
-                          height: "3px",
-                          borderRadius: "2px",
-                          background:
-                            ["enter", "verify"].indexOf(emailStep) >= i ? C.primary : C.border,
-                        }}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Step 1 — enter new email */}
-                  {emailStep === "enter" && (
-                    <>
-                      <p className="text-xs text-gray-500">
-                        Enter the email address to link. A 6-digit code will be sent to it.
-                      </p>
-                      <input
-                        type="email"
-                        value={newEmail}
-                        onChange={(e) => setNewEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                      />
-                      <button
-                        onClick={handleRequestEmailCode}
-                        disabled={emailLoading}
-                        className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                      >
-                        {emailLoading ? "Sending..." : "Send Verification Code"}
-                      </button>
-                      <button
-                        onClick={cancelEmailFlow}
-                        className="w-full text-sm text-gray-500 hover:text-gray-700 transition"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )}
-
-                  {/* Step 2 — verify code */}
-                  {emailStep === "verify" && (
-                    <>
-                      <p className="text-xs text-gray-500">
-                        Enter the 6-digit code sent to{" "}
-                        <span className="font-medium">{newEmail}</span>.
-                      </p>
-                      <input
-                        type="text"
-                        value={emailCode}
-                        onChange={(e) =>
-                          setEmailCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                        }
-                        maxLength={6}
-                        placeholder="• • • • • •"
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-lg tracking-[0.5em] text-center focus:outline-none focus:ring-2 focus:ring-blue-900"
-                      />
-                      <button
-                        onClick={handleVerifyEmailCode}
-                        disabled={emailLoading || emailCode.length !== 6}
-                        className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                      >
-                        {emailLoading ? "Verifying..." : "Verify & Link Email"}
-                      </button>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <button
-                          onClick={() => {
-                            setEmailStep("enter");
-                            setEmailCode("");
-                          }}
-                          className="text-sm text-gray-500 hover:text-gray-700 transition"
-                        >
-                          Back
-                        </button>
-                        <button
-                          onClick={handleResendEmailCode}
-                          disabled={emailCooldown > 0}
-                          className="text-sm text-blue-900 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
-                        >
-                          {emailCooldown > 0 ? `Resend in ${emailCooldown}s` : "Resend code"}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+        <section className="dash-card !mb-0 h-full">
+          <div className="dash-card-header">
+            <h3 className="text-sm font-semibold text-gray-800">Security & access</h3>
+            <p className="mt-0.5 text-xs text-gray-400">Verified contact and password controls</p>
           </div>
-
-          {/* Change Password Card */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3 className="text-base font-semibold text-gray-800">
-                Security
-              </h3>
-            </div>
-            <div className="dash-card-body">
-              {!passStep ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "8px",
-                        background: `${C.primary}15`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: C.primary,
-                      }}
-                    >
-                      <Lock size={16} />
-                    </div>
-                    <div>
-                      <p
-                        className="text-sm font-medium"
-                        style={{ color: C.text, margin: 0 }}
-                      >
-                        Password
-                      </p>
-                      {/* "Last changed: Never" was hardcoded — it read "Never"
-                          even immediately after a successful change, which is
-                          misleading for a security panel. There is no
-                          password_changed_at column to derive a real date from,
-                          so state where the history actually lives instead of
-                          inventing one. */}
-                      <p
-                        className="text-xs"
-                        style={{ color: C.muted, margin: "1px 0 0" }}
-                      >
-                        Changes are recorded in the activity logs
-                      </p>
-                    </div>
+          <div className="divide-y divide-gray-100">
+            <div className="p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-900">
+                    <Mail size={18} />
                   </div>
-                  {/* The whole flow depends on a code sent to the linked address.
-                      Without this gate a freshly created admin — who has no email
-                      until they link one — reached a step reading "a code will be
-                      sent to" followed by blank, then got "Email is required"
-                      from the server. The Email card above gates the same way. */}
-                  <button
-                    onClick={() => setPassStep("request")}
-                    disabled={!user?.email}
-                    title={!user?.email ? "Link an email address first" : undefined}
-                    className="w-full text-sm font-semibold py-2 rounded-lg transition bg-blue-900 hover:bg-blue-800 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-900"
-                  >
-                    Change Password
-                  </button>
-                  {!user?.email && (
-                    <p className="text-xs mt-2" style={{ color: C.muted }}>
-                      Add and verify an email address above to enable password
-                      changes.
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-gray-800">Email address</h4>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        user.email
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-50 text-amber-700"
+                      }`}>
+                        {user.email ? "Verified" : "Not linked"}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-gray-500">
+                      {user.email ? maskEmail(user.email) : "Required for password recovery"}
                     </p>
+                  </div>
+                </div>
+                {!emailStep && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelPasswordFlow();
+                      setEmailStep("enter");
+                    }}
+                    className="shrink-0 rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-semibold text-blue-900 transition hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    {user.email ? "Change email" : "Add email"}
+                  </button>
+                )}
+              </div>
+
+              {emailStep && (
+                <div className="mt-5 space-y-4 rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+                  <StepIndicator
+                    steps={[
+                      { key: "enter", label: "New email" },
+                      { key: "verify", label: "Verify" },
+                    ]}
+                    current={emailStep}
+                  />
+
+                  {emailStep === "enter" && (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        handleRequestEmailCode();
+                      }}
+                    >
+                      <div>
+                        <label htmlFor="new-email" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                          New email address
+                        </label>
+                        <input
+                          id="new-email"
+                          type="email"
+                          autoComplete="email"
+                          value={newEmail}
+                          onChange={(event) => setNewEmail(event.target.value)}
+                          placeholder="you@example.com"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                        />
+                        <p className="mt-1.5 text-xs text-gray-400">
+                          We will send a six-digit verification code to this address.
+                        </p>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelEmailFlow}
+                          className="rounded-lg px-3.5 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={emailLoading}
+                          className="rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
+                        >
+                          {emailLoading ? "Sending..." : "Send code"}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {emailStep === "verify" && (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        handleVerifyEmailCode();
+                      }}
+                    >
+                      <div>
+                        <label htmlFor="email-code" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                          Verification code
+                        </label>
+                        <input
+                          id="email-code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          value={emailCode}
+                          onChange={(event) =>
+                            setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                          }
+                          maxLength={6}
+                          placeholder="000000"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-center text-lg tracking-[0.45em] focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                        />
+                        <p className="mt-1.5 break-all text-xs text-gray-400">
+                          Sent to {newEmail}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEmailStep("enter");
+                              setEmailCode("");
+                            }}
+                            className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100"
+                          >
+                            Back
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleResendEmailCode}
+                            disabled={emailCooldown > 0}
+                            className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-900 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-gray-400"
+                          >
+                            {emailCooldown > 0 ? `Resend in ${emailCooldown}s` : "Resend"}
+                          </button>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={emailLoading || emailCode.length !== 6}
+                          className="rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
+                        >
+                          {emailLoading ? "Verifying..." : "Verify email"}
+                        </button>
+                      </div>
+                    </form>
                   )}
                 </div>
-              ) : (
-                /* ── Password change flow ── */
-                <div className="space-y-4">
-                  {/* Mini step indicator */}
-                  <div
-                    style={{ display: "flex", gap: "4px", marginBottom: "8px" }}
-                  >
-                    {["request", "verify", "reset"].map((s, i) => (
-                      <div
-                        key={s}
-                        style={{
-                          flex: 1,
-                          height: "3px",
-                          borderRadius: "2px",
-                          background:
-                            ["request", "verify", "reset"].indexOf(passStep) >=
-                            i
-                              ? C.primary
-                              : C.border,
-                        }}
-                      />
-                    ))}
+              )}
+            </div>
+
+            <div className="p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-900">
+                    <Lock size={18} />
                   </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-gray-800">Password</h4>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Changes are recorded in the activity logs
+                    </p>
+                  </div>
+                </div>
+                {!passStep && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelEmailFlow();
+                      setPassStep("request");
+                    }}
+                    disabled={!user.email}
+                    title={!user.email ? "Link an email address first" : undefined}
+                    className="shrink-0 rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-semibold text-blue-900 transition hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Change password
+                  </button>
+                )}
+              </div>
 
-                  {/* Step 1 — Request code */}
+              {!user.email && !passStep && (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  Add and verify an email address before changing your password.
+                </p>
+              )}
+
+              {passStep && (
+                <div className="mt-5 space-y-4 rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+                  <StepIndicator
+                    steps={[
+                      { key: "request", label: "Send code" },
+                      { key: "verify", label: "Verify" },
+                      { key: "reset", label: "New password" },
+                    ]}
+                    current={passStep}
+                  />
+
                   {passStep === "request" && (
-                    <>
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        handleRequestCode();
+                      }}
+                    >
                       <p className="text-xs text-gray-500">
-                        A 6-digit code will be sent to{" "}
-                        <span className="font-medium">{user?.email}</span>.
+                        Send a six-digit verification code to {maskEmail(user.email)}.
                       </p>
-                      <button
-                        onClick={handleRequestCode}
-                        disabled={passLoading}
-                        className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                      >
-                        {passLoading ? "Sending..." : "Send Code"}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPassStep(null);
-                          setCode("");
-                        }}
-                        className="w-full text-sm text-gray-500 hover:text-gray-700 transition"
-                      >
-                        Cancel
-                      </button>
-                    </>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelPasswordFlow}
+                          className="rounded-lg px-3.5 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={passLoading}
+                          className="rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
+                        >
+                          {passLoading ? "Sending..." : "Send code"}
+                        </button>
+                      </div>
+                    </form>
                   )}
 
-                  {/* Step 2 — Verify code */}
                   {passStep === "verify" && (
-                    <>
-                      <p className="text-xs text-gray-500">
-                        Check your email and enter the 6-digit code below.
-                      </p>
-                      <input
-                        type="text"
-                        value={code}
-                        onChange={(e) =>
-                          setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                        }
-                        maxLength={6}
-                        placeholder="• • • • • •"
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-lg tracking-[0.5em] text-center focus:outline-none focus:ring-2 focus:ring-blue-900"
-                      />
-                      <button
-                        onClick={handleVerifyCode}
-                        disabled={passLoading || code.length !== 6}
-                        className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                      >
-                        {passLoading ? "Verifying..." : "Verify"}
-                      </button>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        handleVerifyCode();
+                      }}
+                    >
+                      <div>
+                        <label htmlFor="password-code" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                          Verification code
+                        </label>
+                        <input
+                          id="password-code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          value={code}
+                          onChange={(event) =>
+                            setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                          }
+                          maxLength={6}
+                          placeholder="000000"
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-center text-lg tracking-[0.45em] focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPassStep("request");
+                              setCode("");
+                            }}
+                            className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100"
+                          >
+                            Back
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleResend}
+                            disabled={resendCooldown > 0}
+                            className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-900 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-gray-400"
+                          >
+                            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend"}
+                          </button>
+                        </div>
                         <button
-                          onClick={() => {
-                            setPassStep("request");
-                            setCode("");
-                          }}
-                          className="text-sm text-gray-500 hover:text-gray-700 transition"
+                          type="submit"
+                          disabled={passLoading || code.length !== 6}
+                          className="rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
                         >
-                          Back
-                        </button>
-                        <button
-                          onClick={handleResend}
-                          disabled={resendCooldown > 0}
-                          className="text-sm text-blue-900 hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
-                        >
-                          {resendCooldown > 0
-                            ? `Resend in ${resendCooldown}s`
-                            : "Resend code"}
+                          {passLoading ? "Verifying..." : "Verify code"}
                         </button>
                       </div>
-                    </>
+                    </form>
                   )}
 
-                  {/* Step 3 — Set new password */}
                   {passStep === "reset" && (
-                    <>
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        handleChangePassword();
+                      }}
+                    >
                       <div>
+                        <label htmlFor="new-password" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                          New password
+                        </label>
                         <input
+                          id="new-password"
                           type="password"
+                          autoComplete="new-password"
                           value={newPass}
-                          onChange={(e) => setNewPass(e.target.value)}
-                          placeholder="New password"
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                          onChange={(event) => setNewPass(event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
                         />
                       </div>
                       <div>
+                        <label htmlFor="confirm-password" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                          Confirm new password
+                        </label>
                         <input
+                          id="confirm-password"
                           type="password"
+                          autoComplete="new-password"
                           value={confirm}
-                          onChange={(e) => setConfirm(e.target.value)}
-                          placeholder="Confirm password"
-                          className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                          onChange={(event) => setConfirm(event.target.value)}
+                          className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
                         />
+                        <p className="mt-1.5 text-xs text-gray-400">
+                          Use at least 8 characters with one letter and one number.
+                        </p>
                       </div>
-                      <button
-                        onClick={handleChangePassword}
-                        disabled={passLoading}
-                        className="w-full bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                      >
-                        {passLoading ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPassStep(null);
-                          setCode("");
-                          setNewPass("");
-                          setConfirm("");
-                        }}
-                        className="w-full text-sm text-gray-500 hover:text-gray-700 transition"
-                      >
-                        Cancel
-                      </button>
-                    </>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelPasswordFlow}
+                          className="rounded-lg px-3.5 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={passLoading}
+                          className="rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
+                        >
+                          {passLoading ? "Saving..." : "Update password"}
+                        </button>
+                      </div>
+                    </form>
                   )}
                 </div>
               )}
             </div>
           </div>
-
-          {/* Sign Out Card */}
-          <div className="dash-card">
-            <div className="dash-card-body">
-              <button
-                onClick={() => {
-                  logout();
-                  navigate("/login");
-                }}
-                className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 text-sm font-semibold py-2.5 rounded-lg transition"
-              >
-                <LogOut size={16} />
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
+        </section>
       </div>
 
       {/* Unfamiliar-domain confirmation — a mistyped address sends the code
           somewhere unreadable, and it cannot be resent for 1 minute. */}
       {confirmEmail && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            background: "rgba(0,0,0,0.4)",
-          }}
+          className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 p-4"
           onClick={() => setConfirmEmail(false)}
         >
           <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "white",
-              borderRadius: 16,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-              width: "100%",
-              maxWidth: 420,
-              padding: 24,
-            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-email-title"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-2xl"
           >
-            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-              <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: C.text, margin: 0 }}>
-                Double-check this email address
-              </h3>
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <AlertTriangle size={18} />
+              </div>
+              <div>
+                <h3 id="confirm-email-title" className="text-base font-bold text-gray-900">
+                  Double-check the email
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  The verification code will be sent to this address.
+                </p>
+              </div>
             </div>
-            <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: "0 0 8px" }}>
-              The verification code will be sent to:
-            </p>
-            <p
-              style={{
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                color: C.text,
-                wordBreak: "break-all",
-                background: "#f9fafb",
-                border: `1px solid ${C.border}`,
-                borderRadius: 8,
-                padding: "10px 12px",
-                margin: "0 0 12px",
-              }}
-            >
+            <p className="break-all rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold text-gray-800">
               {newEmail}
             </p>
-            <p style={{ fontSize: "0.8rem", color: "#6b7280", margin: "0 0 20px" }}>
+            <p className="mt-3 text-xs leading-5 text-gray-500">
               If this is mistyped you will not receive the code, and a new one
               cannot be sent for 1 minute.
             </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="mt-5 flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setConfirmEmail(false)}>
-                Go back and edit
+                Edit email
               </Button>
               <Button onClick={sendEmailCode}>Send code</Button>
             </div>
