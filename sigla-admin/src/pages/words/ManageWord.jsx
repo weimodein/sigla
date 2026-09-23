@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { SkeletonBlock, TableSkeletonRows } from "../../components/Skeleton.jsx";
 import { listStagger } from "../../utils/motion.js";
 import { invalidate } from "../../utils/apiCache.js";
 import {
@@ -1012,9 +1013,13 @@ const ManageWord = () => {
             <h3 className="section-title">Vocabulary entries</h3>
             <p className="section-subtitle">Training coverage and deployed availability</p>
           </div>
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-            {total} {total === 1 ? "entry" : "entries"}
-          </span>
+          {loading ? (
+            <SkeletonBlock className="h-7 w-24 rounded-full" />
+          ) : (
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+              {total} {total === 1 ? "entry" : "entries"}
+            </span>
+          )}
         </div>
         <div className="overflow-x-auto">
           {/* The proportional columns consume the full card width. The desktop
@@ -1041,15 +1046,17 @@ const ManageWord = () => {
             </thead>
             <tbody>
               {loading ? (
-                Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                  <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <td key={j} className="px-5 py-3">
-                        <div style={{ height: "14px", background: "#f3f4f6", borderRadius: "4px", animation: "pulse 1.5s infinite" }} />
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                <TableSkeletonRows
+                  rows={PAGE_SIZE}
+                  cellClassName="px-5 py-3"
+                  columns={[
+                    { type: "stack", width: "w-28" },
+                    { width: "w-24" },
+                    { width: "w-10" },
+                    { type: "pill", width: "w-20" },
+                    { type: "actions", count: 5 },
+                  ]}
+                />
               ) : words.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: "center", padding: "40px", color: C.muted }}>

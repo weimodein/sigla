@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { TableSkeletonRows } from "../../components/Skeleton.jsx";
 import { listStagger } from "../../utils/motion.js";
 import {
   getAllAdministrators,
@@ -68,19 +69,14 @@ const chipStyle = (bg) => ({
 
 // ── Skeleton ─────────────────────────────────────────────────
 
-const SkeletonRows = ({ rows = 5, cols = 6 }) =>
-  Array.from({ length: rows }).map((_, i) => (
-    <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
-      {Array.from({ length: cols }).map((_, j) => (
-        <td key={j} className="px-5 py-3.5">
-          <div
-            className="h-4 rounded animate-pulse w-3/4"
-            style={{ background: C.border }}
-          />
-        </td>
-      ))}
-    </tr>
-  ));
+const ADMIN_SKELETON_COLUMNS = [
+  { width: "w-10" },
+  { type: "stack", width: "w-28" },
+  { width: "w-40" },
+  { type: "pill", width: "w-20" },
+  { width: "w-24" },
+  { type: "actions", count: 2 },
+];
 
 // ── Sortable Header ──────────────────────────────────────────
 const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
@@ -809,7 +805,7 @@ const ManageAdministrators = () => {
                 </tr>
               </thead>
               <tbody>
-                <SkeletonRows rows={5} cols={6} />
+                <TableSkeletonRows rows={5} columns={ADMIN_SKELETON_COLUMNS} />
               </tbody>
             </table>
           </div>

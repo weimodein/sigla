@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { listStagger } from "../../utils/motion.js";
+import { TableSkeletonRows } from "../../components/Skeleton.jsx";
 import {
   Search,
   ChevronsLeft,
@@ -148,16 +149,13 @@ const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) =
 );
 
 // ── Skeleton rows ────────────────────────────────────────────
-const SkeletonRows = ({ rows = 8, cols = 5 }) =>
-  Array.from({ length: rows }).map((_, i) => (
-    <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
-      {Array.from({ length: cols }).map((_, j) => (
-        <td key={j} className="px-5 py-3.5">
-          <div className="h-4 rounded animate-pulse w-3/4" style={{ background: C.border }} />
-        </td>
-      ))}
-    </tr>
-  ));
+const LOG_SKELETON_COLUMNS = [
+  { width: "w-24" },
+  { type: "pill", width: "w-28" },
+  { width: "w-28" },
+  { width: "w-full" },
+  { width: "w-32" },
+];
 
 // ── Format timestamp ─────────────────────────────────────────
 const formatDateTime = (dateStr) => {
@@ -389,7 +387,7 @@ const ActivityLogs = () => {
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonRows rows={8} cols={5} />
+                <TableSkeletonRows rows={8} columns={LOG_SKELETON_COLUMNS} />
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-10 text-center text-sm" style={{ color: C.muted }}>

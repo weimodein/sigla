@@ -10,6 +10,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { takeAuthMessage } from "../../utils/authMessage.js";
 import { listStagger } from "../../utils/motion.js";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { PageHeaderSkeleton, SkeletonBlock } from "../../components/Skeleton.jsx";
 import {
   Users,
   BookOpen,
@@ -115,38 +116,63 @@ const Dashboard = () => {
   // ── Loading skeleton ──
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <div className="h-8 w-44 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
-        </div>
+      <div className="space-y-6" aria-busy="true" aria-label="Loading dashboard">
+        <PageHeaderSkeleton />
         {/* Stat cards skeleton — 3-col spanning grid */}
         <div className="dash-hero-grid">
+          <div className="dash-hero-tall">
+            <div
+              className="dash-stat-card list-item-in flex h-full flex-col items-center justify-center gap-3"
+              style={listStagger(4)}
+              aria-hidden="true"
+            >
+              <SkeletonBlock className="h-14 w-14 rounded-full" />
+              <SkeletonBlock className="h-4 w-32 rounded" />
+              <SkeletonBlock className="h-9 w-24 rounded-md" />
+            </div>
+          </div>
           <SkeletonCard index={0} />
           <SkeletonCard index={1} />
           <SkeletonCard index={2} />
           <SkeletonCard index={3} />
-          <div
-            style={listStagger(4)}
-            className="dash-hero-tall dash-stat-card list-item-in animate-pulse"
-          />
         </div>
-        {/* Chart skeleton */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
-          <div className="dash-card animate-pulse">
-            <div className="dash-card-header"><div className="h-5 w-40 bg-gray-200 rounded" /></div>
-            <div className="dash-card-body"><div className="h-64 bg-gray-100 rounded" /></div>
+        <div className="dash-card">
+          <div className="dash-card-header space-y-2">
+            <SkeletonBlock className="h-5 w-36 rounded" />
+            <SkeletonBlock className="h-3 w-20 rounded" />
           </div>
-          <div className="dash-card animate-pulse">
-            <div className="dash-card-header"><div className="h-5 w-28 bg-gray-200 rounded" /></div>
-            <div className="dash-card-body space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="space-y-1">
-                  <div className="h-3 w-24 bg-gray-200 rounded" />
-                  <div className="h-2 bg-gray-100 rounded" />
+          <div className="dash-card-body space-y-4">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="space-y-2" aria-hidden="true">
+                <div className="flex items-center justify-between gap-3">
+                  <SkeletonBlock className="h-4 w-20 rounded" />
+                  <SkeletonBlock className="h-4 w-12 rounded" />
                 </div>
-              ))}
+                <SkeletonBlock className="h-2 rounded-full" style={{ width: `${84 - index * 7}%` }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="dash-card">
+          <div className="dash-card-header flex items-center gap-3">
+            <SkeletonBlock className="h-5 w-5 shrink-0 rounded" />
+            <div className="space-y-2">
+              <SkeletonBlock className="h-5 w-32 rounded" />
+              <SkeletonBlock className="h-3 w-52 rounded" />
             </div>
+          </div>
+          <div className="dash-card-body space-y-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="rounded-lg border border-gray-100 p-4" aria-hidden="true">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <SkeletonBlock className="h-4 w-32 rounded" />
+                  <SkeletonBlock className="h-6 w-20 rounded-full" />
+                </div>
+                <SkeletonBlock className="mb-2 h-3 w-3/4 rounded" />
+                <SkeletonBlock className="h-3 w-14 rounded" />
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { TableSkeletonRows } from "../../components/Skeleton.jsx";
 import { listStagger } from "../../utils/motion.js";
 import {
   getCategories,
@@ -260,15 +261,16 @@ const ManageCategories = () => {
                 /* Skeleton rows rather than the word "Loading..." — this page
                    already renders animated skeletons for its stat tiles above,
                    so a bare text cell here was inconsistent within one screen. */
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
-                    {Array.from({ length: 4 }).map((__, j) => (
-                      <td key={j} className="px-5 py-3">
-                        <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                <TableSkeletonRows
+                  rows={5}
+                  cellClassName="px-5 py-3"
+                  columns={[
+                    { width: "w-28" },
+                    { width: "w-3/4" },
+                    { type: "pill", width: "w-12" },
+                    { type: "actions", count: 2 },
+                  ]}
+                />
               ) : categories.length === 0 ? (
                 <tr><td colSpan={4} style={{ textAlign: "center", padding: "40px", color: C.muted }}>No categories yet. Add your first one.</td></tr>
               ) : paginatedCategories.map((cat, i) => (

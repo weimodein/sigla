@@ -11,6 +11,7 @@ import { getModelVersions } from "../../api/modelApi.js";
 import { getCategories } from "../../api/categoryApi.js";
 import { listStagger } from "../../utils/motion.js";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { PageHeaderSkeleton, SkeletonBlock } from "../../components/Skeleton.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
@@ -137,32 +138,40 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 // ── Skeletons ──
 // Module scope on purpose. These used to be declared inside ReportsAnalytics, so
 // React saw a new component type on every render and remounted them — which
-// restarted `animate-pulse` from frame 0 and made the skeletons visibly stutter
+// restarted the shimmer from frame 0 and made the skeletons visibly stutter
 // while data loaded.
 
-const SkeletonChart = () => (
-  <div className="dash-card animate-pulse">
-    <div className="dash-card-header">
-      <div className="h-4 w-32 bg-gray-200 rounded" />
+const SkeletonChart = ({ wide = false }) => (
+  <div className={`dash-card !mb-0 ${wide ? "lg:col-span-2" : ""}`} aria-hidden="true">
+    <div className="dash-card-header space-y-2">
+      <SkeletonBlock className="h-5 w-44 rounded" />
+      <SkeletonBlock className="h-3 w-60 max-w-full rounded" />
     </div>
     <div className="dash-card-body">
-      <div className="h-[220px] bg-gray-100 rounded" />
+      <div className="relative h-[240px] overflow-hidden rounded-lg border border-gray-100 p-4">
+        <div className="flex h-full flex-col justify-between">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <SkeletonBlock key={index} className="h-px w-full" />
+          ))}
+        </div>
+        <SkeletonBlock className="absolute bottom-6 left-8 h-24 w-3/4 rounded-lg opacity-70" />
+      </div>
     </div>
   </div>
 );
 
 const SkeletonTable = () => (
-  <div className="dash-card animate-pulse">
+  <div className="dash-card !mb-0" aria-hidden="true">
     <div className="dash-card-header">
-      <div className="h-4 w-28 bg-gray-200 rounded" />
+      <SkeletonBlock className="h-5 w-40 rounded" />
     </div>
     <div className="rounded-lg border border-gray-200 overflow-hidden mx-6 mb-6">
       <div className="h-10 bg-gray-50" />
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="h-12 border-t px-4 py-3 flex gap-4">
-          <div className="h-4 flex-1 bg-gray-100 rounded" />
-          <div className="h-4 flex-1 bg-gray-100 rounded" />
-          <div className="h-4 w-12 bg-gray-100 rounded" />
+          <SkeletonBlock className="h-4 flex-1 rounded" />
+          <SkeletonBlock className="h-4 flex-1 rounded" />
+          <SkeletonBlock className="h-4 w-12 rounded" />
         </div>
       ))}
     </div>
@@ -844,18 +853,12 @@ const ReportsAnalytics = () => {
   // ── JSX ───────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <div className="h-7 w-48 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
-          </div>
+      <div className="space-y-5" aria-busy="true" aria-label="Loading reports and analytics">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <PageHeaderSkeleton />
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
             {["week", "month", "year"].map((f) => (
-              <div
-                key={f}
-                className="w-14 h-7 bg-gray-200 rounded-md animate-pulse"
-              />
+              <SkeletonBlock key={f} className="h-8 w-16 rounded-md" />
             ))}
           </div>
         </div>
@@ -865,22 +868,27 @@ const ReportsAnalytics = () => {
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonChart key={i} />
-          ))}
+          <SkeletonChart />
+          <SkeletonChart />
+          <SkeletonChart wide />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <SkeletonTable key={i} />
-          ))}
-        </div>
-        <div className="bg-white rounded-xl shadow-sm p-5 animate-pulse">
-          <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
-          <div className="h-3 w-52 bg-gray-100 rounded mb-4" />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-4 bg-gray-100 rounded" />
+        {isSuper && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <SkeletonTable />
+            <SkeletonTable />
+          </div>
+        )}
+        <div className="dash-card !mb-0">
+          <div className="dash-card-header space-y-2">
+            <SkeletonBlock className="h-5 w-40 rounded" />
+            <SkeletonBlock className="h-3 w-64 max-w-full rounded" />
+          </div>
+          <div className="dash-card-body">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonBlock key={i} className="h-16 rounded-lg" />
             ))}
+          </div>
           </div>
         </div>
       </div>

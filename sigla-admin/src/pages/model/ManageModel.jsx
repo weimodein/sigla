@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Fragment } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
+import { SkeletonBlock, TableSkeletonRows } from "../../components/Skeleton.jsx";
 import { listStagger } from "../../utils/motion.js";
 import { invalidate } from "../../utils/apiCache.js";
 import {
@@ -636,7 +637,22 @@ const ManageModel = () => {
       )}
 
       {/* Current Deployed Model */}
-      {stats?.current_model && (
+      {loading ? (
+        <div
+          className="mb-5 rounded-xl border border-gray-200 bg-white px-6 py-5"
+          aria-hidden="true"
+        >
+          <SkeletonBlock className="mb-4 h-4 w-40 rounded" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="space-y-2">
+                <SkeletonBlock className="h-3 w-20 rounded" />
+                <SkeletonBlock className="h-6 w-24 max-w-full rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : stats?.current_model ? (
         /* Not a StatCard — a full-width gradient banner — but it takes the same
            entrance so it does not sit static above cards that animate. */
         <div
@@ -695,7 +711,7 @@ const ManageModel = () => {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Models Table ────────────────────────────────────────── */}
       <div className="dash-card">
@@ -736,10 +752,14 @@ const ManageModel = () => {
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
               style={{ width: "200px" }}
             />
-            <span className="text-xs text-gray-500">
-              {filteredModels.length} version
-              {filteredModels.length !== 1 ? "s" : ""}
-            </span>
+            {loading ? (
+              <SkeletonBlock className="h-4 w-20 rounded" />
+            ) : (
+              <span className="text-xs text-gray-500">
+                {filteredModels.length} version
+                {filteredModels.length !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
         </div>
 
@@ -791,15 +811,19 @@ const ManageModel = () => {
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="border-t">
-                  {Array.from({ length: 7 }).map((_, j) => (
-                    <td key={j} className="px-5 py-3">
-                      <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              <TableSkeletonRows
+                rows={5}
+                cellClassName="px-5 py-3"
+                columns={[
+                  { width: "w-3" },
+                  { width: "w-16" },
+                  { type: "stack", width: "w-20" },
+                  { type: "stack", width: "w-20" },
+                  { type: "pill", width: "w-20" },
+                  { type: "stack", width: "w-28" },
+                  { width: "w-20" },
+                ]}
+              />
             </tbody>
           </table>
           </div>
