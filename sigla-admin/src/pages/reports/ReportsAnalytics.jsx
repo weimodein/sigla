@@ -3,7 +3,6 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
 import {
-  getAdministratorStats,
   getDeactivatedAdministrators,
   getDeletedAdministrators,
 } from "../../api/administratorApi.js";
@@ -37,16 +36,57 @@ import {
 // ── Stat Card ─────────────────────────────────────────────────
 
 // ── Section Header ────────────────────────────────────────────
-const SectionHeader = ({ title, count }) => (
-  <div className="flex items-center justify-between mb-3">
-    <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+const SectionHeader = ({ title, description, count }) => (
+  <div className="flex items-start justify-between gap-4">
+    <div>
+      <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+      {description && (
+        <p className="mt-0.5 text-xs text-gray-400">{description}</p>
+      )}
+    </div>
     {count !== undefined && (
-      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+      <span className="shrink-0 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
         {count} total
       </span>
     )}
   </div>
 );
+
+const asPercent = (value) => {
+  const number = Number(value);
+  return value == null || !Number.isFinite(number)
+    ? null
+    : Number((number * 100).toFixed(1));
+};
+
+const formatAccuracy = (value) => {
+  const percent = asPercent(value);
+  return percent == null ? "—" : `${percent.toFixed(1)}%`;
+};
+
+const pairState = (pair) => {
+  const statuses = [pair.words?.status, pair.letters?.status].filter(Boolean);
+
+  if (!pair.words || !pair.letters) {
+    return { label: "Incomplete" };
+  }
+  if (statuses.every((status) => status === "deployed")) {
+    return { label: "Active" };
+  }
+  if (statuses.some((status) => status === "deployed")) {
+    return { label: "Needs attention" };
+  }
+  if (statuses.some((status) => status === "failed")) {
+    return { label: "Failed" };
+  }
+  if (statuses.some((status) => status === "training")) {
+    return { label: "Training" };
+  }
+  if (statuses.every((status) => status === "trained")) {
+    return { label: "Ready" };
+  }
+  return { label: "Previous" };
+};
 
 // ── Simple Table ──────────────────────────────────────────────
 const SimpleTable = ({ headers, rows, emptyMessage }) => (
@@ -92,9 +132,8 @@ const SimpleTable = ({ headers, rows, emptyMessage }) => (
 );
 
 // ── Main Component ────────────────────────────────────────────
-// The words endpoint is paginated; this page pulls one large page and derives its
-// charts from it. Kept as a named constant so the truncation notice and the fetch
-// can never disagree.
+// Load report rows in bounded pages so trends and exports do not silently stop at
+// the first API page when the vocabulary grows.
 // ── Skeletons ──
 // Module scope on purpose. These used to be declared inside ReportsAnalytics, so
 // React saw a new component type on every render and remounted them — which
@@ -132,6 +171,18 @@ const SkeletonTable = () => (
 
 const WORD_FETCH_LIMIT = 500;
 
+const getReportWords = async () => {
+  const firstPage = await getAllWords({ page: 1, limit: WORD_FETCH_LIMIT });
+  const allWords = [...(firstPage.words || [])];
+
+  for (let page = 2; page <= (firstPage.totalPages || 1); page += 1) {
+    const nextPage = await getAllWords({ page, limit: WORD_FETCH_LIMIT });
+    allWords.push(...(nextPage.words || []));
+  }
+
+  return { ...firstPage, words: allWords };
+};
+
 // Start of the window for each range option, or null for "all time".
 const rangeStart = (range) => {
   const now = new Date();
@@ -164,7 +215,6 @@ const ReportsAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
-  const [userStats, setUserStats] = useState(null);
   const [wordStats, setWordStats] = useState(null);
   const [deactivatedUsers, setDeactivatedUsers] = useState([]);
   const [deletedUsers, setDeletedUsers] = useState([]);
@@ -196,26 +246,23 @@ const ReportsAnalytics = () => {
       // status could never work for deleted accounts: that route hardcodes
       // `status != "deleted"`, so the "Deleted Accounts" table was guaranteed to
       // render empty no matter how many accounts had been deleted.
-      const [uStats, wStats, deactivatedData, deletedData, wordsData, catsData] =
+      const [wStats, deactivatedData, deletedData, wordsData, catsData] =
         await Promise.all([
-          getAdministratorStats(),
           getWordStats(),
           isSuper ? getDeactivatedAdministrators() : Promise.resolve({ administrators: [] }),
           isSuper ? getDeletedAdministrators() : Promise.resolve({ administrators: [] }),
-          getAllWords({ limit: WORD_FETCH_LIMIT }),
+          getReportWords(),
           getCategories(),
         ]);
 
-      setUserStats(uStats);
       setWordStats(wStats);
       setCategoryCount((catsData.categories || []).length);
 
       setDeactivatedUsers(deactivatedData.administrators || []);
       setDeletedUsers(deletedData.administrators || []);
       setWords(wordsData.words || []);
-      // The word list is capped, so charts and the PDF are built from a subset
-      // when the bank is larger. Tracked so that can be stated rather than
-      // presented as complete.
+      // Keep the server total separately so an unexpected partial response can
+      // still be disclosed in the export rather than presented as complete.
       setWordTotal(
         typeof wordsData.total === "number" ? wordsData.total : (wordsData.words || []).length,
       );
@@ -226,7 +273,7 @@ const ReportsAnalytics = () => {
       } catch {
         setModels([]);
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to load reports data");
     } finally {
       setLoading(false);
@@ -236,10 +283,12 @@ const ReportsAnalytics = () => {
   // `filter` is deliberately NOT a dependency. The week/month/year range is
   // applied entirely client-side by the wordsInRange memo below, and none of
   // these endpoints take a date parameter — so refetching on a range change
-  // re-requested all seven (including up to 500 words) for identical data.
+  // re-requested every report source (including the paginated vocabulary) for identical data.
   // isSuper stays: it genuinely changes which endpoints are called.
   useEffect(() => {
     fetchAll();
+    // The range is applied locally; only the administrator scope changes sources.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuper]);
 
   // Range changes only reset pagination.
@@ -296,44 +345,43 @@ const ReportsAnalytics = () => {
       .map(([, v]) => v);
   }, [wordsInRange, filter]);
 
-  // Two fixes here:
-  //   • Untested versions are EXCLUDED rather than plotted at 0%. `m.accuracy ? …
-  //     : 0` made "never measured" indistinguishable from a genuine 0% and sent
-  //     the line diving to the axis.
-  //   • Sorted oldest→newest. getAllModels returns created_at DESC and nothing
-  //     re-sorted it, so a chart titled "per Version" ran backwards in time and a
-  //     rising accuracy trend read as a regression.
-  //   • One point per VERSION, not per row. A run produces a words model and an
-  //     alphabet model sharing a version number, so plotting every row put two
-  //     points at the same x — 81% and 98% for 1.7.0 — and the line jumped
-  //     between them as though accuracy had swung. The words model carries the
-  //     line because it is the system's headline number; the alphabet rides
-  //     along as a separate series.
-  const modelAccuracyData = useMemo(() => {
-    const letters = new Map(
-      models
-        .filter((m) => m.model_kind === "letters" && m.accuracy != null)
-        .map((m) => [m.version_number, m.accuracy]),
-    );
-    return models
-      .filter((m) => m.model_kind !== "letters" && m.accuracy != null)
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(a.trained_at || a.created_at || 0) -
-          new Date(b.trained_at || b.created_at || 0),
-      )
-      .map((m) => {
-        const l = letters.get(m.version_number);
-        return {
-          name: m.version_number,
-          accuracy: parseFloat((m.accuracy * 100).toFixed(1)),
-          ...(l != null
-            ? { alphabet: parseFloat((l * 100).toFixed(1)) }
-            : {}),
-        };
-      });
+  // One point per version, with each model kind kept in its own series. Missing
+  // measurements remain null instead of being rendered as a false 0%.
+  const modelPairs = useMemo(() => {
+    const grouped = new Map();
+
+    models.forEach((model) => {
+      const version = model.version_number;
+      if (!version) return;
+      const pair = grouped.get(version) || {
+        version,
+        words: null,
+        letters: null,
+        timestamp: 0,
+      };
+      const kind = model.model_kind === "letters" ? "letters" : "words";
+      pair[kind] = model;
+      pair.timestamp = Math.max(
+        pair.timestamp,
+        new Date(model.trained_at || model.created_at || 0).getTime() || 0,
+      );
+      grouped.set(version, pair);
+    });
+
+    return [...grouped.values()].sort((a, b) => a.timestamp - b.timestamp);
   }, [models]);
+
+  const modelAccuracyData = useMemo(
+    () =>
+      modelPairs
+        .map((pair) => ({
+          version: pair.version,
+          words: asPercent(pair.words?.accuracy),
+          alphabet: asPercent(pair.letters?.accuracy),
+        }))
+        .filter((point) => point.words != null || point.alphabet != null),
+    [modelPairs],
+  );
 
   // Sample counts are cumulative per word, not per-period, so this intentionally
   // uses the full list rather than wordsInRange — restricting it to a date window
@@ -355,32 +403,36 @@ const ReportsAnalytics = () => {
     [words]
   );
 
-  // Current model accuracy = the deployed WORDS model's accuracy.
-  //
-  // Scoped to the words model deliberately. A training run now also produces an
-  // alphabet model, which is deployed alongside it and scores far higher over
-  // far fewer classes (98% over 5 letters against 81% over 50 words). An
-  // unscoped find() returns whichever row came back first, and the accuracy
-  // fallback sorts by value — so both would happily report the alphabet's 98%
-  // as the system's accuracy.
-  const currentModelAccuracy = useMemo(() => {
-    const wordModels = models.filter((m) => m.model_kind !== "letters");
-    if (!wordModels.length) return "—";
-    const deployed = wordModels.find((m) => m.status === "deployed");
-    const best = [...wordModels].sort((a, b) => (b.accuracy || 0) - (a.accuracy || 0))[0];
-    const m = deployed || best;
-    return m?.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : "—";
-  }, [models]);
-
-  // The alphabet's accuracy, reported separately rather than mixed in — the two
-  // are not comparable, and averaging or replacing one with the other hides
-  // whichever is worse.
-  const currentLettersAccuracy = useMemo(() => {
-    const m = models.find(
-      (x) => x.model_kind === "letters" && x.status === "deployed",
+  // Current means one version whose words and alphabet rows are both deployed.
+  // Never fall back to the highest-scoring row: that is not necessarily live.
+  const deploymentSummary = useMemo(() => {
+    const withDeployedRows = modelPairs.filter(
+      (pair) =>
+        pair.words?.status === "deployed" || pair.letters?.status === "deployed",
     );
-    return m?.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : null;
-  }, [models]);
+    const activePair =
+      withDeployedRows.length === 1 &&
+      withDeployedRows[0].words?.status === "deployed" &&
+      withDeployedRows[0].letters?.status === "deployed"
+        ? withDeployedRows[0]
+        : null;
+
+    if (activePair) {
+      return {
+        state: "active",
+        label: `Active pair · v${activePair.version}`,
+        pair: activePair,
+      };
+    }
+    if (withDeployedRows.length > 0) {
+      return {
+        state: "warning",
+        label: "Deployment needs attention",
+        pair: null,
+      };
+    }
+    return { state: "empty", label: "No active model pair", pair: null };
+  }, [modelPairs]);
 
   const toggleSection = (key) =>
     setReportSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -406,7 +458,7 @@ const ReportsAnalytics = () => {
       doc.text("SigLa System Report", 14, 20);
       doc.setFontSize(11);
       doc.setFont("helvetica", "normal");
-      doc.text(`Filter: ${filterLabel}   |   Generated: ${dateStr}`, 14, 28);
+      doc.text(`Activity range: ${filterLabel}   |   Generated: ${dateStr}`, 14, 28);
       doc.setLineWidth(0.5);
       doc.line(14, 32, 196, 32);
 
@@ -427,13 +479,14 @@ const ReportsAnalytics = () => {
       };
 
       if (reportSections.word_stats) {
-        addSectionTitle("Word Statistics");
+        addSectionTitle("Vocabulary Statistics (All Time)");
         autoTable(doc, {
           startY: y,
           head: [["Metric", "Count"]],
           body: [
-            ["Total Words", wordStats?.total ?? 0],
-            ["Active Words", wordStats?.active ?? 0],
+            ["Total Entries", wordStats?.total ?? 0],
+            ["Active Entries", wordStats?.active ?? 0],
+            ["New Entries in Activity Range", wordsInRange.length],
             ["Total Categories", categoryCount ?? 0],
             ["Total Gesture Samples", wordStats?.total_samples ?? 0],
           ],
@@ -445,7 +498,7 @@ const ReportsAnalytics = () => {
       }
 
       if (reportSections.sample_counts) {
-        addSectionTitle("Gesture Samples per Word");
+        addSectionTitle("Gesture Samples per Vocabulary Entry");
         // State the truncation rather than presenting a capped subset as the
         // complete picture.
         if (wordTotal > words.length) {
@@ -460,7 +513,7 @@ const ReportsAnalytics = () => {
         }
         autoTable(doc, {
           startY: y,
-          head: [["Word", "Total Samples", "Approved Samples"]],
+          head: [["Entry", "Total Samples", "Approved Samples"]],
           body: words.map((w) => [w.label, w.total_samples || 0, w.approved_sample_count || 0]),
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
@@ -477,22 +530,13 @@ const ReportsAnalytics = () => {
           // "1.7.0" lines in the report with nothing to tell them apart. The
           // alphabet gets its own column instead.
           startY: y,
-          head: [["Version", "Accuracy", "Alphabet", "Status"]],
-          body: models
-            .filter((m) => m.model_kind !== "letters")
-            .map((m) => {
-              const l = models.find(
-                (x) =>
-                  x.model_kind === "letters" &&
-                  x.version_number === m.version_number,
-              );
-              return [
-                m.version_number,
-                m.accuracy ? `${(m.accuracy * 100).toFixed(1)}%` : "N/A",
-                l?.accuracy ? `${(l.accuracy * 100).toFixed(1)}%` : "—",
-                m.status === "deployed" ? "Deployed" : (m.status || "—"),
-              ];
-            }),
+          head: [["Version", "Words", "Alphabet", "Pair status"]],
+          body: [...modelPairs].reverse().map((pair) => [
+            pair.version,
+            formatAccuracy(pair.words?.accuracy),
+            formatAccuracy(pair.letters?.accuracy),
+            pairState(pair).label,
+          ]),
           theme: "striped",
           headStyles: { fillColor: [59, 130, 246] },
           margin: { left: 14, right: 14 },
@@ -503,7 +547,7 @@ const ReportsAnalytics = () => {
       const filename = `sigla_report_${filter}_${new Date().toISOString().split("T")[0]}.pdf`;
       doc.save(filename);
       toast.success("Report downloaded successfully");
-    } catch (err) {
+    } catch {
       toast.error("Failed to generate report");
     } finally {
       setGenerating(false);
@@ -529,8 +573,8 @@ const ReportsAnalytics = () => {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard index={i} key={i} />
           ))}
         </div>
@@ -569,27 +613,34 @@ const ReportsAnalytics = () => {
             System activity overview and data exports
           </p>
         </div>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-          {["week", "month", "year"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition capitalize ${
-                filter === f
-                  ? "bg-white text-blue-900 shadow-sm"
-                  : "interactive text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <span className="hidden text-xs font-medium text-gray-400 sm:inline">
+            Activity range
+          </span>
+          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+            {["week", "month", "year"].map((f) => (
+              <button
+                key={f}
+                type="button"
+                aria-pressed={filter === f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition capitalize ${
+                  filter === f
+                    ? "bg-white text-blue-900 shadow-sm"
+                    : "interactive text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Summary Cards (scope §20): words, gesture samples, categories, model accuracy */}
+      {/* Summary Cards (scope §20): words, gesture samples, categories, model pair */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard index={0}
-          title="Total Words"
+          title="Vocabulary Entries"
           value={wordStats?.total}
           icon={BookOpen}
           color="bg-blue-900"
@@ -609,62 +660,121 @@ const ReportsAnalytics = () => {
           color="bg-green-600"
           onClick={() => navigate("/categories")}
         />
-        <StatCard index={3}
-          title="Current Model Accuracy"
-          value={currentModelAccuracy}
-          icon={Cpu}
-          color="bg-purple-600"
+        <button
+          type="button"
           onClick={() => navigate("/model")}
-        />
+          className="dash-stat-card list-item-in flex w-full items-center gap-3 text-left"
+          style={listStagger(3)}
+        >
+          <div className="shrink-0 rounded-full bg-violet-600 p-3">
+            <Cpu size={20} className="text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-center gap-2">
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  deploymentSummary.state === "active"
+                    ? "bg-emerald-500"
+                    : deploymentSummary.state === "warning"
+                      ? "bg-amber-500"
+                      : "bg-gray-300"
+                }`}
+              />
+              <p className="truncate text-xs font-medium text-gray-500">
+                {deploymentSummary.label}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-gray-100">
+              <div className="pr-3">
+                <p className="text-[11px] text-gray-400">Words</p>
+                <p className="text-xl font-bold text-gray-800">
+                  {formatAccuracy(deploymentSummary.pair?.words?.accuracy)}
+                </p>
+              </div>
+              <div className="pl-3">
+                <p className="text-[11px] text-gray-400">Alphabet</p>
+                <p className="text-xl font-bold text-gray-800">
+                  {formatAccuracy(deploymentSummary.pair?.letters?.accuracy)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </button>
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="dash-card">
           <div className="dash-card-header">
-            <SectionHeader title="Word Submission Trend" />
+            <SectionHeader
+              title="Vocabulary submissions"
+              description={`New entries during the selected ${filter}`}
+            />
           </div>
           <div className="dash-card-body">
-            <ResponsiveContainer width="100%" height={220} debounce={200}>
-              <LineChart data={submissionTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="submissions"
-                  stroke="#16a34a"
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {submissionTrend.length === 0 ? (
+              <div className="flex h-[240px] items-center justify-center text-sm text-gray-400">
+                No submissions in this period
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240} debounce={200}>
+                <LineChart data={submissionTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="submissions"
+                    name="Submissions"
+                    stroke="#16a34a"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         <div className="dash-card">
           <div className="dash-card-header">
-            <SectionHeader title="Model Accuracy per Version" />
+            <SectionHeader
+              title="Accuracy by model version"
+              description="Words and alphabet are reported separately"
+            />
           </div>
           <div className="dash-card-body">
-            {models.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-10">
-                No model versions available
-              </p>
+            {modelAccuracyData.length === 0 ? (
+              <div className="flex h-[240px] items-center justify-center text-sm text-gray-400">
+                No measured model versions
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220} debounce={200}>
-                <LineChart data={modelAccuracyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} unit="%" />
-                  <Tooltip formatter={(v) => `${v}%`} />
+              <ResponsiveContainer width="100%" height={240} debounce={200}>
+                <LineChart data={modelAccuracyData} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                  <XAxis dataKey="version" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" />
+                  <Tooltip formatter={(value, name) => [`${value}%`, name]} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                   <Line
                     type="monotone"
-                    dataKey="accuracy"
+                    dataKey="words"
+                    name="Words"
+                    stroke="#1d4ed8"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }}
+                    activeDot={{ r: 5 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="alphabet"
+                    name="Alphabet"
                     stroke="#7c3aed"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#ffffff", strokeWidth: 2 }}
+                    activeDot={{ r: 5 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -674,7 +784,10 @@ const ReportsAnalytics = () => {
 
         <div className="dash-card lg:col-span-2">
           <div className="dash-card-header">
-            <SectionHeader title="Gesture Samples per Word (Top 10)" />
+            <SectionHeader
+              title="Gesture sample coverage"
+              description="Top 10 vocabulary entries · all-time counts"
+            />
           </div>
           <div className="dash-card-body">
             {words.length === 0 ? (
@@ -857,7 +970,7 @@ const ReportsAnalytics = () => {
         <div className="dash-card-body">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { key: "word_stats", label: "Word Statistics" },
+              { key: "word_stats", label: "Vocabulary Statistics" },
               { key: "sample_counts", label: "Gesture Sample Counts" },
               { key: "model_accuracy", label: "Model Accuracy" },
             ].map(({ key, label }) => (
@@ -878,9 +991,9 @@ const ReportsAnalytics = () => {
             ))}
           </div>
           <p className="text-xs text-gray-400 mt-3">
-            Filtered by:{" "}
+            Activity range:{" "}
             <strong className="text-gray-600 capitalize">{filter}</strong>
-            {" · "}Exported as PDF
+            {" · "}Summary totals remain all time · Exported as PDF
           </p>
         </div>
       </div>
