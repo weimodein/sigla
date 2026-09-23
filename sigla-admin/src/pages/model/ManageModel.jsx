@@ -88,8 +88,7 @@ const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
   const active = sortField === sortKey;
   return (
     <th
-      className="interactive px-4 py-3 cursor-pointer select-none hover:bg-gray-100"
-      style={{ fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "#6b7280" }}
+      className="interactive px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:bg-gray-100"
       onClick={() => onSort && onSort(sortKey)}
     >
       <div className="flex items-center gap-1">
@@ -404,8 +403,8 @@ const ManageModel = () => {
   })();
 
   const sortedModels = [...pairedModels].sort((a, b) => {
-    let va = a[sortField];
-    let vb = b[sortField];
+    let va = sortField === "letters_accuracy" ? a.letters?.accuracy : a[sortField];
+    let vb = sortField === "letters_accuracy" ? b.letters?.accuracy : b[sortField];
 
     // Nulls last in BOTH directions. Coercing them to "" put untested models
     // (null accuracy) at the head of an ascending sort, since `0.95 > ""` is
@@ -762,32 +761,46 @@ const ManageModel = () => {
 
         {loading ? (
           <div className="overflow-x-auto">
-          <table className="w-full text-left" style={{ minWidth: 820 }}>
+          <table className="w-full text-left text-sm" style={{ minWidth: 1040, tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "44px" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "20%" }} />
+            </colgroup>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
-                <th className="px-4 py-3" style={{ width: "36px" }} />
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
+                <th className="px-5 py-3" />
+                <th className="px-5 py-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                     Version
                   </span>
                 </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
+                <th className="px-5 py-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Words model
+                  </span>
+                </th>
+                <th className="px-5 py-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Alphabet model
+                  </span>
+                </th>
+                <th className="px-5 py-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                     Status
                   </span>
                 </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
-                    Models
-                  </span>
-                </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
+                <th className="px-5 py-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                     Training
                   </span>
                 </th>
-                <th className="px-4 py-3">
-                  <span className="text-xs font-semibold text-gray-500">
+                <th className="px-5 py-3 text-left">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                     Actions
                   </span>
                 </th>
@@ -796,8 +809,8 @@ const ManageModel = () => {
             <tbody>
               {Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-t">
-                  {Array.from({ length: 6 }).map((_, j) => (
-                    <td key={j} className="px-4 py-3">
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <td key={j} className="px-5 py-3">
                       <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3" />
                     </td>
                   ))}
@@ -810,17 +823,26 @@ const ManageModel = () => {
           <>
             {/* Table header row */}
             <div className="overflow-x-auto">
-            <table className="w-full text-left" style={{ minWidth: 820 }}>
+            <table className="w-full text-left text-sm" style={{ minWidth: 1040, tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "44px" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "20%" }} />
+              </colgroup>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
-                  <th className="px-4 py-3" style={{ width: "36px" }} />
+                  <th className="px-5 py-3" />
                   <SortableHeader label="Version" sortKey="version_number" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <SortableHeader label="Models" sortKey="accuracy" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Words model" sortKey="accuracy" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                  <SortableHeader label="Alphabet model" sortKey="letters_accuracy" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <SortableHeader label="Status" sortKey="status" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <SortableHeader label="Training" sortKey="trained_at" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <th
-                    className="px-4 py-3"
-                    style={{ minWidth: "160px" }}
+                    className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"
                   >
                     Actions
                   </th>
@@ -830,7 +852,7 @@ const ManageModel = () => {
                 {paginatedModels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="text-center py-10"
                       style={{ color: C.muted, fontSize: "0.85rem" }}
                     >
@@ -859,7 +881,7 @@ const ManageModel = () => {
                           )
                         }
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-5 py-3">
                           <ChevronDown
                             size={16}
                             className={`transition-transform duration-200 ${
@@ -868,7 +890,7 @@ const ManageModel = () => {
                             style={{ color: C.muted }}
                           />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-5 py-3">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-gray-900">
                               {model.version_number}
@@ -877,47 +899,36 @@ const ManageModel = () => {
                               <span className="w-2 h-2 rounded-full bg-green-500" title="Active version" />
                             )}
                           </div>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {model.letters && !model.is_letters_only
-                              ? "Words + alphabet"
-                              : "Incomplete pair"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <p className="font-semibold" style={{ color: getMetricColor(model.accuracy) }}>
+                            {fmt(model.accuracy)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            {model.total_classes == null ? "Not trained" : `${model.total_classes} classes`}
                           </p>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-xs whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              <span className="font-medium text-gray-700">Words</span>
-                              <span className="text-gray-400">
-                                {model.total_classes ?? "—"} classes
-                              </span>
-                              <span className="font-semibold" style={{ color: getMetricColor(model.accuracy) }}>
-                                {fmt(model.accuracy)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
-                              <span className="font-medium text-gray-700">Alphabet</span>
-                              <span className="text-gray-400">
-                                {model.letters?.total_classes ?? "—"} classes
-                              </span>
-                              <span
-                                className="font-semibold"
-                                style={{
-                                  color: model.letters?.accuracy == null
-                                    ? C.muted
-                                    : getMetricColor(model.letters.accuracy),
-                                }}
-                              >
-                                {fmt(model.letters?.accuracy)}
-                              </span>
-                            </div>
-                          </div>
+                        <td className="px-5 py-3">
+                          <p
+                            className="font-semibold"
+                            style={{
+                              color: model.letters?.accuracy == null
+                                ? C.muted
+                                : getMetricColor(model.letters.accuracy),
+                            }}
+                          >
+                            {fmt(model.letters?.accuracy)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            {model.letters?.total_classes == null
+                              ? "Not trained"
+                              : `${model.letters.total_classes} classes`}
+                          </p>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-5 py-3">
                           <Badge value={model.status} />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-5 py-3">
                           <p className="text-sm font-medium text-gray-700">
                             {model.trainer?.username || "—"}
                           </p>
@@ -928,10 +939,10 @@ const ManageModel = () => {
                           </p>
                         </td>
                         <td
-                          className="px-4 py-3"
+                          className="px-5 py-3"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex gap-1.5 flex-wrap">
+                          <div className="flex justify-start gap-1.5 flex-wrap">
                             {model.status === "trained" && (
                               <>
                                 <button
@@ -955,18 +966,18 @@ const ManageModel = () => {
                                 <button
                                   onClick={() => handleDelete(model)}
                                   disabled={actionLoading}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
-                                    background: "#fecaca",
+                                    background: "#fff",
                                     color: "#991b1b",
                                   }}
                                   onMouseEnter={(e) =>
-                                    (e.currentTarget.style.background =
-                                      "#fca5a5")
+                                      (e.currentTarget.style.background =
+                                        "#fef2f2")
                                   }
                                   onMouseLeave={(e) =>
-                                    (e.currentTarget.style.background =
-                                      "#fecaca")
+                                      (e.currentTarget.style.background =
+                                        "#fff")
                                   }
                                 >
                                   Delete
@@ -996,18 +1007,18 @@ const ManageModel = () => {
                                 <button
                                   onClick={() => handleDelete(model)}
                                   disabled={actionLoading}
-                                  className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
-                                    background: "#fecaca",
+                                    background: "#fff",
                                     color: "#991b1b",
                                   }}
                                   onMouseEnter={(e) =>
-                                    (e.currentTarget.style.background =
-                                      "#fca5a5")
+                                      (e.currentTarget.style.background =
+                                        "#fef2f2")
                                   }
                                   onMouseLeave={(e) =>
-                                    (e.currentTarget.style.background =
-                                      "#fecaca")
+                                      (e.currentTarget.style.background =
+                                        "#fff")
                                   }
                                 >
                                   Delete
@@ -1021,23 +1032,23 @@ const ManageModel = () => {
                               <button
                                 onClick={() => handleDelete(model)}
                                 disabled={actionLoading}
-                                className="text-xs font-medium px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{
-                                  background: "#fecaca",
+                                  background: "#fff",
                                   color: "#991b1b",
                                 }}
                                 onMouseEnter={(e) =>
-                                  (e.currentTarget.style.background = "#fca5a5")
+                                  (e.currentTarget.style.background = "#fef2f2")
                                 }
                                 onMouseLeave={(e) =>
-                                  (e.currentTarget.style.background = "#fecaca")
+                                  (e.currentTarget.style.background = "#fff")
                                 }
                               >
                                 Delete
                               </button>
                             )}
                             {model.status === "deployed" && (
-                              <span className="text-xs text-gray-400">No actions</span>
+                              <span className="text-xs font-medium text-gray-500">Deployed</span>
                             )}
                           </div>
                         </td>
@@ -1049,7 +1060,7 @@ const ManageModel = () => {
                           style={{ background: "#f8fafc" }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <td colSpan={6} className="px-4 py-4">
+                          <td colSpan={7} className="px-4 py-4">
                             <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
                               <div className="grid grid-cols-1 md:grid-cols-2">
                                 <section className="p-4 md:border-r border-gray-200">
