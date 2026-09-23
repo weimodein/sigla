@@ -1021,18 +1021,18 @@ const ManageWord = () => {
             </span>
           )}
         </div>
-        <div className="overflow-x-auto">
+        <div className="table-scroll" role="region" aria-label="Vocabulary entries table" tabIndex={0}>
           {/* The proportional columns consume the full card width. The desktop
               minimum keeps all five actions on one line; smaller viewports use
               the existing horizontal scroll instead of compressing the row. */}
-          <table className="table-text w-full text-left" style={{ minWidth: 1100, tableLayout: "fixed" }}>
+          <table className="data-table table-text text-left" style={{ minWidth: 980, tableLayout: "fixed" }}>
             <colgroup>
               {/* Allocate space by information density. Actions begin at their
                   column boundary so they stay visually connected to Availability. */}
-              <col style={{ width: "220px" }} />
-              <col style={{ width: "20%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "190px" }} />
+              <col style={{ width: "18%" }} />
               <col style={{ width: "12%" }} />
+              <col style={{ width: "13%" }} />
               <col />
             </colgroup>
             <thead style={{ background: "#f9fafb" }}>

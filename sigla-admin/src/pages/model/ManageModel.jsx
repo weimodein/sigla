@@ -764,16 +764,16 @@ const ManageModel = () => {
         </div>
 
         {loading ? (
-          <div className="overflow-x-auto">
-          <table className="table-text w-full text-left" style={{ minWidth: 1040, tableLayout: "fixed" }}>
+          <div className="table-scroll" role="region" aria-label="Model versions table" tabIndex={0}>
+          <table className="data-table table-text text-left" style={{ minWidth: 920, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "44px" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "17%" }} />
               <col style={{ width: "13%" }} />
               <col style={{ width: "18%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "20%" }} />
+              <col />
             </colgroup>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
@@ -830,16 +830,16 @@ const ManageModel = () => {
         ) : (
           <>
             {/* Table header row */}
-            <div className="overflow-x-auto">
-            <table className="table-text w-full text-left" style={{ minWidth: 1040, tableLayout: "fixed" }}>
+            <div className="table-scroll" role="region" aria-label="Model versions table" tabIndex={0}>
+            <table className="data-table table-text text-left" style={{ minWidth: 920, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "44px" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "17%" }} />
               <col style={{ width: "13%" }} />
               <col style={{ width: "18%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "20%" }} />
+              <col />
               </colgroup>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>

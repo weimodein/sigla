@@ -101,6 +101,64 @@ body {
   line-height: 1.5;
 }
 
+/* Responsive data tables ---------------------------------------------------
+   The usable width changes when the sidebar opens, even though the browser
+   viewport does not. Container queries therefore fit this layout better than
+   viewport-only breakpoints: cell density follows the table card's real width.
+   Wide tables keep their readable minimum and scroll inside this shell. */
+.table-scroll {
+  container: data-table / inline-size;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll:focus-visible {
+  outline: 2px solid rgba(30, 58, 138, 0.28);
+  outline-offset: -2px;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #cbd5e1;
+  background-clip: padding-box;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  vertical-align: middle;
+}
+
+@container data-table (max-width: 1100px) {
+  .data-table th,
+  .data-table td {
+    padding-inline: 1rem !important;
+  }
+}
+
+@container data-table (max-width: 760px) {
+  .data-table th,
+  .data-table td {
+    padding-inline: 0.75rem !important;
+  }
+}
+
 /* Shared loading treatment. A soft travelling highlight reads as progress
    without the distracting full-element flashing of repeated animate-pulse. */
 @keyframes skeleton-shimmer {

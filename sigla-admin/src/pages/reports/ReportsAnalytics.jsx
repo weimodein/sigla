@@ -90,9 +90,9 @@ const pairState = (pair) => {
 };
 
 // ── Simple Table ──────────────────────────────────────────────
-const SimpleTable = ({ headers, rows, emptyMessage }) => (
-  <div className="overflow-x-auto rounded-lg border border-gray-200">
-    <table className="table-text w-full text-left">
+const SimpleTable = ({ headers, rows, emptyMessage, ariaLabel }) => (
+  <div className="table-scroll rounded-lg border border-gray-200" role="region" aria-label={ariaLabel} tabIndex={0}>
+    <table className="data-table table-text text-left" style={{ minWidth: 520 }}>
       <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
         <tr>
           {headers.map((h) => (
@@ -1142,6 +1142,7 @@ const ReportsAnalytics = () => {
           </div>
           <div className="dash-card-body">
             <SimpleTable
+              ariaLabel="Deactivated administrators table"
               headers={["Username", "Email", "Since"]}
               rows={deactivatedUsers
                 .slice(
@@ -1201,6 +1202,7 @@ const ReportsAnalytics = () => {
           </div>
           <div className="dash-card-body">
             <SimpleTable
+              ariaLabel="Deleted accounts table"
               headers={["Username", "Email"]}
               rows={deletedUsers
                 .slice(

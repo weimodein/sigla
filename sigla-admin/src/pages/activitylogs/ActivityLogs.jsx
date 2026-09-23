@@ -369,8 +369,15 @@ const ActivityLogs = () => {
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
       >
-        <div className="overflow-x-auto">
-          <table className="table-text w-full text-left" style={{ minWidth: 760 }}>
+        <div className="table-scroll" role="region" aria-label="Activity logs table" tabIndex={0}>
+          <table className="data-table table-text text-left" style={{ minWidth: 860, tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "28%" }} />
+              <col style={{ width: "18%" }} />
+            </colgroup>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 {["User", "Action", "Affected Item", "Description", "Date & Time"].map((h) => (

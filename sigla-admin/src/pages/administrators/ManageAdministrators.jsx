@@ -793,8 +793,8 @@ const ManageAdministrators = () => {
         }}
       >
         {loading ? (
-          <div className="overflow-x-auto">
-            <table className="table-text w-full text-left" style={{ minWidth: 640 }}>
+          <div className="table-scroll" role="region" aria-label="Administrators table" tabIndex={0}>
+            <table className="data-table table-text text-left" style={{ minWidth: 800 }}>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
                   {["ID", "Username", "Email", "Status", "Registered", "Actions"].map((h) => (
@@ -811,8 +811,8 @@ const ManageAdministrators = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="table-text w-full text-left" style={{ minWidth: 640 }}>
+            <div className="table-scroll" role="region" aria-label="Administrators table" tabIndex={0}>
+              <table className="data-table table-text text-left" style={{ minWidth: 800 }}>
                 <thead style={{ background: "#f9fafb" }}>
                   <tr>
                     <SortableHeader label="ID" sortKey="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />

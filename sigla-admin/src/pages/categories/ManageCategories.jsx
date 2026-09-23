@@ -245,8 +245,8 @@ const ManageCategories = () => {
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
       >
-        <div className="overflow-x-auto">
-          <table className="table-text w-full text-left" style={{ minWidth: 600 }}>
+        <div className="table-scroll" role="region" aria-label="Categories table" tabIndex={0}>
+          <table className="data-table table-text text-left" style={{ minWidth: 600 }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 {["Name", "Description", "Words", "Actions"].map(h => (
