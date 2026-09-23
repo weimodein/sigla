@@ -36,19 +36,19 @@ import {
 // ── Stat Card ─────────────────────────────────────────────────
 
 // ── Section Header ────────────────────────────────────────────
-const SectionHeader = ({ title, description, count }) => (
-  <div className="flex items-start justify-between gap-4">
+const SectionHeader = ({ title, description, count, aside }) => (
+  <div className="flex flex-wrap items-start justify-between gap-4">
     <div>
       <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
       {description && (
         <p className="mt-0.5 text-xs text-gray-400">{description}</p>
       )}
     </div>
-    {count !== undefined && (
+    {aside || (count !== undefined && (
       <span className="shrink-0 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
         {count} total
       </span>
-    )}
+    ))}
   </div>
 );
 
@@ -859,7 +859,7 @@ const ReportsAnalytics = () => {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard index={i} key={i} />
           ))}
@@ -888,7 +888,7 @@ const ReportsAnalytics = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -924,7 +924,7 @@ const ReportsAnalytics = () => {
       </div>
 
       {/* Summary Cards (scope §20): words, gesture samples, categories, model pair */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard index={0}
           title="Vocabulary Entries"
           value={wordStats?.total}
@@ -946,53 +946,27 @@ const ReportsAnalytics = () => {
           color="bg-green-600"
           onClick={() => navigate("/categories")}
         />
-        <button
-          type="button"
+        <StatCard
+          index={3}
+          title="Active Model Pair"
+          value={
+            deploymentSummary.pair
+              ? `v${deploymentSummary.pair.version}`
+              : deploymentSummary.state === "warning"
+                ? "Review"
+                : deploymentSummary.state === "error"
+                  ? "Unavailable"
+                  : "None"
+          }
+          icon={Cpu}
+          color="bg-violet-600"
           onClick={() => navigate("/model")}
-          className="dash-stat-card list-item-in flex w-full items-center gap-3 text-left"
-          style={listStagger(3)}
-        >
-          <div className="shrink-0 rounded-full bg-violet-600 p-3">
-            <Cpu size={20} className="text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-2 flex items-center gap-2">
-              <span
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  deploymentSummary.state === "active"
-                    ? "bg-emerald-500"
-                    : deploymentSummary.state === "warning"
-                      ? "bg-amber-500"
-                      : deploymentSummary.state === "error"
-                        ? "bg-red-500"
-                      : "bg-gray-300"
-                }`}
-              />
-              <p className="truncate text-xs font-medium text-gray-500">
-                {deploymentSummary.label}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 divide-x divide-gray-100">
-              <div className="pr-3">
-                <p className="text-[11px] text-gray-400">Words</p>
-                <p className="text-xl font-bold text-gray-800">
-                  {formatAccuracy(deploymentSummary.pair?.words?.accuracy)}
-                </p>
-              </div>
-              <div className="pl-3">
-                <p className="text-[11px] text-gray-400">Alphabet</p>
-                <p className="text-xl font-bold text-gray-800">
-                  {formatAccuracy(deploymentSummary.pair?.letters?.accuracy)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </button>
+        />
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="dash-card">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="dash-card !mb-0 h-full">
           <div className="dash-card-header">
             <SectionHeader
               title="Vocabulary submissions"
@@ -1026,11 +1000,44 @@ const ReportsAnalytics = () => {
           </div>
         </div>
 
-        <div className="dash-card">
+        <div className="dash-card !mb-0 h-full">
           <div className="dash-card-header">
             <SectionHeader
               title="Accuracy by model version"
               description="Words and alphabet are reported separately"
+              aside={
+                deploymentSummary.pair ? (
+                  <div className="flex flex-wrap items-center gap-3 text-xs">
+                    <span className="text-gray-400">Current</span>
+                    <span className="inline-flex items-center gap-1.5 text-gray-600">
+                      <span className="h-2 w-2 rounded-full bg-blue-700" />
+                      Words
+                      <strong className="text-gray-800">
+                        {formatAccuracy(deploymentSummary.pair.words?.accuracy)}
+                      </strong>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-gray-600">
+                      <span className="h-2 w-2 rounded-full bg-violet-600" />
+                      Alphabet
+                      <strong className="text-gray-800">
+                        {formatAccuracy(deploymentSummary.pair.letters?.accuracy)}
+                      </strong>
+                    </span>
+                  </div>
+                ) : (
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      deploymentSummary.state === "warning"
+                        ? "bg-amber-50 text-amber-700"
+                        : deploymentSummary.state === "error"
+                          ? "bg-red-50 text-red-700"
+                          : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {deploymentSummary.label}
+                  </span>
+                )
+              }
             />
           </div>
           <div className="dash-card-body">
@@ -1045,7 +1052,6 @@ const ReportsAnalytics = () => {
                   <XAxis dataKey="version" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} unit="%" />
                   <Tooltip formatter={(value, name) => [`${value}%`, name]} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                   <Line
                     type="monotone"
                     dataKey="words"
@@ -1070,7 +1076,7 @@ const ReportsAnalytics = () => {
           </div>
         </div>
 
-        <div className="dash-card lg:col-span-2">
+        <div className="dash-card !mb-0 lg:col-span-2">
           <div className="dash-card-header">
             <SectionHeader
               title="Gesture sample coverage"
@@ -1084,14 +1090,16 @@ const ReportsAnalytics = () => {
               </p>
             ) : (
               <ResponsiveContainer width="100%" height={220} debounce={200}>
-                <BarChart data={samplesPerWord} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                <BarChart data={samplesPerWord} layout="vertical" margin={{ left: 8, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis
                     dataKey="name"
                     type="category"
                     tick={{ fontSize: 11 }}
-                    width={65}
+                    tickLine={false}
+                    axisLine={false}
+                    width={72}
                   />
                   <Tooltip />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -1116,8 +1124,8 @@ const ReportsAnalytics = () => {
 
       {/* Administrator Lists — super admin only (per-admin data from /users) */}
       {isSuper && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="dash-card">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="dash-card !mb-0 h-full">
           <div className="dash-card-header">
             <SectionHeader
               title="Deactivated Administrators"
@@ -1179,7 +1187,7 @@ const ReportsAnalytics = () => {
             )}
           </div>
         </div>
-        <div className="dash-card">
+        <div className="dash-card !mb-0 h-full">
           <div className="dash-card-header">
             <SectionHeader title="Deleted Accounts" count={deletedUsers.length} />
           </div>
@@ -1234,14 +1242,14 @@ const ReportsAnalytics = () => {
       )}
 
       {/* Generate Report */}
-      <div className="dash-card">
-        <div className="dash-card-header flex items-center justify-between">
+      <div className="dash-card !mb-0">
+        <div className="dash-card-header flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-gray-700">
-              Generate Report
+            <h3 className="text-sm font-semibold text-gray-800">
+              Export system report
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              Select sections to include in the exported PDF
+              Choose the sections to include in the PDF
             </p>
           </div>
           <button
@@ -1256,24 +1264,41 @@ const ReportsAnalytics = () => {
           </button>
         </div>
         <div className="dash-card-body">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
-              { key: "word_stats", label: "Vocabulary Statistics" },
-              { key: "sample_counts", label: "Gesture Sample Counts" },
-              { key: "model_accuracy", label: "Model Accuracy" },
-            ].map(({ key, label }) => (
+              {
+                key: "word_stats",
+                label: "Vocabulary",
+                description: "Inventory and activity totals",
+              },
+              {
+                key: "sample_counts",
+                label: "Gesture samples",
+                description: "Coverage for every entry",
+              },
+              {
+                key: "model_accuracy",
+                label: "Model accuracy",
+                description: "Words and alphabet history",
+              },
+            ].map(({ key, label, description }) => (
               <label
                 key={key}
-                className="flex items-center gap-2 cursor-pointer group"
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${
+                  reportSections[key]
+                    ? "border-blue-200 bg-blue-50/60"
+                    : "border-gray-200 hover:bg-gray-50"
+                }`}
               >
                 <input
                   type="checkbox"
                   checked={reportSections[key]}
                   onChange={() => toggleSection(key)}
-                  className="w-4 h-4 accent-blue-900 cursor-pointer"
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-blue-900"
                 />
-                <span className="text-xs text-gray-600 group-hover:text-gray-800">
-                  {label}
+                <span>
+                  <span className="block text-xs font-semibold text-gray-700">{label}</span>
+                  <span className="mt-0.5 block text-[11px] text-gray-400">{description}</span>
                 </span>
               </label>
             ))}
