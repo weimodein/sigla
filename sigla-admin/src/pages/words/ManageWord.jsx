@@ -1007,7 +1007,7 @@ const ManageWord = () => {
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
+        <div className="table-card-heading flex flex-wrap items-center justify-between gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
           <div>
             <h3 className="section-title">Vocabulary entries</h3>
             <p className="section-subtitle">Training coverage and deployed availability</p>
