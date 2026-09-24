@@ -91,11 +91,6 @@ const Layout = ({ children }) => {
   // Guards the whole close/confirm sequence. Without it, holding Enter fires
   // confirmLogout repeatedly while the exit animation plays.
   const closingRef = useRef(false);
-  const logoutTimerRef = useRef(null);
-
-  useEffect(() => () => {
-    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
-  }, []);
 
   const dismissLogoutModal = () => {
     if (closingRef.current) return;
@@ -110,22 +105,18 @@ const Layout = ({ children }) => {
     closingRef.current = false;
   };
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     if (closingRef.current) return;
     closingRef.current = true;
     setSigningOut(true);
-    // Let the dialog leave, hold briefly on "Signing out…", then go. The message
-    // is parked for the login page, which is what actually mounts next.
-    logoutTimerRef.current = setTimeout(async () => {
-      const serverInvalidated = await logout();
-      setAuthMessage(
-        serverInvalidated ? "info" : "warning",
-        serverInvalidated
-          ? "You've been signed out."
-          : "Signed out on this device, but the server could not invalidate the session.",
-      );
-      navigate("/login");
-    }, 620);
+    const serverInvalidated = await logout();
+    setAuthMessage(
+      serverInvalidated ? "info" : "warning",
+      serverInvalidated
+        ? "You've been signed out."
+        : "Signed out on this device, but the server could not invalidate the session.",
+    );
+    navigate("/login");
   };
 
   // This overlay is hand-rolled rather than an AppModal, so it needs the keyboard
@@ -170,7 +161,7 @@ const Layout = ({ children }) => {
           marginLeft: isMobile
             ? 0
             : sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
-          transition: "margin-left var(--dur-base) var(--ease-standard)",
+          transition: "margin-left var(--dur-slow) var(--ease-standard)",
           willChange: "margin-left",
           minHeight: "100vh",
           display: "flex",

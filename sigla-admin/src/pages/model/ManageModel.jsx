@@ -892,7 +892,7 @@ const ManageModel = () => {
                         <td className="px-5 py-3">
                           <ChevronDown
                             size={16}
-                            className={`transition-transform duration-200 ${
+                            className={`transition-transform duration-base ease-standard ${
                               expandedRow === model.id ? "rotate-180" : ""
                             }`}
                             style={{ color: C.muted }}

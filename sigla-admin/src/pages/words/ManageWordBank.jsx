@@ -1296,7 +1296,7 @@ const ManageWordBank = () => {
                                   }}
                                 />
                                 {sample.status === "approved" && (
-                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-base ease-standard">
                                     <button
                                       onClick={() => {
                                         const imgUrl = frameUrls[0].startsWith("/")

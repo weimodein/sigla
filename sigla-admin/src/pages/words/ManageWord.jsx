@@ -327,7 +327,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
             <span>{progress}%</span>
           </div>
           <div style={{ background: C.border, borderRadius: "4px", height: "6px" }}>
-            <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${progress}%`, transition: "width 0.2s" }} />
+            <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${progress}%`, transition: "width var(--dur-slow) var(--ease-standard)" }} />
           </div>
         </div>
       )}
@@ -504,7 +504,8 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
             borderRadius: "10px", padding: "28px 20px", textAlign: "center",
             cursor: "pointer", marginBottom: "12px",
             background: dragOver ? "#eff6ff" : "#f9fafb",
-            transition: "border-color .15s, background .15s",
+            transition:
+              "border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard)",
           }}
         >
           <Film size={26} style={{ color: dragOver ? C.secondary : C.muted, margin: "0 auto 8px" }} />
@@ -920,7 +921,7 @@ const ManageWord = () => {
                 style={{
                   height: "6px", borderRadius: "4px", background: C.primary,
                   width: `${uploadJob.total_count ? Math.round((uploadJob.processed_count / uploadJob.total_count) * 100) : 0}%`,
-                  transition: "width 0.3s",
+                  transition: "width var(--dur-slow) var(--ease-standard)",
                 }}
               />
             </div>

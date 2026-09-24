@@ -45,6 +45,7 @@ const Button = ({ disabled, loading, succeeded, children }) => {
     <button
       type="submit"
       disabled={isDisabled}
+      className="interactive"
       style={{
         ...S.btn,
         // Hold on a check so a successful sign-in is acknowledged before the card
@@ -165,7 +166,7 @@ const Login = () => {
         setTimeout(() => setExiting(true), 400),
         setTimeout(() => {
           navigate(admin?.must_complete_setup ? "/onboarding" : "/dashboard");
-        }, 620),
+        }, 660),
       );
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || "Login failed");
@@ -209,7 +210,7 @@ const Login = () => {
             {/* Desktop-only twin of .sigla-band-heading above. */}
             <h2
               className="auth-field-in sigla-form-heading"
-              style={{ ...S.heading, "--stagger-delay": "120ms" }}
+              style={{ ...S.heading, "--stagger-delay": "0ms" }}
             >
               Login Portal
             </h2>
@@ -224,7 +225,7 @@ const Login = () => {
                 label="Username or Email" autoComplete="username"
                 error={fieldErrors.identifier}
                 maxLength={100}
-                delay="180ms"
+                delay="32ms"
               />
               <FloatingInput
                 id="password" type={showPass ? "text" : "password"}
@@ -235,13 +236,13 @@ const Login = () => {
                 label="Password" autoComplete="current-password"
                 error={fieldErrors.password}
                 icon={<PasswordToggleIcon showPass={showPass} onToggle={() => setShowPass(s => !s)} />}
-                delay="240ms"
+                delay="64ms"
               />
             </div>
 
             <label
               className="auth-field-in"
-              style={{ ...S.showPassLabel, "--stagger-delay": "300ms" }}
+              style={{ ...S.showPassLabel, "--stagger-delay": "96ms" }}
             >
               <input
                 type="checkbox" checked={showPass}
@@ -250,13 +251,13 @@ const Login = () => {
               Show Password
             </label>
 
-            <div className="auth-field-in" style={{ "--stagger-delay": "300ms" }}>
+            <div className="auth-field-in" style={{ "--stagger-delay": "120ms" }}>
               <Button disabled={loading} loading={loading} succeeded={succeeded}>
                 {loading ? "Logging in..." : "Login"}
               </Button>
             </div>
 
-            <div className="auth-field-in" style={{ ...S.footer, "--stagger-delay": "380ms" }}>
+            <div className="auth-field-in" style={{ ...S.footer, "--stagger-delay": "144ms" }}>
               <p style={S.footerP}>Forgot your password?</p>
               <button
                 type="button"
@@ -326,7 +327,8 @@ const S = {
     fontSize: "var(--type-body)",
     color: C.text,
     outline: "none",
-    transition: "border-color 0.3s ease, box-shadow 0.3s ease",
+    transition:
+      "border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard)",
     fontFamily: "inherit",
     borderRadius: 0,
     WebkitAppearance: "none",
@@ -338,7 +340,8 @@ const S = {
     color: "#888",
     fontSize: "var(--type-body)",
     pointerEvents: "none",
-    transition: "0.3s ease",
+    transition:
+      "top var(--dur-base) var(--ease-standard), font-size var(--dur-base) var(--ease-standard), color var(--dur-fast) var(--ease-standard)",
   },
   underline: {
     position: "absolute",
@@ -346,7 +349,7 @@ const S = {
     height: "2px",
     width: "0%",
     background: C.primary,
-    transition: "width 0.3s ease",
+    transition: "width var(--dur-base) var(--ease-standard)",
   },
   fieldError: {
     color: "var(--danger)",
@@ -358,7 +361,7 @@ const S = {
     right: "10px",
     top: "14px",
     color: "#999",
-    transition: "color 0.3s ease",
+    transition: "color var(--dur-fast) var(--ease-standard)",
     display: "flex",
     alignItems: "center",
   },
@@ -396,7 +399,8 @@ const S = {
     fontSize: "var(--type-body)",
     fontWeight: 600,
     cursor: "pointer",
-    transition: "0.3s",
+    transition:
+      "background-color var(--dur-fast) var(--ease-standard), opacity var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard)",
     fontFamily: "inherit",
     display: "flex",
     alignItems: "center",

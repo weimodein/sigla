@@ -93,7 +93,7 @@ const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
       className="px-5 py-3.5 select-none"
       style={{
         cursor: sortKey ? "pointer" : "default",
-        transition: "background .15s",
+        transition: "background-color var(--dur-fast) var(--ease-standard)",
       }}
       onClick={() => sortKey && onSort(sortKey)}
       onMouseEnter={(e) =>
@@ -685,7 +685,7 @@ const ManageAdministrators = () => {
             fontSize: "var(--type-body)",
             fontWeight: 600,
             cursor: "pointer",
-            transition: "background 0.2s",
+            transition: "background-color var(--dur-base) var(--ease-standard)",
             fontFamily: "inherit",
           }}
         >

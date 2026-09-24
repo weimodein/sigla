@@ -280,7 +280,7 @@ const Dashboard = () => {
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-1.5">
                     <div
-                      className={`h-1.5 rounded-full transition-all duration-500 ${isDeployed ? "bg-green-500" : "bg-blue-400"}`}
+                      className={`h-1.5 rounded-full transition-[width] duration-slow ease-standard ${isDeployed ? "bg-green-500" : "bg-blue-400"}`}
                       style={{ width: `${Math.min(parseFloat(pct), 100)}%` }}
                     />
                   </div>

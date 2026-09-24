@@ -45,11 +45,12 @@
 
      Restrained on purpose: this is a tool used all day, so motion should be
      felt rather than watched. */
-  --dur-fast: 120ms;   /* hover, press — must feel instant */
-  --dur-base: 200ms;   /* state changes; matches the existing modal timing */
-  --dur-slow: 320ms;   /* entrances and exits */
+  --dur-fast: 140ms;   /* hover and press feedback */
+  --dur-base: 220ms;   /* component state changes */
+  --dur-slow: 300ms;   /* entrances and larger layout changes */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
 body {
@@ -183,7 +184,7 @@ body {
     #e9edf2 56%
   );
   background-size: 220% 100%;
-  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -196,16 +197,16 @@ body {
 @keyframes slide-in {
   from {
     opacity: 0;
-    transform: translateX(100%);
+    transform: translate3d(12px, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .animate-slide-in {
-  animation: slide-in 0.3s ease-out;
+  animation: slide-in var(--dur-slow) var(--ease-enter) both;
 }
 
 /* ── Sidebar nav: keep scrollable on very short screens but hide the track ── */
@@ -231,7 +232,7 @@ body {
   position: relative;
 }
 .dash-stat-card:hover {
-  transform: translateY(-2px);
+  transform: translate3d(0, -1px, 0);
   box-shadow: var(--shadow-card-hover);
 }
 .dash-card {
@@ -367,12 +368,10 @@ body {
   border: 1px solid #f0f0f0;
   /* Explicit properties, not `all` — `all` also transitions layout properties
      and made every hover more expensive than it needed to be. */
-  transition: background-color var(--dur-fast) var(--ease-standard),
-              transform var(--dur-fast) var(--ease-standard);
+  transition: background-color var(--dur-fast) var(--ease-standard);
 }
 .dash-request-item:hover {
   background: #f0f0f0;
-  transform: translateX(4px);
 }
 /* .dash-quick-action and .dash-announcement-item lived here with no call sites
    anywhere in src/ — removed. */
@@ -399,7 +398,7 @@ body {
 /* Press feedback. Nothing in the app had an :active state — controls stayed
    visually inert from click until the network answered. */
 .interactive:active:not(:disabled):not([aria-disabled="true"]) {
-  transform: scale(0.98);
+  transform: scale(0.985);
 }
 
 /* Sidebar nav item. Hover used to be two JS handlers that read
@@ -432,11 +431,11 @@ body {
    Callers must cap the delay (see listStagger in utils/motion.js) — staggering
    every row of a 50-row table reads as slow, not elegant. */
 @keyframes list-item-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0);   }
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0);   }
 }
 .list-item-in {
-  animation: list-item-in var(--dur-base) var(--ease-standard) both;
+  animation: list-item-in var(--dur-base) var(--ease-enter) both;
   animation-delay: var(--stagger-delay, 0ms);
 }
 
@@ -450,17 +449,17 @@ body {
   to   { opacity: 0; }
 }
 @keyframes modal-panel-in {
-  from { opacity: 0; transform: scale(0.95) translateY(8px); }
-  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+  from { opacity: 0; transform: translate3d(0, 4px, 0) scale(0.985); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1);      }
 }
 @keyframes modal-panel-out {
-  from { opacity: 1; transform: scale(1)    translateY(0);   }
-  to   { opacity: 0; transform: scale(0.95) translateY(8px); }
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1);      }
+  to   { opacity: 0; transform: translate3d(0, 4px, 0) scale(0.985); }
 }
-.modal-backdrop-in  { animation: modal-backdrop-in  0.18s ease-out forwards; }
-.modal-backdrop-out { animation: modal-backdrop-out 0.15s ease-in  forwards; }
-.modal-panel-in     { animation: modal-panel-in     0.20s cubic-bezier(0.34,1.56,0.64,1) forwards; }
-.modal-panel-out    { animation: modal-panel-out    0.15s ease-in  forwards; }
+.modal-backdrop-in  { animation: modal-backdrop-in var(--dur-base) var(--ease-standard) forwards; }
+.modal-backdrop-out { animation: modal-backdrop-out var(--dur-fast) var(--ease-exit) forwards; }
+.modal-panel-in     { animation: modal-panel-in var(--dur-base) var(--ease-enter) forwards; }
+.modal-panel-out    { animation: modal-panel-out var(--dur-fast) var(--ease-exit) forwards; }
 
 /* ── Auth screen layout (Login + ForgotPassword) ──
    Same reasoning as .app-main above: these values used to live in the pages'
@@ -756,16 +755,16 @@ body {
    Lives here rather than in Login's runtime-injected <style> block so the
    reduced-motion guard at the end of this file can reach it. */
 @keyframes auth-card-in {
-  from { opacity: 0; transform: translateY(12px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0);   }
 }
 @keyframes auth-card-out {
-  from { opacity: 1; transform: translateY(0)     scale(1);    }
-  to   { opacity: 0; transform: translateY(-8px)  scale(0.98); }
+  from { opacity: 1; transform: translate3d(0, 0, 0);    }
+  to   { opacity: 0; transform: translate3d(0, -4px, 0); }
 }
 @keyframes auth-field-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0);   }
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0);   }
 }
 /* Rejection reads as a colour event, not a movement one.
    This rides a dedicated overlay element rather than the card itself: the card
@@ -778,9 +777,9 @@ body {
   100% { opacity: 0; }
 }
 
-/* Same springy curve as modal-panel-in, so the card reads as the same app. */
-.auth-card-in  { animation: auth-card-in  0.42s var(--ease-spring) both; }
-.auth-card-out { animation: auth-card-out var(--dur-base) ease-in forwards; }
+/* Authentication uses the same restrained entrance as the rest of the app. */
+.auth-card-in  { animation: auth-card-in var(--dur-slow) var(--ease-enter) both; }
+.auth-card-out { animation: auth-card-out var(--dur-base) var(--ease-exit) forwards; }
 
 /* The card sets overflow:hidden, which would clip an outward ring — so the ring
    is inset, hugging the card's rounded edge, and only the soft glow spills out. */
@@ -794,7 +793,7 @@ body {
               0 0 22px 4px      rgba(220, 38, 38, 0.28);
 }
 .auth-deny-overlay.is-denied {
-  animation: auth-deny 0.70s var(--ease-standard);
+  animation: auth-deny 420ms var(--ease-standard);
 }
 
 /* ── Toast ──
@@ -804,18 +803,18 @@ body {
 @keyframes toast-out {
   from {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
     max-height: 200px;
   }
   to {
     opacity: 0;
-    transform: translateX(100%);
+    transform: translate3d(12px, 0, 0);
     max-height: 0;
     margin-bottom: -0.5rem; /* cancels the stack's space-y-2 gap */
   }
 }
 .toast-out {
-  animation: toast-out var(--dur-base) var(--ease-standard) forwards;
+  animation: toast-out var(--dur-base) var(--ease-exit) forwards;
   overflow: hidden;
 }
 
@@ -823,7 +822,7 @@ body {
    full opacity until its delay elapses, which flashes the whole form in before
    the stagger starts. Delay is set per-element via the custom property. */
 .auth-field-in {
-  animation: auth-field-in 0.35s ease-out both;
+  animation: auth-field-in var(--dur-slow) var(--ease-enter) both;
   animation-delay: var(--stagger-delay, 0ms);
 }
 
@@ -846,8 +845,18 @@ body {
      for a motion-sensitive user than not moving at all. Suppress the movement
      itself; the colour change still communicates the state. */
   .dash-stat-card:hover,
-  .dash-request-item:hover,
   .interactive:active:not(:disabled) {
+    transform: none !important;
+  }
+
+  .animate-slide-in,
+  .toast-out,
+  .list-item-in,
+  .modal-panel-in,
+  .modal-panel-out,
+  .auth-card-in,
+  .auth-card-out,
+  .auth-field-in {
     transform: none !important;
   }
 }

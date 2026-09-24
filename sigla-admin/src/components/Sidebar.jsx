@@ -72,8 +72,8 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
            — the two halves of one interaction previously ran at different
            durations. Animating width on the drawer would reflow every frame. */
         transition: isMobile
-          ? "transform var(--dur-base) var(--ease-standard)"
-          : "width var(--dur-base) var(--ease-standard)",
+          ? "transform var(--dur-slow) var(--ease-standard)"
+          : "width var(--dur-slow) var(--ease-standard)",
         borderRight: `1px solid ${BORDER}`,
         boxShadow: isMobile && drawerOpen
           ? "0 0 40px rgba(0, 0, 0, 0.18)"
@@ -87,8 +87,8 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
         overflow: "hidden",
         willChange: isMobile ? "transform" : "width",
         transform: isMobile && !drawerOpen
-          ? "translateX(-100%)"
-          : "translateX(0)",
+          ? "translate3d(-100%, 0, 0)"
+          : "translate3d(0, 0, 0)",
       }}
     >
       {/* Sidebar Header */}

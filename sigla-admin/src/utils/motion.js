@@ -5,8 +5,8 @@
 // The cap is the important part. Staggering every row of a 50-row table takes
 // seconds and reads as the page being slow, not as polish — so only the first
 // few items are offset and the rest share the final delay.
-const STEP_MS = 30;
-const MAX_STEPS = 8;
+const STEP_MS = 24;
+const MAX_STEPS = 6;
 
 export const listStagger = (index) => ({
   "--stagger-delay": `${Math.min(index, MAX_STEPS) * STEP_MS}ms`,

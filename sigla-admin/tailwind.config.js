@@ -35,13 +35,16 @@ export default {
       // hand-written CSS draw from one scale. Use duration-fast / duration-base
       // / duration-slow rather than Tailwind's numeric durations.
       transitionDuration: {
-        fast: "120ms",
-        base: "200ms",
-        slow: "320ms",
+        DEFAULT: "220ms",
+        fast: "140ms",
+        base: "220ms",
+        slow: "300ms",
       },
       transitionTimingFunction: {
+        DEFAULT: "cubic-bezier(0.4, 0, 0.2, 1)",
         standard: "cubic-bezier(0.4, 0, 0.2, 1)",
-        spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        enter: "cubic-bezier(0.22, 1, 0.36, 1)",
+        exit: "cubic-bezier(0.4, 0, 1, 1)",
       },
     },
   },
