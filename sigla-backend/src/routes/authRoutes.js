@@ -9,6 +9,7 @@ const {
   getMe,
   resendCode,
   verifyResetCode,
+  logout,
 } = require("../controllers/authController.js");
 
 // Tighter per-IP budget for password guessing, inside the blanket authLimiter
@@ -46,6 +47,7 @@ router.post("/verify-reset-code", verifyResetCode); // Verify reset code before 
 
 // Protected route
 router.get("/me", authMiddleware, getMe);
+router.post("/logout", authMiddleware, logout);
 
 module.exports = router;
 // ```

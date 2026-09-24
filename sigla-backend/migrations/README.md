@@ -22,6 +22,7 @@ psql "$PG_URI" -f migrations/001_model_versions_trained_word_ids.sql
 | `005_model_versions_model_kind.sql` | yes — 2026-09-22 | Words and alphabet deploy as separate models |
 | `006_model_versions_version_unique_per_kind.sql` | yes — 2026-09-22 | One version names a words+letters pair |
 | `007_words_vocabulary.sql` | yes — 2026-09-22 | Word carries its model explicitly, not by label shape |
+| `008_revoked_auth_tokens.sql` | yes — 2026-09-24 | Make JWT logout enforceable by the backend |
 
 `psql` is not always on PATH, and the database is Supabase-hosted. Two alternatives that
 need no extra tooling: paste the file into the **Supabase SQL Editor**, or run it through

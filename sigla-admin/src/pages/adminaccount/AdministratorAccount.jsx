@@ -5,6 +5,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import Button from "../../components/Button.jsx";
 import { useModalKeys } from "../../components/useModalKeys.js";
 import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
+import { setAuthMessage } from "../../utils/authMessage.js";
 import {
   Mail,
   Pencil,
@@ -318,8 +319,14 @@ const AdministratorAccount = () => {
     try {
       await resetPassword(user?.email, newPass);
       toast.success("Password changed successfully. Please log in again.");
-      logoutTimerRef.current = setTimeout(() => {
-        logout();
+      logoutTimerRef.current = setTimeout(async () => {
+        const serverInvalidated = await logout();
+        if (!serverInvalidated) {
+          setAuthMessage(
+            "warning",
+            "Signed out on this device, but the server could not invalidate the session.",
+          );
+        }
         navigate("/login");
       }, 2000);
     } catch (err) {
@@ -375,8 +382,14 @@ const AdministratorAccount = () => {
         </div>
         <button
           type="button"
-          onClick={() => {
-            logout();
+          onClick={async () => {
+            const serverInvalidated = await logout();
+            setAuthMessage(
+              serverInvalidated ? "info" : "warning",
+              serverInvalidated
+                ? "You've been signed out."
+                : "Signed out on this device, but the server could not invalidate the session.",
+            );
             navigate("/login");
           }}
           className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"

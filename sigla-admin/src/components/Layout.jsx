@@ -116,9 +116,14 @@ const Layout = ({ children }) => {
     setSigningOut(true);
     // Let the dialog leave, hold briefly on "Signing out…", then go. The message
     // is parked for the login page, which is what actually mounts next.
-    logoutTimerRef.current = setTimeout(() => {
-      setAuthMessage("info", "You've been signed out.");
-      logout();
+    logoutTimerRef.current = setTimeout(async () => {
+      const serverInvalidated = await logout();
+      setAuthMessage(
+        serverInvalidated ? "info" : "warning",
+        serverInvalidated
+          ? "You've been signed out."
+          : "Signed out on this device, but the server could not invalidate the session.",
+      );
       navigate("/login");
     }, 620);
   };

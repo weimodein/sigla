@@ -1102,6 +1102,10 @@ body {
   font-weight: 500;
 }
 .onboarding-footer button:hover { color: var(--text); }
+.onboarding-footer button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
 .onboarding-confirmation { display: flex; gap: 12px; color: var(--text); }
 .onboarding-confirmation > span {
   display: grid;

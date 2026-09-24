@@ -11,6 +11,7 @@ import {
 } from "../../api/authApi.js";
 import { AlertTriangle, LogOut } from "lucide-react";
 import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
+import { setAuthMessage } from "../../utils/authMessage.js";
 
 const isValidPassword = (pw) =>
   pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
@@ -68,6 +69,8 @@ const Onboarding = () => {
   const [showPasswords, setShowPasswords] = useState(false);
   const [credentialErrors, setCredentialErrors] = useState({});
   const [credLoading, setCredLoading] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const otpRefs = useRef([]);
 
   // Ref + unmount cleanup: completing setup navigates away while the cooldown may
@@ -257,6 +260,35 @@ const Onboarding = () => {
   };
 
   const inputCls = "onboarding-input";
+  const hasUnsavedInput =
+    (step === 1 &&
+      ((newEmail.trim() !== "" && newEmail.trim() !== (user?.email || "")) ||
+        emailCode.some(Boolean))) ||
+    username.trim() !== (user?.username || "") ||
+    password !== "" ||
+    confirmPassword !== "";
+
+  const performSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    const serverInvalidated = await logout();
+    setAuthMessage(
+      serverInvalidated ? "info" : "warning",
+      serverInvalidated
+        ? "You've been signed out."
+        : "Signed out on this device, but the server could not invalidate the session.",
+    );
+    navigate("/login", { replace: true });
+  };
+
+  const handleSignOut = () => {
+    if (hasUnsavedInput) {
+      setConfirmSignOut(true);
+      return;
+    }
+    performSignOut();
+  };
+
   const screen =
     step === 1
       ? emailPhase === "enter"
@@ -577,13 +609,11 @@ const Onboarding = () => {
         <footer className="onboarding-footer">
           <button
             type="button"
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
+            onClick={handleSignOut}
+            disabled={signingOut}
           >
             <LogOut size={14} aria-hidden="true" />
-            Sign out
+            {signingOut ? "Signing out…" : "Sign out"}
           </button>
         </footer>
       </section>
@@ -620,6 +650,33 @@ const Onboarding = () => {
               </small>
             </div>
           </div>
+        </AppModal>
+      )}
+
+      {confirmSignOut && (
+        <AppModal
+          title="Sign out before finishing setup?"
+          onClose={() => setConfirmSignOut(false)}
+          onEnter={performSignOut}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmSignOut(false)}
+                disabled={signingOut}
+              >
+                Continue setup
+              </Button>
+              <Button onClick={performSignOut} loading={signingOut}>
+                Sign out
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-gray-600">
+            Your unsaved setup information will be lost. You can sign in again
+            to finish setting up your account.
+          </p>
         </AppModal>
       )}
     </main>

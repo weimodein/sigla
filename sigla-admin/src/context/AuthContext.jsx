@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { login as loginApi, getMe, SESSION_EXPIRED_EVENT } from "../api/authApi.js";
+import {
+  login as loginApi,
+  logout as logoutApi,
+  getMe,
+  SESSION_EXPIRED_EVENT,
+} from "../api/authApi.js";
 import { setAuthMessage } from "../utils/authMessage.js";
 import { clearCache } from "../utils/apiCache.js";
 
@@ -96,13 +101,24 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Logout ────────────────────────────────────────────────
-  const logout = () => {
-    storage.remove("token");
-    storage.remove("user");
-    setUser(null);
-    // Otherwise the next admin to sign in on this browser is served the previous
-    // one's cached data.
-    clearCache();
+  const logout = async () => {
+    const hasToken = !!storage.get("token");
+
+    try {
+      // Revoke the current JWT before removing the only browser copy. If the
+      // request cannot reach the server we still clear this device in finally.
+      if (hasToken) await logoutApi();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      storage.remove("token");
+      storage.remove("user");
+      setUser(null);
+      // Otherwise the next admin to sign in on this browser is served the previous
+      // one's cached data.
+      clearCache();
+    }
   };
 
   // ── Helpers ───────────────────────────────────────────────

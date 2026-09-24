@@ -29,7 +29,10 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     const url = error.config?.url ?? "";
-    const isAuthEndpoint = url.includes("/auth/login") || url.includes("/auth/me");
+    const isAuthEndpoint =
+      url.includes("/auth/login") ||
+      url.includes("/auth/me") ||
+      url.includes("/auth/logout");
     if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
@@ -49,6 +52,11 @@ export const login = async (identifier, password) => {
 
 export const getMe = async () => {
   const response = await api.get("/auth/me");
+  return response.data;
+};
+
+export const logout = async () => {
+  const response = await api.post("/auth/logout");
   return response.data;
 };
 

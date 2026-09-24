@@ -1,7 +1,11 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
-const { Administrator, EmailVerification } = require("../models/index.js");
+const {
+  Administrator,
+  EmailVerification,
+  RevokedAuthToken,
+} = require("../models/index.js");
 const {
   sendVerificationCode,
   sendPasswordChangedNotice,
@@ -520,6 +524,45 @@ const getMe = async (req, res) => {
   }
 };
 
+// POST /api/auth/logout
+// JWTs are otherwise valid until their expiry even after the browser deletes
+// its local copy. Recording the current token's hash closes that window without
+// storing the bearer credential itself or signing every device out at once.
+const logout = async (req, res) => {
+  try {
+    await RevokedAuthToken.findOrCreate({
+      where: { token_hash: req.authTokenHash },
+      defaults: {
+        administrator_id: req.user.id,
+        expires_at: new Date(req.user.exp * 1000),
+      },
+    });
+
+    // Expired entries can no longer match a JWT accepted by jwt.verify(). Keep
+    // cleanup non-fatal because the current token has already been revoked.
+    RevokedAuthToken.destroy({
+      where: { expires_at: { [Op.lte]: new Date() } },
+    }).catch((err) => console.error("Revoked-token cleanup error:", err));
+
+    try {
+      await logActivity({
+        administrator_id: req.user.id,
+        action: "signed_out",
+        target_type: "administrator",
+        target_id: req.user.id,
+        details: "Administrator signed out",
+      });
+    } catch (err) {
+      console.error("Sign-out audit error:", err);
+    }
+
+    return res.status(200).json({ message: "Signed out successfully" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    return res.status(500).json({ message: "Unable to sign out securely" });
+  }
+};
+
 module.exports = {
   verifyResetCode,
   login,
@@ -527,4 +570,5 @@ module.exports = {
   resetPassword,
   resendCode,
   getMe,
+  logout,
 };

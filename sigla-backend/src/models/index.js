@@ -6,6 +6,7 @@ const ModelVersion = require("./ModelVersion.js");
 const Category = require("./Category.js");
 const ActivityLog = require("./ActivityLog.js");
 const UploadJob = require("./UploadJob.js");
+const RevokedAuthToken = require("./RevokedAuthToken.js");
 
 // ── Associations ──────────────────────────────────────────────
 
@@ -47,4 +48,5 @@ module.exports = {
   Category,
   ActivityLog,
   UploadJob,
+  RevokedAuthToken,
 };
