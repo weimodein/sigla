@@ -64,6 +64,7 @@ const Onboarding = () => {
   // invent a new name. Changing it stays optional.
   const [username, setUsername] = useState(user?.username || "");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
   const [credentialErrors, setCredentialErrors] = useState({});
   const [credLoading, setCredLoading] = useState(false);
@@ -88,9 +89,12 @@ const Onboarding = () => {
     }, 1000);
   };
 
-  useEffect(() => () => {
-    if (cooldownRef.current) clearInterval(cooldownRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    },
+    [],
+  );
 
   if (loading) {
     return (
@@ -126,12 +130,16 @@ const Onboarding = () => {
     setEmailLoading(true);
     try {
       await requestEmailCode(newEmail);
-      toast.success(`Verification code sent to ${newEmail}. Valid for 5 minutes.`);
+      toast.success(
+        `Verification code sent to ${newEmail}. Valid for 5 minutes.`,
+      );
       setEmailPhase("verify");
       setCodeError("");
       startCooldown();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to send verification code");
+      toast.error(
+        err.response?.data?.message || "Failed to send verification code",
+      );
     } finally {
       setEmailLoading(false);
     }
@@ -151,15 +159,20 @@ const Onboarding = () => {
     setCodeError("");
     const digits = rawValue.replace(/\D/g, "");
     if (!digits) {
-      setEmailCode((current) => current.map((digit, i) => (i === index ? "" : digit)));
+      setEmailCode((current) =>
+        current.map((digit, i) => (i === index ? "" : digit)),
+      );
       return;
     }
 
     setEmailCode((current) => {
       const next = [...current];
-      digits.slice(0, 6 - index).split("").forEach((digit, offset) => {
-        next[index + offset] = digit;
-      });
+      digits
+        .slice(0, 6 - index)
+        .split("")
+        .forEach((digit, offset) => {
+          next[index + offset] = digit;
+        });
       return next;
     });
     otpRefs.current[Math.min(index + digits.length, 5)]?.focus();
@@ -180,7 +193,10 @@ const Onboarding = () => {
   };
 
   const handleOtpPaste = (event) => {
-    const digits = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const digits = event.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
     if (!digits) return;
     event.preventDefault();
     setCodeError("");
@@ -201,7 +217,9 @@ const Onboarding = () => {
       toast.success("Email linked. Now update your credentials.");
       setStep(2);
     } catch (err) {
-      setCodeError(err.response?.data?.message || "The code is invalid or has expired.");
+      setCodeError(
+        err.response?.data?.message || "The code is invalid or has expired.",
+      );
     } finally {
       setEmailLoading(false);
     }
@@ -213,7 +231,13 @@ const Onboarding = () => {
       errors.username = "Enter a username.";
     }
     if (!isValidPassword(password)) {
-      errors.password = "Use at least 8 characters, including a letter and a number.";
+      errors.password =
+        "Use at least 8 characters, including a letter and a number.";
+    }
+    if (!confirmPassword) {
+      errors.confirmPassword = "Confirm your password.";
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
     }
     setCredentialErrors(errors);
     if (Object.keys(errors).length) {
@@ -233,25 +257,29 @@ const Onboarding = () => {
   };
 
   const inputCls = "onboarding-input";
-  const screen = step === 1
-    ? emailPhase === "enter"
-      ? {
-          eyebrow: "Step 1 of 2",
-          title: "Add your email address",
-          description: "We’ll use this address for account recovery and important security notices.",
-        }
+  const screen =
+    step === 1
+      ? emailPhase === "enter"
+        ? {
+            eyebrow: "Step 1 of 2",
+            title: "Add your email address",
+            description:
+              "We’ll use this address for account recovery and important security notices.",
+          }
+        : {
+            eyebrow: "Step 1 of 2",
+            title: "Check your email",
+            description: `Enter the six-digit code we sent to ${newEmail}.`,
+          }
       : {
-          eyebrow: "Step 1 of 2",
-          title: "Check your email",
-          description: `Enter the six-digit code we sent to ${newEmail}.`,
-        }
-    : {
-        eyebrow: emailStepNeeded ? "Step 2 of 2" : "Account security",
-        title: emailStepNeeded ? "Create your sign-in details" : "Create a new password",
-        description: emailStepNeeded
-          ? "Choose the username and password you’ll use to access SIGLA."
-          : "Choose a secure password to regain access to your account.",
-      };
+          eyebrow: emailStepNeeded ? "Step 2 of 2" : "Account security",
+          title: emailStepNeeded
+            ? "Create your sign-in details"
+            : "Create a new password",
+          description: emailStepNeeded
+            ? "Choose the username and password you’ll use to access SIGLA."
+            : "Choose a secure password to regain access to your account.",
+        };
 
   return (
     <main className="onboarding-page">
@@ -259,7 +287,10 @@ const Onboarding = () => {
         {/* Header */}
         <header className="onboarding-header">
           <p className="onboarding-step-label">{screen.eyebrow}</p>
-          <h1 id="onboarding-title" className="page-title">
+          <h1
+            id="onboarding-title"
+            className={`page-title ${screen.title === "Create a new password" ? "onboarding-title-one-line" : ""}`}
+          >
             {screen.title}
           </h1>
           <p className="page-subtitle">{screen.description}</p>
@@ -294,12 +325,18 @@ const Onboarding = () => {
                   enterKeyHint="send"
                   className={inputCls}
                   aria-invalid={emailError ? "true" : undefined}
-                  aria-describedby={emailError ? "onboarding-email-error" : undefined}
+                  aria-describedby={
+                    emailError ? "onboarding-email-error" : undefined
+                  }
                   autoFocus
                   required
                 />
                 {emailError && (
-                  <p id="onboarding-email-error" className="onboarding-error" role="alert">
+                  <p
+                    id="onboarding-email-error"
+                    className="onboarding-error"
+                    role="alert"
+                  >
                     {emailError}
                   </p>
                 )}
@@ -330,10 +367,14 @@ const Onboarding = () => {
                     {emailCode.map((digit, index) => (
                       <input
                         key={index}
-                        ref={(node) => { otpRefs.current[index] = node; }}
+                        ref={(node) => {
+                          otpRefs.current[index] = node;
+                        }}
                         type="text"
                         value={digit}
-                        onChange={(event) => updateOtp(index, event.target.value)}
+                        onChange={(event) =>
+                          updateOtp(index, event.target.value)
+                        }
                         onKeyDown={(event) => handleOtpKeyDown(index, event)}
                         inputMode="numeric"
                         pattern="[0-9]"
@@ -347,7 +388,11 @@ const Onboarding = () => {
                   </div>
                 </fieldset>
                 {codeError && (
-                  <p id="onboarding-code-error" className="onboarding-error" role="alert">
+                  <p
+                    id="onboarding-code-error"
+                    className="onboarding-error"
+                    role="alert"
+                  >
                     {codeError}
                   </p>
                 )}
@@ -403,16 +448,27 @@ const Onboarding = () => {
                 value={username}
                 onChange={(e) => {
                   setUsername(e.target.value);
-                  setCredentialErrors((current) => ({ ...current, username: "" }));
+                  setCredentialErrors((current) => ({
+                    ...current,
+                    username: "",
+                  }));
                 }}
                 autoComplete="username"
                 className={inputCls}
                 aria-invalid={credentialErrors.username ? "true" : undefined}
-                aria-describedby={credentialErrors.username ? "onboarding-username-error" : undefined}
+                aria-describedby={
+                  credentialErrors.username
+                    ? "onboarding-username-error"
+                    : undefined
+                }
                 required
               />
               {credentialErrors.username && (
-                <p id="onboarding-username-error" className="onboarding-error" role="alert">
+                <p
+                  id="onboarding-username-error"
+                  className="onboarding-error"
+                  role="alert"
+                >
                   {credentialErrors.username}
                 </p>
               )}
@@ -423,9 +479,7 @@ const Onboarding = () => {
               )}
             </div>
             <div className="onboarding-field">
-              <label htmlFor="onboarding-password">
-                Create a password
-              </label>
+              <label htmlFor="onboarding-password">Create a password</label>
               <input
                 id="onboarding-password"
                 name="new-password"
@@ -433,7 +487,11 @@ const Onboarding = () => {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  setCredentialErrors((current) => ({ ...current, password: "" }));
+                  setCredentialErrors((current) => ({
+                    ...current,
+                    password: "",
+                    confirmPassword: "",
+                  }));
                 }}
                 autoComplete="new-password"
                 className={inputCls}
@@ -449,8 +507,50 @@ const Onboarding = () => {
                 At least 8 characters, including a letter and a number.
               </p>
               {credentialErrors.password && (
-                <p id="onboarding-password-error" className="onboarding-error" role="alert">
+                <p
+                  id="onboarding-password-error"
+                  className="onboarding-error"
+                  role="alert"
+                >
                   {credentialErrors.password}
+                </p>
+              )}
+            </div>
+            <div className="onboarding-field">
+              <label htmlFor="onboarding-confirm-password">
+                Confirm password
+              </label>
+              <input
+                id="onboarding-confirm-password"
+                name="confirm-password"
+                type={showPasswords ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setCredentialErrors((current) => ({
+                    ...current,
+                    confirmPassword: "",
+                  }));
+                }}
+                autoComplete="new-password"
+                className={inputCls}
+                aria-invalid={
+                  credentialErrors.confirmPassword ? "true" : undefined
+                }
+                aria-describedby={
+                  credentialErrors.confirmPassword
+                    ? "onboarding-confirm-password-error"
+                    : undefined
+                }
+                required
+              />
+              {credentialErrors.confirmPassword && (
+                <p
+                  id="onboarding-confirm-password-error"
+                  className="onboarding-error"
+                  role="alert"
+                >
+                  {credentialErrors.confirmPassword}
                 </p>
               )}
             </div>
@@ -495,7 +595,10 @@ const Onboarding = () => {
           onEnter={sendEmailCode}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setConfirmEmail(false)}>
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmEmail(false)}
+              >
                 Go back and edit
               </Button>
               <Button onClick={sendEmailCode} loading={emailLoading}>
@@ -509,9 +612,7 @@ const Onboarding = () => {
               <AlertTriangle size={18} />
             </span>
             <div>
-              <p>
-              The verification code will be sent to:
-              </p>
+              <p>The verification code will be sent to:</p>
               <strong>{newEmail}</strong>
               <small>
                 Check for spelling errors. You’ll need to wait one minute before

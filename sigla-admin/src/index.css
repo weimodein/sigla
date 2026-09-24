@@ -1317,3 +1317,9 @@ body {
   .onboarding-otp input { height: 44px; font-size: 1.1rem; }
 }
 
+.onboarding-header .page-title.onboarding-title-one-line {
+  max-width: none;
+  font-size: clamp(1.4rem, 6vw, 1.75rem);
+  white-space: nowrap;
+}
+
