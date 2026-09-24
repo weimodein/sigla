@@ -279,6 +279,7 @@ const ManageAdministrators = () => {
   const [resetModal, setResetModal] = useState(null);
   const [resetForm, setResetForm] = useState({ password: "", confirm: "" });
   const [confirmReset, setConfirmReset] = useState(false);
+  const [showResetPasswords, setShowResetPasswords] = useState(false);
 
   // ── Fetch data ──────────────────────────────────────────────
   // These four cards are the module's headline content, so a failure has to be
@@ -502,6 +503,7 @@ const ManageAdministrators = () => {
   const handleResetOpen = (admin) => {
     setResetForm({ password: "", confirm: "" });
     setConfirmReset(false);
+    setShowResetPasswords(false);
     setResetModal(admin);
   };
 
@@ -537,6 +539,7 @@ const ManageAdministrators = () => {
       );
       setConfirmReset(false);
       setResetModal(null);
+      setShowResetPasswords(false);
       setResetForm({ password: "", confirm: "" });
       if (data?.has_email && data?.notified === false) {
         toast.warning(
@@ -1114,11 +1117,20 @@ const ManageAdministrators = () => {
       {resetModal && !confirmReset && (
         <AppModal
           title="Reset Password"
-          onClose={() => setResetModal(null)}
+          onClose={() => {
+            setShowResetPasswords(false);
+            setResetModal(null);
+          }}
           onEnter={() => { if (!actionLoading) handleResetSubmit(); }}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setResetModal(null)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowResetPasswords(false);
+                  setResetModal(null);
+                }}
+              >
                 Cancel
               </Button>
               <Button onClick={handleResetSubmit} loading={actionLoading}>
@@ -1128,12 +1140,6 @@ const ManageAdministrators = () => {
           }
         >
           <div className="space-y-3">
-            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
-              Set a temporary password for{" "}
-              <strong style={{ color: C.text }}>{resetModal.username}</strong>.
-              Give it to them directly — they will be asked to choose their own
-              username and password the next time they sign in.
-            </p>
             <div>
               <label
                 className="block text-xs font-medium mb-1"
@@ -1142,7 +1148,7 @@ const ManageAdministrators = () => {
                 Temporary Password
               </label>
               <input
-                type="password"
+                type={showResetPasswords ? "text" : "password"}
                 maxLength={PASSWORD_MAX}
                 autoComplete="new-password"
                 value={resetForm.password}
@@ -1168,7 +1174,7 @@ const ManageAdministrators = () => {
                 Confirm Temporary Password
               </label>
               <input
-                type="password"
+                type={showResetPasswords ? "text" : "password"}
                 maxLength={PASSWORD_MAX}
                 autoComplete="new-password"
                 value={resetForm.confirm}
@@ -1183,6 +1189,17 @@ const ManageAdministrators = () => {
                 }}
               />
             </div>
+            <label className="inline-flex w-fit cursor-pointer items-center gap-2 text-sm font-medium text-gray-600">
+              <input
+                type="checkbox"
+                checked={showResetPasswords}
+                onChange={(event) =>
+                  setShowResetPasswords(event.target.checked)
+                }
+                className="h-4 w-4 accent-blue-900"
+              />
+              Show passwords
+            </label>
           </div>
         </AppModal>
       )}
