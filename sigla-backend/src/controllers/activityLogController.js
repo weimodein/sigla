@@ -1,5 +1,6 @@
 const { Op } = require("sequelize");
 const { ActivityLog, Administrator } = require("../models/index.js");
+const { maskEmailAddresses } = require("../utils/maskEmailAddresses.js");
 
 // ── GET /api/activity-logs ────────────────────────────────────
 // Read-only, system-wide audit trail. Supports filtering by action,
@@ -65,11 +66,16 @@ const getActivityLogs = async (req, res) => {
       offset: parseInt(offset),
     });
 
+    const maskedRows = rows.map((row) => {
+      const log = row.toJSON();
+      return { ...log, details: maskEmailAddresses(log.details) };
+    });
+
     return res.status(200).json({
       total: count,
       page: parseInt(page),
       totalPages: Math.ceil(count / limit),
-      logs: rows,
+      logs: maskedRows,
     });
   } catch (err) {
     console.error("Get activity logs error:", err);
