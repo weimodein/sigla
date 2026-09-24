@@ -1085,14 +1085,128 @@ body {
 }
 
 /* ── Toast ──
-   Entrance was already animated; the exit was not, so toasts slid in and then
-   vanished in a single frame. Collapsing max-height/margin alongside the fade
-   keeps the toasts below from teleporting upward as one leaves. */
+   Compact, capped notifications stay above dialogs without blocking the page.
+   Pointer events pass through the empty viewport area; each card opts back in. */
+.toast-viewport {
+  position: fixed;
+  z-index: 2100;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+  display: flex;
+  width: min(400px, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  pointer-events: none;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.toast-card {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 0.75rem;
+  border: 1px solid var(--card-border);
+  border-left-width: 3px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 0.875rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14),
+              0 2px 8px rgba(15, 23, 42, 0.06);
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.toast-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+}
+
+.toast-content {
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.toast-title {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--type-meta);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.toast-message {
+  margin: 0.1875rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: var(--type-meta);
+  line-height: 1.45;
+}
+
+.toast-dismiss {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard);
+}
+
+.toast-dismiss:hover {
+  background: #f3f4f6;
+  color: var(--text);
+}
+
+.toast-dismiss:focus-visible {
+  outline: 2px solid var(--brand-secondary);
+  outline-offset: 2px;
+}
+
+.toast-card[data-toast-type="success"] { border-left-color: #10b981; }
+.toast-card[data-toast-type="success"] .toast-icon { background: #ecfdf5; color: #059669; }
+.toast-card[data-toast-type="error"] { border-left-color: #ef4444; }
+.toast-card[data-toast-type="error"] .toast-icon { background: #fef2f2; color: #dc2626; }
+.toast-card[data-toast-type="warning"] { border-left-color: #f59e0b; }
+.toast-card[data-toast-type="warning"] .toast-icon { background: #fffbeb; color: #d97706; }
+.toast-card[data-toast-type="info"] { border-left-color: #3b82f6; }
+.toast-card[data-toast-type="info"] .toast-icon { background: #eff6ff; color: #2563eb; }
+
+@media (max-width: 480px) {
+  .toast-viewport {
+    top: max(0.75rem, env(safe-area-inset-top));
+    right: 0.75rem;
+    width: calc(100vw - 1.5rem);
+    max-height: calc(100dvh - 1.5rem);
+  }
+
+  .toast-card {
+    grid-template-columns: 32px minmax(0, 1fr) 28px;
+    gap: 0.625rem;
+    padding: 0.75rem;
+  }
+
+  .toast-icon { width: 32px; height: 32px; }
+}
+
+/* Collapsing height and cancelling the stack gap prevents surrounding toasts
+   from jumping when one leaves. */
 @keyframes toast-out {
   from {
     opacity: 1;
     transform: translate3d(0, 0, 0);
-    max-height: 200px;
+    max-height: 320px;
   }
   to {
     opacity: 0;
