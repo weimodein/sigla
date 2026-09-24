@@ -4,8 +4,18 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext.jsx";
 import Button from "../../components/Button.jsx";
 import { useModalKeys } from "../../components/useModalKeys.js";
-import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
+import {
+  validateEmail,
+  isKnownDomain,
+  normalizeEmail,
+} from "../../utils/emailValidation.js";
 import { setAuthMessage } from "../../utils/authMessage.js";
+import {
+  PASSWORD_HELP,
+  PASSWORD_MAX,
+  validatePassword,
+  validatePasswordConfirmation,
+} from "../../utils/credentialValidation.js";
 import {
   Mail,
   Pencil,
@@ -27,10 +37,6 @@ import {
   verifyEmailCode,
 } from "../../api/authApi.js";
 import api from "../../api/authApi.js";
-
-// Password rule (scope §21): at least 8 chars, one letter, one number.
-const isValidPassword = (pw) =>
-  pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
 
 // Mask an email for display, e.g. "jhoren@gmail.com" -> "jh***@gmail.com".
 const maskEmail = (email) => {
@@ -179,11 +185,13 @@ const AdministratorAccount = () => {
   };
 
   const sendEmailCode = async () => {
+    const normalizedEmail = normalizeEmail(newEmail);
     setConfirmEmail(false);
     setEmailLoading(true);
     try {
-      await requestEmailCode(newEmail);
-      toast.success(`Verification code sent to ${newEmail}. Valid for 5 minutes.`);
+      await requestEmailCode(normalizedEmail);
+      setNewEmail(normalizedEmail);
+      toast.success(`Verification code sent to ${normalizedEmail}. Valid for 5 minutes.`);
       setEmailStep("verify");
       startEmailCooldown();
     } catch (err) {
@@ -307,12 +315,14 @@ const AdministratorAccount = () => {
   };
 
   const handleChangePassword = async () => {
-    if (newPass !== confirm) {
-      toast.error("Passwords do not match");
+    const passwordError = validatePassword(newPass);
+    if (passwordError) {
+      toast.error(passwordError);
       return;
     }
-    if (!isValidPassword(newPass)) {
-      toast.error("Password must be at least 8 characters and include a letter and a number");
+    const confirmationError = validatePasswordConfirmation(newPass, confirm);
+    if (confirmationError) {
+      toast.error(confirmationError);
       return;
     }
     setPassLoading(true);
@@ -598,6 +608,9 @@ const AdministratorAccount = () => {
                           id="new-email"
                           type="email"
                           autoComplete="email"
+                          autoCapitalize="none"
+                          spellCheck="false"
+                          maxLength={100}
                           value={newEmail}
                           onChange={(event) => setNewEmail(event.target.value)}
                           placeholder="you@example.com"
@@ -840,6 +853,7 @@ const AdministratorAccount = () => {
                           id="new-password"
                           type="password"
                           autoComplete="new-password"
+                          maxLength={PASSWORD_MAX}
                           value={newPass}
                           onChange={(event) => setNewPass(event.target.value)}
                           className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
@@ -853,12 +867,13 @@ const AdministratorAccount = () => {
                           id="confirm-password"
                           type="password"
                           autoComplete="new-password"
+                          maxLength={PASSWORD_MAX}
                           value={confirm}
                           onChange={(event) => setConfirm(event.target.value)}
                           className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
                         />
                         <p className="small-text mt-1.5 text-gray-400">
-                          Use at least 8 characters with one letter and one number.
+                          {PASSWORD_HELP}
                         </p>
                       </div>
                       <div className="flex justify-end gap-2">

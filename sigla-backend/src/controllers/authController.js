@@ -11,7 +11,12 @@ const {
   sendPasswordChangedNotice,
 } = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
-const { validatePassword } = require("../utils/validators.js");
+const {
+  validateEmail,
+  validatePassword,
+  isPasswordWithinBcryptLimit,
+  normalizeEmail,
+} = require("../utils/validators.js");
 require("dotenv").config();
 
 // ── Helper: generate 6-digit code ────────────────────────────
@@ -101,14 +106,24 @@ const resendCode = async (req, res) => {
   try {
     const { email, type } = req.body;
 
-    if (!email || !type) {
-      return res.status(400).json({ message: "Email and type are required" });
+    const emailError = validateEmail(email);
+    if (emailError) {
+      return res.status(400).json({ message: emailError });
+    }
+    if (type !== "password_reset") {
+      return res.status(400).json({ message: "Invalid verification type" });
+    }
+    const normalizedEmail = normalizeEmail(email);
+
+    const user = await Administrator.findOne({ where: { email: normalizedEmail } });
+    if (!user) {
+      return res.status(200).json({ message: "If that email exists, a code has been sent" });
     }
 
     // Check 1-minute cooldown
     const recent = await EmailVerification.findOne({
       where: {
-        email,
+        email: normalizedEmail,
         type,
         last_sent_at: { [Op.gt]: new Date(Date.now() - 60 * 1000) },
       },
@@ -123,7 +138,7 @@ const resendCode = async (req, res) => {
     // Invalidate previous codes
     await EmailVerification.update(
       { session_invalidated: true },
-      { where: { email, type, is_used: false } },
+      { where: { email: normalizedEmail, type, is_used: false } },
     );
 
     // Send fresh code — valid for 5 minutes
@@ -131,7 +146,8 @@ const resendCode = async (req, res) => {
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
     await EmailVerification.create({
-      email,
+      administrator_id: user.id,
+      email: normalizedEmail,
       code,
       type,
       expires_at: expires,
@@ -142,8 +158,8 @@ const resendCode = async (req, res) => {
 
     res.status(200).json({ message: "New verification code sent" });
 
-    sendVerificationCode(email, code, type).catch((err) =>
-      console.error("Failed to resend code to", email, err)
+    sendVerificationCode(normalizedEmail, code, type).catch((err) =>
+      console.error("Failed to resend code to", normalizedEmail, err)
     );
   } catch (err) {
     console.error("Resend code error:", err);
@@ -161,15 +177,29 @@ const login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
-    if (!identifier || !password) {
+    if (
+      typeof identifier !== "string" ||
+      !identifier.trim() ||
+      typeof password !== "string" ||
+      !password
+    ) {
       return res
         .status(400)
         .json({ message: "Email/username and password are required" });
     }
+    const normalizedIdentifier = identifier.includes("@")
+      ? normalizeEmail(identifier)
+      : identifier.trim();
+
+    // bcrypt ignores bytes after its 72-byte input boundary. Reject oversized
+    // login inputs so truncated candidates can never authenticate.
+    if (!isPasswordWithinBcryptLimit(password)) {
+      return res.status(401).json({ message: INVALID_CREDENTIALS });
+    }
 
     const user = await Administrator.findOne({
       where: {
-        [Op.or]: [{ email: identifier }, { username: identifier }],
+        [Op.or]: [{ email: normalizedIdentifier }, { username: normalizedIdentifier }],
       },
     });
 
@@ -286,12 +316,13 @@ const login = async (req, res) => {
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+    const emailError = validateEmail(email);
+    if (emailError) {
+      return res.status(400).json({ message: emailError });
     }
+    const normalizedEmail = normalizeEmail(email);
 
-    const user = await Administrator.findOne({ where: { email } });
+    const user = await Administrator.findOne({ where: { email: normalizedEmail } });
     if (!user) {
       // Don't reveal if email exists
       return res
@@ -302,7 +333,7 @@ const forgotPassword = async (req, res) => {
     // Check 1-minute resend cooldown
     const recent = await EmailVerification.findOne({
       where: {
-        email,
+        email: normalizedEmail,
         type: "password_reset",
         last_sent_at: { [Op.gt]: new Date(Date.now() - 60 * 1000) },
       },
@@ -317,7 +348,7 @@ const forgotPassword = async (req, res) => {
     // Invalidate previous reset codes
     await EmailVerification.update(
       { session_invalidated: true },
-      { where: { email, type: "password_reset", is_used: false } },
+      { where: { email: normalizedEmail, type: "password_reset", is_used: false } },
     );
 
     // Send fresh code — valid for 5 minutes
@@ -326,7 +357,7 @@ const forgotPassword = async (req, res) => {
 
     await EmailVerification.create({
       administrator_id: user.id,
-      email,
+      email: normalizedEmail,
       code,
       type: "password_reset",
       expires_at: expires,
@@ -337,8 +368,8 @@ const forgotPassword = async (req, res) => {
 
     res.status(200).json({ message: "If that email exists, a code has been sent" });
 
-    sendVerificationCode(email, code, "password_reset").catch((err) =>
-      console.error("Failed to send password reset code to", email, err)
+    sendVerificationCode(normalizedEmail, code, "password_reset").catch((err) =>
+      console.error("Failed to send password reset code to", normalizedEmail, err)
     );
   } catch (err) {
     console.error("Forgot password error:", err);
@@ -351,11 +382,16 @@ const verifyResetCode = async (req, res) => {
   try {
     const { email, code } = req.body;
 
-    if (!email || !code) {
-      return res.status(400).json({ message: "Email and code are required" });
+    const emailError = validateEmail(email);
+    if (emailError) {
+      return res.status(400).json({ message: emailError });
     }
+    if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ message: "Enter a valid 6-digit verification code" });
+    }
+    const normalizedEmail = normalizeEmail(email);
 
-    const record = await getLatestVerification(email, "password_reset");
+    const record = await getLatestVerification(normalizedEmail, "password_reset");
 
     if (!record) {
       return res
@@ -410,11 +446,11 @@ const resetPassword = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required" });
+    const emailError = validateEmail(email);
+    if (emailError) {
+      return res.status(400).json({ message: emailError });
     }
+    const normalizedEmail = normalizeEmail(email);
 
     // Enforce the password rule (scope §13/§21): ≥8 chars, ≥1 letter, ≥1 number.
     const passwordError = validatePassword(password);
@@ -436,7 +472,7 @@ const resetPassword = async (req, res) => {
     // consumed below the moment it is spent.
     const verified = await EmailVerification.findOne({
       where: {
-        email,
+        email: normalizedEmail,
         type: "password_reset",
         is_used: true,
         session_invalidated: false,
@@ -458,7 +494,7 @@ const resetPassword = async (req, res) => {
 
     // Load the row rather than bulk-updating by email: the audit entry needs an
     // administrator_id, and the notice needs a username.
-    const user = await Administrator.findOne({ where: { email } });
+    const user = await Administrator.findOne({ where: { email: normalizedEmail } });
     if (!user) {
       // A verified reset record exists but the account is gone. Respond exactly
       // as the success case does — this must not become an enumeration oracle.

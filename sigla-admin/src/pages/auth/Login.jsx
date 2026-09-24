@@ -14,7 +14,7 @@ const C = {
 };
 
 const FloatingInput = ({
-  id, type, value, onChange, label, autoComplete, icon, delay,
+  id, type, value, onChange, label, autoComplete, icon, delay, error, maxLength,
 }) => (
   <div
     className="auth-field-in"
@@ -23,11 +23,19 @@ const FloatingInput = ({
     <input
       id={id} type={type} value={value} onChange={onChange}
       required autoComplete={autoComplete}
+      maxLength={maxLength}
+      aria-invalid={error ? "true" : undefined}
+      aria-describedby={error ? `${id}-error` : undefined}
       className="sigla-input" style={S.input} placeholder=" "
     />
     <label style={S.label}>{label}</label>
     {icon && <span style={S.inputIcon}>{icon}</span>}
     <span className="sigla-underline" style={S.underline} />
+    {error && (
+      <p id={`${id}-error`} role="alert" style={S.fieldError}>
+        {error}
+      </p>
+    )}
   </div>
 );
 
@@ -74,6 +82,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showPass, setShowPass] = useState(false);
   // Separate from `loading` on purpose — see handleLogin.
   const [succeeded, setSucceeded] = useState(false);
@@ -124,9 +133,18 @@ const Login = () => {
   const handleLogin = useCallback(async (e) => {
     e.preventDefault();
     if (loading || succeeded) return;
+    const normalizedIdentifier = identifier.trim();
+    const errors = {};
+    if (!normalizedIdentifier) errors.identifier = "Enter your username or email.";
+    if (!password) errors.password = "Enter your password.";
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
     setLoading(true);
     try {
-      const data = await login(identifier, password);
+      const data = await login(normalizedIdentifier, password);
       const admin = data?.administrator;
 
       // NOTE: `loading` is deliberately NOT reset here, and there is no finally
@@ -187,7 +205,7 @@ const Login = () => {
 
         {/* Right panel */}
         <div className="sigla-right-panel" style={S.rightPanel}>
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} noValidate>
             {/* Desktop-only twin of .sigla-band-heading above. */}
             <h2
               className="auth-field-in sigla-form-heading"
@@ -199,14 +217,23 @@ const Login = () => {
             <div style={S.fields}>
               <FloatingInput
                 id="identifier" type="text" value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => {
+                  setIdentifier(e.target.value);
+                  setFieldErrors((current) => ({ ...current, identifier: "" }));
+                }}
                 label="Username or Email" autoComplete="username"
+                error={fieldErrors.identifier}
+                maxLength={100}
                 delay="180ms"
               />
               <FloatingInput
                 id="password" type={showPass ? "text" : "password"}
-                value={password} onChange={(e) => setPassword(e.target.value)}
+                value={password} onChange={(e) => {
+                  setPassword(e.target.value);
+                  setFieldErrors((current) => ({ ...current, password: "" }));
+                }}
                 label="Password" autoComplete="current-password"
+                error={fieldErrors.password}
                 icon={<PasswordToggleIcon showPass={showPass} onToggle={() => setShowPass(s => !s)} />}
                 delay="240ms"
               />
@@ -320,6 +347,11 @@ const S = {
     width: "0%",
     background: C.primary,
     transition: "width 0.3s ease",
+  },
+  fieldError: {
+    color: "var(--danger)",
+    fontSize: "var(--type-meta)",
+    margin: "6px 0 0 10px",
   },
   inputIcon: {
     position: "absolute",

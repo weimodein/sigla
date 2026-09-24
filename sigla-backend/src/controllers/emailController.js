@@ -5,7 +5,7 @@ const {
   sendAccountChangeNotice,
 } = require("../utils/mailer.js");
 const { logActivity } = require("../utils/activityLogger.js");
-const { validateEmail } = require("../utils/validators.js");
+const { validateEmail, normalizeEmail } = require("../utils/validators.js");
 
 const TYPE = "email_change";
 const CODE_TTL_MS = 5 * 60 * 1000;   // 5 minutes
@@ -38,9 +38,12 @@ const requestEmailCode = async (req, res) => {
     if (emailError) {
       return res.status(400).json({ message: emailError });
     }
+    const normalizedEmail = normalizeEmail(email);
 
     // Reject if the email is already linked to a different account.
-    const existing = await Administrator.findOne({ where: { email } });
+    const existing = await Administrator.findOne({
+      where: { email: normalizedEmail },
+    });
     if (existing && existing.id !== req.user.id) {
       return res.status(409).json({ message: "Email already in use" });
     }
@@ -53,7 +56,7 @@ const requestEmailCode = async (req, res) => {
     // 1-minute resend cooldown
     const recent = await EmailVerification.findOne({
       where: {
-        email,
+        email: normalizedEmail,
         type: TYPE,
         last_sent_at: { [Op.gt]: new Date(Date.now() - RESEND_COOLDOWN_MS) },
       },
@@ -68,13 +71,13 @@ const requestEmailCode = async (req, res) => {
     // Invalidate previous unused codes for this email
     await EmailVerification.update(
       { session_invalidated: true },
-      { where: { email, type: TYPE, is_used: false } },
+      { where: { email: normalizedEmail, type: TYPE, is_used: false } },
     );
 
     const code = generateCode();
     await EmailVerification.create({
       administrator_id: req.user.id,
-      email,
+      email: normalizedEmail,
       code,
       type: TYPE,
       expires_at: new Date(Date.now() + CODE_TTL_MS),
@@ -83,10 +86,13 @@ const requestEmailCode = async (req, res) => {
       last_sent_at: new Date(),
     });
 
-    res.status(200).json({ message: "Verification code sent to email", email });
+    res.status(200).json({
+      message: "Verification code sent to email",
+      email: normalizedEmail,
+    });
 
-    sendVerificationCode(email, code, TYPE).catch((err) =>
-      console.error("Failed to send email-change code to", email, err.message),
+    sendVerificationCode(normalizedEmail, code, TYPE).catch((err) =>
+      console.error("Failed to send email-change code to", normalizedEmail, err.message),
     );
   } catch (err) {
     console.error("Request email code error:", err);
@@ -100,11 +106,16 @@ const verifyEmailCode = async (req, res) => {
   try {
     const { email, code } = req.body;
 
-    if (!email || !code) {
-      return res.status(400).json({ message: "Email and code are required" });
+    const emailError = validateEmail(email);
+    if (emailError) {
+      return res.status(400).json({ message: emailError });
     }
+    if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ message: "Enter a valid 6-digit verification code" });
+    }
+    const normalizedEmail = normalizeEmail(email);
 
-    const record = await getLatestVerification(email);
+    const record = await getLatestVerification(normalizedEmail);
     if (!record) {
       return res
         .status(400)
@@ -136,7 +147,9 @@ const verifyEmailCode = async (req, res) => {
     }
 
     // Correct — re-check uniqueness at commit time, then link the email.
-    const taken = await Administrator.findOne({ where: { email } });
+    const taken = await Administrator.findOne({
+      where: { email: normalizedEmail },
+    });
     if (taken && taken.id !== req.user.id) {
       return res.status(409).json({ message: "Email already in use" });
     }
@@ -149,7 +162,10 @@ const verifyEmailCode = async (req, res) => {
     const previousEmail = account ? account.email : null;
 
     await record.update({ is_used: true });
-    await Administrator.update({ email }, { where: { id: req.user.id } });
+    await Administrator.update(
+      { email: normalizedEmail },
+      { where: { id: req.user.id } },
+    );
 
     await logActivity({
       administrator_id: req.user.id,
@@ -157,8 +173,8 @@ const verifyEmailCode = async (req, res) => {
       target_type: "administrator",
       target_id: req.user.id,
       details: previousEmail
-        ? `Changed own email address (verified): "${previousEmail}" → "${email}"`
-        : `Linked own email address (verified): "${email}"`,
+        ? `Changed own email address (verified): "${previousEmail}" → "${normalizedEmail}"`
+        : `Linked own email address (verified): "${normalizedEmail}"`,
     });
 
     // Tell BOTH addresses. Without the notice to the old one, someone who
@@ -169,13 +185,13 @@ const verifyEmailCode = async (req, res) => {
     // Non-fatal: the address is already changed, so a mail outage must not
     // report the verification as failed.
     let notified = true;
-    const targets = [...new Set([previousEmail, email].filter(Boolean))];
+    const targets = [...new Set([previousEmail, normalizedEmail].filter(Boolean))];
     for (const to of targets) {
       try {
         await sendAccountChangeNotice({
           to,
           adminUsername: account ? account.username : "administrator",
-          changes: [{ field: "email", from: previousEmail, to: email }],
+          changes: [{ field: "email", from: previousEmail, to: normalizedEmail }],
           actor: "self",
         });
       } catch (err) {
@@ -186,7 +202,7 @@ const verifyEmailCode = async (req, res) => {
 
     return res.status(200).json({
       message: "Email verified and linked successfully",
-      email,
+      email: normalizedEmail,
       notified,
     });
   } catch (err) {

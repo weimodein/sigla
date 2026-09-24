@@ -10,11 +10,18 @@ import {
   completeSetup,
 } from "../../api/authApi.js";
 import { AlertTriangle, LogOut } from "lucide-react";
-import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
+import {
+  validateEmail,
+  isKnownDomain,
+  normalizeEmail,
+} from "../../utils/emailValidation.js";
 import { setAuthMessage } from "../../utils/authMessage.js";
-
-const isValidPassword = (pw) =>
-  pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
+import {
+  PASSWORD_HELP,
+  PASSWORD_MAX,
+  validatePassword,
+  validatePasswordConfirmation,
+} from "../../utils/credentialValidation.js";
 
 const Onboarding = () => {
   const { user, needsSetup, loading, logout, refreshUser } = useAuth();
@@ -129,12 +136,14 @@ const Onboarding = () => {
 
   const sendEmailCode = async () => {
     if (emailLoading) return;
+    const normalizedEmail = normalizeEmail(newEmail);
     setConfirmEmail(false);
     setEmailLoading(true);
     try {
-      await requestEmailCode(newEmail);
+      await requestEmailCode(normalizedEmail);
+      setNewEmail(normalizedEmail);
       toast.success(
-        `Verification code sent to ${newEmail}. Valid for 5 minutes.`,
+        `Verification code sent to ${normalizedEmail}. Valid for 5 minutes.`,
       );
       setEmailPhase("verify");
       setCodeError("");
@@ -233,15 +242,13 @@ const Onboarding = () => {
     if (!username.trim()) {
       errors.username = "Enter a username.";
     }
-    if (!isValidPassword(password)) {
-      errors.password =
-        "Use at least 8 characters, including a letter and a number.";
-    }
-    if (!confirmPassword) {
-      errors.confirmPassword = "Confirm your password.";
-    } else if (password !== confirmPassword) {
-      errors.confirmPassword = "Passwords do not match.";
-    }
+    const passwordError = validatePassword(password);
+    if (passwordError) errors.password = passwordError;
+    const confirmationError = validatePasswordConfirmation(
+      password,
+      confirmPassword,
+    );
+    if (confirmationError) errors.confirmPassword = confirmationError;
     setCredentialErrors(errors);
     if (Object.keys(errors).length) {
       return;
@@ -354,6 +361,7 @@ const Onboarding = () => {
                   }}
                   autoComplete="email"
                   spellCheck="false"
+                  maxLength={100}
                   enterKeyHint="send"
                   className={inputCls}
                   aria-invalid={emailError ? "true" : undefined}
@@ -526,6 +534,7 @@ const Onboarding = () => {
                   }));
                 }}
                 autoComplete="new-password"
+                maxLength={PASSWORD_MAX}
                 className={inputCls}
                 aria-invalid={credentialErrors.password ? "true" : undefined}
                 aria-describedby={
@@ -536,7 +545,7 @@ const Onboarding = () => {
                 required
               />
               <p id="onboarding-password-hint" className="onboarding-help">
-                At least 8 characters, including a letter and a number.
+                {PASSWORD_HELP}
               </p>
               {credentialErrors.password && (
                 <p
@@ -565,6 +574,7 @@ const Onboarding = () => {
                   }));
                 }}
                 autoComplete="new-password"
+                maxLength={PASSWORD_MAX}
                 className={inputCls}
                 aria-invalid={
                   credentialErrors.confirmPassword ? "true" : undefined

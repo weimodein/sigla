@@ -10,10 +10,17 @@ import {
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { isKnownDomain, validateEmail } from "../../utils/emailValidation.js";
-
-const isValidPassword = (password) =>
-  password.length >= 8 && /[A-Za-z]/.test(password) && /[0-9]/.test(password);
+import {
+  isKnownDomain,
+  normalizeEmail,
+  validateEmail,
+} from "../../utils/emailValidation.js";
+import {
+  PASSWORD_HELP,
+  PASSWORD_MAX,
+  validatePassword,
+  validatePasswordConfirmation,
+} from "../../utils/credentialValidation.js";
 
 const STEP_COPY = {
   forgot: {
@@ -74,7 +81,7 @@ const ForgotPassword = () => {
   }, []);
 
   const sendResetCode = useCallback(async () => {
-    const normalizedEmail = email.trim();
+    const normalizedEmail = normalizeEmail(email);
     setConfirmEmail(false);
     setLoading(true);
     setEmailError("");
@@ -187,14 +194,13 @@ const ForgotPassword = () => {
   const handleReset = async (event) => {
     event.preventDefault();
     const errors = {};
-    if (!isValidPassword(newPassword)) {
-      errors.newPassword = "Use at least 8 characters, including a letter and a number.";
-    }
-    if (!confirmPassword) {
-      errors.confirmPassword = "Confirm your new password.";
-    } else if (newPassword !== confirmPassword) {
-      errors.confirmPassword = "Passwords do not match.";
-    }
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) errors.newPassword = passwordError;
+    const confirmationError = validatePasswordConfirmation(
+      newPassword,
+      confirmPassword,
+    );
+    if (confirmationError) errors.confirmPassword = confirmationError;
     if (Object.keys(errors).length > 0) {
       setPasswordErrors(errors);
       return;
@@ -243,6 +249,7 @@ const ForgotPassword = () => {
                 autoComplete="email"
                 autoCapitalize="none"
                 spellCheck="false"
+                maxLength={100}
                 className="onboarding-input"
                 aria-invalid={emailError ? "true" : undefined}
                 aria-describedby={emailError ? "forgot-email-error" : undefined}
@@ -359,6 +366,7 @@ const ForgotPassword = () => {
                   }));
                 }}
                 autoComplete="new-password"
+                maxLength={PASSWORD_MAX}
                 autoCapitalize="none"
                 spellCheck="false"
                 className="onboarding-input"
@@ -372,7 +380,7 @@ const ForgotPassword = () => {
                 required
               />
               <p id="new-password-help" className="onboarding-help">
-                At least 8 characters, including a letter and a number.
+                {PASSWORD_HELP}
               </p>
               {passwordErrors.newPassword && (
                 <p id="new-password-error" className="onboarding-error" role="alert">
@@ -396,6 +404,7 @@ const ForgotPassword = () => {
                   }));
                 }}
                 autoComplete="new-password"
+                maxLength={PASSWORD_MAX}
                 autoCapitalize="none"
                 spellCheck="false"
                 className="onboarding-input"

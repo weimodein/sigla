@@ -11,17 +11,38 @@
 //                      addresses are legitimate and will not be on this list.
 
 const EMAIL_MAX = 100;
-const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
 const EMAIL_MESSAGE = "Please enter a valid email address";
+const EMAIL_LOCAL_RX = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
+const EMAIL_DOMAIN_LABEL_RX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
+
+export const normalizeEmail = (email) => {
+  if (typeof email !== "string") return "";
+  const value = email.trim();
+  const separator = value.lastIndexOf("@");
+  if (separator < 0) return value;
+  return `${value.slice(0, separator)}@${value.slice(separator + 1).toLowerCase()}`;
+};
 
 // Returns an error string, or null when the address is well formed.
 export const validateEmail = (email) => {
   if (typeof email !== "string" || !email.trim()) return "Email is required";
-  const value = email.trim();
+  const value = normalizeEmail(email);
   if (value.length > EMAIL_MAX) return `Email must be at most ${EMAIL_MAX} characters`;
-  if (!EMAIL_RX.test(value)) return EMAIL_MESSAGE;
-  if (value.includes("..")) return EMAIL_MESSAGE;
-  if (/^\.|\.$|\.@|@\./.test(value)) return EMAIL_MESSAGE;
+  const parts = value.split("@");
+  if (parts.length !== 2) return EMAIL_MESSAGE;
+  const [local, domain] = parts;
+  if (!local || local.length > 64 || !EMAIL_LOCAL_RX.test(local)) return EMAIL_MESSAGE;
+  if (local.startsWith(".") || local.endsWith(".") || local.includes("..")) {
+    return EMAIL_MESSAGE;
+  }
+  if (!domain || domain.length > 253 || domain.includes("..")) return EMAIL_MESSAGE;
+  const labels = domain.split(".");
+  if (labels.length < 2 || !/^[A-Za-z]{2,}$/.test(labels.at(-1))) {
+    return EMAIL_MESSAGE;
+  }
+  if (labels.some((label) => !EMAIL_DOMAIN_LABEL_RX.test(label))) {
+    return EMAIL_MESSAGE;
+  }
   return null;
 };
 

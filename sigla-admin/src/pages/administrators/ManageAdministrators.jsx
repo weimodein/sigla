@@ -17,6 +17,13 @@ import {
   resetAdministratorPassword,
 } from "../../api/administratorApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { normalizeEmail, validateEmail } from "../../utils/emailValidation.js";
+import {
+  PASSWORD_HELP,
+  PASSWORD_MAX,
+  validatePassword,
+  validatePasswordConfirmation,
+} from "../../utils/credentialValidation.js";
 import {
   Users,
   UserX,
@@ -226,10 +233,6 @@ const ActionBtn = ({ label, bg, onClick, disabled, title }) => (
   </button>
 );
 
-// ── Password rule: ≥8 chars, ≥1 letter, ≥1 number ─────────────
-const isValidPassword = (pw) =>
-  pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
-
 // ════════════════════════════════════════════════════════════
 // ── Main Component ─────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
@@ -370,18 +373,21 @@ const ManageAdministrators = () => {
   // ── Create Administrator ─────────────────────────────────────
   // Step 1: validate the form, then open a confirmation dialog.
   const handleCreateAdmin = () => {
-    if (!createForm.username.trim() || !createForm.password.trim()) {
+    if (!createForm.username.trim() || !createForm.password) {
       showError("Username and password are required");
       return;
     }
-    if (!isValidPassword(createForm.password)) {
-      showError(
-        "Password must be at least 8 characters and include a letter and a number",
-      );
+    const passwordError = validatePassword(createForm.password);
+    if (passwordError) {
+      showError(passwordError);
       return;
     }
-    if (createForm.password !== createForm.confirmPassword) {
-      showError("Passwords do not match");
+    const confirmationError = validatePasswordConfirmation(
+      createForm.password,
+      createForm.confirmPassword,
+    );
+    if (confirmationError) {
+      showError(confirmationError);
       return;
     }
     setConfirmCreate(true);
@@ -467,11 +473,10 @@ const ManageAdministrators = () => {
       showError("Username is required");
       return;
     }
-    const email = editForm.email.trim();
-    // Email is optional — an account may have none linked yet. Shape is checked
-    // server-side by validateEmail; this is just an early, friendlier catch.
-    if (email && !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email)) {
-      showError("Please enter a valid email address");
+    const email = normalizeEmail(editForm.email);
+    const emailError = email ? validateEmail(email) : null;
+    if (emailError) {
+      showError(emailError);
       return;
     }
     setActionLoading(true);
@@ -504,14 +509,17 @@ const ManageAdministrators = () => {
       showError("Enter a temporary password");
       return;
     }
-    if (!isValidPassword(resetForm.password)) {
-      showError(
-        "Password must be at least 8 characters and include a letter and a number",
-      );
+    const passwordError = validatePassword(resetForm.password);
+    if (passwordError) {
+      showError(passwordError);
       return;
     }
-    if (resetForm.password !== resetForm.confirm) {
-      showError("Passwords do not match");
+    const confirmationError = validatePasswordConfirmation(
+      resetForm.password,
+      resetForm.confirm,
+    );
+    if (confirmationError) {
+      showError(confirmationError);
       return;
     }
     setConfirmReset(true);
@@ -893,6 +901,10 @@ const ManageAdministrators = () => {
               </label>
               <input
                 type="email"
+                maxLength={100}
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck="false"
                 value={editForm.email}
                 onChange={(e) =>
                   setEditForm({ ...editForm, email: e.target.value })
@@ -999,6 +1011,8 @@ const ManageAdministrators = () => {
               </label>
               <input
                 type="password"
+                maxLength={PASSWORD_MAX}
+                autoComplete="new-password"
                 value={createForm.password}
                 onChange={(e) =>
                   setCreateForm({ ...createForm, password: e.target.value })
@@ -1011,7 +1025,7 @@ const ManageAdministrators = () => {
                 }}
               />
               <p className="text-[13px] mt-1" style={{ color: C.muted }}>
-                At least 8 characters, including a letter and a number.
+                {PASSWORD_HELP}
               </p>
             </div>
             <div>
@@ -1023,6 +1037,8 @@ const ManageAdministrators = () => {
               </label>
               <input
                 type="password"
+                maxLength={PASSWORD_MAX}
+                autoComplete="new-password"
                 value={createForm.confirmPassword}
                 onChange={(e) =>
                   setCreateForm({ ...createForm, confirmPassword: e.target.value })
@@ -1106,6 +1122,8 @@ const ManageAdministrators = () => {
               </label>
               <input
                 type="password"
+                maxLength={PASSWORD_MAX}
+                autoComplete="new-password"
                 value={resetForm.password}
                 onChange={(e) =>
                   setResetForm({ ...resetForm, password: e.target.value })
@@ -1118,7 +1136,7 @@ const ManageAdministrators = () => {
                 }}
               />
               <p className="text-[13px] mt-1" style={{ color: C.muted }}>
-                At least 8 characters, including a letter and a number.
+                {PASSWORD_HELP}
               </p>
             </div>
             <div>
@@ -1130,6 +1148,8 @@ const ManageAdministrators = () => {
               </label>
               <input
                 type="password"
+                maxLength={PASSWORD_MAX}
+                autoComplete="new-password"
                 value={resetForm.confirm}
                 onChange={(e) =>
                   setResetForm({ ...resetForm, confirm: e.target.value })

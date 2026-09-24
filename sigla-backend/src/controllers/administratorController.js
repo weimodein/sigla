@@ -16,6 +16,7 @@ const {
   validatePassword,
   validateUsername,
   validateEmail,
+  normalizeEmail,
 } = require("../utils/validators.js");
 
 // Regular administrator accounts are role_id = 1 (0 = super administrator).
@@ -461,7 +462,7 @@ const updateAdministrator = async (req, res) => {
         if (emailError) {
           return res.status(400).json({ message: emailError });
         }
-        nextEmail = String(email).trim();
+        nextEmail = normalizeEmail(email);
 
         if (nextEmail !== user.email) {
           const taken = await Administrator.findOne({
