@@ -273,7 +273,7 @@ const S = {
     background: C.primary,
   },
   rightPanel: {
-    background: "#f0f1f9",
+    background: "var(--surface)",
     color: C.text,
   },
   heading: {
