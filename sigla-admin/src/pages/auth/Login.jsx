@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { setAuthMessage, takeAuthMessage } from "../../utils/authMessage.js";
+import { hasOuterWhitespace } from "../../utils/credentialValidation.js";
 import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
 
 const C = {
@@ -134,10 +135,16 @@ const Login = () => {
   const handleLogin = useCallback(async (e) => {
     e.preventDefault();
     if (loading || succeeded) return;
-    const normalizedIdentifier = identifier.trim();
     const errors = {};
-    if (!normalizedIdentifier) errors.identifier = "Enter your username or email.";
+    if (!identifier) {
+      errors.identifier = "Enter your username or email.";
+    } else if (/\s/u.test(identifier)) {
+      errors.identifier = "Username or email cannot contain whitespace.";
+    }
     if (!password) errors.password = "Enter your password.";
+    else if (hasOuterWhitespace(password)) {
+      errors.password = "Password cannot start or end with whitespace.";
+    }
     if (Object.keys(errors).length) {
       setFieldErrors(errors);
       return;
@@ -145,7 +152,7 @@ const Login = () => {
     setFieldErrors({});
     setLoading(true);
     try {
-      const data = await login(normalizedIdentifier, password);
+      const data = await login(identifier, password);
       const admin = data?.administrator;
 
       // NOTE: `loading` is deliberately NOT reset here, and there is no finally

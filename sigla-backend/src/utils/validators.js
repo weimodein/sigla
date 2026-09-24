@@ -18,8 +18,14 @@ const BCRYPT_MAX_BYTES = 72;
 const PASSWORD_MESSAGE =
   `Password must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters and include a letter and a number`;
 
+const hasOuterWhitespace = (value) =>
+  typeof value === "string" && (/^\s/u.test(value) || /\s$/u.test(value));
+
 // Returns an error string, or null when the password is acceptable.
 const validatePassword = (password) => {
+  if (hasOuterWhitespace(password)) {
+    return "Password cannot start or end with whitespace";
+  }
   if (typeof password !== "string" || password.length < PASSWORD_MIN) {
     return PASSWORD_MESSAGE;
   }
@@ -38,14 +44,16 @@ const isPasswordWithinBcryptLimit = (password) =>
   typeof password === "string" &&
   Buffer.byteLength(password, "utf8") <= BCRYPT_MAX_BYTES;
 
-// Returns { error } on failure, or { value } holding the trimmed username.
-// Callers must persist `value`, not the raw input, so stored usernames and
-// uniqueness checks both use the trimmed form.
+// Returns { error } on failure, or { value } holding the checked username.
+// Usernames are stored exactly as entered after whitespace is rejected.
 const validateUsername = (username) => {
   if (typeof username !== "string" || !username.trim()) {
     return { error: "Username is required" };
   }
-  const value = username.trim();
+  if (/\s/u.test(username)) {
+    return { error: "Username cannot contain whitespace" };
+  }
+  const value = username;
   if (value.length < USERNAME_MIN) {
     return { error: `Username must be at least ${USERNAME_MIN} characters` };
   }
@@ -131,6 +139,7 @@ const validateCategoryName = (name) => {
 
 module.exports = {
   validatePassword,
+  hasOuterWhitespace,
   isPasswordWithinBcryptLimit,
   validateUsername,
   validateEmail,

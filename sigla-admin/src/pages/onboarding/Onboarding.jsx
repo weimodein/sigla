@@ -21,6 +21,7 @@ import {
   PASSWORD_MAX,
   validatePassword,
   validatePasswordConfirmation,
+  validateUsername,
 } from "../../utils/credentialValidation.js";
 
 const Onboarding = () => {
@@ -239,9 +240,8 @@ const Onboarding = () => {
 
   const handleCompleteSetup = async () => {
     const errors = {};
-    if (!username.trim()) {
-      errors.username = "Enter a username.";
-    }
+    const usernameError = validateUsername(username);
+    if (usernameError) errors.username = usernameError;
     const passwordError = validatePassword(password);
     if (passwordError) errors.password = passwordError;
     const confirmationError = validatePasswordConfirmation(
@@ -255,7 +255,7 @@ const Onboarding = () => {
     }
     setCredLoading(true);
     try {
-      await completeSetup({ username: username.trim(), password });
+      await completeSetup({ username, password });
       await refreshUser();
       toast.success("Setup complete. Welcome!");
       navigate("/dashboard", { replace: true });
@@ -271,7 +271,7 @@ const Onboarding = () => {
     (step === 1 &&
       ((newEmail.trim() !== "" && newEmail.trim() !== (user?.email || "")) ||
         emailCode.some(Boolean))) ||
-    username.trim() !== (user?.username || "") ||
+    username !== (user?.username || "") ||
     password !== "" ||
     confirmPassword !== "";
 
@@ -485,6 +485,7 @@ const Onboarding = () => {
                 id="onboarding-username"
                 name="username"
                 type="text"
+                maxLength={50}
                 value={username}
                 onChange={(e) => {
                   setUsername(e.target.value);

@@ -23,6 +23,7 @@ import {
   PASSWORD_MAX,
   validatePassword,
   validatePasswordConfirmation,
+  validateUsername,
 } from "../../utils/credentialValidation.js";
 import {
   Users,
@@ -375,7 +376,12 @@ const ManageAdministrators = () => {
   // ── Create Administrator ─────────────────────────────────────
   // Step 1: validate the form, then open a confirmation dialog.
   const handleCreateAdmin = () => {
-    if (!createForm.username.trim() || !createForm.password) {
+    const usernameError = validateUsername(createForm.username);
+    if (usernameError) {
+      showError(usernameError);
+      return;
+    }
+    if (!createForm.password) {
       showError("Username and password are required");
       return;
     }
@@ -400,7 +406,7 @@ const ManageAdministrators = () => {
     setActionLoading(true);
     try {
       await createAdministrator({
-        username: createForm.username.trim(),
+        username: createForm.username,
         password: createForm.password,
       });
       showSuccess("Administrator created successfully");
@@ -472,8 +478,9 @@ const ManageAdministrators = () => {
   };
 
   const handleEditSave = async () => {
-    if (!editForm.username.trim()) {
-      showError("Username is required");
+    const usernameError = validateUsername(editForm.username);
+    if (usernameError) {
+      showError(usernameError);
       return;
     }
     const email = normalizeEmail(editForm.email);
@@ -485,7 +492,7 @@ const ManageAdministrators = () => {
     setActionLoading(true);
     try {
       const data = await updateAdministrator(editModal.id, {
-        username: editForm.username.trim(),
+        username: editForm.username,
         email,
       });
       // The change is saved either way; only the notice may have failed.
@@ -896,6 +903,7 @@ const ManageAdministrators = () => {
               </label>
               <input
                 type="text"
+                maxLength={50}
                 value={editForm.username}
                 onChange={(e) =>
                   setEditForm({ ...editForm, username: e.target.value })
@@ -1011,6 +1019,7 @@ const ManageAdministrators = () => {
               </label>
               <input
                 type="text"
+                maxLength={50}
                 value={createForm.username}
                 onChange={(e) =>
                   setCreateForm({ ...createForm, username: e.target.value })
@@ -1112,7 +1121,7 @@ const ManageAdministrators = () => {
             <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
               Create a new administrator account with username{" "}
               <strong style={{ color: C.text }}>
-                {createForm.username.trim()}
+                {createForm.username}
               </strong>
               ? The assigned person can log in with these credentials and will
               be asked to link an email on first login.

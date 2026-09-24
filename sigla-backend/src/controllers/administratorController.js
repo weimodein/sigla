@@ -154,7 +154,7 @@ const createAdministrator = async (req, res) => {
     if (checkedUsername.error) {
       return res.status(400).json({ message: checkedUsername.error });
     }
-    const trimmedUsername = checkedUsername.value;
+    const usernameValue = checkedUsername.value;
 
     const passwordError = validatePassword(password);
     if (passwordError) {
@@ -163,7 +163,7 @@ const createAdministrator = async (req, res) => {
 
     // Check for an existing username (email is linked later, so not checked here)
     const existing = await Administrator.findOne({
-      where: { username: trimmedUsername },
+      where: { username: usernameValue },
     });
     if (existing) {
       return res.status(409).json({ message: "Username already taken" });
@@ -172,7 +172,7 @@ const createAdministrator = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await Administrator.create({
-      username: trimmedUsername,
+      username: usernameValue,
       email: null,
       password: hashedPassword,
       role_id: ADMIN_ROLE_ID,
@@ -704,13 +704,13 @@ const completeSetup = async (req, res) => {
     }
 
     // Keep the existing username when none is supplied.
-    let trimmedUsername = user.username;
+    let usernameValue = user.username;
     if (username !== undefined && String(username).trim() !== "") {
       const checkedUsername = validateUsername(username);
       if (checkedUsername.error) {
         return res.status(400).json({ message: checkedUsername.error });
       }
-      trimmedUsername = checkedUsername.value;
+      usernameValue = checkedUsername.value;
     }
 
     const passwordError = validatePassword(password);
@@ -718,15 +718,15 @@ const completeSetup = async (req, res) => {
       return res.status(400).json({ message: passwordError });
     }
 
-    if (trimmedUsername !== user.username) {
-      const taken = await Administrator.findOne({ where: { username: trimmedUsername } });
+    if (usernameValue !== user.username) {
+      const taken = await Administrator.findOne({ where: { username: usernameValue } });
       if (taken) {
         return res.status(409).json({ message: "Username already taken" });
       }
     }
 
     await user.update({
-      username: trimmedUsername,
+      username: usernameValue,
       password: await bcrypt.hash(password, 10),
       must_complete_setup: false,
     });

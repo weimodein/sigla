@@ -15,6 +15,7 @@
 
 const bcrypt = require("bcrypt");
 const { Administrator } = require("../models/index.js");
+const { validatePassword, validateUsername } = require("../utils/validators.js");
 
 const SUPER_ADMIN_ROLE_ID = 0;
 
@@ -31,8 +32,17 @@ const seedSuperAdmin = async () => {
       return;
     }
 
-    const username = process.env.SUPER_ADMIN_USERNAME || "superadmin";
+    const configuredUsername = process.env.SUPER_ADMIN_USERNAME || "superadmin";
     const password = process.env.SUPER_ADMIN_PASSWORD || "ChangeMe!123";
+    const checkedUsername = validateUsername(configuredUsername);
+    const passwordError = validatePassword(password);
+    if (checkedUsername.error || passwordError) {
+      console.error(
+        `Super admin seed: invalid credentials (${checkedUsername.error || passwordError}) — skipped.`,
+      );
+      return;
+    }
+    const username = checkedUsername.value;
 
     // Guard against colliding with an existing non-super account (username is unique).
     const usernameTaken = await Administrator.findOne({ where: { username } });

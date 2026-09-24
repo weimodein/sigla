@@ -14,6 +14,7 @@ const { logActivity } = require("../utils/activityLogger.js");
 const {
   validateEmail,
   validatePassword,
+  hasOuterWhitespace,
   isPasswordWithinBcryptLimit,
   normalizeEmail,
 } = require("../utils/validators.js");
@@ -187,9 +188,12 @@ const login = async (req, res) => {
         .status(400)
         .json({ message: "Email/username and password are required" });
     }
+    if (/\s/u.test(identifier) || hasOuterWhitespace(password)) {
+      return res.status(401).json({ message: INVALID_CREDENTIALS });
+    }
     const normalizedIdentifier = identifier.includes("@")
       ? normalizeEmail(identifier)
-      : identifier.trim();
+      : identifier;
 
     // bcrypt ignores bytes after its 72-byte input boundary. Reject oversized
     // login inputs so truncated candidates can never authenticate.

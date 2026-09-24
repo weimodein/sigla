@@ -15,7 +15,8 @@ import {
 import { validateEmail, isKnownDomain, normalizeEmail } from "../../utils/emailValidation.js";
 import { setAuthMessage } from "../../utils/authMessage.js";
 import {
-  PASSWORD_HELP, PASSWORD_MAX, validatePassword, validatePasswordConfirmation,
+  PASSWORD_HELP, PASSWORD_MAX, USERNAME_HELP, validatePassword,
+  validatePasswordConfirmation, validateUsername,
 } from "../../utils/credentialValidation.js";
 import {
   verifyResetCode, resetPassword, resendCode, requestEmailCode, verifyEmailCode,
@@ -348,10 +349,9 @@ const AdministratorAccount = () => {
   };
 
   const handleUpdateProfile = async () => {
-    const username = profileForm.username.trim();
-    if (username.length < 3 || username.length > 50) {
-      return toast.error("Username must be between 3 and 50 characters");
-    }
+    const username = profileForm.username;
+    const usernameError = validateUsername(username);
+    if (usernameError) return toast.error(usernameError);
     setProfileLoading(true);
     try {
       await api.put(`/administrators/${user.id}`, { username });
@@ -383,9 +383,9 @@ const AdministratorAccount = () => {
 
   if (!user) return null;
 
-  const trimmedUsername = profileForm.username.trim();
-  const usernameIsValid = trimmedUsername.length >= 3 && trimmedUsername.length <= 50;
-  const usernameChanged = trimmedUsername !== (user.username || "").trim();
+  const usernameError = validateUsername(profileForm.username);
+  const usernameIsValid = !usernameError;
+  const usernameChanged = profileForm.username !== (user.username || "");
   const passwordMatches = newPass.length > 0 && newPass === confirm;
 
   return (
@@ -568,7 +568,7 @@ const AdministratorAccount = () => {
               />
               <div id="username-help" className="account-modal-help-row account-modal-help">
                 <span className={profileForm.username.length > 0 && !usernameIsValid ? "font-medium text-red-600" : "text-gray-400"}>
-                  Use 3–50 characters.
+                  {usernameError || USERNAME_HELP}
                 </span>
                 <span className="shrink-0 text-gray-400">{profileForm.username.length}/50</span>
               </div>

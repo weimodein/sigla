@@ -1,11 +1,34 @@
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 64;
+export const USERNAME_MIN = 3;
+export const USERNAME_MAX = 50;
 const BCRYPT_MAX_BYTES = 72;
 
 export const PASSWORD_HELP =
-  `${PASSWORD_MIN}–${PASSWORD_MAX} characters, including a letter and a number.`;
+  `${PASSWORD_MIN}–${PASSWORD_MAX} characters, including a letter and a number. Spaces are allowed only between characters.`;
+export const USERNAME_HELP =
+  `${USERNAME_MIN}–${USERNAME_MAX} characters with no whitespace.`;
+
+export const hasOuterWhitespace = (value) =>
+  typeof value === "string" && (/^\s/u.test(value) || /\s$/u.test(value));
+
+export const validateUsername = (username) => {
+  if (typeof username !== "string" || !username.trim()) {
+    return "Username is required.";
+  }
+  if (/\s/u.test(username)) {
+    return "Username cannot contain whitespace.";
+  }
+  if (username.length < USERNAME_MIN || username.length > USERNAME_MAX) {
+    return `Username must be ${USERNAME_MIN} to ${USERNAME_MAX} characters.`;
+  }
+  return null;
+};
 
 export const validatePassword = (password) => {
+  if (hasOuterWhitespace(password)) {
+    return "Password cannot start or end with whitespace.";
+  }
   if (typeof password !== "string" || password.length < PASSWORD_MIN) {
     return `Password must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters and include a letter and a number.`;
   }
