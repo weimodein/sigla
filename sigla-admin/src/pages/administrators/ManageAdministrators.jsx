@@ -259,6 +259,7 @@ const ManageAdministrators = () => {
   const [editModal, setEditModal] = useState(null);
   const [createModal, setCreateModal] = useState(false);
   const [confirmCreate, setConfirmCreate] = useState(false);
+  const [showCreatePasswords, setShowCreatePasswords] = useState(false);
   const [createForm, setCreateForm] = useState({
     username: "",
     password: "",
@@ -404,6 +405,7 @@ const ManageAdministrators = () => {
       showSuccess("Administrator created successfully");
       setConfirmCreate(false);
       setCreateModal(false);
+      setShowCreatePasswords(false);
       setCreateForm({ username: "", password: "", confirmPassword: "" });
       fetchStats();
       fetchTabData();
@@ -672,7 +674,10 @@ const ManageAdministrators = () => {
           </p>
         </div>
         <button
-          onClick={() => setCreateModal(true)}
+          onClick={() => {
+            setShowCreatePasswords(false);
+            setCreateModal(true);
+          }}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -963,11 +968,20 @@ const ManageAdministrators = () => {
       {createModal && (
         <AppModal
           title="Create Administrator"
-          onClose={() => setCreateModal(false)}
+          onClose={() => {
+            setShowCreatePasswords(false);
+            setCreateModal(false);
+          }}
           onEnter={() => { if (!actionLoading) handleCreateAdmin(); }}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setCreateModal(false)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowCreatePasswords(false);
+                  setCreateModal(false);
+                }}
+              >
                 Cancel
               </Button>
               <Button onClick={handleCreateAdmin} loading={actionLoading}>
@@ -1010,7 +1024,7 @@ const ManageAdministrators = () => {
                 Password
               </label>
               <input
-                type="password"
+                type={showCreatePasswords ? "text" : "password"}
                 maxLength={PASSWORD_MAX}
                 autoComplete="new-password"
                 value={createForm.password}
@@ -1036,7 +1050,7 @@ const ManageAdministrators = () => {
                 Confirm Password
               </label>
               <input
-                type="password"
+                type={showCreatePasswords ? "text" : "password"}
                 maxLength={PASSWORD_MAX}
                 autoComplete="new-password"
                 value={createForm.confirmPassword}
@@ -1051,6 +1065,17 @@ const ManageAdministrators = () => {
                 }}
               />
             </div>
+            <label className="inline-flex w-fit cursor-pointer items-center gap-2 text-sm font-medium text-gray-600">
+              <input
+                type="checkbox"
+                checked={showCreatePasswords}
+                onChange={(event) =>
+                  setShowCreatePasswords(event.target.checked)
+                }
+                className="h-4 w-4 accent-blue-900"
+              />
+              Show passwords
+            </label>
           </div>
         </AppModal>
       )}
