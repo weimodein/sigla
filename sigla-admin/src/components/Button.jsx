@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
    there is one place to change the brand blue. */
 
 const BASE =
-  "interactive text-sm font-semibold px-4 py-2 rounded-lg inline-flex items-center justify-center gap-1.5 " +
+  "interactive min-h-11 text-sm font-semibold px-4 py-2 rounded-lg inline-flex items-center justify-center gap-1.5 " +
   "disabled:opacity-50 disabled:cursor-not-allowed";
 
 const VARIANTS = {

@@ -44,7 +44,7 @@ export const ModalFooter = ({ children, className = "" }) => {
     <div
       /* shrink-0 keeps the actions pinned while the body scrolls; flex-wrap so
          three or more buttons stack instead of overflowing a narrow panel. */
-      className={`flex flex-wrap justify-end gap-2.5 px-6 py-4 shrink-0 ${className}`}
+      className={`modal-footer flex flex-wrap justify-end gap-2.5 px-6 py-4 shrink-0 ${className}`}
       style={{ borderTop: "1px solid #f0f0f0" }}
     >
       {content}
@@ -175,7 +175,7 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
   return (
     <div
       data-modal-backdrop=""
-      className="modal-backdrop-in fixed inset-0 flex items-center justify-center px-4 py-6 overflow-y-auto"
+      className="app-modal-backdrop modal-backdrop-in fixed inset-0 flex items-center justify-center px-4 py-6 overflow-y-auto"
       style={{
         zIndex: 1100,
         background: "rgba(0,0,0,0.45)",
@@ -194,14 +194,14 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
           dvh, not vh: mobile browser chrome shrinks the visible viewport. */}
       <div
         ref={panelRef}
-        className={`modal-panel-in bg-white rounded-2xl w-full my-auto flex flex-col max-h-[90dvh] ${wide ? "max-w-4xl" : "max-w-lg"}`}
+        className={`app-modal-panel modal-panel-in bg-white rounded-2xl w-full my-auto flex flex-col max-h-[90dvh] ${wide ? "max-w-4xl" : "max-w-lg"}`}
         style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)" }}
         onAnimationEnd={(e) => {
           if (closingRef.current && e.target === panelRef.current) onClose();
         }}
       >
         <div
-          className="flex items-center justify-between px-6 py-4 shrink-0"
+          className="app-modal-header flex items-center justify-between px-6 py-4 shrink-0"
           style={{ borderBottom: "1px solid #f0f0f0" }}
         >
           <h3
@@ -212,7 +212,7 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
           </h3>
           <button
             onClick={startClose}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="modal-close-button flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
             aria-label="Close"
           >
             <X size={16} />

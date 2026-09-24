@@ -250,7 +250,7 @@ const ActivityLogs = () => {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
+      <div className="page-header">
         <h2 className="page-title">
           Activity Logs
         </h2>
@@ -260,9 +260,9 @@ const ActivityLogs = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3 mb-4">
+      <div className="filter-bar mb-4">
         {/* Action type */}
-        <div>
+        <div className="filter-field">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             Action Type
           </label>
@@ -282,7 +282,7 @@ const ActivityLogs = () => {
         </div>
 
         {/* Affected item */}
-        <div>
+        <div className="filter-field">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             Affected Item
           </label>
@@ -302,7 +302,7 @@ const ActivityLogs = () => {
         </div>
 
         {/* Date range */}
-        <div>
+        <div className="filter-field">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             From
           </label>
@@ -314,7 +314,7 @@ const ActivityLogs = () => {
             style={selectStyle}
           />
         </div>
-        <div>
+        <div className="filter-field">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             To
           </label>
@@ -328,7 +328,7 @@ const ActivityLogs = () => {
         </div>
 
         {/* Search */}
-        <div className="flex-1 min-w-[200px]">
+        <div className="filter-field-grow">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             Search
           </label>
@@ -352,7 +352,7 @@ const ActivityLogs = () => {
         {hasFilters && (
           <button
             onClick={clearFilters}
-            className="flex items-center gap-1 px-3 py-2.5 text-sm rounded-xl transition hover:bg-gray-100"
+            className="mobile-full-width interactive flex items-center justify-center gap-1 px-3 py-2.5 text-sm rounded-xl transition hover:bg-gray-100"
             style={{ border: `1px solid ${C.border}`, color: "#4b5563" }}
           >
             <X size={14} /> Clear
@@ -370,7 +370,7 @@ const ActivityLogs = () => {
         }}
       >
         <div className="table-scroll" role="region" aria-label="Activity logs table" tabIndex={0}>
-          <table className="data-table table-text text-left" style={{ minWidth: 860, tableLayout: "fixed" }}>
+          <table className="data-table mobile-card-table activity-mobile-table table-text text-left" style={{ minWidth: 860, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "16%" }} />
               <col style={{ width: "20%" }} />

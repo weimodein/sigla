@@ -92,7 +92,7 @@ const pairState = (pair) => {
 // ── Simple Table ──────────────────────────────────────────────
 const SimpleTable = ({ headers, rows, emptyMessage, ariaLabel }) => (
   <div className="table-scroll rounded-lg border border-gray-200" role="region" aria-label={ariaLabel} tabIndex={0}>
-    <table className="data-table table-text text-left" style={{ minWidth: 520 }}>
+    <table className="data-table mobile-card-table reports-mobile-table table-text text-left" style={{ minWidth: 520 }}>
       <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
         <tr>
           {headers.map((h) => (
@@ -120,7 +120,7 @@ const SimpleTable = ({ headers, rows, emptyMessage, ariaLabel }) => (
               style={listStagger(i)}
             >
               {row.map((cell, j) => (
-                <td key={j} className="px-4 py-3 text-gray-700">
+                <td key={j} data-label={headers[j]} className="px-4 py-3 text-gray-700">
                   {cell}
                 </td>
               ))}
@@ -898,7 +898,7 @@ const ReportsAnalytics = () => {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header page-header-spaced">
         <div>
           <h1 className="page-title">
             Reports & Analytics
@@ -907,11 +907,11 @@ const ReportsAnalytics = () => {
             System activity overview and data exports
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="page-header-actions">
           <span className="hidden text-xs font-medium text-gray-400 sm:inline">
             Activity range
           </span>
-          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+          <div className="segmented-control rounded-lg bg-gray-100 p-1">
             {["week", "month", "year"].map((f) => (
               <button
                 key={f}

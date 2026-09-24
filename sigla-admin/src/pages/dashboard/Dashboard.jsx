@@ -211,7 +211,7 @@ const Dashboard = () => {
     <div className="space-y-6">
 
       {/* ── Header ── */}
-      <div>
+      <div className="page-header page-header-spaced">
         <h1 className="page-title">Admin Dashboard</h1>
         <p className="page-subtitle">Welcome back! Here's what's happening today.</p>
       </div>
@@ -226,8 +226,10 @@ const Dashboard = () => {
               its content. It still takes the shared entrance, with an index that
               continues the sequence of the four cards beside it so the grid
               reads as one animation instead of four-plus-one. */}
-          <div
-            className="dash-stat-card list-item-in h-full flex flex-col items-center justify-center gap-3"
+          <button
+            type="button"
+            aria-label={`Active model version ${deployedModel?.version_number ?? "None"}. Open model management.`}
+            className="dash-stat-card stat-card-action list-item-in h-full flex flex-col items-center justify-center gap-3"
             onClick={() => navigate("/model")}
             style={{ ...listStagger(4), cursor: "pointer" }}
           >
@@ -240,7 +242,7 @@ const Dashboard = () => {
                 {deployedModel?.version_number ?? "None"}
               </p>
             </div>
-          </div>
+          </button>
         </div>
         {/* 4 auto-placed cards — fill cols 1 & 2, rows 1 & 2 */}
         {/* First card differs by account type (scope): super → total admins, admin → own account creation date */}

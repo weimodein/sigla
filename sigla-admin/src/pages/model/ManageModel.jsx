@@ -574,7 +574,7 @@ const ManageModel = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+      <div className="page-header">
         <div>
           <h1 className="page-title">
             Manage Model
@@ -586,7 +586,7 @@ const ManageModel = () => {
         <button
           onClick={() => setTrainModal(true)}
           disabled={!!trainingModelId}
-          className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="page-primary-action interactive bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
           title={trainingModelId ? "Training in progress…" : undefined}
         >
           + Train New Model
@@ -765,7 +765,7 @@ const ManageModel = () => {
 
         {loading ? (
           <div className="table-scroll" role="region" aria-label="Model versions table" tabIndex={0}>
-          <table className="data-table table-text text-left" style={{ minWidth: 920, tableLayout: "fixed" }}>
+          <table className="data-table mobile-card-table models-mobile-table table-text text-left" style={{ minWidth: 920, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "44px" }} />
               <col style={{ width: "12%" }} />
@@ -831,7 +831,7 @@ const ManageModel = () => {
           <>
             {/* Table header row */}
             <div className="table-scroll" role="region" aria-label="Model versions table" tabIndex={0}>
-            <table className="data-table table-text text-left" style={{ minWidth: 920, tableLayout: "fixed" }}>
+            <table className="data-table mobile-card-table models-mobile-table table-text text-left" style={{ minWidth: 920, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "44px" }} />
               <col style={{ width: "12%" }} />

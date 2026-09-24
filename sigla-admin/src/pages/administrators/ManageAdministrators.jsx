@@ -682,7 +682,7 @@ const ManageAdministrators = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="page-header">
         <div>
           <h2 className="page-title">
             Manage Administrators
@@ -692,6 +692,7 @@ const ManageAdministrators = () => {
           </p>
         </div>
         <button
+          className="page-primary-action interactive"
           onClick={() => {
             setShowCreatePasswords(false);
             setCreateModal(true);
@@ -771,8 +772,8 @@ const ManageAdministrators = () => {
 
       {/* Tabs */}
       <div
-        className="flex gap-1 mb-4 rounded-xl p-1"
-        style={{ background: C.border, width: "fit-content" }}
+        className="segmented-control mb-4 rounded-xl p-1"
+        style={{ background: C.border }}
       >
         {tabs.map((tab) => (
           <button
@@ -793,7 +794,7 @@ const ManageAdministrators = () => {
 
       {/* Search */}
       {activeTab === "all" && (
-        <div className="relative mb-4 max-w-sm">
+        <div className="mobile-full-width relative mb-4 max-w-sm">
           <Search
             size={16}
             className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -825,7 +826,7 @@ const ManageAdministrators = () => {
       >
         {loading ? (
           <div className="table-scroll" role="region" aria-label="Administrators table" tabIndex={0}>
-            <table className="data-table table-text text-left" style={{ minWidth: 800 }}>
+            <table className="data-table mobile-card-table administrators-mobile-table table-text text-left" style={{ minWidth: 800 }}>
               <thead style={{ background: "#f9fafb" }}>
                 <tr>
                   {["ID", "Username", "Email", "Status", "Registered", "Actions"].map((h) => (
@@ -843,7 +844,7 @@ const ManageAdministrators = () => {
         ) : (
           <>
             <div className="table-scroll" role="region" aria-label="Administrators table" tabIndex={0}>
-              <table className="data-table table-text text-left" style={{ minWidth: 800 }}>
+              <table className="data-table mobile-card-table administrators-mobile-table table-text text-left" style={{ minWidth: 800 }}>
                 <thead style={{ background: "#f9fafb" }}>
                   <tr>
                     <SortableHeader label="ID" sortKey="id" sortField={sortField} sortDir={sortDir} onSort={handleSort} />

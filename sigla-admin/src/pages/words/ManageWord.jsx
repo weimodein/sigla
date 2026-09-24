@@ -862,7 +862,7 @@ const ManageWord = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="page-header">
         <div>
           <h2 className="page-title">
             Manage Words
@@ -871,8 +871,9 @@ const ManageWord = () => {
             Manage vocabulary, training clips, and demonstration videos
           </p>
         </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <div className="page-header-actions">
           <button
+            className="page-primary-action interactive"
             onClick={() => navigate("/model")}
             style={{
               display: "inline-flex", alignItems: "center", gap: "6px",
@@ -885,6 +886,7 @@ const ManageWord = () => {
             <Brain size={16} /> Train Model
           </button>
           <button
+            className="page-primary-action interactive"
             onClick={() => setAddOpen(true)}
             style={{
               display: "inline-flex", alignItems: "center", gap: "6px",
@@ -971,20 +973,16 @@ const ManageWord = () => {
 
       {/* Filters */}
       <div
-        className="rounded-2xl"
+        className="filter-bar rounded-2xl"
         style={{
           background: "white",
           border: `1px solid ${C.border}`,
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
           padding: "16px",
           marginBottom: "16px",
-          display: "flex",
-          gap: "12px",
-          flexWrap: "wrap",
-          alignItems: "center",
         }}
       >
-        <div style={{ position: "relative", flex: 1, minWidth: "200px" }}>
+        <div className="filter-field-grow" style={{ position: "relative" }}>
           <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: C.muted }} />
           <input
             placeholder="Search vocabulary..."
@@ -993,7 +991,7 @@ const ManageWord = () => {
             style={{ width: "100%", padding: "8px 8px 8px 32px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", boxSizing: "border-box" }}
           />
         </div>
-        <select value={filterCategory} onChange={e => applyCategoryFilter(e.target.value)}
+        <select className="filter-field" value={filterCategory} onChange={e => applyCategoryFilter(e.target.value)}
           style={{ padding: "8px 12px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", minWidth: "140px" }}>
           <option value="">All Categories</option>
           {categoryOptions.map(c => <option key={c} value={c.toLowerCase()}>{c}</option>)}
@@ -1026,7 +1024,7 @@ const ManageWord = () => {
           {/* The proportional columns consume the full card width. The desktop
               minimum keeps all five actions on one line; smaller viewports use
               the existing horizontal scroll instead of compressing the row. */}
-          <table className="data-table table-text text-left" style={{ minWidth: 980, tableLayout: "fixed" }}>
+          <table className="data-table mobile-card-table words-mobile-table table-text text-left" style={{ minWidth: 980, tableLayout: "fixed" }}>
             <colgroup>
               {/* Allocate space by information density. Actions begin at their
                   column boundary so they stay visually connected to Availability. */}

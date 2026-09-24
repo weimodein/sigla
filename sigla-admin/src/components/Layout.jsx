@@ -11,6 +11,7 @@ import {
   SIDEBAR_COLLAPSED,
 } from "./sidebarState.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
+import { navItems } from "./navItems.js";
 import { X, Menu } from "lucide-react";
 
 const Layout = ({ children }) => {
@@ -23,6 +24,8 @@ const Layout = ({ children }) => {
   const location = useLocation();
 
   const isMobile = useIsMobile();
+  const menuButtonRef = useRef(null);
+  const drawerWasOpenRef = useRef(false);
 
   // Drawer state lives HERE, not in Sidebar. Manage Administrators is guarded by
   // SuperRoute while every other route uses ProtectedRoute, so navigating there
@@ -56,6 +59,24 @@ const Layout = ({ children }) => {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
+
+  // Move focus into the drawer when it opens and return it to the menu button
+  // when it closes. This keeps keyboard and screen-reader navigation aligned
+  // with the visible interface on small screens.
+  useEffect(() => {
+    if (!isMobile) return;
+    if (drawerOpen) {
+      drawerWasOpenRef.current = true;
+      requestAnimationFrame(() => {
+        document.querySelector("[data-drawer-close]")?.focus();
+      });
+      return;
+    }
+    if (drawerWasOpenRef.current) {
+      drawerWasOpenRef.current = false;
+      requestAnimationFrame(() => menuButtonRef.current?.focus());
+    }
+  }, [drawerOpen, isMobile]);
 
   // The page behind an open drawer must not scroll under the finger.
   useEffect(() => {
@@ -128,8 +149,14 @@ const Layout = ({ children }) => {
     enabled: () => showLogoutModal,
   });
 
+  const currentPage = navItems.find((item) => item.path === location.pathname);
+  const mobilePageTitle = currentPage?.label || "Dashboard";
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)" }}>
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <Sidebar
         onToggle={handleToggle}
         onLogout={() => setShowLogoutModal(true)}
@@ -155,6 +182,7 @@ const Layout = ({ children }) => {
       )}
 
       <div
+        inert={isMobile && drawerOpen}
         style={{
           /* The line that reclaims the screen: on mobile the sidebar is
              off-canvas, so the content must not be pushed over at all. */
@@ -175,52 +203,26 @@ const Layout = ({ children }) => {
         {/* Mobile header — the app has no topbar, so the hamburger needs a home.
             Pages render their own <h2>, so this carries no title. */}
         {isMobile && (
-          <header
-            style={{
-              position: "sticky",
-              top: 0,
-              zIndex: 900,
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "10px 16px",
-              background: "#ffffff",
-              borderBottom: "1px solid #f0f0f0",
-              flexShrink: 0,
-            }}
-          >
+          <header className="mobile-topbar">
             <button
+              ref={menuButtonRef}
               onClick={() => setDrawerOpen(true)}
               aria-label="Open menu"
               aria-expanded={drawerOpen}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#1f2937",
-                cursor: "pointer",
-                padding: "8px",
-                borderRadius: "8px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+              aria-controls="mobile-navigation"
+              className="mobile-menu-button interactive"
             >
               <Menu size={22} />
             </button>
-            <span
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: 700,
-                color: "#1f2937",
-                letterSpacing: "0.02em",
-              }}
-            >
-              SIGLA
-            </span>
+            <div className="mobile-topbar-copy">
+              <span className="mobile-page-name">{mobilePageTitle}</span>
+            </div>
           </header>
         )}
 
         <main
+          id="main-content"
+          tabIndex={-1}
           className="app-main"
           style={{
             flex: 1,

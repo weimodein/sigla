@@ -183,7 +183,7 @@ const ManageCategories = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="page-header">
         <div>
           <h2 className="page-title">
             Manage Categories
@@ -193,6 +193,7 @@ const ManageCategories = () => {
           </p>
         </div>
         <button
+          className="page-primary-action interactive"
           onClick={() => setAddOpen(true)}
           style={{
             display: "inline-flex", alignItems: "center", gap: "6px",
@@ -246,7 +247,7 @@ const ManageCategories = () => {
         }}
       >
         <div className="table-scroll" role="region" aria-label="Categories table" tabIndex={0}>
-          <table className="data-table table-text text-left" style={{ minWidth: 600 }}>
+          <table className="data-table mobile-card-table categories-mobile-table table-text text-left" style={{ minWidth: 600 }}>
             <thead style={{ background: "#f9fafb" }}>
               <tr>
                 {["Name", "Description", "Words", "Actions"].map(h => (

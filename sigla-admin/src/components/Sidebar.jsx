@@ -57,13 +57,20 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
 
   return (
     <aside
+      id="mobile-navigation"
+      data-mobile-sidebar=""
+      role={isMobile ? "dialog" : undefined}
+      aria-modal={isMobile && drawerOpen ? "true" : undefined}
+      aria-label={isMobile ? "Main menu" : undefined}
       /* Hidden from assistive tech (and from tab order, via inert) while the
          drawer is closed — an off-canvas element is still focusable otherwise,
          so keyboard users would tab into an invisible nav. */
       aria-hidden={isMobile && !drawerOpen ? "true" : undefined}
       inert={isMobile && !drawerOpen}
       style={{
-        width: isCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
+        width: isMobile
+          ? "min(86vw, 320px)"
+          : isCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
         background: SURFACE,
         display: "flex",
         flexDirection: "column",
@@ -81,6 +88,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
         /* Above the drawer backdrop (1040) so the panel sits on top of it. */
         zIndex: 1050,
         height: "100vh",
+        minHeight: "100dvh",
         position: "fixed",
         left: 0,
         top: 0,
@@ -207,12 +215,14 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
           {/* Mobile closes the drawer; desktop collapses to the icon rail. */}
           <button
             onClick={isMobile ? onCloseDrawer : handleToggle}
+            data-drawer-close={isMobile ? "" : undefined}
             style={{
               background: "none",
               border: "none",
               color: MUTED,
               cursor: "pointer",
-              padding: "8px",
+              width: "44px",
+              height: "44px",
               borderRadius: "8px",
               display: "flex",
               alignItems: "center",
@@ -233,6 +243,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
       {/* Navigation Menu */}
       <nav
         className="sidebar-nav"
+        aria-label="Main navigation"
         style={{
           flex: 1,
           padding: "12px 12px",
@@ -252,6 +263,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
                NavLink only adds it automatically when className is a string, and
                this one is a function, so it is applied explicitly here. */
             className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+            onClick={isMobile ? onCloseDrawer : undefined}
             style={({ isActive }) => ({
               display: "flex",
               alignItems: "center",
@@ -259,7 +271,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
               gap: isCollapsed ? 0 : "12px",
               padding: isCollapsed ? "0" : "0 12px",
               textDecoration: "none",
-              height: "42px",
+              minHeight: "48px",
               borderRadius: "8px",
               whiteSpace: "nowrap",
               background: isActive ? ACTIVE : "transparent",
@@ -289,7 +301,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
       <div
         style={{
           borderTop: `1px solid ${BORDER}`,
-          padding: "12px",
+          padding: "12px 12px max(12px, env(safe-area-inset-bottom))",
           flexShrink: 0,
           background: SURFACE,
         }}
@@ -306,7 +318,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
             background: "none",
             border: "none",
             padding: isCollapsed ? "0" : "0 12px",
-            height: "42px",
+            minHeight: "48px",
             borderRadius: "8px",
             color: MUTED,
             cursor: "pointer",

@@ -13,9 +13,14 @@ import { SkeletonBlock } from "./Skeleton.jsx";
    `index` drives the stagger so a row of cards enters left to right; it defaults
    to 0, so a caller that does not care still animates. */
 
-export const StatCard = ({ title, value, icon, color, onClick, index = 0 }) => (
-  <div
-    className="dash-stat-card list-item-in flex items-center gap-4 min-w-0"
+export const StatCard = ({ title, value, icon, color, onClick, index = 0 }) => {
+  const Component = onClick ? "button" : "div";
+
+  return (
+  <Component
+    type={onClick ? "button" : undefined}
+    aria-label={onClick ? `${title}: ${value ?? "Unavailable"}. Open details.` : undefined}
+    className={`dash-stat-card list-item-in flex items-center gap-4 min-w-0${onClick ? " stat-card-action" : ""}`}
     onClick={onClick}
     style={{ ...listStagger(index), ...(onClick ? { cursor: "pointer" } : {}) }}
   >
@@ -26,8 +31,9 @@ export const StatCard = ({ title, value, icon, color, onClick, index = 0 }) => (
       <p className="text-xs text-gray-500 truncate">{title}</p>
       <p className="text-2xl font-bold text-gray-800">{value ?? "—"}</p>
     </div>
-  </div>
-);
+  </Component>
+  );
+};
 
 /* Carries the same entrance as StatCard so the skeleton grid arrives the way the
    real cards do and the handoff between them does not jump. */

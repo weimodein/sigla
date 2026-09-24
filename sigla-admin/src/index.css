@@ -63,6 +63,97 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 3000;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--brand-primary);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.32);
+  outline-offset: 2px;
+}
+
+#main-content:focus {
+  outline: none;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-header-spaced {
+  margin-bottom: 0;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.page-primary-action {
+  min-height: 44px;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.filter-field {
+  min-width: 150px;
+}
+
+.filter-field-grow {
+  flex: 1 1 240px;
+}
+
+.segmented-control {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.segmented-control::-webkit-scrollbar {
+  display: none;
+}
+
+.segmented-control > button {
+  min-height: 40px;
+  flex: 0 0 auto;
+}
+
 .page-title {
   margin: 0;
   color: var(--text);
@@ -125,6 +216,10 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
   -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll::before {
+  display: none;
 }
 
 .table-scroll:focus-visible {
@@ -254,6 +349,13 @@ body {
   padding: 16px 24px;
   border-top: 1px solid var(--card-border);
   background: #f9fafb;
+}
+
+.stat-card-action {
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  text-align: left;
 }
 
 /* Administrator account ---------------------------------------------------
@@ -512,6 +614,57 @@ body {
   scrollbar-gutter: stable;
 }
 
+.mobile-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: max(8px, env(safe-area-inset-top)) 14px 8px;
+  border-bottom: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.mobile-menu-button,
+.modal-close-button {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+}
+
+.mobile-menu-button:hover,
+.modal-close-button:hover {
+  background: #f1f5f9;
+}
+
+.mobile-topbar-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+.mobile-page-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Keep long pages and modal forms scrollable without letting the native Windows
    scrollbar dominate the interface. The thumb remains visible and widens in
    contrast on hover, so discoverability is preserved. */
@@ -554,8 +707,277 @@ body {
 /* One block shrinks every card surface in the app. At 24px the padding alone
    ate 48px of a 320px screen, leaving stat values nowhere to go. */
 @media (max-width: 640px) {
+  :root {
+    /* Keep reading text comfortably sized while headings scale with the phone.
+       The smaller semantic roles gain one step because 12–13px helper copy is
+       difficult to scan on a handheld screen. */
+    --type-page-title: clamp(1.5rem, 1.25rem + 1.25vw, 1.75rem);
+    --type-section-title: clamp(1.0625rem, 1rem + 0.35vw, 1.125rem);
+    --type-body: 1rem;
+    --type-table: 0.9375rem;
+    --type-meta: 0.9375rem;
+    --type-small: 0.875rem;
+  }
+  body {
+    line-height: 1.6;
+  }
+  .page-title {
+    max-width: 22ch;
+    font-size: var(--type-page-title);
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+  .page-subtitle {
+    max-width: 60ch;
+    margin-top: 0.375rem;
+    font-size: var(--type-meta);
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .section-title {
+    font-size: var(--type-section-title);
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .section-subtitle,
+  .meta-text,
+  .small-text {
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  /* Tailwind's 12px/14px utilities are useful on desktop data-dense screens,
+     but small for labels and controls held at arm's length on a phone. */
+  .text-xs {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  .text-sm {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    line-height: 1.4;
+  }
+  .mobile-page-name {
+    font-size: clamp(1rem, 0.95rem + 0.4vw, 1.0625rem);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  .app-modal-header h3 {
+    font-size: var(--type-section-title);
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .app-modal-panel p {
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .dash-stat-card .text-xs {
+    font-size: var(--type-small);
+  }
+  .dash-stat-card .text-2xl {
+    font-size: clamp(1.375rem, 1.125rem + 1.25vw, 1.625rem);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  .data-table {
+    line-height: 1.5;
+  }
+  .data-table th .tracking-wider {
+    letter-spacing: 0.04em;
+  }
   .app-main {
-    padding: 16px;
+    padding: 16px 14px max(20px, env(safe-area-inset-bottom));
+  }
+  .page-header {
+    flex-direction: column;
+    margin-bottom: 1.25rem;
+  }
+  .page-header-spaced {
+    margin-bottom: 0;
+  }
+  .page-header-actions,
+  .page-primary-action,
+  .mobile-full-width {
+    width: 100%;
+  }
+  .page-header-actions > button,
+  .page-header-actions > a {
+    flex: 1 1 140px;
+  }
+  .filter-bar,
+  .filter-field,
+  .filter-field-grow,
+  .filter-bar > label,
+  .filter-bar > div {
+    width: 100%;
+    min-width: 0;
+  }
+  .filter-bar select,
+  .filter-bar input {
+    width: 100%;
+  }
+  .segmented-control {
+    width: 100%;
+  }
+  .segmented-control > button {
+    flex: 1 0 auto;
+  }
+  /* Dense desktop tables become labelled record cards on phones. This keeps
+     every field and action visible at a readable size without sideways scroll. */
+  .table-scroll {
+    overflow: visible;
+  }
+  .table-scroll::before {
+    display: none;
+  }
+  .mobile-card-table {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: auto !important;
+  }
+  .mobile-card-table colgroup {
+    display: none;
+  }
+  .mobile-card-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .mobile-card-table tbody {
+    display: grid;
+    width: 100%;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+  .mobile-card-table tbody > tr {
+    display: grid;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .mobile-card-table td {
+    display: grid;
+    width: 100%;
+    max-width: none !important;
+    grid-template-columns: minmax(88px, 32%) minmax(0, 1fr);
+    align-items: start;
+    gap: 0 0.75rem;
+    overflow: visible !important;
+    border-top: 1px solid #f1f5f9;
+    padding: 0.65rem 0.75rem !important;
+    text-align: left !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  .mobile-card-table td:first-child {
+    border-top: 0;
+  }
+  .mobile-card-table td::before {
+    grid-column: 1;
+    grid-row: 1 / span 20;
+    color: var(--text-muted);
+    content: attr(data-label);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+  .mobile-card-table td > * {
+    grid-column: 2;
+    min-width: 0;
+  }
+  .mobile-card-table td[colspan] {
+    display: block;
+    padding: 1.25rem 0.75rem !important;
+  }
+  .mobile-card-table td[colspan]::before {
+    display: none;
+  }
+  .administrators-mobile-table td:nth-child(1)::before { content: "ID"; }
+  .administrators-mobile-table td:nth-child(2)::before { content: "Username"; }
+  .administrators-mobile-table td:nth-child(3)::before { content: "Email"; }
+  .administrators-mobile-table td:nth-child(4)::before { content: "Status"; }
+  .administrators-mobile-table td:nth-child(5)::before { content: "Registered"; }
+  .administrators-mobile-table td:nth-child(6)::before { content: "Actions"; }
+  .words-mobile-table td:nth-child(1)::before { content: "Vocabulary"; }
+  .words-mobile-table td:nth-child(2)::before { content: "Category"; }
+  .words-mobile-table td:nth-child(3)::before { content: "Samples"; }
+  .words-mobile-table td:nth-child(4)::before { content: "Status"; }
+  .words-mobile-table td:nth-child(5)::before { content: "Actions"; }
+  .categories-mobile-table td:nth-child(1)::before { content: "Name"; }
+  .categories-mobile-table td:nth-child(2)::before { content: "Description"; }
+  .categories-mobile-table td:nth-child(3)::before { content: "Words"; }
+  .categories-mobile-table td:nth-child(4)::before { content: "Actions"; }
+  .activity-mobile-table td:nth-child(1)::before { content: "User"; }
+  .activity-mobile-table td:nth-child(2)::before { content: "Action"; }
+  .activity-mobile-table td:nth-child(3)::before { content: "Affected item"; }
+  .activity-mobile-table td:nth-child(4)::before { content: "Description"; }
+  .activity-mobile-table td:nth-child(5)::before { content: "Date & time"; }
+  .models-mobile-table td:nth-child(1)::before { content: "Details"; }
+  .models-mobile-table td:nth-child(2)::before { content: "Version"; }
+  .models-mobile-table td:nth-child(3)::before { content: "Words model"; }
+  .models-mobile-table td:nth-child(4)::before { content: "Alphabet model"; }
+  .models-mobile-table td:nth-child(5)::before { content: "Status"; }
+  .models-mobile-table td:nth-child(6)::before { content: "Training"; }
+  .models-mobile-table td:nth-child(7)::before { content: "Actions"; }
+  .words-mobile-table td:nth-child(5) > div,
+  .models-mobile-table td:nth-child(7) > div {
+    flex-wrap: wrap;
+    white-space: normal !important;
+  }
+  .data-table button,
+  .data-table a {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .app-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .app-main select,
+  .app-main textarea,
+  .app-modal-panel input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .app-modal-panel select,
+  .app-modal-panel textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .app-modal-backdrop {
+    align-items: flex-end !important;
+    padding: max(16px, env(safe-area-inset-top)) 0 0 !important;
+  }
+  .app-modal-panel {
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top))) !important;
+    margin: 0 !important;
+    border-radius: 18px 18px 0 0 !important;
+  }
+  .app-modal-header {
+    padding: 16px !important;
+  }
+  .modal-scroll-body {
+    padding: 16px !important;
+  }
+  .modal-footer {
+    gap: 0.5rem !important;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom)) !important;
+  }
+  .modal-footer > button {
+    flex: 1 1 120px;
   }
   .dash-stat-card {
     padding: 16px;
@@ -1146,6 +1568,16 @@ body {
   .auth-card-out,
   .auth-field-in {
     transform: none !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+  .modal-footer > button {
+    width: 100%;
+    flex-basis: auto;
   }
 }
 
