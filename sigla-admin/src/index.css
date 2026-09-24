@@ -256,6 +256,92 @@ body {
   background: #f9fafb;
 }
 
+/* Administrator account ---------------------------------------------------
+   This page lives beside a collapsible sidebar, so viewport breakpoints do not
+   describe the space its cards actually receive. The named containers below
+   let the page and each card respond to their own usable inline width. */
+.administrator-account-page {
+  container: administrator-account / inline-size;
+  min-width: 0;
+}
+
+.administrator-profile-row {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.administrator-profile-action,
+.administrator-security-action {
+  width: 100%;
+}
+
+.administrator-account-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 1.5rem;
+}
+
+.account-details-card {
+  container: account-details / inline-size;
+}
+
+.account-security-card {
+  container: account-security / inline-size;
+}
+
+.administrator-account-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.administrator-security-row {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@container administrator-account (min-width: 560px) {
+  .administrator-profile-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .administrator-profile-action {
+    width: auto;
+  }
+}
+
+@container administrator-account (min-width: 1040px) {
+  .administrator-account-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container account-details (min-width: 500px) {
+  .administrator-account-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container account-security (min-width: 500px) {
+  .administrator-security-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .administrator-security-action {
+    width: auto;
+  }
+}
+
 /* ── Responsive shell + surfaces ──
    Layout's <main> padding used to be an inline "32px", which cannot carry a
    media query. It lives here so it can scale with the viewport. */
