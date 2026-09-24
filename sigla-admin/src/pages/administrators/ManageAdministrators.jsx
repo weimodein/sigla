@@ -628,11 +628,19 @@ const ManageAdministrators = () => {
                   bg={C.primary}
                   onClick={() => handleEditOpen(u)}
                 />
-                <ActionBtn
-                  label="Deactivate"
-                  bg={C.red}
-                  onClick={() => handleDeactivate(u.id)}
-                />
+                {u.status === "deactivated" ? (
+                  <ActionBtn
+                    label="Reactivate"
+                    bg={C.green}
+                    onClick={() => handleReactivate(u.id)}
+                  />
+                ) : (
+                  <ActionBtn
+                    label="Deactivate"
+                    bg={C.red}
+                    onClick={() => handleDeactivate(u.id)}
+                  />
+                )}
                 <ActionBtn
                   label="Delete"
                   bg="#6b7280"
