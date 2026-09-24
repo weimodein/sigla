@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  AlertTriangle, Calendar, Hash, Lock, LogOut, Mail, Pencil, Shield, ShieldCheck,
+  AlertTriangle, Calendar, Check, Hash, Lock, LogOut, Mail, Pencil, Shield, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
+import VerificationCodeInput from "../../components/VerificationCodeInput.jsx";
+import {
+  createEmptyVerificationCode,
+  isVerificationCodeComplete,
+} from "../../utils/verificationCode.js";
 import { validateEmail, isKnownDomain, normalizeEmail } from "../../utils/emailValidation.js";
 import { setAuthMessage } from "../../utils/authMessage.js";
 import {
@@ -51,22 +56,34 @@ const StepIndicator = ({ steps, current }) => {
   const currentIndex = steps.findIndex((step) => step.key === current);
   return (
     <ol className="flex gap-2" aria-label="Progress">
-      {steps.map((step, index) => (
-        <li
-          key={step.key}
-          aria-current={index === currentIndex ? "step" : undefined}
-          className={`flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium ${
-            index <= currentIndex ? "bg-blue-50 text-blue-900" : "bg-gray-50 text-gray-400"
-          }`}
-        >
-          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] ${
-            index <= currentIndex ? "bg-blue-900 text-white" : "bg-gray-200 text-gray-500"
-          }`}>
-            {index + 1}
-          </span>
-          <span className="hidden truncate sm:block">{step.label}</span>
-        </li>
-      ))}
+      {steps.map((step, index) => {
+        const isComplete = index < currentIndex;
+        const isCurrent = index === currentIndex;
+        return (
+          <li
+            key={step.key}
+            aria-current={isCurrent ? "step" : undefined}
+            className={`flex flex-1 items-center gap-2 rounded-lg border px-2.5 py-2 text-[13px] font-medium ${
+              isCurrent
+                ? "border-blue-200 bg-blue-50 text-blue-900"
+                : isComplete
+                  ? "border-transparent bg-gray-50 text-gray-600"
+                  : "border-transparent bg-gray-50 text-gray-400"
+            }`}
+          >
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] ${
+              isCurrent
+                ? "bg-blue-900 text-white"
+                : isComplete
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-gray-200 text-gray-500"
+            }`}>
+              {isComplete ? <Check size={12} strokeWidth={3} /> : index + 1}
+            </span>
+            <span className="hidden truncate sm:block">{step.label}</span>
+          </li>
+        );
+      })}
     </ol>
   );
 };
@@ -102,11 +119,13 @@ const AdministratorAccount = () => {
   const [emailLoading, setEmailLoading] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [confirmEmail, setConfirmEmail] = useState(false);
-  const [emailCode, setEmailCode] = useState("");
+  const [emailCode, setEmailCode] = useState(createEmptyVerificationCode);
+  const [emailCodeError, setEmailCodeError] = useState("");
   const [emailCooldown, setEmailCooldown] = useState(0);
   const [passStep, setPassStep] = useState(null);
   const [passLoading, setPassLoading] = useState(false);
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(createEmptyVerificationCode);
+  const [passwordCodeError, setPasswordCodeError] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
@@ -155,7 +174,8 @@ const AdministratorAccount = () => {
     setEmailStep(null);
     setConfirmEmail(false);
     setNewEmail("");
-    setEmailCode("");
+    setEmailCode(createEmptyVerificationCode());
+    setEmailCodeError("");
     setEmailCooldown(0);
     if (emailCooldownRef.current) clearInterval(emailCooldownRef.current);
     emailCooldownRef.current = null;
@@ -171,6 +191,7 @@ const AdministratorAccount = () => {
       setNewEmail(normalizedEmail);
       toast.success(`Verification code sent to ${normalizedEmail}. Valid for 5 minutes.`);
       setEmailStep("verify");
+      setEmailCodeError("");
       startCooldown(emailCooldownRef, setEmailCooldown);
     } catch (error) {
       if (emailFlowActiveRef.current) {
@@ -194,6 +215,7 @@ const AdministratorAccount = () => {
       await requestEmailCode(newEmail);
       if (!emailFlowActiveRef.current) return;
       toast.success("New verification code sent.");
+      setEmailCodeError("");
       startCooldown(emailCooldownRef, setEmailCooldown);
     } catch (error) {
       if (emailFlowActiveRef.current) {
@@ -203,17 +225,21 @@ const AdministratorAccount = () => {
   };
 
   const handleVerifyEmailCode = async () => {
-    if (emailCode.length !== 6) return toast.error("Please enter the 6-digit verification code");
+    if (!isVerificationCodeComplete(emailCode)) {
+      setEmailCodeError("Enter the complete 6-digit verification code.");
+      return;
+    }
+    setEmailCodeError("");
     setEmailLoading(true);
     try {
-      await verifyEmailCode(newEmail, emailCode);
+      await verifyEmailCode(newEmail, emailCode.join(""));
       if (!emailFlowActiveRef.current) return;
       toast.success("Email verified and linked successfully.");
       await refreshUser();
       cancelEmailFlow();
     } catch (error) {
       if (emailFlowActiveRef.current) {
-        toast.error(error.response?.data?.message || "Invalid or expired code");
+        setEmailCodeError(error.response?.data?.message || "Invalid or expired code.");
       }
     } finally {
       setEmailLoading(false);
@@ -230,7 +256,8 @@ const AdministratorAccount = () => {
   const cancelPasswordFlow = () => {
     passwordFlowActiveRef.current = false;
     setPassStep(null);
-    setCode("");
+    setCode(createEmptyVerificationCode());
+    setPasswordCodeError("");
     setNewPass("");
     setConfirm("");
     setShowPasswords(false);
@@ -246,6 +273,7 @@ const AdministratorAccount = () => {
       if (!passwordFlowActiveRef.current) return;
       toast.success(`Verification code sent to ${user?.email}. Valid for 5 minutes.`);
       setPassStep("verify");
+      setPasswordCodeError("");
       startCooldown(passCooldownRef, setResendCooldown);
     } catch (error) {
       if (passwordFlowActiveRef.current) {
@@ -262,6 +290,7 @@ const AdministratorAccount = () => {
       await resendCode(user?.email, "password_reset");
       if (!passwordFlowActiveRef.current) return;
       toast.success("New verification code sent.");
+      setPasswordCodeError("");
       startCooldown(passCooldownRef, setResendCooldown);
     } catch (error) {
       if (passwordFlowActiveRef.current) {
@@ -271,15 +300,19 @@ const AdministratorAccount = () => {
   };
 
   const handleVerifyPasswordCode = async () => {
-    if (code.length !== 6) return toast.error("Please enter the 6-digit verification code");
+    if (!isVerificationCodeComplete(code)) {
+      setPasswordCodeError("Enter the complete 6-digit verification code.");
+      return;
+    }
+    setPasswordCodeError("");
     setPassLoading(true);
     try {
-      await verifyResetCode(user?.email, code);
+      await verifyResetCode(user?.email, code.join(""));
       if (!passwordFlowActiveRef.current) return;
       setPassStep("reset");
     } catch (error) {
       if (passwordFlowActiveRef.current) {
-        toast.error(error.response?.data?.message || "Invalid or expired code");
+        setPasswordCodeError(error.response?.data?.message || "Invalid or expired code.");
       }
     } finally {
       setPassLoading(false);
@@ -356,7 +389,8 @@ const AdministratorAccount = () => {
   const passwordMatches = newPass.length > 0 && newPass === confirm;
 
   return (
-    <div className="administrator-account-page space-y-6">
+    <>
+      <div className="administrator-account-page space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="page-title">Administrator Account</h1>
@@ -497,6 +531,9 @@ const AdministratorAccount = () => {
           </div>
         </section>
       </div>
+      {/* Keep dialogs outside this responsive container. CSS containment would
+          otherwise make their fixed backdrops start at the page content box. */}
+      </div>
 
       {isEditing && (
         <AppModal
@@ -512,12 +549,12 @@ const AdministratorAccount = () => {
             </Button>
           </>}
         >
-          <div className="space-y-5">
-            <p className="text-sm leading-6 text-gray-500">
+          <div className="account-modal-content">
+            <p className="account-modal-copy">
               This name is shown throughout the administrator portal and in activity records.
             </p>
-            <div>
-              <label htmlFor="account-username" className="mb-1.5 block text-sm font-semibold text-gray-700">Username</label>
+            <div className="account-modal-field">
+              <label htmlFor="account-username" className="account-modal-label">Username</label>
               <input
                 id="account-username"
                 type="text"
@@ -527,9 +564,9 @@ const AdministratorAccount = () => {
                 onChange={(event) => setProfileForm({ username: event.target.value })}
                 aria-describedby="username-help"
                 aria-invalid={profileForm.username.length > 0 && !usernameIsValid}
-                className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                className="account-modal-input"
               />
-              <div id="username-help" className="mt-1.5 flex items-center justify-between gap-3 text-xs">
+              <div id="username-help" className="account-modal-help-row account-modal-help">
                 <span className={profileForm.username.length > 0 && !usernameIsValid ? "font-medium text-red-600" : "text-gray-400"}>
                   Use 3–50 characters.
                 </span>
@@ -547,7 +584,9 @@ const AdministratorAccount = () => {
           onEnter={() => {
             if (emailLoading) return;
             if (emailStep === "enter") handleRequestEmailCode();
-            if (emailStep === "verify" && emailCode.length === 6) handleVerifyEmailCode();
+            if (emailStep === "verify" && isVerificationCodeComplete(emailCode)) {
+              handleVerifyEmailCode();
+            }
           }}
           footer={emailStep === "enter" ? <>
             <Button variant="secondary" onClick={cancelEmailFlow}>Cancel</Button>
@@ -555,18 +594,18 @@ const AdministratorAccount = () => {
               {emailLoading ? "Sending..." : "Send verification code"}
             </Button>
           </> : <>
-            <Button variant="secondary" onClick={() => { setEmailStep("enter"); setEmailCode(""); }}>Back</Button>
-            <Button onClick={handleVerifyEmailCode} loading={emailLoading} disabled={emailCode.length !== 6}>
+            <Button variant="secondary" onClick={() => { setEmailStep("enter"); setEmailCode(createEmptyVerificationCode()); setEmailCodeError(""); }}>Back</Button>
+            <Button onClick={handleVerifyEmailCode} loading={emailLoading} disabled={!isVerificationCodeComplete(emailCode)}>
               {emailLoading ? "Verifying..." : "Verify and update"}
             </Button>
           </>}
         >
-          <div className="space-y-5">
+          <div className="account-modal-content">
             <StepIndicator steps={[{ key: "enter", label: "New email" }, { key: "verify", label: "Verify" }]} current={emailStep} />
             {emailStep === "enter" && <>
               {user.email && <ModalNotice icon={<Mail size={17} />} title="Current email">{maskEmail(user.email)}</ModalNotice>}
-              <div>
-                <label htmlFor="new-email" className="mb-1.5 block text-sm font-semibold text-gray-700">New email address</label>
+              <div className="account-modal-field">
+                <label htmlFor="new-email" className="account-modal-label">New email address</label>
                 <input
                   id="new-email"
                   type="email"
@@ -578,9 +617,9 @@ const AdministratorAccount = () => {
                   onChange={(event) => setNewEmail(event.target.value)}
                   placeholder="you@example.com"
                   aria-describedby="new-email-help"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                  className="account-modal-input"
                 />
-                <p id="new-email-help" className="mt-1.5 text-xs leading-5 text-gray-500">
+                <p id="new-email-help" className="account-modal-help">
                   We’ll send a 6-digit code to confirm you can access this address.
                 </p>
               </div>
@@ -589,21 +628,25 @@ const AdministratorAccount = () => {
               <ModalNotice icon={<Mail size={17} />} title="Check your inbox">
                 A 6-digit code was sent to <strong className="break-all font-semibold text-gray-700">{newEmail}</strong>. It expires in 5 minutes.
               </ModalNotice>
-              <div>
-                <label htmlFor="email-code" className="mb-1.5 block text-sm font-semibold text-gray-700">Verification code</label>
-                <input
+              <div className="account-modal-field">
+                <VerificationCodeInput
                   id="email-code"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
                   value={emailCode}
-                  onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  maxLength={6}
-                  placeholder="000000"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-3 text-center text-xl font-semibold tracking-[0.45em] focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                  onChange={(nextCode) => {
+                    setEmailCode(nextCode);
+                    setEmailCodeError("");
+                  }}
+                  invalid={Boolean(emailCodeError)}
+                  errorId={emailCodeError ? "email-code-error" : undefined}
                 />
-                <div className="mt-2 flex justify-end">
-                  <button type="button" onClick={handleResendEmailCode} disabled={emailCooldown > 0} className="text-xs font-semibold text-blue-900 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400">
+                {emailCodeError && (
+                  <p id="email-code-error" className="account-modal-error" role="alert">
+                    {emailCodeError}
+                  </p>
+                )}
+                <div className="account-modal-code-actions">
+                  <span>Didn’t receive the code?</span>
+                  <button type="button" onClick={handleResendEmailCode} disabled={emailCooldown > 0}>
                     {emailCooldown > 0 ? `Resend code in ${emailCooldown}s` : "Resend code"}
                   </button>
                 </div>
@@ -642,15 +685,17 @@ const AdministratorAccount = () => {
           onEnter={() => {
             if (passLoading) return;
             if (passStep === "request") handleRequestCode();
-            if (passStep === "verify" && code.length === 6) handleVerifyPasswordCode();
+            if (passStep === "verify" && isVerificationCodeComplete(code)) {
+              handleVerifyPasswordCode();
+            }
             if (passStep === "reset") handleChangePassword();
           }}
           footer={passStep === "request" ? <>
             <Button variant="secondary" onClick={cancelPasswordFlow}>Cancel</Button>
             <Button onClick={handleRequestCode} loading={passLoading}>{passLoading ? "Sending..." : "Send verification code"}</Button>
           </> : passStep === "verify" ? <>
-            <Button variant="secondary" onClick={() => { setPassStep("request"); setCode(""); }}>Back</Button>
-            <Button onClick={handleVerifyPasswordCode} loading={passLoading} disabled={code.length !== 6}>
+            <Button variant="secondary" onClick={() => { setPassStep("request"); setCode(createEmptyVerificationCode()); setPasswordCodeError(""); }}>Back</Button>
+            <Button onClick={handleVerifyPasswordCode} loading={passLoading} disabled={!isVerificationCodeComplete(code)}>
               {passLoading ? "Verifying..." : "Verify code"}
             </Button>
           </> : <>
@@ -660,7 +705,7 @@ const AdministratorAccount = () => {
             </Button>
           </>}
         >
-          <div className="space-y-5">
+          <div className="account-modal-content">
             <StepIndicator steps={[
               { key: "request", label: "Send code" },
               { key: "verify", label: "Verify" },
@@ -675,29 +720,33 @@ const AdministratorAccount = () => {
               <ModalNotice icon={<ShieldCheck size={17} />} title="Check your inbox">
                 Enter the code sent to {maskEmail(user.email)}. It expires in 5 minutes.
               </ModalNotice>
-              <div>
-                <label htmlFor="password-code" className="mb-1.5 block text-sm font-semibold text-gray-700">Verification code</label>
-                <input
+              <div className="account-modal-field">
+                <VerificationCodeInput
                   id="password-code"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
                   value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  maxLength={6}
-                  placeholder="000000"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-3 text-center text-xl font-semibold tracking-[0.45em] focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                  onChange={(nextCode) => {
+                    setCode(nextCode);
+                    setPasswordCodeError("");
+                  }}
+                  invalid={Boolean(passwordCodeError)}
+                  errorId={passwordCodeError ? "password-code-error" : undefined}
                 />
-                <div className="mt-2 flex justify-end">
-                  <button type="button" onClick={handleResendPasswordCode} disabled={resendCooldown > 0} className="text-xs font-semibold text-blue-900 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400">
+                {passwordCodeError && (
+                  <p id="password-code-error" className="account-modal-error" role="alert">
+                    {passwordCodeError}
+                  </p>
+                )}
+                <div className="account-modal-code-actions">
+                  <span>Didn’t receive the code?</span>
+                  <button type="button" onClick={handleResendPasswordCode} disabled={resendCooldown > 0}>
                     {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
                   </button>
                 </div>
               </div>
             </>}
             {passStep === "reset" && <>
-              <div>
-                <label htmlFor="new-password" className="mb-1.5 block text-sm font-semibold text-gray-700">New password</label>
+              <div className="account-modal-field">
+                <label htmlFor="new-password" className="account-modal-label">New password</label>
                 <input
                   id="new-password"
                   type={showPasswords ? "text" : "password"}
@@ -705,12 +754,12 @@ const AdministratorAccount = () => {
                   maxLength={PASSWORD_MAX}
                   value={newPass}
                   onChange={(event) => setNewPass(event.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                  className="account-modal-input"
                 />
-                <p className="mt-1.5 text-xs leading-5 text-gray-500">{PASSWORD_HELP}</p>
+                <p className="account-modal-help">{PASSWORD_HELP}</p>
               </div>
-              <div>
-                <label htmlFor="confirm-password" className="mb-1.5 block text-sm font-semibold text-gray-700">Confirm new password</label>
+              <div className="account-modal-field">
+                <label htmlFor="confirm-password" className="account-modal-label">Confirm new password</label>
                 <input
                   id="confirm-password"
                   type={showPasswords ? "text" : "password"}
@@ -720,10 +769,10 @@ const AdministratorAccount = () => {
                   onChange={(event) => setConfirm(event.target.value)}
                   aria-invalid={confirm.length > 0 && !passwordMatches}
                   aria-describedby="password-match-help"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/15"
+                  className="account-modal-input"
                 />
                 {confirm.length > 0 && (
-                  <p id="password-match-help" className={`mt-1.5 text-xs font-medium ${passwordMatches ? "text-emerald-600" : "text-red-600"}`}>
+                  <p id="password-match-help" className={`account-password-match ${passwordMatches ? "text-emerald-600" : "text-red-600"}`} aria-live="polite">
                     {passwordMatches ? "Passwords match." : "Passwords do not match yet."}
                   </p>
                 )}
@@ -736,7 +785,7 @@ const AdministratorAccount = () => {
           </div>
         </AppModal>
       )}
-    </div>
+    </>
   );
 };
 
