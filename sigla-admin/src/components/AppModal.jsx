@@ -89,9 +89,18 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
   // modals (e.g. a confirmation dialog over a form modal) overlap.
   useEffect(() => {
     const count = Number(document.body.dataset.modalLockCount || "0");
+    const appScroller = document.querySelector(".app-main");
     if (count === 0) {
       document.body.dataset.prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
+
+      // Layout's main region is its own scroll container. Locking only <body>
+      // leaves that scrollbar visible and allows the page to move behind a
+      // modal, which is especially noticeable on the account screen.
+      if (appScroller instanceof HTMLElement) {
+        document.body.dataset.prevAppOverflowY = appScroller.style.overflowY;
+        appScroller.style.overflowY = "hidden";
+      }
     }
     document.body.dataset.modalLockCount = String(count + 1);
 
@@ -99,8 +108,13 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
       const next = Number(document.body.dataset.modalLockCount || "1") - 1;
       if (next <= 0) {
         document.body.style.overflow = document.body.dataset.prevOverflow || "";
+        if (appScroller instanceof HTMLElement) {
+          appScroller.style.overflowY =
+            document.body.dataset.prevAppOverflowY || "";
+        }
         delete document.body.dataset.modalLockCount;
         delete document.body.dataset.prevOverflow;
+        delete document.body.dataset.prevAppOverflowY;
       } else {
         document.body.dataset.modalLockCount = String(next);
       }
@@ -110,6 +124,7 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
   // Focus first element on open; restore on close
   useEffect(() => {
     const panel = panelRef.current;
+    const trigger = triggerRef.current;
     if (!panel) return;
     const first = panel.querySelectorAll(FOCUSABLE)[0];
     first?.focus();
@@ -118,7 +133,6 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
       // modal-driven delete its row — and therefore the button that opened the
       // modal — is gone, and focusing a detached node silently drops focus to
       // <body>, so the next Tab restarts from the top of the page.
-      const trigger = triggerRef.current;
       if (trigger && document.contains(trigger)) {
         trigger.focus?.();
       } else {
@@ -206,7 +220,9 @@ const AppModal = ({ title, onClose, children, footer, onEnter, wide = false }) =
         </div>
         {/* The only scrolling region; min-h-0 is required or the flex item
             refuses to shrink below its content and overflow never kicks in. */}
-        <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">{children}</div>
+        <div className="modal-scroll-body px-6 py-5 overflow-y-auto flex-1 min-h-0">
+          {children}
+        </div>
         {footer && <ModalFooter>{footer}</ModalFooter>}
       </div>
     </div>

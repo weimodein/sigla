@@ -509,6 +509,46 @@ body {
    media query. It lives here so it can scale with the viewport. */
 .app-main {
   padding: 32px;
+  scrollbar-gutter: stable;
+}
+
+/* Keep long pages and modal forms scrollable without letting the native Windows
+   scrollbar dominate the interface. The thumb remains visible and widens in
+   contrast on hover, so discoverability is preserved. */
+.app-main,
+.modal-scroll-body {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.app-main::-webkit-scrollbar,
+.modal-scroll-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.app-main::-webkit-scrollbar-track,
+.modal-scroll-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-main::-webkit-scrollbar-thumb,
+.modal-scroll-body::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #cbd5e1;
+  background-clip: padding-box;
+}
+
+.app-main::-webkit-scrollbar-thumb:hover,
+.modal-scroll-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+}
+
+.app-main::-webkit-scrollbar-button,
+.modal-scroll-body::-webkit-scrollbar-button {
+  display: none;
 }
 
 /* One block shrinks every card surface in the app. At 24px the padding alone
