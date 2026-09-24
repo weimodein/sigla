@@ -991,10 +991,6 @@ const ManageAdministrators = () => {
           }
         >
           <div className="space-y-3">
-            <p className="text-sm leading-relaxed" style={{ color: "#4b5563" }}>
-              Create an administrator account with a username and password. The
-              administrator links their email address on first login.
-            </p>
             <div>
               <label
                 className="block text-xs font-medium mb-1"
