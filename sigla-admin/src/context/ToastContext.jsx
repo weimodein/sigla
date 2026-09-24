@@ -1,134 +1,59 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { AlertTriangle, CheckCircle, Info, X, XCircle } from "lucide-react";
+import { createContext, useContext, useState, useCallback, useMemo } from "react";
+import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
 const ToastContext = createContext(null);
 
-const TOAST_TYPES = {
-  success: { icon: CheckCircle, label: "Success", duration: 3500 },
-  error: { icon: XCircle, label: "Error", duration: 6000 },
-  warning: { icon: AlertTriangle, label: "Warning", duration: 5000 },
-  info: { icon: Info, label: "Information", duration: 4000 },
+const ICONS = {
+  success: CheckCircle,
+  error: XCircle,
+  warning: AlertTriangle,
+  info: Info,
 };
 
-const MAX_VISIBLE_TOASTS = 4;
-const EXIT_FALLBACK_MS = 350;
+const COLORS = {
+  success: "bg-green-50 border-green-200 text-green-800",
+  error: "bg-red-50 border-red-200 text-red-800",
+  warning: "bg-yellow-50 border-yellow-200 text-yellow-800",
+  info: "bg-blue-50 border-blue-200 text-blue-800",
+};
 
-const normalizeMessage = (message) => {
-  if (message instanceof Error) return message.message;
-  if (typeof message === "string") return message.trim();
-  if (message == null) return "";
-  return String(message);
+const ICON_COLORS = {
+  success: "text-green-500",
+  error: "text-red-500",
+  warning: "text-yellow-500",
+  info: "text-blue-500",
 };
 
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
-  const nextIdRef = useRef(0);
-  const autoDismissTimersRef = useRef(new Map());
-  const exitTimersRef = useRef(new Map());
 
-  const clearTimer = useCallback((timerMap, id) => {
-    const timer = timerMap.current.get(id);
-    if (timer) window.clearTimeout(timer);
-    timerMap.current.delete(id);
+  // Both removal paths mark the toast `leaving` rather than dropping it, so the
+  // exit animation can play; the node really unmounts on animationend.
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) =>
+      prev.map((toast) => (
+        toast.id === id ? { ...toast, leaving: true } : toast
+      )),
+    );
   }, []);
 
   const dropToast = useCallback((id) => {
-    clearTimer(autoDismissTimersRef, id);
-    clearTimer(exitTimersRef, id);
-    setToasts((current) => current.filter((toast) => toast.id !== id));
-  }, [clearTimer]);
-
-  const dismissToast = useCallback((id) => {
-    clearTimer(autoDismissTimersRef, id);
-    setToasts((current) => current.map((toast) => (
-      toast.id === id && !toast.leaving
-        ? { ...toast, leaving: true }
-        : toast
-    )));
-
-    clearTimer(exitTimersRef, id);
-    exitTimersRef.current.set(
-      id,
-      window.setTimeout(() => dropToast(id), EXIT_FALLBACK_MS),
-    );
-  }, [clearTimer, dropToast]);
-
-  const scheduleDismiss = useCallback((id, duration) => {
-    clearTimer(autoDismissTimersRef, id);
-    if (duration <= 0) return;
-    autoDismissTimersRef.current.set(
-      id,
-      window.setTimeout(() => dismissToast(id), duration),
-    );
-  }, [clearTimer, dismissToast]);
-
-  const addToast = useCallback((message, requestedType = "info", duration) => {
-    const text = normalizeMessage(message);
-    if (!text) return null;
-
-    const type = TOAST_TYPES[requestedType] ? requestedType : "info";
-    const lifetime = duration ?? TOAST_TYPES[type].duration;
-    const id = `${Date.now()}-${nextIdRef.current++}`;
-    const nextToast = {
-      id,
-      message: text,
-      type,
-      duration: lifetime,
-      leaving: false,
-    };
-
-    // Replace an identical active notification and cap the visible queue. This
-    // prevents repeated API failures from flooding the screen.
-    setToasts((current) => [
-      ...current.filter((toast) => (
-        toast.leaving || toast.type !== type || toast.message !== text
-      )),
-      nextToast,
-    ].slice(-MAX_VISIBLE_TOASTS));
-    scheduleDismiss(id, lifetime);
-    return id;
-  }, [scheduleDismiss]);
-
-  const pauseToast = useCallback((id) => {
-    clearTimer(autoDismissTimersRef, id);
-  }, [clearTimer]);
-
-  const resumeToast = useCallback((toast, element) => {
-    if (toast.leaving || toast.duration <= 0) return;
-    if (element.matches(":hover") || element.contains(document.activeElement)) {
-      return;
-    }
-    // Restarting the duration after interaction gives the user enough time to
-    // finish reading rather than dismissing immediately after pointer exit.
-    scheduleDismiss(toast.id, toast.duration);
-  }, [scheduleDismiss]);
-
-  useEffect(() => {
-    const activeIds = new Set(toasts.map((toast) => toast.id));
-    [autoDismissTimersRef, exitTimersRef].forEach((timerMap) => {
-      timerMap.current.forEach((timer, id) => {
-        if (!activeIds.has(id)) {
-          window.clearTimeout(timer);
-          timerMap.current.delete(id);
-        }
-      });
-    });
-  }, [toasts]);
-
-  useEffect(() => () => {
-    [autoDismissTimersRef, exitTimersRef].forEach((timerMap) => {
-      timerMap.current.forEach((timer) => window.clearTimeout(timer));
-      timerMap.current.clear();
-    });
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
+
+  const addToast = useCallback((message, type = "info", duration = 4000) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type, leaving: false }]);
+    if (duration > 0) {
+      setTimeout(() => {
+        dismissToast(id);
+        // Animation events may not fire while the tab is in the background.
+        setTimeout(() => dropToast(id), 400);
+      }, duration);
+    }
+  }, [dismissToast, dropToast]);
+
+  const removeToast = useCallback((id) => dismissToast(id), [dismissToast]);
 
   const success = useCallback(
     (message, duration) => addToast(message, "success", duration),
@@ -155,57 +80,42 @@ export const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <section
-        className="toast-viewport"
-        aria-label="Notifications"
-        aria-relevant="additions"
+      <div
+        className="fixed top-4 left-4 right-4 w-auto sm:left-auto sm:w-80 space-y-2 max-h-screen overflow-y-auto"
+        style={{ zIndex: 2100 }}
       >
         {toasts.map((toast) => {
-          const config = TOAST_TYPES[toast.type];
-          const Icon = config.icon;
-
+          const Icon = ICONS[toast.type];
           return (
-            <article
+            <div
               key={toast.id}
-              data-toast-type={toast.type}
-              role={toast.type === "error" ? "alert" : "status"}
-              aria-atomic="true"
-              className={`toast-card ${
+              className={`border rounded-lg px-4 py-3 shadow-lg flex items-start gap-3 ${
                 toast.leaving ? "toast-out" : "animate-slide-in"
-              }`}
-              onMouseEnter={() => pauseToast(toast.id)}
-              onMouseLeave={(event) => resumeToast(toast, event.currentTarget)}
-              onFocusCapture={() => pauseToast(toast.id)}
-              onBlurCapture={(event) => resumeToast(toast, event.currentTarget)}
+              } ${COLORS[toast.type]}`}
               onAnimationEnd={(event) => {
                 if (event.animationName === "toast-out") dropToast(toast.id);
               }}
             >
-              <span className="toast-icon" aria-hidden="true">
-                <Icon size={18} strokeWidth={2.2} />
-              </span>
-              <div className="toast-content">
-                <p className="toast-title">{config.label}</p>
-                <p className="toast-message">{toast.message}</p>
-              </div>
+              <Icon
+                size={18}
+                className={`mt-0.5 shrink-0 ${ICON_COLORS[toast.type]}`}
+              />
+              <p className="text-sm leading-snug flex-1">{toast.message}</p>
               <button
-                type="button"
-                onClick={() => dismissToast(toast.id)}
-                className="toast-dismiss"
-                aria-label={`Dismiss ${config.label.toLowerCase()} notification`}
+                onClick={() => removeToast(toast.id)}
+                className="interactive shrink-0 opacity-50 hover:opacity-100"
+                aria-label="Dismiss notification"
               >
                 <X size={16} />
               </button>
-            </article>
+            </div>
           );
         })}
-      </section>
+      </div>
     </ToastContext.Provider>
   );
 };
 
-// Kept beside the provider to preserve the app-wide import contract.
-// eslint-disable-next-line react-refresh/only-export-components
 export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) {
