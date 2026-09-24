@@ -1,84 +1,37 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useToast } from "../../context/ToastContext.jsx";
-// Aliased — this file has its own local `Button` for the full-width form submit.
-import ModalButton from "../../components/Button.jsx";
-import { useModalKeys } from "../../components/useModalKeys.js";
 import {
   forgotPassword,
-  verifyResetCode,
-  resetPassword,
   resendCode,
+  resetPassword,
+  verifyResetCode,
 } from "../../api/authApi.js";
-import { Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
-import { validateEmail, isKnownDomain } from "../../utils/emailValidation.js";
+import AppModal from "../../components/AppModal.jsx";
+import Button from "../../components/Button.jsx";
+import { useToast } from "../../context/ToastContext.jsx";
+import { isKnownDomain, validateEmail } from "../../utils/emailValidation.js";
 
-// Mirrors validatePassword in sigla-backend/src/utils/validators.js: >=8 chars,
-// at least one letter, at least one number. Same rule the other screens use.
-const isValidPassword = (pw) =>
-  pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]/.test(pw);
+const isValidPassword = (password) =>
+  password.length >= 8 && /[A-Za-z]/.test(password) && /[0-9]/.test(password);
 
-const C = {
-  text: "#1f2937",
-  background: "#f3f4f6",
-  primary: "#1e3a8a",
-  secondary: "#1d4ed8",
-  accent: "#3f8efc",
+const STEP_COPY = {
+  forgot: {
+    eyebrow: "Password recovery · Step 1 of 3",
+    title: "Reset your password",
+    description: "Enter the email address linked to your administrator account.",
+  },
+  verify: {
+    eyebrow: "Password recovery · Step 2 of 3",
+    title: "Check your email",
+    description: "Enter the six-digit verification code. It expires after 5 minutes.",
+  },
+  reset: {
+    eyebrow: "Password recovery · Step 3 of 3",
+    title: "Create a new password",
+    description: "Choose a secure password to regain access to your account.",
+  },
 };
-
-// Single source for each step's heading. The mobile band renders from this map
-// and each form renders the same string for desktop, so the two twins cannot
-// drift apart — only one is ever visible (see .sigla-band-heading in index.css).
-const STEP_HEADINGS = {
-  forgot: "Forgot Password?",
-  verify: "Verify Your Email",
-  reset: "Set New Password",
-};
-
-const FloatingInput = ({
-  id, type, value, onChange, label,
-  maxLength, inputMode, pattern, autoComplete, icon,
-}) => (
-  <div style={S.inputGroup}>
-    <input
-      id={id} type={type} value={value} onChange={onChange}
-      required maxLength={maxLength} inputMode={inputMode}
-      pattern={pattern} autoComplete={autoComplete}
-      className="fp-input" style={S.input} placeholder=" "
-    />
-    <label style={S.label}>{label}</label>
-    {icon && <span style={S.inputIcon}>{icon}</span>}
-    <span className="fp-underline" style={S.underline} />
-  </div>
-);
-
-const Button = ({ disabled, loading, children }) => {
-  const isDisabled = loading || disabled;
-  return (
-    <button
-      type="submit"
-      disabled={isDisabled}
-      style={{ ...S.btn, ...(isDisabled ? { opacity: 0.7, cursor: "not-allowed" } : {}) }}
-    >
-      {loading && (
-        <Loader2
-          size={16}
-          style={{ display: "inline-block", animation: "fp-spin 0.8s ease-in-out infinite" }}
-        />
-      )}
-      {children}
-    </button>
-  );
-};
-
-const PasswordToggleIcon = ({ showPass, onToggle }) => (
-  <button
-    type="button" onClick={onToggle} style={S.eyeToggle}
-    tabIndex={-1} aria-label={showPass ? "Hide password" : "Show password"}
-  >
-    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-  </button>
-);
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -86,66 +39,32 @@ const ForgotPassword = () => {
 
   const [step, setStep] = useState("forgot");
   const [loading, setLoading] = useState(false);
-
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [showNewPass, setShowNewPass] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [code, setCode] = useState(() => Array(6).fill(""));
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  // Set when the address is well formed but its domain is unfamiliar — the user
-  // confirms before a code is sent to a possibly mistyped address.
   const [confirmEmail, setConfirmEmail] = useState(false);
-
-  useEffect(() => {
-    if (document.getElementById("fp-dynamic-styles")) return;
-    const style = document.createElement("style");
-    style.id = "fp-dynamic-styles";
-    style.textContent = `
-      .fp-input:focus {
-        border-color: ${C.primary} !important;
-        box-shadow: 0 2px 0 ${C.primary};
-      }
-      .fp-input:focus + label,
-      .fp-input:not(:placeholder-shown) + label {
-        top: -10px !important;
-        font-size: var(--type-meta) !important;
-        font-weight: 500 !important;
-        color: ${C.primary} !important;
-      }
-      .fp-input:focus ~ .fp-underline { width: 100% !important; }
-      .fp-input[type="password"]::-ms-reveal,
-      .fp-input[type="password"]::-ms-clear { display: none; }
-      .fp-input::-webkit-credentials-auto-fill-button,
-      .fp-input::-webkit-password-toggle { display: none; }
-      @keyframes fp-spin { to { transform: rotate(360deg); } }
-      @keyframes fp-fadein {
-        from { opacity: 0; transform: translateY(8px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      .fp-form-in { animation: fp-fadein 0.28s ease forwards; }
-    `;
-    document.head.appendChild(style);
-  }, []);
-
-  // Held in a ref so unmount can clear it. This page navigates to /login right
-  // after a successful reset — while the 60s cooldown is still running — so
-  // without cleanup every successful reset left a 1 Hz timer ticking against an
-  // unmounted component for up to a minute.
+  const [emailError, setEmailError] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [passwordErrors, setPasswordErrors] = useState({});
   const cooldownRef = useRef(null);
+  const otpRefs = useRef([]);
+
+  const screen = STEP_COPY[step];
 
   const startCooldown = useCallback(() => {
     if (cooldownRef.current) clearInterval(cooldownRef.current);
     setResendCooldown(60);
     cooldownRef.current = setInterval(() => {
-      setResendCooldown((p) => {
-        if (p <= 1) {
+      setResendCooldown((current) => {
+        if (current <= 1) {
           clearInterval(cooldownRef.current);
           cooldownRef.current = null;
           return 0;
         }
-        return p - 1;
+        return current - 1;
       });
     }, 1000);
   }, []);
@@ -154,32 +73,29 @@ const ForgotPassword = () => {
     if (cooldownRef.current) clearInterval(cooldownRef.current);
   }, []);
 
-  // Validate the shape, then ask for confirmation when the domain is unfamiliar.
-  //
-  // The prompt matters MORE here than during onboarding. To avoid revealing
-  // which addresses have accounts, the server answers a typo'd address exactly
-  // as it answers a real one — 200, same message, no email sent. The user is
-  // then dropped on the code screen waiting for mail that will never arrive,
-  // with nothing to distinguish "wrong address" from "slow email". A second
-  // look before sending is the only thing that catches it.
   const sendResetCode = useCallback(async () => {
+    const normalizedEmail = email.trim();
     setConfirmEmail(false);
     setLoading(true);
+    setEmailError("");
     try {
-      await forgotPassword(email);
-      toast.success("Verification code sent. Valid for 5 minutes.");
+      await forgotPassword(normalizedEmail);
+      setEmail(normalizedEmail);
       setStep("verify");
       startCooldown();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to send code");
-    } finally { setLoading(false); }
-  }, [email, toast, startCooldown]);
+      toast.success("Verification code sent. Valid for 5 minutes.");
+    } catch (error) {
+      setEmailError(error.response?.data?.message || "Failed to send verification code.");
+    } finally {
+      setLoading(false);
+    }
+  }, [email, startCooldown, toast]);
 
-  const handleForgot = useCallback((e) => {
-    e.preventDefault();
-    const emailError = validateEmail(email);
-    if (emailError) {
-      toast.error(emailError);
+  const handleForgot = (event) => {
+    event.preventDefault();
+    const validationError = validateEmail(email);
+    if (validationError) {
+      setEmailError(validationError);
       return;
     }
     if (!isKnownDomain(email)) {
@@ -187,429 +103,360 @@ const ForgotPassword = () => {
       return;
     }
     sendResetCode();
-  }, [email, toast, sendResetCode]);
+  };
 
-  // Hand-rolled overlay, not an AppModal — wire the keyboard contract explicitly.
-  // The overlay renders outside the page's <form> elements, and the hook calls
-  // preventDefault, so Enter here cannot also submit the form behind it.
-  useModalKeys({
-    onEscape: () => setConfirmEmail(false),
-    onEnter: sendResetCode,
-    enabled: () => confirmEmail,
-  });
-
-  const handleVerify = useCallback(async (e) => {
-    e.preventDefault();
-    if (code.length !== 6) { toast.error("Please enter the 6-digit code"); return; }
-    setLoading(true);
-    try {
-      await verifyResetCode(email, code);
-      toast.success("Code verified. Set your new password.");
-      setStep("reset");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Invalid or expired code");
-    } finally { setLoading(false); }
-  }, [email, code, toast]);
-
-  const handleResend = useCallback(async () => {
-    if (resendCooldown > 0) return;
-    try {
-      await resendCode(email, "password_reset");
-      toast.success("New code sent.");
-      startCooldown();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to resend code");
-    }
-  }, [email, resendCooldown, toast, startCooldown]);
-
-  const handleReset = useCallback(async (e) => {
-    e.preventDefault();
-    if (newPass !== confirm) { toast.error("Passwords do not match"); return; }
-    // Must match validatePassword in sigla-backend/src/utils/validators.js —
-    // this used to allow 6 characters, so "abc123" passed here and was rejected
-    // by the server after a round-trip.
-    if (!isValidPassword(newPass)) {
-      toast.error("Password must be at least 8 characters and include a letter and a number");
+  const updateOtp = (index, rawValue) => {
+    setCodeError("");
+    const digits = rawValue.replace(/\D/g, "");
+    if (!digits) {
+      setCode((current) => current.map((digit, i) => (i === index ? "" : digit)));
       return;
     }
+
+    setCode((current) => {
+      const next = [...current];
+      digits
+        .slice(0, 6 - index)
+        .split("")
+        .forEach((digit, offset) => {
+          next[index + offset] = digit;
+        });
+      return next;
+    });
+    otpRefs.current[Math.min(index + digits.length, 5)]?.focus();
+  };
+
+  const handleOtpKeyDown = (index, event) => {
+    if (event.key === "Backspace" && !code[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (event.key === "ArrowRight" && index < 5) {
+      event.preventDefault();
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (event) => {
+    const digits = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!digits) return;
+    event.preventDefault();
+    setCodeError("");
+    setCode(Array.from({ length: 6 }, (_, index) => digits[index] || ""));
+    otpRefs.current[Math.min(digits.length, 5)]?.focus();
+  };
+
+  const handleVerify = async (event) => {
+    event.preventDefault();
+    if (code.some((digit) => !digit)) {
+      setCodeError("Enter the complete 6-digit verification code.");
+      return;
+    }
+
     setLoading(true);
+    setCodeError("");
     try {
-      await resetPassword(email, newPass);
+      await verifyResetCode(email, code.join(""));
+      setStep("reset");
+      toast.success("Code verified. Create your new password.");
+    } catch (error) {
+      setCodeError(error.response?.data?.message || "The code is invalid or has expired.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setLoading(true);
+    setCodeError("");
+    try {
+      await resendCode(email, "password_reset");
+      startCooldown();
+      toast.success("A new verification code was sent.");
+    } catch (error) {
+      setCodeError(error.response?.data?.message || "Failed to resend the code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async (event) => {
+    event.preventDefault();
+    const errors = {};
+    if (!isValidPassword(newPassword)) {
+      errors.newPassword = "Use at least 8 characters, including a letter and a number.";
+    }
+    if (!confirmPassword) {
+      errors.confirmPassword = "Confirm your new password.";
+    } else if (newPassword !== confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors);
+      return;
+    }
+
+    setLoading(true);
+    setPasswordErrors({});
+    try {
+      await resetPassword(email, newPassword);
       toast.success("Password reset successfully. You can now log in.");
       navigate("/login");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to reset password");
-    } finally { setLoading(false); }
-  }, [newPass, confirm, email, toast, navigate]);
-
-  const passwordsMatch = newPass && confirm && newPass === confirm;
-  const passwordsMismatch = newPass && confirm && newPass !== confirm;
+    } catch (error) {
+      setPasswordErrors({ form: error.response?.data?.message || "Failed to reset password." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="auth-page-wrapper" style={S.pageWrapper}>
-      <div style={S.background} />
-      <div className="fp-container" style={S.container}>
-
-        {/* Left panel — form */}
-        <div className="fp-left" style={S.leftPanel}>
-
-          {/* ── FORGOT PASSWORD ── */}
-          {step === "forgot" && (
-            <form key="forgot" className="fp-form-in" onSubmit={handleForgot}>
-              <h2 className="sigla-form-heading" style={S.heading}>
-                {STEP_HEADINGS.forgot}
-              </h2>
-              <p style={S.subtitle}>
-                Enter the email address linked to your admin account.
-              </p>
-              <div style={S.fields}>
-                <FloatingInput
-                  id="forgot-email" type="email" value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  label="Email Address"
-                />
-              </div>
-              <Button disabled={loading} loading={loading}>
-                {loading ? "Sending..." : "Send Verification Code"}
-              </Button>
-              <div style={S.footer}>
-                <p style={S.footerP}>Remember your password?</p>
-                <button type="button" onClick={() => navigate("/login")} style={S.footerLink}>
-                  Back to login
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ── VERIFY CODE ── */}
-          {step === "verify" && (
-            <form key="verify" className="fp-form-in" onSubmit={handleVerify}>
-              <h2 className="sigla-form-heading" style={S.heading}>
-                {STEP_HEADINGS.verify}
-              </h2>
-              <p style={S.subtitle}>
-                A 6-digit code was sent to{" "}
-                <strong style={{ color: C.primary }}>{email}</strong>.
-                Enter it below.
-              </p>
-              <div style={S.fields}>
-                <FloatingInput
-                  id="code" type="text" value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  label="Verification Code"
-                  maxLength={6} inputMode="numeric" pattern="[0-9]{6}"
-                />
-              </div>
-              <Button disabled={loading || code.length !== 6} loading={loading}>
-                {loading ? "Verifying..." : "Verify Code"}
-              </Button>
-              <div style={S.linkRow}>
-                <button
-                  type="button" onClick={handleResend}
-                  disabled={resendCooldown > 0}
-                  style={{ ...S.link, ...(resendCooldown > 0 ? S.linkDisabled : {}) }}
-                >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
-                </button>
-                <button type="button" onClick={() => navigate("/login")} style={S.link}>
-                  Back to login
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ── RESET PASSWORD ── */}
-          {step === "reset" && (
-            <form key="reset" className="fp-form-in" onSubmit={handleReset}>
-              <h2 className="sigla-form-heading" style={S.heading}>
-                {STEP_HEADINGS.reset}
-              </h2>
-              <p style={S.subtitle}>Choose a strong password for your account.</p>
-              <div style={S.fields}>
-                <FloatingInput
-                  id="new-pass"
-                  type={showNewPass ? "text" : "password"}
-                  value={newPass}
-                  onChange={(e) => setNewPass(e.target.value)}
-                  label="New Password"
-                  autoComplete="new-password"
-                  icon={
-                    <PasswordToggleIcon
-                      showPass={showNewPass}
-                      onToggle={() => setShowNewPass(s => !s)}
-                    />
-                  }
-                />
-                <div>
-                  <FloatingInput
-                    id="confirm-pass"
-                    type={showConfirm ? "text" : "password"}
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                    label="Confirm Password"
-                    autoComplete="new-password"
-                    icon={
-                      <PasswordToggleIcon
-                        showPass={showConfirm}
-                        onToggle={() => setShowConfirm(s => !s)}
-                      />
-                    }
-                  />
-                  {passwordsMatch && (
-                    <p style={{ ...S.matchHint, color: "#16a34a" }}>✓ Passwords match</p>
-                  )}
-                  {passwordsMismatch && (
-                    <p style={{ ...S.matchHint, color: "#dc2626" }}>✗ Passwords do not match</p>
-                  )}
-                </div>
-              </div>
-              <Button disabled={loading || !passwordsMatch} loading={loading}>
-                {loading ? "Resetting..." : "Reset Password"}
-              </Button>
-              <div style={S.footer}>
-                <p style={S.footerP}>Done resetting?</p>
-                <button type="button" onClick={() => navigate("/login")} style={S.footerLink}>
-                  Back to login
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-
-        {/* Right panel — logo */}
-        <div className="fp-right" style={S.rightPanel}>
-          {/* Sized in index.css: bleeds past the panel on desktop, fits whole
-              inside a compact band once the panels stack. */}
-          <img src="/logo.png" alt="SIGLA Logo" />
-          {/* Mobile-only band heading, mirroring Login's. Shows the current
-              step's heading; the twin inside each form is hidden ≤640px by
-              index.css so only one is ever visible or announced. The subtitles
-              stay in the form with their fields — the verify one interpolates
-              the email address. */}
-          <h2 className="sigla-band-heading">{STEP_HEADINGS[step]}</h2>
-        </div>
-      </div>
-
-      {/* Unfamiliar-domain confirmation. A mistyped address is especially costly
-          here: to avoid revealing which addresses have accounts, the server
-          answers an unknown address exactly as it answers a real one, so a typo
-          silently sends nothing and the next code cannot be requested for a
-          minute. Mirrors the same step in Onboarding. */}
-      {confirmEmail && (
-        <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 2000,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16, background: "rgba(0,0,0,0.4)",
-          }}
-          onClick={() => setConfirmEmail(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "white", borderRadius: 16,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-              width: "100%", maxWidth: 420, padding: 24,
-            }}
+    <main className="onboarding-page password-recovery-page">
+      <section className="onboarding-card" aria-labelledby="password-recovery-title">
+        <header className="onboarding-header">
+          <p className="onboarding-step-label">{screen.eyebrow}</p>
+          <h1
+            id="password-recovery-title"
+            className={`page-title ${step === "reset" ? "onboarding-title-one-line" : ""}`}
           >
-            <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-              <AlertTriangle size={20} style={{ color: "#f59e0b", flexShrink: 0 }} />
-              <h3 className="section-title">
-                Double-check this email address
-              </h3>
+            {screen.title}
+          </h1>
+          <p className="page-subtitle">{screen.description}</p>
+        </header>
+
+        {step === "forgot" && (
+          <form className="onboarding-form" onSubmit={handleForgot} noValidate>
+            <div className="onboarding-field">
+              <label htmlFor="forgot-email">Email address</label>
+              <input
+                id="forgot-email"
+                name="email"
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setEmailError("");
+                }}
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck="false"
+                className="onboarding-input"
+                aria-invalid={emailError ? "true" : undefined}
+                aria-describedby={emailError ? "forgot-email-error" : undefined}
+                autoFocus
+                required
+              />
+              {emailError && (
+                <p id="forgot-email-error" className="onboarding-error" role="alert">
+                  {emailError}
+                </p>
+              )}
             </div>
-            <p style={{ fontSize: "var(--type-body)", color: "#6b7280", margin: "0 0 8px" }}>
-              The verification code will be sent to:
-            </p>
-            <p
-              style={{
-                fontSize: "var(--type-body)", fontWeight: 600, color: C.text,
-                wordBreak: "break-all", background: "#f9fafb",
-                border: "1px solid #e5e7eb", borderRadius: 8,
-                padding: "10px 12px", margin: "0 0 12px",
-              }}
+            <Button type="submit" className="onboarding-submit" loading={loading}>
+              Send verification code
+            </Button>
+            <div className="password-recovery-back">
+              <span>Remember your password?</span>
+              <button type="button" onClick={() => navigate("/login")}>Back to login</button>
+            </div>
+          </form>
+        )}
+
+        {step === "verify" && (
+          <form className="onboarding-form" onSubmit={handleVerify} noValidate>
+            <div className="password-recovery-destination">
+              <span>Code sent to</span>
+              <strong>{email}</strong>
+            </div>
+            <fieldset
+              className="onboarding-otp-fieldset"
+              aria-describedby={
+                codeError
+                  ? "reset-code-help reset-code-error"
+                  : "reset-code-help"
+              }
             >
-              {email}
-            </p>
-            <p style={{ fontSize: "var(--type-meta)", color: "#6b7280", margin: "0 0 20px" }}>
-              If this is mistyped you will not receive the code, and a new one
-              cannot be sent for 1 minute.
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <ModalButton variant="secondary" onClick={() => setConfirmEmail(false)}>
+              <legend>Verification code</legend>
+              <p id="reset-code-help" className="onboarding-help">
+                Enter all 6 digits from the email.
+              </p>
+              <div className="onboarding-otp" onPaste={handleOtpPaste}>
+                {code.map((digit, index) => (
+                  <input
+                    key={index}
+                    ref={(node) => {
+                      otpRefs.current[index] = node;
+                    }}
+                    type="text"
+                    value={digit}
+                    onChange={(event) => updateOtp(index, event.target.value)}
+                    onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                    inputMode="numeric"
+                    pattern="[0-9]"
+                    maxLength={index === 0 ? 6 : 1}
+                    autoComplete={index === 0 ? "one-time-code" : "off"}
+                    aria-invalid={codeError ? "true" : undefined}
+                    aria-label={`Verification code digit ${index + 1}`}
+                    autoFocus={index === 0}
+                  />
+                ))}
+              </div>
+            </fieldset>
+            {codeError && (
+              <p id="reset-code-error" className="onboarding-error" role="alert">
+                {codeError}
+              </p>
+            )}
+            <Button type="submit" className="onboarding-submit" loading={loading}>
+              Verify and continue
+            </Button>
+            <div className="onboarding-form-links">
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("forgot");
+                  setCode(Array(6).fill(""));
+                  setCodeError("");
+                }}
+              >
+                Change email
+              </button>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resendCooldown > 0 || loading}
+              >
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === "reset" && (
+          <form className="onboarding-form" onSubmit={handleReset} noValidate>
+            {passwordErrors.form && (
+              <p className="password-recovery-form-error" role="alert">
+                {passwordErrors.form}
+              </p>
+            )}
+            <div className="onboarding-field">
+              <label htmlFor="new-password">Create a password</label>
+              <input
+                id="new-password"
+                name="new-password"
+                type={showPasswords ? "text" : "password"}
+                value={newPassword}
+                onChange={(event) => {
+                  setNewPassword(event.target.value);
+                  setPasswordErrors((current) => ({
+                    ...current,
+                    newPassword: "",
+                    confirmPassword: "",
+                    form: "",
+                  }));
+                }}
+                autoComplete="new-password"
+                autoCapitalize="none"
+                spellCheck="false"
+                className="onboarding-input"
+                aria-invalid={passwordErrors.newPassword ? "true" : undefined}
+                aria-describedby={
+                  passwordErrors.newPassword
+                    ? "new-password-help new-password-error"
+                    : "new-password-help"
+                }
+                autoFocus
+                required
+              />
+              <p id="new-password-help" className="onboarding-help">
+                At least 8 characters, including a letter and a number.
+              </p>
+              {passwordErrors.newPassword && (
+                <p id="new-password-error" className="onboarding-error" role="alert">
+                  {passwordErrors.newPassword}
+                </p>
+              )}
+            </div>
+            <div className="onboarding-field">
+              <label htmlFor="confirm-new-password">Confirm password</label>
+              <input
+                id="confirm-new-password"
+                name="confirm-password"
+                type={showPasswords ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(event) => {
+                  setConfirmPassword(event.target.value);
+                  setPasswordErrors((current) => ({
+                    ...current,
+                    confirmPassword: "",
+                    form: "",
+                  }));
+                }}
+                autoComplete="new-password"
+                autoCapitalize="none"
+                spellCheck="false"
+                className="onboarding-input"
+                aria-invalid={passwordErrors.confirmPassword ? "true" : undefined}
+                aria-describedby={
+                  passwordErrors.confirmPassword ? "confirm-new-password-error" : undefined
+                }
+                required
+              />
+              {passwordErrors.confirmPassword && (
+                <p id="confirm-new-password-error" className="onboarding-error" role="alert">
+                  {passwordErrors.confirmPassword}
+                </p>
+              )}
+            </div>
+            <label className="onboarding-show-passwords">
+              <input
+                type="checkbox"
+                checked={showPasswords}
+                onChange={(event) => setShowPasswords(event.target.checked)}
+              />
+              Show passwords
+            </label>
+            <Button type="submit" className="onboarding-submit" loading={loading}>
+              Save new password
+            </Button>
+            <div className="password-recovery-back">
+              <button type="button" onClick={() => navigate("/login")}>Back to login</button>
+            </div>
+          </form>
+        )}
+      </section>
+
+      {confirmEmail && (
+        <AppModal
+          title="Double-check this email address"
+          onClose={() => setConfirmEmail(false)}
+          onEnter={sendResetCode}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmEmail(false)}>
                 Go back and edit
-              </ModalButton>
-              <ModalButton onClick={sendResetCode}>Send code</ModalButton>
+              </Button>
+              <Button onClick={sendResetCode} loading={loading}>
+                Send code
+              </Button>
+            </>
+          }
+        >
+          <div className="onboarding-confirmation">
+            <span aria-hidden="true"><AlertTriangle size={18} /></span>
+            <div>
+              <p>The verification code will be sent to:</p>
+              <strong>{email}</strong>
+              <small>Check for spelling errors before continuing.</small>
             </div>
           </div>
-        </div>
+        </AppModal>
       )}
-    </div>
+    </main>
   );
-};
-
-const S = {
-  // See the note in Login.jsx: layout lives in index.css under
-  // `.auth-page-wrapper`, `.fp-container`, `.fp-left` (form) and `.fp-right`
-  // (logo). Only colour and typography stay inline.
-  pageWrapper: {
-    position: "relative",
-    backgroundColor: C.background,
-  },
-  background: {
-    position: "fixed",
-    top: 0, left: 0, width: "100%", height: "100%",
-    background: `linear-gradient(135deg, ${C.primary} 0%, ${C.secondary} 60%, ${C.accent} 100%)`,
-    filter: "blur(8px)",
-    zIndex: -1,
-  },
-  container: {
-    borderRadius: "15px",
-    overflow: "hidden",
-    boxShadow: "0 6px 25px rgba(0,0,0,0.3)",
-  },
-  leftPanel: {
-    background: "#f0f1f9",
-    color: C.text,
-  },
-  rightPanel: {
-    background: C.primary,
-  },
-  heading: {
-    fontSize: "var(--type-page-title)",
-    fontWeight: 700,
-    marginBottom: "12px",
-    marginTop: 0,
-    color: C.text,
-  },
-  subtitle: {
-    fontSize: "var(--type-body)",
-    color: "#6b7280",
-    marginTop: 0,
-    marginBottom: "26px",
-    lineHeight: 1.55,
-  },
-  fields: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "32px",
-    marginBottom: "22px",
-  },
-  inputGroup: { position: "relative", width: "100%" },
-  input: {
-    width: "100%",
-    padding: "12px 40px 12px 10px",
-    border: "none",
-    borderBottom: "2px solid #ccc",
-    background: "transparent",
-    fontSize: "var(--type-body)",
-    color: C.text,
-    outline: "none",
-    transition: "border-color 0.3s ease, box-shadow 0.3s ease",
-    fontFamily: "inherit",
-    borderRadius: 0,
-    WebkitAppearance: "none",
-  },
-  label: {
-    position: "absolute",
-    left: "10px",
-    top: "12px",
-    color: "#888",
-    fontSize: "var(--type-body)",
-    pointerEvents: "none",
-    transition: "0.3s ease",
-  },
-  underline: {
-    position: "absolute",
-    left: 0, bottom: 0,
-    height: "2px",
-    width: "0%",
-    background: C.primary,
-    transition: "width 0.3s ease",
-  },
-  inputIcon: {
-    position: "absolute",
-    right: "10px",
-    top: "14px",
-    color: "#999",
-    transition: "color 0.3s ease",
-    display: "flex",
-    alignItems: "center",
-  },
-  eyeToggle: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    color: "#999",
-    display: "flex",
-    alignItems: "center",
-    padding: 0,
-  },
-  btn: {
-    width: "100%",
-    background: C.primary,
-    color: "#fff",
-    border: "none",
-    padding: "10px 20px",
-    borderRadius: "25px",
-    fontSize: "var(--type-body)",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "0.3s",
-    fontFamily: "inherit",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "8px",
-  },
-  footer: {
-    marginTop: "16px",
-    color: C.text,
-    fontSize: "var(--type-body)",
-    textAlign: "center",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "6px",
-  },
-  footerP: { margin: 0, color: C.text },
-  footerLink: {
-    color: C.primary,
-    fontWeight: "bold",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    fontSize: "var(--type-body)",
-    fontFamily: "inherit",
-    padding: 0,
-  },
-  linkRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: "16px",
-  },
-  link: {
-    background: "none",
-    border: "none",
-    color: C.primary,
-    fontWeight: "bold",
-    cursor: "pointer",
-    fontSize: "var(--type-body)",
-    fontFamily: "inherit",
-    padding: 0,
-  },
-  linkDisabled: {
-    color: "#999",
-    cursor: "not-allowed",
-    fontWeight: 400,
-  },
-  matchHint: {
-    fontSize: "var(--type-meta)",
-    marginTop: "6px",
-    marginLeft: "4px",
-    fontWeight: 500,
-  },
 };
 
 export default ForgotPassword;

@@ -1323,3 +1323,68 @@ body {
   white-space: nowrap;
 }
 
+/* Password recovery intentionally shares the onboarding card and form system. */
+.password-recovery-destination {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-item);
+  background: #f9fafb;
+  padding: 10px 12px;
+  font-size: var(--type-small);
+}
+
+.password-recovery-destination span { color: var(--text-muted); }
+.password-recovery-destination strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: var(--type-meta);
+}
+
+.password-recovery-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--type-meta);
+}
+
+.password-recovery-back button {
+  border: 0;
+  background: transparent;
+  color: var(--brand-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 2px;
+}
+
+.password-recovery-back button:hover { color: var(--brand-secondary); }
+.password-recovery-back button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--brand-secondary);
+  outline-offset: 3px;
+}
+
+.password-recovery-form-error {
+  margin: 0;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-item);
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 10px 12px;
+  font-size: var(--type-small);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .password-recovery-back {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+}
+
