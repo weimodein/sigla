@@ -1018,6 +1018,92 @@ textarea:focus-visible,
     grid-column: 2;
     grid-row: 1;
   }
+
+  /* Give every record type a clear first line. The most useful identifier is
+     lifted into a soft header while the remaining fields keep their labels. */
+  .categories-mobile-table td:first-child,
+  .activity-mobile-table td:first-child,
+  .reports-mobile-table td:first-child,
+  .administrators-mobile-table td:nth-child(2),
+  .models-mobile-table td:nth-child(2) {
+    display: block;
+    border-top: 0;
+    background: #f8fafc;
+    padding-block: 0.75rem !important;
+    color: var(--text);
+    font-weight: 700;
+  }
+  .categories-mobile-table td:first-child::before,
+  .activity-mobile-table td:first-child::before,
+  .reports-mobile-table td:first-child::before,
+  .administrators-mobile-table td:nth-child(2)::before,
+  .models-mobile-table td:nth-child(2)::before {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .administrators-mobile-table td:nth-child(2),
+  .models-mobile-table td:nth-child(2) {
+    order: -1;
+  }
+  .administrators-mobile-table td:nth-child(1),
+  .models-mobile-table td:nth-child(1) {
+    border-top: 1px solid #f1f5f9;
+  }
+
+  /* Filters form compact two-column pairs where the controls remain readable. */
+  .filter-bar .filter-field-half-mobile {
+    width: calc(50% - 0.375rem);
+  }
+
+  .table-toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch !important;
+  }
+  .table-toolbar-actions {
+    display: grid !important;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem !important;
+  }
+  .table-toolbar-actions input {
+    width: 100% !important;
+  }
+
+  .reports-section-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .reports-section-header > :last-child:not(:first-child) {
+    max-width: 100%;
+  }
+
+  .data-pagination {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    padding: 0.75rem !important;
+  }
+  .data-pagination > div {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .data-pagination > div:last-child {
+    justify-content: center;
+  }
+  .data-pagination > div:last-child > span {
+    padding-inline: 0.375rem !important;
+    text-align: center;
+  }
+  .data-pagination button {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
   .data-table button,
   .data-table a {
     min-width: 44px;

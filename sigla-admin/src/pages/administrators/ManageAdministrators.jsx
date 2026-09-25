@@ -134,7 +134,7 @@ const Pagination = ({
   total,
 }) => (
   <div
-    className="meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
+    className="data-pagination meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
     style={{ borderTop: `1px solid ${C.border}` }}
   >
     <div className="flex items-center gap-3">

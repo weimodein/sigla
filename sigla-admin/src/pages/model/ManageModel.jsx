@@ -716,7 +716,7 @@ const ManageModel = () => {
       {/* Models Table ────────────────────────────────────────── */}
       <div className="dash-card">
         <div
-          className="dash-card-header"
+          className="table-toolbar dash-card-header"
           style={{
             display: "flex",
             alignItems: "center",
@@ -734,6 +734,7 @@ const ManageModel = () => {
             </p>
           </div>
           <div
+            className="table-toolbar-actions"
             style={{
               display: "flex",
               alignItems: "center",
@@ -1082,7 +1083,7 @@ const ManageModel = () => {
                                     </div>
                                     {model.words_status ? <Badge value={model.words_status} /> : <Badge value="incomplete" />}
                                   </div>
-                                  <div className="grid grid-cols-3 gap-4">
+                                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                     <ModelMetric
                                       label="Accuracy"
                                       value={fmt(model.accuracy)}
@@ -1113,7 +1114,7 @@ const ManageModel = () => {
                                     </div>
                                     <Badge value={model.letters?.status || "incomplete"} />
                                   </div>
-                                  <div className="grid grid-cols-3 gap-4">
+                                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                     <ModelMetric
                                       label="Accuracy"
                                       value={fmt(model.letters?.accuracy)}
@@ -1192,7 +1193,7 @@ const ManageModel = () => {
             {/* Pagination */}
             {filteredModels.length > pageSize && (
               <div
-                className="dash-card-footer meta-text flex flex-wrap items-center justify-between gap-2 text-gray-500"
+                className="data-pagination dash-card-footer meta-text flex flex-wrap items-center justify-between gap-2 text-gray-500"
                 style={{
                   paddingTop: "12px",
                   borderTop: `1px solid ${C.border}`,
@@ -1425,7 +1426,7 @@ const ManageModel = () => {
             )}
             {(resultModal.accuracy != null ||
               resultModal.totalClasses != null) && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {resultModal.accuracy != null && (
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-500">Accuracy</p>

@@ -391,7 +391,7 @@ const AdministratorAccount = () => {
   return (
     <>
       <div className="administrator-account-page space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="page-header page-header-spaced">
         <div>
           <h1 className="page-title">Administrator Account</h1>
           <p className="page-subtitle">Profile, contact information, and account security</p>
@@ -399,7 +399,7 @@ const AdministratorAccount = () => {
         <button
           type="button"
           onClick={handleSignOut}
-          className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+          className="page-primary-action interactive flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3.5 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
         >
           <LogOut size={16} /> Sign out
         </button>

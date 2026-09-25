@@ -38,7 +38,7 @@ import {
 
 // ── Section Header ────────────────────────────────────────────
 const SectionHeader = ({ title, description, count, aside }) => (
-  <div className="flex flex-wrap items-start justify-between gap-4">
+  <div className="reports-section-header flex flex-wrap items-start justify-between gap-4">
     <div>
       <h3 className="section-title">{title}</h3>
       {description && (

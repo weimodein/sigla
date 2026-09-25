@@ -95,7 +95,7 @@ const ActionBadge = ({ action }) => {
 // ── Pagination ───────────────────────────────────────────────
 const Pagination = ({ page, totalPages, onPage, pageSize, onPageSize, total }) => (
   <div
-    className="meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
+    className="data-pagination meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
     style={{ borderTop: `1px solid ${C.border}` }}
   >
     <div className="flex items-center gap-3">
@@ -262,7 +262,7 @@ const ActivityLogs = () => {
       {/* Filters */}
       <div className="filter-bar mb-4">
         {/* Action type */}
-        <div className="filter-field">
+        <div className="filter-field filter-field-half-mobile">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             Action Type
           </label>
@@ -282,7 +282,7 @@ const ActivityLogs = () => {
         </div>
 
         {/* Affected item */}
-        <div className="filter-field">
+        <div className="filter-field filter-field-half-mobile">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             Affected Item
           </label>
@@ -302,7 +302,7 @@ const ActivityLogs = () => {
         </div>
 
         {/* Date range */}
-        <div className="filter-field">
+        <div className="filter-field filter-field-half-mobile">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             From
           </label>
@@ -314,7 +314,7 @@ const ActivityLogs = () => {
             style={selectStyle}
           />
         </div>
-        <div className="filter-field">
+        <div className="filter-field filter-field-half-mobile">
           <label className="block text-xs font-medium mb-1" style={{ color: "#4b5563" }}>
             To
           </label>

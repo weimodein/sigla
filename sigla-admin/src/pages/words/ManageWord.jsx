@@ -1141,7 +1141,7 @@ const ManageWord = () => {
 
         {/* Pagination */}
         {total > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-2" style={{ padding: "12px 20px", borderTop: `1px solid ${C.border}`, background: "#f9fafb" }}>
+          <div className="data-pagination flex flex-wrap items-center justify-between gap-2" style={{ padding: "12px 20px", borderTop: `1px solid ${C.border}`, background: "#f9fafb" }}>
             <span className="text-xs text-gray-500">
               Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
             </span>
