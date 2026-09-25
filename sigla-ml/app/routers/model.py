@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import List, Optional
 import hashlib
@@ -11,6 +12,20 @@ from app.services.video   import generate_word_video
 from app.services.extract import extract_motion_landmarks
 
 router = APIRouter(prefix="", tags=["Model"])
+
+
+# ── Why every handler below offloads its work ─────────────────
+#
+# These endpoints are `async def`, which means FastAPI runs them ON the event
+# loop rather than in its threadpool. train(), test(), deploy(),
+# generate_word_video() and extract_motion_landmarks() are all synchronous and
+# CPU-bound, so calling them directly blocked the whole service for their entire
+# duration — one clip extraction (20-33s measured) stalled every other request,
+# and a training run (tens of minutes) froze the service outright.
+#
+# run_in_threadpool moves the call to a worker thread and leaves the loop free.
+# This helps here specifically because MediaPipe and TensorFlow release the GIL
+# inside their native code; pure-Python work would still serialize.
 
 
 # ── Request schemas ───────────────────────────────────────────
@@ -62,7 +77,8 @@ async def train_model(request: TrainRequest):
     Called by Node.js backend when admin clicks Train Model.
     """
     try:
-        result = train(
+        result = await run_in_threadpool(
+            train,
             version_number=request.version_number,
             model_id=request.model_id,
             word_labels=request.word_labels,
@@ -91,7 +107,8 @@ async def test_model(request: TestRequest):
     Called by Node.js backend when admin clicks Test Model.
     """
     try:
-        result = test(
+        result = await run_in_threadpool(
+            test,
             version_number=request.version_number,
             model_id=request.model_id,
         )
@@ -118,7 +135,8 @@ async def deploy_model(request: DeployRequest):
     The Node.js backend owns the atomic model_versions status transaction.
     """
     try:
-        result = deploy(
+        result = await run_in_threadpool(
+            deploy,
             version_number=request.version_number,
             model_id=request.model_id,
             tflite_url=request.tflite_url,
@@ -203,7 +221,9 @@ async def generate_video(request: VideoRequest):
     """
     try:
         from app.services.video import generate_word_video
-        video_url = generate_word_video(request.word_id, request.word_label)
+        video_url = await run_in_threadpool(
+            generate_word_video, request.word_id, request.word_label
+        )
         return {"video_url": video_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
@@ -218,7 +238,9 @@ async def extract_landmarks(file: UploadFile = File(...)):
     """
     try:
         video_bytes = await file.read()
-        sequence = extract_motion_landmarks(video_bytes, file.filename)
+        sequence = await run_in_threadpool(
+            extract_motion_landmarks, video_bytes, file.filename
+        )
         if sequence is None:
             raise HTTPException(status_code=422, detail="No hands detected in video")
         return {"type": "motion", "sequence": sequence}
