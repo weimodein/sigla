@@ -34,6 +34,7 @@ const {
   uploadVideos,
   getUploadJob,
   getSignerIds,
+  getActiveUploadJobs,
   getActiveUploadJob,
 } = require("../controllers/wordController.js");
 const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -152,6 +153,10 @@ router.get("/signers", roleMiddleware("admin"), getSignerIds);
 // ── Upload job status ─────────────────────────────────────────
 // IMPORTANT: must come before the /:id wildcard below, or "upload-jobs" is
 // swallowed as a word id and getWordById answers with a 404 instead.
+//
+// "active" is registered BEFORE /:jobId for the same reason one level down:
+// Express would otherwise match the literal string as a job id.
+router.get("/upload-jobs/active", roleMiddleware("admin"), getActiveUploadJobs);
 router.get("/upload-jobs/:jobId", roleMiddleware("admin"), getUploadJob);
 
 

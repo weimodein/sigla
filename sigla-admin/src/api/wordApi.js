@@ -158,6 +158,17 @@ export const getUploadJob = async (jobId) => {
   return response.data;
 };
 
+// Every extraction batch running right now, across all words and admins.
+//
+// Replaces asking per visible word: that capped visibility at the current page,
+// and the page kept only the first job it found. Two admins uploading to
+// different words is allowed by the server, so the second one's batch showed no
+// progress at all and looked like a failure worth retrying.
+export const getActiveUploadJobs = async () => {
+  const response = await api.get("/words/upload-jobs/active");
+  return response.data;
+};
+
 // The live batch for a word, or { job: null } — lets the page re-adopt a job that
 // is still running after a reload or navigating back.
 export const getActiveUploadJob = async (wordId) => {

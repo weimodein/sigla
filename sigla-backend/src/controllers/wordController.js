@@ -2034,9 +2034,33 @@ const getActiveUploadJob = async (req, res) => {
   }
 };
 
+// ── GET /api/words/upload-jobs/active ─────────────────────────
+// Every extraction batch currently running, across all words and admins.
+//
+// The per-word endpoint above forced the page to ask once per visible row,
+// which capped visibility at the current page: a batch on page 2 was invisible,
+// and the page tracked only the first one it happened to find. Two admins
+// uploading to different words is allowed by the server — the upload lock is
+// per word, not global — so the second admin's batch ran with no progress shown
+// at all. An upload that looks like nothing is happening invites a re-upload,
+// and the clips really are being stored meanwhile.
+const getActiveUploadJobs = async (req, res) => {
+  try {
+    const jobs = await UploadJob.findAll({
+      where: { status: "processing" },
+      order: [["created_at", "ASC"]],
+    });
+    return res.json({ jobs });
+  } catch (err) {
+    console.error("Get active upload jobs error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getAllWords,
   getSignerIds,
+  getActiveUploadJobs,
   getWordStats,
   getWordById,
   checkWordExists,
