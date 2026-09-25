@@ -247,8 +247,17 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
         style={{
           flex: 1,
           padding: "12px 12px",
-          overflowY: "auto",
-          overflowX: "hidden",
+          // The nav fits rather than scrolls. Eight items at a 48px minimum plus
+          // the header, user block and footer overflow a short viewport, and a
+          // scrollbar inside a sidebar hides navigation behind a gesture — the
+          // collapsed rail in particular gave no clue that anything was below.
+          //
+          // minHeight: 0 is what actually allows the shrink: a flex child's
+          // default min-height is auto, so the items keep their full height and
+          // push past the container however this is styled. With it, the items
+          // below compress toward their own minimum instead.
+          minHeight: 0,
+          overflow: "hidden",
           display: "flex",
           flexDirection: "column",
           gap: "4px",
@@ -271,7 +280,13 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
               gap: isCollapsed ? 0 : "12px",
               padding: isCollapsed ? "0" : "0 12px",
               textDecoration: "none",
-              minHeight: "48px",
+              // Shrinks from the comfortable 48px toward 36px when the viewport
+              // is too short for all eight at full size, rather than the nav
+              // scrolling. 36px still clears the 24px icon with room to tap, and
+              // on a tall enough screen nothing changes because flex-basis is
+              // the 48px it always was.
+              flex: "0 1 48px",
+              minHeight: "36px",
               borderRadius: "8px",
               whiteSpace: "nowrap",
               background: isActive ? ACTIVE : "transparent",
