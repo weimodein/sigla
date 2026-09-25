@@ -14,6 +14,7 @@ import {
   deleteWord,
   deleteAllWordSamples,
   uploadVideos,
+  getSignerIds,
   getUploadJob,
   getActiveUploadJob,
   setWordVideo,
@@ -229,6 +230,35 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
   const [sessionId, setSessionId] = useState("");
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
+  // Signer IDs already in the dataset, offered for selection so the common case
+  // never depends on retyping one correctly. A typo splits one person into two
+  // and inflates signer-held-out accuracy, which no later check can detect.
+  const [knownSigners, setKnownSigners] = useState([]);
+  // True while the operator is naming a signer who has no samples yet.
+  const [addingNew, setAddingNew] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getSignerIds()
+      .then((data) => {
+        if (cancelled) return;
+        const list = data?.signers || [];
+        setKnownSigners(list);
+        // Selecting nothing is the failure this exists to prevent, so a first
+        // signer is pre-selected. With an empty dataset there is nobody to
+        // choose, and the free-text field opens instead.
+        setAddingNew(list.length === 0);
+        setSessionId(list.length ? list[0].session_id : "");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // The dropdown is a convenience, so losing it must not block an upload.
+        setKnownSigners([]);
+        setAddingNew(true);
+      });
+    return () => { cancelled = true; };
+  }, [open]);
 
   const handleFiles = (e) => {
     setFiles(Array.from(e.target.files));
@@ -275,14 +305,47 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
         <label style={{ fontSize: "var(--type-meta)", fontWeight: 600, color: "#374151" }}>
           Signer ID
         </label>
-        <input
-          value={sessionId}
-          onChange={(e) => setSessionId(e.target.value)}
-          placeholder="e.g. signer-03"
-          maxLength={100}
-          disabled={sending}
-          style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", marginTop: "4px", boxSizing: "border-box" }}
-        />
+        {addingNew ? (
+          <input
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+            placeholder="e.g. signer-05"
+            maxLength={100}
+            disabled={sending}
+            autoFocus
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", marginTop: "4px", boxSizing: "border-box" }}
+          />
+        ) : (
+          <select
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+            disabled={sending}
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", marginTop: "4px", boxSizing: "border-box", background: "#fff" }}
+          >
+            {knownSigners.map((s) => (
+              <option key={s.session_id} value={s.session_id}>
+                {s.session_id} ({s.sample_count} sample{s.sample_count === 1 ? "" : "s"})
+              </option>
+            ))}
+          </select>
+        )}
+        {knownSigners.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              const next = !addingNew;
+              setAddingNew(next);
+              // Clear on the way in so a typed id starts empty rather than
+              // editing a known one into a near-miss, and restore a known id on
+              // the way back so the field is never left blank.
+              setSessionId(next ? "" : knownSigners[0].session_id);
+            }}
+            disabled={sending}
+            style={{ marginTop: "6px", background: "none", border: "none", padding: 0, color: C.accent, fontSize: "var(--type-meta)", cursor: "pointer", textDecoration: "underline" }}
+          >
+            {addingNew ? "Choose an existing signer" : "This is a new signer"}
+          </button>
+        )}
         <p style={{ fontSize: "var(--type-meta)", color: C.muted, marginTop: "4px" }}>
           Reuse this ID across every word and batch from the same person. Never put
           clips from different people in one batch; signer-held-out evaluation depends on it.

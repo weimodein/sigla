@@ -179,6 +179,43 @@ const getSignerCoverage = async (wordId) => {
   return { counts, qualifiedSigners };
 };
 
+// ── GET /api/words/signers ────────────────────────────────────
+// Every signer ID already stored, with how many samples each has.
+//
+// session_id is the grouping key for signer-held-out cross-validation, and the
+// upload form takes it as free text. A typo therefore creates a phantom signer:
+// "singer-04" once split ten HOW ARE YOU clips away from signer-04, so that
+// person appeared in both the training and the evaluation side of a fold and the
+// reported accuracy rose rather than fell. Nothing downstream can detect that,
+// because a higher number never looks like a bug.
+//
+// Offering the known IDs for selection removes the common case of the mistake
+// without preventing a genuinely new signer from being added.
+const getSignerIds = async (req, res) => {
+  try {
+    const rows = await GestureSample.findAll({
+      where: { session_id: { [Op.ne]: null } },
+      attributes: ["session_id"],
+      raw: true,
+    });
+    const counts = new Map();
+    for (const row of rows) {
+      // Normalized the same way uploadVideos stores it, so a difference in case
+      // cannot present the same person as two options.
+      const signer = String(row.session_id || "").trim().toLowerCase();
+      if (signer) counts.set(signer, (counts.get(signer) || 0) + 1);
+    }
+    const signers = [...counts.entries()]
+      .map(([session_id, sample_count]) => ({ session_id, sample_count }))
+      .sort((a, b) => a.session_id.localeCompare(b.session_id));
+
+    return res.status(200).json({ signers });
+  } catch (err) {
+    console.error("Get signer ids error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ── Helper: update sample count; mark word approved when threshold met ────
 // Words are NOT activated here — activation only happens on model deploy.
 const checkAndActivateWord = async (word, reviewerId = null) => {
@@ -1999,6 +2036,7 @@ const getActiveUploadJob = async (req, res) => {
 
 module.exports = {
   getAllWords,
+  getSignerIds,
   getWordStats,
   getWordById,
   checkWordExists,

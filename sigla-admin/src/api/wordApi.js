@@ -142,6 +142,17 @@ export const uploadVideos = async (wordId, files, sessionId, onProgress) => {
   return response.data;
 };
 
+// Signer IDs already present in the dataset, with each one's sample count.
+//
+// session_id is the grouping key for signer-held-out cross-validation, so a
+// typo splits one person into two and quietly inflates reported accuracy. The
+// upload dialog offers these for selection rather than relying on the operator
+// retyping an id correctly every time.
+export const getSignerIds = async () => {
+  const response = await api.get("/words/signers");
+  return response.data;
+};
+
 export const getUploadJob = async (jobId) => {
   const response = await api.get(`/words/upload-jobs/${jobId}`);
   return response.data;

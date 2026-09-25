@@ -309,6 +309,9 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true",
                     help="show the plan; make no changes")
     ap.add_argument("--json", metavar="PATH", help="write a per-batch report")
+    ap.add_argument("--stop-after", metavar="LABEL",
+                    help="finish LABEL, write the report, then stop before the "
+                         "next word (useful for category-by-category checkpoints)")
     args = ap.parse_args()
 
     selected: set[str] | None = None
@@ -331,7 +334,10 @@ def main() -> int:
     n_batches = sum(len(c["signers"]) for c in found.values())
     n_clips = sum(len(v) for c in found.values() for v in c["signers"].values())
     print(f"{len(found)} words, {n_batches} batches, {n_clips} clips")
-    for cid, c in sorted(found.items(), key=lambda kv: kv[1]["label"]):
+    # `found` preserves labels.csv insertion order. Keep that order in both the
+    # preview and the live import so an operator can work through categories in
+    # the same sequence as the canonical FSL-105 label map.
+    for cid, c in found.items():
         detail = "  ".join(f"{s}={len(v)}" for s, v in c["signers"].items())
         print(f"  {c['label']:22} [{c['category']}]  {detail}")
 
@@ -349,7 +355,7 @@ def main() -> int:
 
     report: dict[str, dict] = {}
     with httpx.Client() as client:
-        for cid, c in sorted(found.items(), key=lambda kv: kv[1]["label"]):
+        for cid, c in found.items():
             label = c["label"]
             word_id = find_or_create_word(client, label, c["category"])
             print(f"\n{label} (word_id {word_id})")
@@ -390,6 +396,11 @@ def main() -> int:
                     # clean completion is no use precisely then.
                     with open(args.json, "w", encoding="utf-8") as fh:
                         json.dump(report, fh, indent=2)
+
+            if (args.stop_after
+                    and label.upper() == args.stop_after.strip().upper()):
+                print(f"\nstop-after checkpoint reached: {label}")
+                break
 
     if args.json:
         with open(args.json, "w", encoding="utf-8") as fh:

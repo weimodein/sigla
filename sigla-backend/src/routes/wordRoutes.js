@@ -33,6 +33,7 @@ const {
   setVideo,
   uploadVideos,
   getUploadJob,
+  getSignerIds,
   getActiveUploadJob,
 } = require("../controllers/wordController.js");
 const videoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -142,6 +143,11 @@ router.get("/stats", roleMiddleware("admin"), getWordStats);
 // ── Admin add word manually ───────────────────────────────────
 // IMPORTANT: must come before /:id wildcard routes
 router.post("/admin-add", roleMiddleware("admin"), adminAddWord);
+
+// ── Known signer IDs ──────────────────────────────────────────
+// Same ordering requirement as upload-jobs below: this must precede the /:id
+// wildcard, or "signers" is read as a word id.
+router.get("/signers", roleMiddleware("admin"), getSignerIds);
 
 // ── Upload job status ─────────────────────────────────────────
 // IMPORTANT: must come before the /:id wildcard below, or "upload-jobs" is
