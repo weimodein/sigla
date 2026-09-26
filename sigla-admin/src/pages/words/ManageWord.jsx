@@ -349,11 +349,6 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
             {addingNew ? "Choose an existing signer" : "This is a new signer"}
           </button>
         )}
-        <p style={{ fontSize: "var(--type-meta)", color: C.muted, marginTop: "4px" }}>
-          Reuse this ID across every word and batch from the same person. Never put
-          clips from different people in one batch; signer-held-out evaluation depends on it.
-          Counts above are each signer's approved samples for <strong>{word?.label}</strong> only.
-        </p>
       </div>
 
       <div
