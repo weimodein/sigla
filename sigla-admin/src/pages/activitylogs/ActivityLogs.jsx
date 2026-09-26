@@ -29,6 +29,7 @@ const C = {
 // ── Action metadata: humanized label + accent color ──────────
 const ACTION_META = {
   signed_in:            { label: "Signed In",            color: C.muted },
+  signed_out:           { label: "Signed Out",            color: C.muted },
   created_admin:        { label: "Created Admin",        color: C.green },
   updated_admin:        { label: "Updated Admin",        color: C.primary },
   deactivated_admin:    { label: "Deactivated Admin",    color: C.red },
@@ -48,6 +49,9 @@ const ACTION_META = {
   approved_submission:  { label: "Approved Submission",  color: C.green },
   rejected_submission:  { label: "Rejected Submission",  color: C.red },
   uploaded_samples:     { label: "Uploaded Samples",     color: C.primary },
+  upload_failed:        { label: "Upload Failed",        color: C.red },
+  deleted_word_samples: { label: "Cleared Samples",      color: C.red },
+  set_word_video:       { label: "Set Demo Video",       color: C.primary },
   trained_model:        { label: "Trained Model",        color: C.purple },
   tested_model:         { label: "Tested Model",         color: C.purple },
   deployed_model:       { label: "Deployed Model",       color: C.green },
@@ -202,6 +206,12 @@ const ActivityLogs = () => {
         target_type: targetFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        // Only meaningful alongside a date filter, but harmless to always send:
+        // getTimezoneOffset() is minutes to ADD to local time to reach UTC (e.g.
+        // -480 at UTC+8). The server uses it to build day boundaries in the
+        // viewer's timezone instead of its own — otherwise a deployed server
+        // running in UTC would shift a single-day filter by up to a day.
+        tzOffset: new Date().getTimezoneOffset(),
         search: debouncedSearch || undefined,
         page,
         limit: pageSize,
@@ -216,16 +226,18 @@ const ActivityLogs = () => {
     }
   }, [actionFilter, targetFilter, startDate, endDate, debouncedSearch, page, pageSize, toast]);
 
-  // Debounce search
+  // Debounce search, then reset to page 1 in the SAME state update the
+  // debounced value commits — not in a separate effect keyed on it. A filter
+  // change used to fetch once with the new filter at whatever page the admin
+  // was on, then reset to page 1 and fetch again, flickering the table.
+  // Resetting inline means only one render, so only one request.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 400);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
     return () => clearTimeout(t);
   }, [search]);
-
-  // Reset to page 1 whenever a filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [actionFilter, targetFilter, startDate, endDate, debouncedSearch, pageSize]);
 
   useEffect(() => {
     fetchLogs();
@@ -234,12 +246,21 @@ const ActivityLogs = () => {
   const hasFilters =
     actionFilter || targetFilter || startDate || endDate || search;
 
+  // Every non-search filter setter resets to page 1 in the same event, for
+  // the same one-request reason as the search debounce above.
+  const applyActionFilter = (value) => { setActionFilter(value); setPage(1); };
+  const applyTargetFilter = (value) => { setTargetFilter(value); setPage(1); };
+  const applyStartDate = (value) => { setStartDate(value); setPage(1); };
+  const applyEndDate = (value) => { setEndDate(value); setPage(1); };
+  const applyPageSize = (value) => { setPageSize(value); setPage(1); };
+
   const clearFilters = () => {
     setActionFilter("");
     setTargetFilter("");
     setStartDate("");
     setEndDate("");
     setSearch("");
+    setPage(1);
   };
 
   const selectStyle = {
@@ -269,7 +290,7 @@ const ActivityLogs = () => {
           </label>
           <select
             value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
+            onChange={(e) => applyActionFilter(e.target.value)}
             className="rounded-xl px-3 py-2.5 text-sm focus:outline-none"
             style={selectStyle}
           >
@@ -289,7 +310,7 @@ const ActivityLogs = () => {
           </label>
           <select
             value={targetFilter}
-            onChange={(e) => setTargetFilter(e.target.value)}
+            onChange={(e) => applyTargetFilter(e.target.value)}
             className="rounded-xl px-3 py-2.5 text-sm focus:outline-none"
             style={selectStyle}
           >
@@ -310,7 +331,7 @@ const ActivityLogs = () => {
           <input
             type="date"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => applyStartDate(e.target.value)}
             className="rounded-xl px-3 py-2.5 text-sm focus:outline-none"
             style={selectStyle}
           />
@@ -322,7 +343,7 @@ const ActivityLogs = () => {
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => applyEndDate(e.target.value)}
             className="rounded-xl px-3 py-2.5 text-sm focus:outline-none"
             style={selectStyle}
           />
@@ -456,7 +477,7 @@ const ActivityLogs = () => {
             totalPages={totalPages}
             onPage={setPage}
             pageSize={pageSize}
-            onPageSize={setPageSize}
+            onPageSize={applyPageSize}
             total={total}
           />
         )}

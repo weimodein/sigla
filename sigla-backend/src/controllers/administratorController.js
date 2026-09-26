@@ -725,18 +725,27 @@ const completeSetup = async (req, res) => {
       }
     }
 
+    const previousUsername = user.username;
+
     await user.update({
       username: usernameValue,
       password: await bcrypt.hash(password, 10),
       must_complete_setup: false,
     });
 
+    // Record a rename in the same `username "old" → "new"` form updateAdministrator
+    // uses. Descriptions elsewhere keep the username as it was at the time
+    // ("Created administrator account: admin_temp"), and this entry is the only
+    // link from that placeholder to the name the admin actually chose.
     await logActivity({
       administrator_id: user.id,
       action: "completed_setup",
       target_type: "administrator",
       target_id: user.id,
-      details: "Completed first-login account setup",
+      details:
+        usernameValue !== previousUsername
+          ? `Completed first-login account setup; username "${previousUsername}" → "${usernameValue}"`
+          : "Completed first-login account setup",
     });
 
     return res.status(200).json({ message: "Account setup complete" });

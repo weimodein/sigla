@@ -2050,6 +2050,32 @@ const uploadVideos = async (req, res) => {
             finished_at: new Date(),
           })
           .catch(() => {});
+
+        // The counters above only ran on the SUCCESS path, so the clips stored
+        // before the failure (results.length may be > 0) would otherwise sit
+        // uncounted — invisible in the Samples column and "Awaiting Deployment"
+        // — until some later, unrelated action happened to recompute them.
+        // Also best-effort: a failed batch must still be reported even if this
+        // recount or the log write itself fails.
+        try {
+          const newApproved = await getApprovedSampleCount(word.id);
+          await word.update({ approved_sample_count: newApproved });
+          await word.reload();
+          await checkAndActivateWord(word, req.user.id);
+        } catch (recountErr) {
+          console.error(`[uploadVideos] job ${job.id} recount FAILED:`, recountErr);
+        }
+
+        await logActivity({
+          administrator_id: req.user.id,
+          action: "upload_failed",
+          target_type: "word",
+          target_id: word.id,
+          details:
+            `Upload for word: ${word.label} (signer: ${sessionId}) stopped early — ` +
+            `${results.length} of ${files.length} processed, ${successCount} stored: ` +
+            `${err.message || "Unknown error"}`,
+        });
       }
     })();
   } catch (err) {
@@ -2100,11 +2126,43 @@ const failStaleUploadJobs = async () => {
         },
         { where: { id: job.id, status: "processing" } },
       );
+      // Only when THIS call is the one that actually flipped the row — with
+      // two servers sweeping at once, this stops both from recounting the
+      // word and logging the same failure twice.
       if (updated) {
         console.warn(
           `[failStaleUploadJobs] job ${job.id} (word ${job.word_id}) orphaned at ` +
             `${job.processed_count}/${job.total_count} — marked failed`,
         );
+
+        // Same reasoning as the in-request failure path: the clips stored
+        // before the batch died (job.success_count) were never counted,
+        // because that only happens on the success path.
+        try {
+          const word = await Word.findByPk(job.word_id);
+          if (word) {
+            const newApproved = await getApprovedSampleCount(word.id);
+            await word.update({ approved_sample_count: newApproved });
+            await word.reload();
+            await checkAndActivateWord(word, job.started_by);
+
+            await logActivity({
+              administrator_id: job.started_by,
+              action: "upload_failed",
+              target_type: "word",
+              target_id: word.id,
+              details:
+                `Upload for word: ${word.label} (signer: ${job.session_id}) was orphaned ` +
+                `by a server restart — ${job.processed_count} of ${job.total_count} ` +
+                `processed, ${stored} stored. Re-upload the missing clips.`,
+            });
+          }
+        } catch (recountErr) {
+          console.error(
+            `[failStaleUploadJobs] job ${job.id} recount/log FAILED:`,
+            recountErr,
+          );
+        }
       }
     }
   } catch (err) {

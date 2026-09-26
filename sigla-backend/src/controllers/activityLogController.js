@@ -14,9 +14,17 @@ const getActivityLogs = async (req, res) => {
       endDate,
       search,
       mine,
-      page = 1,
-      limit = 20,
+      tzOffset,
+      page: rawPage = 1,
+      limit: rawLimit = 20,
     } = req.query;
+
+    // Bounded so a request cannot demand an unlimited page size (?limit=1000000
+    // would otherwise dump the whole table in one response), and so a bad value
+    // (missing, non-numeric, negative) falls back to a sane default instead of
+    // producing NaN offsets/totals downstream.
+    const page = Math.max(1, Number.parseInt(rawPage, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(rawLimit, 10) || 20));
     const offset = (page - 1) * limit;
 
     const where = {};
@@ -27,26 +35,31 @@ const getActivityLogs = async (req, res) => {
     if (target_type) where.target_type = target_type;
     if (search) where.details = { [Op.iLike]: `%${search}%` };
 
-    // Date range filter on created_at, inclusive of the whole first and last day.
+    // Date range filter on created_at, inclusive of the whole first and last day
+    // IN THE VIEWER'S TIMEZONE, not the server's.
     //
-    // Both bounds must be built in the SAME time frame. `new Date("2026-07-29")`
-    // is parsed as UTC midnight by spec, while setHours() below works in local
-    // time — so the start landed 8 hours later than the end's frame at UTC+8 and
-    // every log from 00:00 to 07:59 local on the first selected day was silently
-    // excluded. Constructing from explicit parts gives local midnight, matching
-    // the local end-of-day, so a single-day filter now covers the whole day.
-    const localStartOfDay = (value) => {
+    // tzOffset is JS's getTimezoneOffset() from the browser: minutes to ADD to
+    // local time to reach UTC (e.g. -480 at UTC+8). "Midnight in the viewer's
+    // timezone" is therefore UTC midnight for that date, shifted by -tzOffset
+    // minutes. Without it (an older client, or a direct API call) this falls
+    // back to the server's own local time, which is what this used to do
+    // unconditionally — correct only when the server and every viewer share a
+    // timezone. A deployed server typically runs in UTC while admins view from
+    // UTC+8, and building boundaries from the server's clock shifted a
+    // single-day filter by up to 8 hours, silently dropping early-morning rows.
+    const offsetMinutes = Number.parseInt(tzOffset, 10) || 0;
+    const startOfDayForViewer = (value) => {
       const [y, m, d] = String(value).split("-").map(Number);
       if (!y || !m || !d) return new Date(value); // unexpected format: leave as-is
-      return new Date(y, m - 1, d, 0, 0, 0, 0);
+      return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0) + offsetMinutes * 60000);
     };
 
     if (startDate || endDate) {
       where.created_at = {};
-      if (startDate) where.created_at[Op.gte] = localStartOfDay(startDate);
+      if (startDate) where.created_at[Op.gte] = startOfDayForViewer(startDate);
       if (endDate) {
-        const end = localStartOfDay(endDate);
-        end.setHours(23, 59, 59, 999);
+        const end = startOfDayForViewer(endDate);
+        end.setUTCHours(end.getUTCHours() + 24, 0, 0, -1); // end of that same local day
         where.created_at[Op.lte] = end;
       }
     }
@@ -62,8 +75,8 @@ const getActivityLogs = async (req, res) => {
         },
       ],
       order: [["created_at", "DESC"]],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      limit,
+      offset,
     });
 
     const maskedRows = rows.map((row) => {
@@ -73,7 +86,7 @@ const getActivityLogs = async (req, res) => {
 
     return res.status(200).json({
       total: count,
-      page: parseInt(page),
+      page,
       totalPages: Math.ceil(count / limit),
       logs: maskedRows,
     });
