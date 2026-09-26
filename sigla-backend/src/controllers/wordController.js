@@ -518,10 +518,31 @@ const getWordStats = async (req, res) => {
         GestureSample.count(),
       ]);
 
-    // Words approved but not yet active — waiting for next model deploy
-    const readyToActivate = await Word.count({
-      where: { status: "approved", is_active: false },
+    // Words that would actually activate on the next model deploy — NOT the
+    // same as status: "approved". A word's status flips to "approved" the
+    // moment it's created by an admin (adminAddWord, approved_sample_count: 0)
+    // or has a user submission accepted (approveWord), neither of which checks
+    // sample count at all. Counting by status alone put brand-new, 0-sample
+    // words in "Awaiting Deployment" — this instead re-checks the SAME gate
+    // checkAndActivateWord and the manual activate endpoint already enforce:
+    // >= ACTIVATION_THRESHOLD approved samples AND >= MIN_SIGNERS_PER_WORD
+    // qualified signers (>= MIN_SAMPLES_PER_SIGNER approved clips each).
+    //
+    // The sample-count half is a single indexed count; only words that clear
+    // it need the per-signer query, which cannot be expressed as one COUNT.
+    // In practice that is a handful of words, not the whole table.
+    const threshold = getActivationThreshold();
+    const candidates = await Word.findAll({
+      where: { is_active: false, approved_sample_count: { [Op.gte]: threshold } },
+      attributes: ["id"],
+      raw: true,
     });
+    const coverageChecks = await Promise.all(
+      candidates.map((w) => getSignerCoverage(w.id)),
+    );
+    const readyToActivate = coverageChecks.filter(
+      (c) => c.qualifiedSigners >= MIN_SIGNERS_PER_WORD,
+    ).length;
 
     return res.status(200).json({
       total,
