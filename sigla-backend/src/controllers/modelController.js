@@ -7,8 +7,10 @@ const {
   Word,
   Administrator,
   GestureSample,
+  UploadJob,
 } = require("../models/index.js");
 const { logActivity } = require("../utils/activityLogger.js");
+const { failStaleUploadJobs } = require("./wordController.js");
 require("dotenv").config();
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
@@ -574,6 +576,44 @@ const trainModel = async (req, res) => {
     });
     if (existing) {
       return res.status(409).json({ message: "Version number already exists" });
+    }
+
+    // Refuse to start a second training run while one is already going. Two
+    // concurrent runs would both hit the same ML service — CPU-bound TensorFlow
+    // work that blocks its event loop per request (see model.py) — and race to
+    // write the same version's rows.
+    const trainingInProgress = await ModelVersion.findOne({
+      where: { status: "training" },
+    });
+    if (trainingInProgress) {
+      return res.status(409).json({
+        message:
+          `Version ${trainingInProgress.version_number} is still training. ` +
+          "Wait for it to finish before starting another run.",
+      });
+    }
+
+    // Refuse to start training while a clip upload is still writing rows for
+    // some word. Training snapshots the dataset once at the start of each half
+    // (see fetch_approved_samples in train.py); a batch that is only partway
+    // done would be trained on with too few clips/signers for the word it is
+    // uploading — the exact failure this guard exists to prevent — and the rest
+    // of that batch would silently miss this model entirely.
+    //
+    // Sweep first: a batch orphaned by a backend restart must not block every
+    // future training run forever.
+    await failStaleUploadJobs();
+    const liveUploads = await UploadJob.findAll({
+      where: { status: "processing" },
+      include: [{ model: Word, as: "word", attributes: ["label"] }],
+    });
+    if (liveUploads.length > 0) {
+      const words = [...new Set(liveUploads.map((j) => j.word?.label || `word ${j.word_id}`))];
+      return res.status(409).json({
+        message:
+          "An upload is still in progress for: " + words.join(", ") +
+          ". Wait for it to finish before training, so the new clips are included.",
+      });
     }
 
     const letterLabels = await labelsForKind("letters");
