@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo } from "react";
+import { useState, useEffect, useMemo, useRef, memo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +13,10 @@ import { listStagger } from "../../utils/motion.js";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { PageHeaderSkeleton, SkeletonBlock } from "../../components/Skeleton.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
+import { usePageViewState } from "../../utils/pageViewState.js";
+import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
+import { cachedFetch, getCached, hasCached } from "../../utils/apiCache.js";
+import { CACHE_KEYS } from "../../api/cacheKeys.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
   BarChart,
@@ -180,12 +184,18 @@ const SkeletonTable = () => (
 
 const WORD_FETCH_LIMIT = 500;
 
-const getReportWords = async () => {
-  const firstPage = await getAllWords({ page: 1, limit: WORD_FETCH_LIMIT });
+const getReportWords = (opts) => cachedFetch(CACHE_KEYS.reportWords, async () => {
+  const firstPage = await getAllWords(
+    { page: 1, limit: WORD_FETCH_LIMIT },
+    { force: true },
+  );
   const allWords = [...(firstPage.words || [])];
 
   for (let page = 2; page <= (firstPage.totalPages || 1); page += 1) {
-    const nextPage = await getAllWords({ page, limit: WORD_FETCH_LIMIT });
+    const nextPage = await getAllWords(
+      { page, limit: WORD_FETCH_LIMIT },
+      { force: true },
+    );
     allWords.push(...(nextPage.words || []));
   }
 
@@ -193,7 +203,7 @@ const getReportWords = async () => {
     ...new Map(allWords.map((entry) => [entry.id, entry])).values(),
   ];
   return { ...firstPage, words: uniqueWords };
-};
+}, opts);
 
 // Start of the window for each range option, or null for "all time".
 const rangeStart = (range) => {
@@ -223,21 +233,35 @@ const ReportsAnalytics = () => {
   const toast = useToast();
   const navigate = useNavigate();
   const { isSuper, user } = useAuth();
-  const [filter, setFilter] = useState("month");
-  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = usePageViewState("reports.filter", "month");
+  const [loading, setLoading] = useState(() => !(
+    hasCached(CACHE_KEYS.wordStats) &&
+    hasCached(CACHE_KEYS.reportWords) &&
+    hasCached(CACHE_KEYS.categories) &&
+    hasCached(CACHE_KEYS.models) &&
+    (!isSuper || (hasCached(CACHE_KEYS.deactivatedAdministrators) && hasCached(CACHE_KEYS.deletedAdministrators)))
+  ));
   const [generating, setGenerating] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [modelLoadFailed, setModelLoadFailed] = useState(false);
   const [dataAsOf, setDataAsOf] = useState(null);
 
-  const [wordStats, setWordStats] = useState(null);
-  const [deactivatedUsers, setDeactivatedUsers] = useState([]);
-  const [deletedUsers, setDeletedUsers] = useState([]);
-  const [words, setWords] = useState([]);
+  const [wordStats, setWordStats] = useState(() => getCached(CACHE_KEYS.wordStats) || null);
+  const [deactivatedUsers, setDeactivatedUsers] = useState(
+    () => getCached(CACHE_KEYS.deactivatedAdministrators)?.administrators || [],
+  );
+  const [deletedUsers, setDeletedUsers] = useState(
+    () => getCached(CACHE_KEYS.deletedAdministrators)?.administrators || [],
+  );
+  const [words, setWords] = useState(() => getCached(CACHE_KEYS.reportWords)?.words || []);
   // Total words on the server, which may exceed WORD_FETCH_LIMIT.
-  const [wordTotal, setWordTotal] = useState(0);
-  const [models, setModels] = useState([]);
-  const [categoryCount, setCategoryCount] = useState(null);
+  const [wordTotal, setWordTotal] = useState(
+    () => getCached(CACHE_KEYS.reportWords)?.total || 0,
+  );
+  const [models, setModels] = useState(() => getCached(CACHE_KEYS.models)?.models || []);
+  const [categoryCount, setCategoryCount] = useState(
+    () => getCached(CACHE_KEYS.categories)?.categories?.length ?? null,
+  );
 
   // Report sections per scope §20: word statistics, gesture sample counts, model accuracy.
   const [reportSections, setReportSections] = useState({
@@ -246,13 +270,57 @@ const ReportsAnalytics = () => {
     model_accuracy: true,
   });
 
-  const [deactivatedPage, setDeactivatedPage] = useState(1);
-  const [deletedPage, setDeletedPage] = useState(1);
+  const [deactivatedPage, setDeactivatedPage] = usePageViewState("reports.deactivatedPage", 1);
+  const [deletedPage, setDeletedPage] = usePageViewState("reports.deletedPage", 1);
   const PAGE_SIZE = 5;
+  const previousFilterRef = useRef(filter);
+
+  useCacheSubscription(CACHE_KEYS.wordStats, setWordStats);
+  useCacheSubscription(CACHE_KEYS.deactivatedAdministrators, (data) => {
+    setDeactivatedUsers(data.administrators || []);
+  });
+  useCacheSubscription(CACHE_KEYS.deletedAdministrators, (data) => {
+    setDeletedUsers(data.administrators || []);
+  });
+  useCacheSubscription(CACHE_KEYS.reportWords, (data) => {
+    setWords(data.words || []);
+    setWordTotal(typeof data.total === "number" ? data.total : (data.words || []).length);
+  });
+  useCacheSubscription(CACHE_KEYS.categories, (data) => {
+    setCategoryCount((data.categories || []).length);
+  });
+  useCacheSubscription(CACHE_KEYS.models, (data) => {
+    setModels(data.models || []);
+  });
 
   // ── Fetch ───────────────────────────────────────────────────
   const fetchAll = async () => {
-    setLoading(true);
+    const cachedStats = getCached(CACHE_KEYS.wordStats);
+    const cachedDeactivated = getCached(CACHE_KEYS.deactivatedAdministrators);
+    const cachedDeleted = getCached(CACHE_KEYS.deletedAdministrators);
+    const cachedWords = getCached(CACHE_KEYS.reportWords);
+    const cachedCategories = getCached(CACHE_KEYS.categories);
+    const cachedModels = getCached(CACHE_KEYS.models);
+    if (cachedStats) setWordStats(cachedStats);
+    if (cachedDeactivated) setDeactivatedUsers(cachedDeactivated.administrators || []);
+    if (cachedDeleted) setDeletedUsers(cachedDeleted.administrators || []);
+    if (cachedWords) {
+      setWords(cachedWords.words || []);
+      setWordTotal(
+        typeof cachedWords.total === "number"
+          ? cachedWords.total
+          : (cachedWords.words || []).length,
+      );
+    }
+    if (cachedCategories) setCategoryCount((cachedCategories.categories || []).length);
+    if (cachedModels) setModels(cachedModels.models || []);
+    const hasCachedReport =
+      hasCached(CACHE_KEYS.wordStats) &&
+      hasCached(CACHE_KEYS.reportWords) &&
+      hasCached(CACHE_KEYS.categories) &&
+      hasCached(CACHE_KEYS.models) &&
+      (!isSuper || (hasCached(CACHE_KEYS.deactivatedAdministrators) && hasCached(CACHE_KEYS.deletedAdministrators)));
+    setLoading(!hasCachedReport);
     setLoadError(false);
     setModelLoadFailed(false);
     try {
@@ -288,14 +356,18 @@ const ReportsAnalytics = () => {
         const mData = await getModelVersions({ force: true });
         setModels(mData.models || []);
       } catch {
-        setModels([]);
-        setModelLoadFailed(true);
+        if (!hasCached(CACHE_KEYS.models)) {
+          setModels([]);
+          setModelLoadFailed(true);
+        }
       }
       setDataAsOf(new Date());
     } catch {
-      setLoadError(true);
-      setDataAsOf(null);
-      toast.error("Failed to load reports data");
+      if (!hasCachedReport) {
+        setLoadError(true);
+        setDataAsOf(null);
+        toast.error("Failed to load reports data");
+      }
     } finally {
       setLoading(false);
     }
@@ -314,8 +386,11 @@ const ReportsAnalytics = () => {
 
   // Range changes only reset pagination.
   useEffect(() => {
-    setDeactivatedPage(1);
-    setDeletedPage(1);
+    if (previousFilterRef.current !== filter) {
+      previousFilterRef.current = filter;
+      setDeactivatedPage(1);
+      setDeletedPage(1);
+    }
   }, [filter]);
 
   // ── Chart data helpers ──────────────────────────────────────

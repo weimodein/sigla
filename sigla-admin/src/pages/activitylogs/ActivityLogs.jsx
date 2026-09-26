@@ -1,6 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { usePageViewState } from "../../utils/pageViewState.js";
+import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
+import { cacheKey, getCached, hasCached } from "../../utils/apiCache.js";
+import { CACHE_KEYS } from "../../api/cacheKeys.js";
 import { listStagger } from "../../utils/motion.js";
 import { TableSkeletonRows } from "../../components/Skeleton.jsx";
 import PageNav from "../../components/PageNav.jsx";
@@ -181,25 +185,50 @@ const targetLabel = (t) =>
 const ActivityLogs = () => {
   const toast = useToast();
 
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-
   // Filters
-  const [actionFilter, setActionFilter] = useState("");
-  const [targetFilter, setTargetFilter] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [actionFilter, setActionFilter] = usePageViewState("activityLogs.actionFilter", "");
+  const [targetFilter, setTargetFilter] = usePageViewState("activityLogs.targetFilter", "");
+  const [startDate, setStartDate] = usePageViewState("activityLogs.startDate", "");
+  const [endDate, setEndDate] = usePageViewState("activityLogs.endDate", "");
+  const [search, setSearch] = usePageViewState("activityLogs.search", "");
+  const [debouncedSearch, setDebouncedSearch] = usePageViewState("activityLogs.debouncedSearch", "");
 
   // Pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = usePageViewState("activityLogs.page", 1);
+  const [pageSize, setPageSize] = usePageViewState("activityLogs.pageSize", 10);
+
+  const logCacheKey = cacheKey(CACHE_KEYS.activityLogs, {
+    action: actionFilter || undefined,
+    target_type: targetFilter || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    tzOffset: new Date().getTimezoneOffset(),
+    search: debouncedSearch || undefined,
+    page,
+    limit: pageSize,
+  });
+
+  const cachedLogs = getCached(logCacheKey);
+  const [logs, setLogs] = useState(() => cachedLogs?.logs || []);
+  const [loading, setLoading] = useState(() => !hasCached(logCacheKey));
+  const [total, setTotal] = useState(() => cachedLogs?.total || 0);
+  const [totalPages, setTotalPages] = useState(() => cachedLogs?.totalPages || 1);
+
+  useCacheSubscription(logCacheKey, (data) => {
+    setLogs(data.logs || []);
+    setTotal(data.total || 0);
+    setTotalPages(data.totalPages || 1);
+    setLoading(false);
+  });
 
   const fetchLogs = useCallback(async () => {
-    setLoading(true);
+    const cached = getCached(logCacheKey);
+    if (cached) {
+      setLogs(cached.logs || []);
+      setTotal(cached.total || 0);
+      setTotalPages(cached.totalPages || 1);
+    }
+    setLoading(!hasCached(logCacheKey));
     try {
       const data = await getActivityLogs({
         action: actionFilter || undefined,
@@ -224,7 +253,7 @@ const ActivityLogs = () => {
     } finally {
       setLoading(false);
     }
-  }, [actionFilter, targetFilter, startDate, endDate, debouncedSearch, page, pageSize, toast]);
+  }, [actionFilter, targetFilter, startDate, endDate, debouncedSearch, page, pageSize, logCacheKey, toast]);
 
   // Debounce search, then reset to page 1 in the SAME state update the
   // debounced value commits — not in a separate effect keyed on it. A filter
@@ -232,12 +261,13 @@ const ActivityLogs = () => {
   // was on, then reset to page 1 and fetch again, flickering the table.
   // Resetting inline means only one render, so only one request.
   useEffect(() => {
+    if (search === debouncedSearch) return;
     const t = setTimeout(() => {
       setDebouncedSearch(search);
       setPage(1);
     }, 400);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, debouncedSearch]);
 
   useEffect(() => {
     fetchLogs();

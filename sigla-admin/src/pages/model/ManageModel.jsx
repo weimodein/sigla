@@ -17,6 +17,10 @@ import {
 } from "../../api/modelApi.js";
 import { getWordStats } from "../../api/wordApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { usePageViewState } from "../../utils/pageViewState.js";
+import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
+import { getCached, hasCached } from "../../utils/apiCache.js";
+import { CACHE_KEYS } from "../../api/cacheKeys.js";
 import {
   Cpu,
   CheckCircle,
@@ -113,21 +117,31 @@ const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
 // ── Main Component ────────────────────────────────────────────
 const ManageModel = () => {
   const toast = useToast();
-  const [stats, setStats] = useState(null);
-  const [wordStats, setWordStats] = useState(null);
-  const [models, setModels] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedModelsAtMount = getCached(CACHE_KEYS.models);
+  const [stats, setStats] = useState(() => getCached(CACHE_KEYS.modelStats) || null);
+  const [wordStats, setWordStats] = useState(() => getCached(CACHE_KEYS.wordStats) || null);
+  const [models, setModels] = useState(() => cachedModelsAtMount?.models || []);
+  const [loading, setLoading] = useState(() =>
+    !cachedModelsAtMount || cachedModelsAtMount.models?.some((model) => model.status === "training"),
+  );
   const [actionLoading, setActionLoading] = useState(false);
   const [expandedRow, setExpandedRow] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = usePageViewState("models.searchTerm", "");
 
   // Pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = usePageViewState("models.page", 1);
+  const [pageSize, setPageSize] = usePageViewState("models.pageSize", 10);
 
   // Sorting
-  const [sortField, setSortField] = useState("trained_at");
-  const [sortDir, setSortDir] = useState("desc");
+  const [sortField, setSortField] = usePageViewState("models.sortField", "trained_at");
+  const [sortDir, setSortDir] = usePageViewState("models.sortDir", "desc");
+
+  useCacheSubscription(CACHE_KEYS.models, (data) => {
+    setModels(data.models || []);
+    setLoading(false);
+  });
+  useCacheSubscription(CACHE_KEYS.modelStats, setStats);
+  useCacheSubscription(CACHE_KEYS.wordStats, setWordStats);
 
   // Modal state
   const [trainModal, setTrainModal] = useState(false);
@@ -149,7 +163,16 @@ const ManageModel = () => {
 
   // ── Fetch data ──────────────────────────────────────────────
   const fetchData = async () => {
-    setLoading(true);
+    const cachedModels = getCached(CACHE_KEYS.models);
+    const cachedStats = getCached(CACHE_KEYS.modelStats);
+    const cachedWordStats = getCached(CACHE_KEYS.wordStats);
+    if (cachedModels) setModels(cachedModels.models || []);
+    if (cachedStats) setStats(cachedStats);
+    if (cachedWordStats) setWordStats(cachedWordStats);
+    const hasCachedTraining = (cachedModels?.models || []).some(
+      (model) => model.status === "training",
+    );
+    setLoading(!hasCached(CACHE_KEYS.models) || hasCachedTraining);
     try {
       const [statsData, modelsData, wordStatsData] = await Promise.all([
         getModelStats(),

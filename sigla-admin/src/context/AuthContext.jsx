@@ -7,6 +7,7 @@ import {
 } from "../api/authApi.js";
 import { setAuthMessage } from "../utils/authMessage.js";
 import { clearCache } from "../utils/apiCache.js";
+import { clearPageViewState } from "../utils/pageViewState.js";
 
 const AuthContext = createContext(null);
 
@@ -66,6 +67,7 @@ export const AuthProvider = ({ children }) => {
       storage.remove("user");
       setUser(null);
       clearCache();
+      clearPageViewState();
       // Say why. ProtectedRoute redirects to /login on the next render, and
       // without this the admin is dropped there mid-task with no explanation.
       // Parked rather than toasted directly: this provider wraps ToastProvider,
@@ -87,6 +89,8 @@ export const AuthProvider = ({ children }) => {
 
     storage.set("token", data.token);
     storage.set("user", JSON.stringify(data.administrator));
+    clearCache();
+    clearPageViewState();
     setUser(data.administrator);
 
     return data;
@@ -118,6 +122,7 @@ export const AuthProvider = ({ children }) => {
       // Otherwise the next admin to sign in on this browser is served the previous
       // one's cached data.
       clearCache();
+      clearPageViewState();
     }
   };
 

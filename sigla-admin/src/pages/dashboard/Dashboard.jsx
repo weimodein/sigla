@@ -8,6 +8,9 @@ import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { takeAuthMessage } from "../../utils/authMessage.js";
+import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
+import { cacheKey, getCached, hasCached } from "../../utils/apiCache.js";
+import { CACHE_KEYS } from "../../api/cacheKeys.js";
 import { listStagger } from "../../utils/motion.js";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { PageHeaderSkeleton, SkeletonBlock } from "../../components/Skeleton.jsx";
@@ -70,14 +73,31 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const { user, isSuper } = useAuth();
+  const activityKey = cacheKey(CACHE_KEYS.activityLogs, { mine: true, limit: 10 });
 
-  const [userStats, setUserStats]   = useState(null);
-  const [wordStats, setWordStats]   = useState(null);
-  const [modelStats, setModelStats] = useState(null);
-  const [allModels, setAllModels]   = useState([]);
-  const [myActivity, setMyActivity] = useState([]);
-  const [categoryCount, setCategoryCount] = useState(null);
-  const [loading, setLoading]       = useState(true);
+  const [userStats, setUserStats] = useState(() => getCached(CACHE_KEYS.adminStats) || null);
+  const [wordStats, setWordStats] = useState(() => getCached(CACHE_KEYS.wordStats) || null);
+  const [modelStats, setModelStats] = useState(() => getCached(CACHE_KEYS.modelStats) || null);
+  const [allModels, setAllModels] = useState(() => getCached(CACHE_KEYS.models)?.models || []);
+  const [myActivity, setMyActivity] = useState(() => getCached(activityKey)?.logs || []);
+  const [categoryCount, setCategoryCount] = useState(
+    () => getCached(CACHE_KEYS.categories)?.categories?.length ?? null,
+  );
+  const [loading, setLoading] = useState(() => ![
+    CACHE_KEYS.adminStats,
+    CACHE_KEYS.wordStats,
+    CACHE_KEYS.modelStats,
+    CACHE_KEYS.models,
+    CACHE_KEYS.categories,
+    activityKey,
+  ].every(hasCached));
+
+  useCacheSubscription(CACHE_KEYS.adminStats, setUserStats);
+  useCacheSubscription(CACHE_KEYS.wordStats, setWordStats);
+  useCacheSubscription(CACHE_KEYS.modelStats, setModelStats);
+  useCacheSubscription(CACHE_KEYS.models, (data) => setAllModels(data.models || []));
+  useCacheSubscription(CACHE_KEYS.categories, (data) => setCategoryCount((data.categories || []).length));
+  useCacheSubscription(activityKey, (data) => setMyActivity(data.logs || []));
 
   // The welcome greeting is parked by Login, which unmounts on navigate and so
   // cannot show it itself. Read-once, so a later visit here stays quiet.
@@ -89,6 +109,27 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchAll = async () => {
+      const cachedUsers = getCached(CACHE_KEYS.adminStats);
+      const cachedWords = getCached(CACHE_KEYS.wordStats);
+      const cachedModelStats = getCached(CACHE_KEYS.modelStats);
+      const cachedModels = getCached(CACHE_KEYS.models);
+      const cachedCategories = getCached(CACHE_KEYS.categories);
+      const cachedActivity = getCached(activityKey);
+      if (cachedUsers) setUserStats(cachedUsers);
+      if (cachedWords) setWordStats(cachedWords);
+      if (cachedModelStats) setModelStats(cachedModelStats);
+      if (cachedModels) setAllModels(cachedModels.models || []);
+      if (cachedCategories) setCategoryCount((cachedCategories.categories || []).length);
+      if (cachedActivity) setMyActivity(cachedActivity.logs || []);
+      const hasDashboardCache = [
+        CACHE_KEYS.adminStats,
+        CACHE_KEYS.wordStats,
+        CACHE_KEYS.modelStats,
+        CACHE_KEYS.models,
+        CACHE_KEYS.categories,
+        activityKey,
+      ].every(hasCached);
+      setLoading(!hasDashboardCache);
       try {
         const [users, words, models, modelsAll, cats, activity] = await Promise.all([
           getAdministratorStats(),
@@ -105,13 +146,13 @@ const Dashboard = () => {
         setCategoryCount((cats.categories || []).length);
         setMyActivity(activity.logs || []);
       } catch {
-        toast.error("Failed to load dashboard data");
+        if (!hasDashboardCache) toast.error("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     };
     fetchAll();
-  }, [toast]);
+  }, [activityKey, toast]);
 
   // ── Loading skeleton ──
   if (loading) {

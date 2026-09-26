@@ -27,6 +27,12 @@ const UploadJobsContext = createContext(null);
 const POLL_TIMEOUT_MS = 30 * 60 * 1000;
 const POLL_INTERVAL_MS = 5000;
 
+const invalidateAfterUpload = () => {
+  invalidate("words:");
+  invalidate("activity:");
+  invalidate("reports:");
+};
+
 export const UploadJobsProvider = ({ children }) => {
   const { success, error: errorToast } = useToast();
   const { user, isLoggedIn } = useAuth();
@@ -160,7 +166,7 @@ export const UploadJobsProvider = ({ children }) => {
         errorToast(
           "Stopped tracking these uploads — they have not reported back. Reload to check their status.",
         );
-        invalidate("words:");
+        invalidateAfterUpload();
         setFinishedCount((n) => n + 1);
         return;
       }
@@ -222,7 +228,7 @@ export const UploadJobsProvider = ({ children }) => {
         // The sample counts changed on the SERVER, so no mutation call ran on
         // this client to clear them. Without this, a cached fetch would re-serve
         // the pre-upload numbers.
-        invalidate("words:");
+        invalidateAfterUpload();
         setFinishedCount((n) => n + 1);
       }
     }, POLL_INTERVAL_MS);

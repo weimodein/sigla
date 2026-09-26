@@ -20,6 +20,10 @@ import {
 import { getCategories } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useUploadJobs } from "../../context/UploadJobsContext.jsx";
+import { usePageViewState } from "../../utils/pageViewState.js";
+import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
+import { cacheKey, getCached, hasCached } from "../../utils/apiCache.js";
+import { CACHE_KEYS } from "../../api/cacheKeys.js";
 import {
   Plus,
   Upload,
@@ -668,22 +672,27 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
 const ManageWord = () => {
   const { success, error: errorToast } = useToast();
   const navigate = useNavigate();
-  const [words, setWords] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const [page, setPage] = usePageViewState("dataset.page", 1);
+  const [search, setSearch] = usePageViewState("dataset.search", "");
   // Trails `search` by 400ms; the fetch keys off this so typing does not fire a
   // request per keystroke.
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = usePageViewState("dataset.debouncedSearch", "");
+  const [filterCategory, setFilterCategory] = usePageViewState("dataset.filterCategory", "");
+  const initialWordParams = { page, limit: PAGE_SIZE };
+  if (debouncedSearch) initialWordParams.search = debouncedSearch;
+  if (filterCategory) initialWordParams.category = filterCategory;
+  const initialWordKey = cacheKey(CACHE_KEYS.words, initialWordParams);
+  const cachedWords = getCached(initialWordKey);
+  const [words, setWords] = useState(() => cachedWords?.words || []);
+  const [total, setTotal] = useState(() => cachedWords?.total || 0);
+  const [loading, setLoading] = useState(() => !hasCached(initialWordKey));
   const [addOpen, setAddOpen] = useState(false);
   const [editWord, setEditWord] = useState(null);
   const [uploadWord, setUploadWord] = useState(null);
   const [demoVideoWord, setDemoVideoWord] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [clearSamplesConfirm, setClearSamplesConfirm] = useState(null);
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(() => getCached(CACHE_KEYS.wordStats) || null);
   // Upload tracking (which batches are running, their toasts, the results
   // modal) lives in UploadJobsProvider — mounted once in App.jsx, so it
   // survives this page unmounting when the admin navigates away and back.
@@ -694,11 +703,27 @@ const ManageWord = () => {
   // current page it could only ever offer the ~10 categories visible, and
   // selecting one narrowed `words`, which then dropped the selected value from
   // its own dropdown.
-  const [allCategories, setAllCategories] = useState([]);
+  const [allCategories, setAllCategories] = useState(
+    () => getCached(CACHE_KEYS.categories)?.categories || [],
+  );
   // Guards against out-of-order responses: only the newest request may write to
   // state. Without this a slow earlier fetch can land after a newer one and
   // repopulate the table with results for a filter the user already changed.
   const fetchIdRef = useRef(0);
+  const wordQueryParams = { page, limit: PAGE_SIZE };
+  if (debouncedSearch) wordQueryParams.search = debouncedSearch;
+  if (filterCategory) wordQueryParams.category = filterCategory;
+  const wordQueryKey = cacheKey(CACHE_KEYS.words, wordQueryParams);
+
+  useCacheSubscription(CACHE_KEYS.wordStats, setStats);
+  useCacheSubscription(CACHE_KEYS.categories, (data) => {
+    setAllCategories(data.categories || []);
+  });
+  useCacheSubscription(wordQueryKey, (data) => {
+    setWords(data.words || []);
+    setTotal(data.total || 0);
+    setLoading(false);
+  });
 
   // Summary-card counts come from a separate endpoint than the table, so they
   // are refreshed here — every mutation already routes through fetchWords().
@@ -713,11 +738,14 @@ const ManageWord = () => {
 
   const fetchWords = async () => {
     const requestId = ++fetchIdRef.current;
-    setLoading(true);
+    const params = { ...wordQueryParams };
+    const cached = getCached(wordQueryKey);
+    if (cached) {
+      setWords(cached.words || []);
+      setTotal(cached.total || 0);
+    }
+    setLoading(!hasCached(wordQueryKey));
     try {
-      const params = { page, limit: PAGE_SIZE };
-      if (debouncedSearch) params.search = debouncedSearch;
-      if (filterCategory) params.category = filterCategory;
       const data = await getAllWords(params);
       // A newer request has started since this one — discard the result.
       if (requestId !== fetchIdRef.current) return;

@@ -18,6 +18,10 @@ import {
   resetAdministratorPassword,
 } from "../../api/administratorApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { usePageViewState } from "../../utils/pageViewState.js";
+import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
+import { cacheKey, getCached, hasCached } from "../../utils/apiCache.js";
+import { CACHE_KEYS } from "../../api/cacheKeys.js";
 import { normalizeEmail, validateEmail } from "../../utils/emailValidation.js";
 import {
   PASSWORD_HELP,
@@ -239,23 +243,37 @@ const ActionBtn = ({ label, bg, onClick, disabled, title }) => (
 // ── Main Component ─────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
 const ManageAdministrators = () => {
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = usePageViewState("administrators.activeTab", "all");
   const toast = useToast();
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(() => getCached(CACHE_KEYS.adminStats) || null);
   const [statsError, setStatsError] = useState(false);
-  const [admins, setAdmins] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = usePageViewState("administrators.search", "");
+  const [debouncedSearch, setDebouncedSearch] = usePageViewState("administrators.debouncedSearch", "");
   const [actionLoading, setActionLoading] = useState(false);
 
   // Pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = usePageViewState("administrators.page", 1);
+  const [pageSize, setPageSize] = usePageViewState("administrators.pageSize", 10);
 
   // Sorting
-  const [sortField, setSortField] = useState("id");
-  const [sortDir, setSortDir] = useState("asc");
+  const [sortField, setSortField] = usePageViewState("administrators.sortField", "id");
+  const [sortDir, setSortDir] = usePageViewState("administrators.sortDir", "asc");
+
+  const adminQueryParams = { search: debouncedSearch, limit: 500 };
+  const adminListKey = activeTab === "all"
+    ? cacheKey(CACHE_KEYS.administrators, adminQueryParams)
+    : activeTab === "deactivated"
+      ? CACHE_KEYS.deactivatedAdministrators
+      : CACHE_KEYS.deletedAdministrators;
+  const cachedAdminList = getCached(adminListKey);
+  const [admins, setAdmins] = useState(() => cachedAdminList?.administrators || []);
+  const [loading, setLoading] = useState(() => !hasCached(adminListKey));
+
+  useCacheSubscription(adminListKey, (data) => {
+    setAdmins(data.administrators || []);
+    setLoading(false);
+  });
+  useCacheSubscription(CACHE_KEYS.adminStats, setStats);
 
   // Modal state
   const [editModal, setEditModal] = useState(null);
@@ -292,6 +310,8 @@ const ManageAdministrators = () => {
   const fetchStats = async () => {
     setStatsError(false);
     try {
+      const cached = getCached(CACHE_KEYS.adminStats);
+      if (cached) setStats(cached);
       const data = await getAdministratorStats();
       setStats(data);
     } catch {
@@ -301,10 +321,12 @@ const ManageAdministrators = () => {
   };
 
   const fetchTabData = async () => {
-    setLoading(true);
+    const cached = getCached(adminListKey);
+    if (cached) setAdmins(cached.administrators || []);
+    setLoading(!hasCached(adminListKey));
     try {
       if (activeTab === "all") {
-        const data = await getAllAdministrators({ search: debouncedSearch, limit: 500 });
+        const data = await getAllAdministrators(adminQueryParams);
         setAdmins(data.administrators || []);
       } else if (activeTab === "deactivated") {
         const data = await getDeactivatedAdministrators();
@@ -317,7 +339,6 @@ const ManageAdministrators = () => {
       toast.error(err.response?.data?.message || "Failed to load administrators");
     } finally {
       setLoading(false);
-      setPage(1);
     }
   };
 
@@ -325,9 +346,13 @@ const ManageAdministrators = () => {
     fetchStats();
   }, []);
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    if (search === debouncedSearch) return;
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, debouncedSearch]);
   useEffect(() => {
     fetchTabData();
   }, [activeTab, debouncedSearch]);
@@ -340,6 +365,11 @@ const ManageAdministrators = () => {
       setSortField(field);
       setSortDir("asc");
     }
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setPage(1);
   };
 
   const sortedAdmins = [...admins].sort((a, b) => {
@@ -779,7 +809,7 @@ const ManageAdministrators = () => {
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
             className="px-4 py-2 text-sm font-medium rounded-lg transition"
             style={{
               background: activeTab === tab.key ? C.surface : "transparent",

@@ -3,10 +3,12 @@ import axios from "axios";
 import { cachedFetch, cacheKey } from "../utils/apiCache.js";
 import { CACHE_KEYS, withInvalidation } from "./cacheKeys.js";
 
-export const getAllWords = async (params) => {
-  const response = await api.get("/words", { params });
-  return response.data;
-};
+export const getAllWords = (params, opts) =>
+  cachedFetch(
+    cacheKey(CACHE_KEYS.words, params),
+    async () => (await api.get("/words", { params })).data,
+    opts,
+  );
 
 // Cached: four pages call this, and the backend runs 7 aggregate queries per
 // call. `force` is available for callers that must read live state.
@@ -22,15 +24,15 @@ export const getWordById = async (id) => {
   return response.data;
 };
 
-export const approveWord = async (id) => {
+export const approveWord = withInvalidation(async (id) => {
   const response = await api.patch(`/words/${id}/approve`);
   return response.data;
-};
+}, "word");
 
-export const rejectWord = async (id, reason) => {
+export const rejectWord = withInvalidation(async (id, reason) => {
   const response = await api.patch(`/words/${id}/reject`, { reason });
   return response.data;
-};
+}, "word");
 
 export const updateWord = withInvalidation(async (id, data) => (await api.put(`/words/${id}`, data)).data, "word");
 
@@ -51,38 +53,50 @@ export const getWordSamples = async (id) => {
   return response.data;
 };
 
-export const approveSample = (wordId, sampleId) =>
-  api.patch(`/words/${wordId}/samples/${sampleId}/approve`).then((r) => r.data);
+export const approveSample = withInvalidation(
+  (wordId, sampleId) => api.patch(`/words/${wordId}/samples/${sampleId}/approve`).then((r) => r.data),
+  "word",
+);
 
-export const rejectSample = (wordId, sampleId) =>
-  api.patch(`/words/${wordId}/samples/${sampleId}/reject`).then((r) => r.data);
+export const rejectSample = withInvalidation(
+  (wordId, sampleId) => api.patch(`/words/${wordId}/samples/${sampleId}/reject`).then((r) => r.data),
+  "word",
+);
 
-export const approveAllSamplesByUser = (wordId, userId) =>
-  api
-    .patch(`/words/${wordId}/samples/user/${userId}/approve-all`)
-    .then((r) => r.data);
+export const approveAllSamplesByUser = withInvalidation(
+  (wordId, userId) => api.patch(`/words/${wordId}/samples/user/${userId}/approve-all`).then((r) => r.data),
+  "word",
+);
 
-export const rejectAllSamplesByUser = (wordId, userId) =>
-  api
-    .patch(`/words/${wordId}/samples/user/${userId}/reject-all`)
-    .then((r) => r.data);
+export const rejectAllSamplesByUser = withInvalidation(
+  (wordId, userId) => api.patch(`/words/${wordId}/samples/user/${userId}/reject-all`).then((r) => r.data),
+  "word",
+);
 
-export const approveSubmission = (wordId, data) =>
-  api.patch(`/words/${wordId}/approve-submission`, data).then((r) => r.data);
+export const approveSubmission = withInvalidation(
+  (wordId, data) => api.patch(`/words/${wordId}/approve-submission`, data).then((r) => r.data),
+  "word",
+);
 
-export const rejectSubmission = (wordId, data) =>
-  api.patch(`/words/${wordId}/reject-submission`, data).then((r) => r.data);
+export const rejectSubmission = withInvalidation(
+  (wordId, data) => api.patch(`/words/${wordId}/reject-submission`, data).then((r) => r.data),
+  "word",
+);
 
-export const lockWord = (id) =>
-  api.patch(`/words/${id}/lock`).then((r) => r.data);
+export const lockWord = withInvalidation(
+  (id) => api.patch(`/words/${id}/lock`).then((r) => r.data),
+  "word",
+);
 
-export const unlockWord = (id) =>
-  api.patch(`/words/${id}/unlock`).then((r) => r.data);
+export const unlockWord = withInvalidation(
+  (id) => api.patch(`/words/${id}/unlock`).then((r) => r.data),
+  "word",
+);
 
-export const submitWord = async (data) => {
+export const submitWord = withInvalidation(async (data) => {
   const response = await api.post("/words", data);
   return response.data;
-};
+}, "word");
 
 export const getUserSampleCount = async (wordId) => {
   const response = await api.get(`/words/${wordId}/user-sample-count`);
@@ -91,37 +105,47 @@ export const getUserSampleCount = async (wordId) => {
 
 export const adminAddWord = withInvalidation(async (data) => (await api.post("/words/admin-add", data)).data, "word");
 
-export const adminUploadSamples = async (wordId, data) => {
+export const adminUploadSamples = withInvalidation(async (wordId, data) => {
   const response = await api.post(`/words/${wordId}/admin-samples`, data);
   return response.data;
-};
+}, "word");
 
-export const activateWord = (id) =>
-  api.patch(`/words/${id}/activate`).then((r) => r.data);
+export const activateWord = withInvalidation(
+  (id) => api.patch(`/words/${id}/activate`).then((r) => r.data),
+  "word",
+);
 
-export const approveAllSamplesForWord = (wordId) =>
-  api.patch(`/words/${wordId}/samples/approve-all`).then((r) => r.data);
+export const approveAllSamplesForWord = withInvalidation(
+  (wordId) => api.patch(`/words/${wordId}/samples/approve-all`).then((r) => r.data),
+  "word",
+);
 
-export const rejectAllSamplesForWord = (wordId) =>
-  api.patch(`/words/${wordId}/samples/reject-all`).then((r) => r.data);
+export const rejectAllSamplesForWord = withInvalidation(
+  (wordId) => api.patch(`/words/${wordId}/samples/reject-all`).then((r) => r.data),
+  "word",
+);
 
-export const setWordThumbnail = (wordId, thumbnail_url) =>
-  api.patch(`/words/${wordId}/set-thumbnail`, { thumbnail_url }).then((r) => r.data);
+export const setWordThumbnail = withInvalidation(
+  (wordId, thumbnail_url) => api.patch(`/words/${wordId}/set-thumbnail`, { thumbnail_url }).then((r) => r.data),
+  "word",
+);
 
-export const setWordVideo = (wordId, data) =>
-  api.patch(`/words/${wordId}/set-video`, data).then((r) => r.data);
+export const setWordVideo = withInvalidation(
+  (wordId, data) => api.patch(`/words/${wordId}/set-video`, data).then((r) => r.data),
+  "word",
+);
 
 export const getMotionSequences = async (wordId) => {
   const response = await api.get(`/words/${wordId}/motion-sequences`);
   return response.data;
 };
 
-export const generateVideoFromSequence = async (wordId, sequenceIds) => {
+export const generateVideoFromSequence = withInvalidation(async (wordId, sequenceIds) => {
   const response = await api.post(`/words/${wordId}/generate-video`, {
     sequence_ids: sequenceIds,
   });
   return response.data;
-};
+}, "word");
 
 // Returns 202 with { job } — the clips are uploaded synchronously, but landmark
 // extraction runs in a background job on the server. Poll getUploadJob for

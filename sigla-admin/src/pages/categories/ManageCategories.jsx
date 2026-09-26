@@ -12,6 +12,10 @@ import {
   deleteCategory,
 } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { usePageViewState } from "../../utils/pageViewState.js";
+import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
+import { getCached, hasCached } from "../../utils/apiCache.js";
+import { CACHE_KEYS } from "../../api/cacheKeys.js";
 import {
   Plus,
   Pencil,
@@ -104,16 +108,25 @@ const PAGE_SIZE = 10;
 
 const ManageCategories = () => {
   const { success, error: errorToast } = useToast();
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState(
+    () => getCached(CACHE_KEYS.categories)?.categories || [],
+  );
+  const [loading, setLoading] = useState(() => !hasCached(CACHE_KEYS.categories));
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = usePageViewState("categories.page", 1);
+
+  useCacheSubscription(CACHE_KEYS.categories, (data) => {
+    setCategories(data.categories || []);
+    setLoading(false);
+  });
 
   const fetchCategories = async () => {
-    setLoading(true);
+    const cached = getCached(CACHE_KEYS.categories);
+    if (cached) setCategories(cached.categories || []);
+    setLoading(!hasCached(CACHE_KEYS.categories));
     try {
       const data = await getCategories();
       setCategories(data.categories || []);

@@ -15,16 +15,21 @@ export const CACHE_KEYS = {
   models: "models:list",
   modelStats: "models:stats",
   adminStats: "administrators:stats",
+  administrators: "administrators:list",
+  deactivatedAdministrators: "administrators:deactivated",
+  deletedAdministrators: "administrators:deleted",
+  activityLogs: "activity:list",
+  reportWords: "reports:words",
 };
 
 // Everything a write to one entity can affect. Used by the mutation handlers.
 export const CACHE_GROUPS = {
   // A word changing moves its stats, the list it appears in, and the word_count
   // shown against its category.
-  word: ["words:", "categories:"],
-  category: ["categories:", "words:"],
-  model: ["models:"],
-  administrator: ["administrators:"],
+  word: ["words:", "categories:", "activity:", "reports:"],
+  category: ["categories:", "words:", "activity:", "reports:"],
+  model: ["models:", "activity:", "reports:"],
+  administrator: ["administrators:", "activity:", "reports:"],
 };
 
 // Wrap a mutation so the caches it affects are dropped once it succeeds.
