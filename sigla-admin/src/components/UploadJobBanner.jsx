@@ -119,6 +119,12 @@ const UploadJobBanner = () => {
             <>
               {shownJobs.map((job, i) => {
                 const wordLabel = job.word?.label || `word #${job.word_id}`;
+                // Whose upload this is, shown only for someone else's — an
+                // admin's own card stays "Extracting · WORD" as before, since
+                // asking "who started this?" only makes sense for a card they
+                // didn't start themselves.
+                const isMine = job.started_by === user?.id;
+                const starterName = job.starter?.username || "another admin";
                 return (
                   <div
                     key={job.id}
@@ -143,9 +149,15 @@ const UploadJobBanner = () => {
                       <p
                         className="text-sm font-semibold text-blue-800"
                         style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}
-                        title={`Extracting landmarks for ${wordLabel}`}
+                        title={
+                          isMine
+                            ? `Extracting landmarks for ${wordLabel}`
+                            : `Uploaded by ${starterName} — extracting landmarks for ${wordLabel}`
+                        }
                       >
-                        Extracting · <span className="font-mono">{wordLabel}</span>
+                        {isMine
+                          ? <>Extracting · <span className="font-mono">{wordLabel}</span></>
+                          : <>{starterName} · <span className="font-mono">{wordLabel}</span></>}
                       </p>
                       <span className="text-sm font-semibold text-blue-800" style={{ flexShrink: 0 }}>
                         {job.processed_count}/{job.total_count}

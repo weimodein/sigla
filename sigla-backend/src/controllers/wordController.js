@@ -2106,6 +2106,11 @@ const UPLOAD_JOB_WORD_INCLUDE = [
     attributes: ["id", "label"],
     include: [{ model: Category, as: "category_ref", attributes: ["name"] }],
   },
+  // Who started the batch, so another admin's banner can say whose upload it
+  // is rather than showing an unattributed card. No FK (see UploadJob.js), so
+  // this is a plain LEFT join — a deleted administrator's job just gets no
+  // starter, which withJobWordCategoryName's caller falls back on.
+  { model: Administrator, as: "starter", attributes: ["id", "username"] },
 ];
 
 // Flattens job.word.category_ref.name to job.word.category, matching the
