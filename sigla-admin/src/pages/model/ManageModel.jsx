@@ -5,18 +5,18 @@ import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { SkeletonBlock, TableSkeletonRows } from "../../components/Skeleton.jsx";
 import PageNav from "../../components/PageNav.jsx";
 import { listStagger } from "../../utils/motion.js";
-import { invalidate } from "../../utils/apiCache.js";
 import {
   getAllModels,
   getModelStats,
   trainModel,
-  getModelStatus,
   deployModel,
   revertModel,
   deleteModel,
 } from "../../api/modelApi.js";
 import { getWordStats } from "../../api/wordApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { useTrainingJob } from "../../context/TrainingJobContext.jsx";
+import { useUploadJobs } from "../../context/UploadJobsContext.jsx";
 import { usePageViewState } from "../../utils/pageViewState.js";
 import { useCacheSubscription } from "../../hooks/useCacheSubscription.js";
 import { getCached, hasCached } from "../../utils/apiCache.js";
@@ -147,21 +147,37 @@ const ManageModel = () => {
   const [trainModal, setTrainModal] = useState(false);
   const [deployModal, setDeployModal] = useState(null);
   const [revertModal, setRevertModal] = useState(null);
-  const [resultModal, setResultModal] = useState(null);
 
   // Train form
   const [trainForm, setTrainForm] = useState({ version_number: "", notes: "" });
 
-  // Async training poll state
-  const [trainingModelId, setTrainingModelId] = useState(null);
-  const [trainingVersion, setTrainingVersion] = useState("");
-  // The alphabet row trained alongside the words model in the same run. Polled
-  // together with it so a failed alphabet is reported rather than sitting
-  // unnoticed as a "failed" row in the table.
-  const [trainingLettersId, setTrainingLettersId] = useState(null);
-  const pollingRef = useRef(null);
+  // Training progress, the results modal and the poll that drives them all now
+  // live in TrainingJobsProvider (App.jsx) — same reason UploadJobsContext was
+  // hoisted out of ManageWord: this page unmounts on navigation (App.jsx
+  // renders <Layout> per-<Route>), so state and an interval kept here would be
+  // lost the moment the admin left, and a run finishing elsewhere would never
+  // report its outcome. This page only needs to know a run is in flight (to
+  // disable the Train button) and to refetch when one finishes.
+  const {
+    job: trainingJob,
+    finishedCount: trainingFinishedCount,
+    startJob: startTrainingJob,
+  } = useTrainingJob();
+  // Live upload batches, so the Train button can be disabled with a reason —
+  // trainModel now refuses to start (409) while any word's upload is still
+  // processing, since training snapshots the dataset once and would train on
+  // a partially-uploaded word. See the guard in modelController.js.
+  const { uploadJobs } = useUploadJobs();
+  const uploadingWords = Object.values(uploadJobs).map(
+    (j) => j.word?.label || `word #${j.word_id}`,
+  );
 
   // ── Fetch data ──────────────────────────────────────────────
+  // Re-adopting an in-flight training run (so a reload doesn't show a stale
+  // "Train New Model" button) is TrainingJobsProvider's job now, not this
+  // page's — it re-adopts on login and on every route change regardless of
+  // whether ManageModel is even mounted. This just loads what the page
+  // displays.
   const fetchData = async () => {
     const cachedModels = getCached(CACHE_KEYS.models);
     const cachedStats = getCached(CACHE_KEYS.modelStats);
@@ -169,57 +185,16 @@ const ManageModel = () => {
     if (cachedModels) setModels(cachedModels.models || []);
     if (cachedStats) setStats(cachedStats);
     if (cachedWordStats) setWordStats(cachedWordStats);
-    const hasCachedTraining = (cachedModels?.models || []).some(
-      (model) => model.status === "training",
-    );
-    setLoading(!hasCached(CACHE_KEYS.models) || hasCachedTraining);
+    setLoading(!hasCached(CACHE_KEYS.models));
     try {
       const [statsData, modelsData, wordStatsData] = await Promise.all([
         getModelStats(),
-        // force: this page reads status === "training" from the list below to
-        // re-adopt a run already in flight. A cached copy would show no banner,
-        // re-enable the Train button, and leave the run looking stuck forever —
-        // exactly the bug the re-adoption logic was written to fix.
-        getAllModels({ force: true }),
+        getAllModels(),
         getWordStats(),
       ]);
       setStats(statsData);
-      const list = modelsData.models || [];
-      setModels(list);
+      setModels(modelsData.models || []);
       setWordStats(wordStatsData);
-
-      // Adopt a training run that is already in flight. Training happens in a
-      // background job on the server, so it survives the admin navigating away
-      // or reloading — but trainingModelId is component state and does not.
-      // Without this, returning to the page showed no banner, re-enabled the
-      // Train button, and never reported the outcome: the run looked stuck at
-      // "training" forever even though the server had finished it.
-      // Prefer the WORDS row as the one to track: a run produces both, the
-      // words model is the long half, and the poll reads the alphabet through
-      // trainingLettersId rather than tracking it directly.
-      const training = list.filter((m) => m.status === "training");
-      const inFlight =
-        training.find((m) => m.model_kind !== "letters") || training[0];
-      setTrainingModelId((current) => {
-        if (inFlight) {
-          setTrainingVersion(inFlight.version_number || "");
-          // Re-adopt the alphabet row of the same version too, so a reload
-          // mid-run still reports the alphabet's outcome instead of declaring
-          // the run finished when only the words half is done.
-          const companion = list.find(
-            (m) =>
-              m.version_number === inFlight.version_number &&
-              m.model_kind === "letters" &&
-              m.id !== inFlight.id,
-          );
-          setTrainingLettersId(companion?.id ?? null);
-          return inFlight.id;
-        }
-        // Only clear when we were tracking a run the server no longer reports as
-        // training; leave an id set moments ago by handleTrain alone, since the
-        // row may not have been re-read yet.
-        return current && !list.some((m) => m.id === current) ? null : current;
-      });
     } catch (err) {
       toast.error("Failed to load model data");
     } finally {
@@ -231,141 +206,18 @@ const ManageModel = () => {
     fetchData();
   }, []);
 
-  // Poll training status every 5 seconds when a training job is in progress.
-  //
-  // The interval is cleared on unmount and whenever trainingModelId changes, and
-  // fetchData re-adopts an in-flight run on mount, so navigating away and back
-  // resumes polling rather than losing the run.
+  // Refetch whenever a training run finishes — this admin's or another's —
+  // the same way ManageWord refetches on UploadJobsContext's finishedCount.
+  // Skipped on the very first render, when finishedCount is still its initial
+  // value and fetchData has not run yet via the effect above.
+  const isFirstTrainingFinishedCount = useRef(true);
   useEffect(() => {
-    if (!trainingModelId) return;
-
-    // A row stranded at "training" (server restarted mid-run, so nothing will
-    // ever mark it trained/failed) would otherwise poll every 5s for the whole
-    // session and keep the Train button disabled forever. Give up after 30
-    // minutes — well past the 20-minute ML timeout — and say so.
-    const startedAt = Date.now();
-    const POLL_TIMEOUT_MS = 30 * 60 * 1000;
-
-    pollingRef.current = setInterval(async () => {
-      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
-        clearInterval(pollingRef.current);
-        setTrainingModelId(null);
-        setTrainingVersion("");
-        setTrainingLettersId(null);
-        showError(
-          "Stopped tracking this training run — it has not reported back. Reload to check its status.",
-        );
-        fetchData();
-        return;
-      }
-      try {
-        const { model } = await getModelStatus(trainingModelId);
-
-        // The alphabet trains after the words model in the same run, so the
-        // words row reaching "trained" does NOT mean the run is over. Keep
-        // polling until the alphabet settles too, otherwise the modal appears
-        // mid-run and a later alphabet failure is never reported.
-        // Resolve the alphabet row by VERSION from the list, not only from the
-        // id captured when this client started the run. A run started from
-        // another tab, or adopted after a reload, has no captured id — and
-        // without this the modal reported "no alphabet model was trained" for a
-        // run whose alphabet had in fact trained fine.
-        const lettersId =
-          trainingLettersId ??
-          models.find(
-            (m) =>
-              m.version_number === model.version_number &&
-              m.model_kind === "letters",
-          )?.id ??
-          null;
-
-        let letters = null;
-        if (lettersId) {
-          try {
-            letters = (await getModelStatus(lettersId)).model;
-          } catch {
-            // Treat an unreadable letters row as still running rather than as a
-            // failure; the next tick retries, and the poll timeout is the
-            // backstop if it never resolves.
-            letters = null;
-          }
-          if (model.status === "trained" && letters && letters.status === "training") {
-            return;
-          }
-        }
-
-        if (model.status === "trained") {
-          clearInterval(pollingRef.current);
-          setTrainingModelId(null);
-          setTrainingVersion("");
-          setTrainingLettersId(null);
-          showSuccess(`Model ${model.version_number} trained successfully`);
-
-          // The two rows are one deployable version. A failed alphabet leaves
-          // the version incomplete even when words training succeeded.
-          // Keyed off `letters`, the row actually read this tick — not off the
-          // captured id, which is null for a run this client did not start and
-          // made the modal claim no alphabet was trained when one had been.
-          const lettersNote =
-            letters?.status === "trained"
-              ? ` Alphabet model: ${fmt(letters.accuracy)} over ${letters.total_classes ?? "?"} letters.`
-              : letters?.status === "failed"
-                ? ` The alphabet model FAILED (${letters.training_error || "unknown error"}); this version cannot be deployed.`
-                : !lettersId
-                  ? " No alphabet model was trained — there are no letters in the word list yet."
-                  : "";
-
-          // Flattened to the shape the results modal reads. Passing the raw
-          // model object left every field unreadable, so the modal rendered
-          // nothing but a title and a Close button.
-          setResultModal({
-            title: "Training Results",
-            message:
-              "Training finished." +
-              lettersNote,
-            accuracy: model.accuracy ?? null,
-            totalClasses: model.total_classes ?? null,
-            versionNumber: model.version_number,
-          });
-          // Training completed on the SERVER, so no mutation ran on this client
-          // to clear the model caches. getAllModels is already forced below, but
-          // getModelStats is not and it carries current_model.
-          invalidate("models:");
-          fetchData();
-        } else if (model.status === "failed") {
-          clearInterval(pollingRef.current);
-          setTrainingModelId(null);
-          setTrainingVersion("");
-          setTrainingLettersId(null);
-          showError(`Training failed: ${model.training_error || "Unknown error"}`);
-          invalidate("models:");
-          fetchData();
-        }
-      } catch (err) {
-        // A missing or forbidden model will never resolve — stop rather than
-        // hammering the endpoint for the rest of the session. Network hiccups
-        // (no response) keep polling, which is the original intent.
-        const status = err.response?.status;
-        if (status === 404 || status === 403 || status === 401) {
-          clearInterval(pollingRef.current);
-          setTrainingModelId(null);
-          setTrainingVersion("");
-          setTrainingLettersId(null);
-          fetchData();
-        }
-      }
-    }, 5000);
-    return () => clearInterval(pollingRef.current);
-    // trainingLettersId is a dependency, not just a closed-over value: the
-    // re-adoption path in fetchData can set it AFTER this effect has started
-    // (a reload mid-run learns the words row first), and without it the
-    // interval would keep reading the stale null and declare the run finished
-    // as soon as the words half completed.
-    //
-    // `models` likewise: the fallback lookup by version reads it, and a list
-    // fetched after this effect started is the one that actually contains the
-    // alphabet row for a run in progress.
-  }, [trainingModelId, trainingLettersId, models]);
+    if (isFirstTrainingFinishedCount.current) {
+      isFirstTrainingFinishedCount.current = false;
+      return;
+    }
+    fetchData();
+  }, [trainingFinishedCount]);
 
   // ── Sort ────────────────────────────────────────────────────
   const handleSort = (field) => {
@@ -499,10 +351,10 @@ const ManageModel = () => {
     setActionLoading(true);
     try {
       const result = await trainModel(trainForm.version_number, trainForm.notes);
-      // Backend returns 202 — training is running in background, start polling
-      setTrainingModelId(result.model.id);
-      setTrainingVersion(result.model.version_number);
-      setTrainingLettersId(result.letters_model?.id ?? null);
+      // Backend returns 202 — training is running in background. Hand the pair
+      // off to TrainingJobsProvider, which polls both rows and survives this
+      // page unmounting.
+      startTrainingJob(result.model, result.letters_model);
       setTrainModal(false);
       setTrainForm({ version_number: "", notes: "" });
       fetchData();
@@ -609,26 +461,24 @@ const ManageModel = () => {
         </div>
         <button
           onClick={() => setTrainModal(true)}
-          disabled={!!trainingModelId}
+          disabled={!!trainingJob || uploadingWords.length > 0}
           className="page-primary-action interactive bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          title={trainingModelId ? "Training in progress…" : undefined}
+          title={
+            trainingJob
+              ? "Training in progress…"
+              : uploadingWords.length > 0
+                ? `Wait for the upload in progress to finish: ${uploadingWords.join(", ")}`
+                : undefined
+          }
         >
           + Train New Model
         </button>
       </div>
 
-      {/* Training in progress banner */}
-      {trainingModelId && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4">
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-blue-800">
-              Training <span className="font-mono">{trainingVersion}</span> in progress…
-            </p>
-            <p className="small-text text-blue-500">This may take several minutes. You can safely navigate away — this page will update automatically.</p>
-          </div>
-        </div>
-      )}
+      {/* Training progress now renders as a floating card in Layout
+          (TrainingJobBanner), matching UploadJobBanner — see the note there.
+          It survives navigating away from this page, which the inline banner
+          this replaced did not. */}
 
       {/* Stat Cards */}
       {loading ? (
@@ -1434,52 +1284,9 @@ const ManageModel = () => {
         </AppModal>
       )}
 
-      {/* Results Modal */}
-      {resultModal && (
-        <AppModal
-          title={resultModal.title}
-          onClose={() => setResultModal(null)}
-          onEnter={() => setResultModal(null)}
-          footer={
-            /* Lone button — ModalFooter promotes it to primary. */
-            <Button onClick={() => setResultModal(null)}>Close</Button>
-          }
-        >
-          <div className="space-y-3 text-sm">
-            {resultModal.message && (
-              <p className="text-gray-700 leading-relaxed">
-                {resultModal.message}
-              </p>
-            )}
-            {(resultModal.accuracy != null ||
-              resultModal.totalClasses != null) && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {resultModal.accuracy != null && (
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Accuracy</p>
-                    <p className="font-bold text-lg text-blue-900">
-                      {fmt(resultModal.accuracy)}
-                    </p>
-                  </div>
-                )}
-                {resultModal.totalClasses != null && (
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Gesture classes</p>
-                    <p className="font-bold text-lg text-blue-900">
-                      {resultModal.totalClasses}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            {resultModal.versionNumber && (
-              <p className="small-text text-gray-500">
-                Version <strong>{resultModal.versionNumber}</strong>
-              </p>
-            )}
-          </div>
-        </AppModal>
-      )}
+      {/* Training results/failure modal now renders from TrainingJobBanner in
+          Layout, so it appears even if the admin left this page before the
+          run finished — see TrainingJobContext.jsx. */}
     </div>
   );
 };

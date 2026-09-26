@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Minus, Loader2 } from "lucide-react";
 import { useUploadJobs } from "../context/UploadJobsContext.jsx";
+import { useTrainingJob } from "../context/TrainingJobContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import AppModal from "./AppModal.jsx";
 import Button from "./Button.jsx";
@@ -44,11 +45,27 @@ const PANEL_VISIBLE_ROWS = 5;
 // away and back). Elsewhere only the current admin's own batches show —
 // another admin's upload on a word this admin has never opened would
 // otherwise be a mystery card with no context.
+// Fixed heights of TrainingJobBanner's own card, so this stack can reserve
+// the same space and sit above it rather than the two overlapping — both are
+// position: fixed to the same bottom-right corner. Kept in sync with
+// CARD_HEIGHT/STACK_Z_INDEX-adjacent constants over in TrainingJobBanner.jsx.
+const TRAINING_CARD_HEIGHT = 92;
+const TRAINING_PILL_HEIGHT = 40;
+const DOCK_GAP = 10;
+
 const UploadJobBanner = () => {
   const { uploadJobs, uploadResults, setUploadResults, minimized, setMinimized } = useUploadJobs();
+  const { job: trainingJob, minimized: trainingMinimized } = useTrainingJob();
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Reserve space for the training card above this stack when one is showing,
+  // so the two never overlap. Both providers are siblings mounted once in
+  // App.jsx, so reading the other's state here carries no circular dependency.
+  const bottomOffset = trainingJob
+    ? (trainingMinimized ? TRAINING_PILL_HEIGHT : TRAINING_CARD_HEIGHT) + DOCK_GAP + 16
+    : 16;
 
   const onDatasetPage = location.pathname === "/dataset";
   // Own uploads first, then everyone else's by start time. Without this, a
@@ -95,7 +112,7 @@ const UploadJobBanner = () => {
           style={{
             position: "fixed",
             right: "16px",
-            bottom: "16px",
+            bottom: `${bottomOffset}px`,
             left: "16px",
             zIndex: STACK_Z_INDEX,
             // Pinned to the same left/right offset as the container above, then
@@ -107,6 +124,7 @@ const UploadJobBanner = () => {
             display: "flex",
             flexDirection: "column",
             gap: "10px",
+            transition: "bottom var(--dur-slow) var(--ease-standard)",
           }}
         >
           {minimized ? (

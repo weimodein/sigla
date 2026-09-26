@@ -13,6 +13,7 @@ import {
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 import { navItems } from "./navItems.js";
 import UploadJobBanner from "./UploadJobBanner.jsx";
+import TrainingJobBanner from "./TrainingJobBanner.jsx";
 import { X, Menu } from "lucide-react";
 
 const Layout = ({ children }) => {
@@ -242,7 +243,11 @@ const Layout = ({ children }) => {
           finishes. Rendered on every admin page, not just Manage Words: a
           running batch used to vanish from view on navigation because its
           state lived inside the page that unmounts. Tracking now lives in
-          UploadJobsProvider (App.jsx), which survives route changes. */}
+          UploadJobsProvider (App.jsx), which survives route changes.
+          TrainingJobBanner first: it anchors the bottom-right corner, and
+          UploadJobBanner reads its height to sit above it — see the note in
+          UploadJobBanner.jsx. */}
+      <TrainingJobBanner />
       <UploadJobBanner />
 
       {/* Logout confirmation — triggered from the sidebar */}
