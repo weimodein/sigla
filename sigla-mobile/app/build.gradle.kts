@@ -25,6 +25,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // x86/x86_64 are emulator-only ABIs — no real phone ships them. They
+        // were doubling the APK's size (258 of 461 MB) because TensorFlow
+        // Lite's Flex library (needed for the LSTM's SELECT_TF_OPS — see
+        // train.py) is 67-115 MB per ABI. Dropping them still covers every
+        // real device; only an x86 emulator loses the ability to install this
+        // build (use an arm64 emulator image, or a real phone, instead).
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
