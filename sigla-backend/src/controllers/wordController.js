@@ -1150,6 +1150,7 @@ const updateWord = async (req, res) => {
       description,
       sign_type,
       category,
+      vocabulary,
       filipino_translation,
     } = req.body;
 
@@ -1161,6 +1162,18 @@ const updateWord = async (req, res) => {
     const updatedLabel = label || word.label;
     const updatedNormalized = normalizeLabel(updatedLabel);
     const updatedSignType = sign_type || word.sign_type;
+    const updatedVocabulary =
+      vocabulary === undefined
+        ? word.vocabulary
+        : typeof vocabulary === "string"
+          ? vocabulary.trim().toLowerCase()
+          : "";
+
+    if (!["words", "letters"].includes(updatedVocabulary)) {
+      return res.status(400).json({
+        message: "Vocabulary must be either 'words' or 'letters'.",
+      });
+    }
 
     const labelError = validateWordLabel(updatedLabel);
     if (labelError) {
@@ -1204,6 +1217,7 @@ const updateWord = async (req, res) => {
       description: description ?? word.description,
       sign_type: updatedSignType,
       category_id: nextCategoryId,
+      vocabulary: updatedVocabulary,
       filipino_translation:
         filipino_translation !== undefined
           ? filipino_translation

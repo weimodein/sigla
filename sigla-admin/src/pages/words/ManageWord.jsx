@@ -58,6 +58,7 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
     label: "",
     description: "",
     category: "",
+    vocabulary: "words",
     sign_type: "FSL",
     filipino_translation: "",
   });
@@ -76,6 +77,7 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
         label: word.label || "",
         description: word.description || "",
         category: word.category || "",
+        vocabulary: word.vocabulary || "words",
         sign_type: word.sign_type || "FSL",
         filipino_translation: word.filipino_translation || "",
       });
@@ -84,6 +86,7 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
         label: "",
         description: "",
         category: "",
+        vocabulary: "words",
         sign_type: "FSL",
         filipino_translation: "",
       });
@@ -161,6 +164,17 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
               No categories yet. Create one in Manage Categories.
             </p>
           )}
+        </div>
+        <div>
+          <label style={{ fontSize: "var(--type-meta)", fontWeight: 600, color: "#374151" }}>Vocabulary</label>
+          <select
+            value={form.vocabulary}
+            onChange={e => setForm(f => ({ ...f, vocabulary: e.target.value }))}
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", marginTop: "4px", boxSizing: "border-box", background: "white" }}
+          >
+            <option value="words">WORD</option>
+            <option value="letters">LETTER</option>
+          </select>
         </div>
         <div>
           <label style={{ fontSize: "var(--type-meta)", fontWeight: 600, color: "#374151" }}>Filipino Translation</label>
@@ -966,13 +980,14 @@ const ManageWord = () => {
           {/* The proportional columns consume the full card width. The desktop
               minimum keeps all five actions on one line; smaller viewports use
               the existing horizontal scroll instead of compressing the row. */}
-          <table className="data-table mobile-card-table words-mobile-table table-text text-left" style={{ minWidth: 980, tableLayout: "fixed" }}>
+          <table className="data-table mobile-card-table words-mobile-table table-text text-left" style={{ minWidth: 1050, tableLayout: "fixed" }}>
             <colgroup>
               {/* Allocate space by information density. Actions begin at their
                   column boundary so they stay visually connected to Availability. */}
               <col style={{ width: "190px" }} />
-              <col style={{ width: "18%" }} />
+              <col style={{ width: "16%" }} />
               <col style={{ width: "12%" }} />
+              <col style={{ width: "10%" }} />
               <col style={{ width: "13%" }} />
               <col />
             </colgroup>
@@ -980,6 +995,7 @@ const ManageWord = () => {
               <tr>
                 <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Vocabulary</span></th>
                 <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Category</span></th>
+                <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Type</span></th>
                 <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Samples</span></th>
                 <th className="px-5 py-3"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Status</span></th>
                 <th className="px-5 py-3 text-left"><span className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Actions</span></th>
@@ -993,6 +1009,7 @@ const ManageWord = () => {
                   columns={[
                     { type: "stack", width: "w-28" },
                     { width: "w-24" },
+                    { type: "pill", width: "w-16" },
                     { width: "w-10" },
                     { type: "pill", width: "w-20" },
                     { type: "actions", count: 5 },
@@ -1000,7 +1017,7 @@ const ManageWord = () => {
                 />
               ) : words.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: "40px", color: C.muted }}>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: C.muted }}>
                     No words found. Add your first word using the button above.
                   </td>
                 </tr>
@@ -1021,6 +1038,11 @@ const ManageWord = () => {
                     )}
                   </td>
                   <td className="px-5 py-3" style={{ color: "#6b7280", textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={word.category || ""}>{word.category || "—"}</td>
+                  <td className="px-5 py-3">
+                    <span style={{ padding: "2px 8px", borderRadius: "12px", fontSize: "var(--type-small)", fontWeight: 600, background: "#f3f4f6", color: "#4b5563" }}>
+                      {word.vocabulary === "letters" ? "LETTER" : "WORD"}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 font-medium text-gray-700">
                     {word.approved_sample_count ?? 0}
                   </td>

@@ -930,9 +930,10 @@ textarea:focus-visible,
   .administrators-mobile-table td:nth-child(6)::before { content: "Actions"; }
   .words-mobile-table td:nth-child(1)::before { content: "Vocabulary"; }
   .words-mobile-table td:nth-child(2)::before { content: "Category"; }
-  .words-mobile-table td:nth-child(3)::before { content: "Samples"; }
-  .words-mobile-table td:nth-child(4)::before { content: "Status"; }
-  .words-mobile-table td:nth-child(5)::before { content: "Actions"; }
+  .words-mobile-table td:nth-child(3)::before { content: "Type"; }
+  .words-mobile-table td:nth-child(4)::before { content: "Samples"; }
+  .words-mobile-table td:nth-child(5)::before { content: "Status"; }
+  .words-mobile-table td:nth-child(6)::before { content: "Actions"; }
   .categories-mobile-table td:nth-child(1)::before { content: "Name"; }
   .categories-mobile-table td:nth-child(2)::before { content: "Description"; }
   .categories-mobile-table td:nth-child(3)::before { content: "Words"; }
@@ -976,13 +977,13 @@ textarea:focus-visible,
   /* Action groups use the card's full width, then wrap into comfortable touch
      targets instead of being squeezed into the value column. */
   .administrators-mobile-table td:nth-child(6),
-  .words-mobile-table td:nth-child(5),
+  .words-mobile-table td:nth-child(6),
   .categories-mobile-table td:nth-child(4),
   .models-mobile-table td:nth-child(7) {
     display: block;
   }
   .administrators-mobile-table td:nth-child(6)::before,
-  .words-mobile-table td:nth-child(5)::before,
+  .words-mobile-table td:nth-child(6)::before,
   .categories-mobile-table td:nth-child(4)::before,
   .models-mobile-table td:nth-child(7)::before {
     display: block;
@@ -994,13 +995,13 @@ textarea:focus-visible,
     flex-wrap: wrap;
     white-space: normal !important;
   }
-  .words-mobile-table td:nth-child(5) > div {
+  .words-mobile-table td:nth-child(6) > div {
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.5rem !important;
     white-space: normal !important;
   }
-  .words-mobile-table td:nth-child(5) button {
+  .words-mobile-table td:nth-child(6) button {
     width: 100% !important;
     min-width: 0;
     height: 44px !important;
