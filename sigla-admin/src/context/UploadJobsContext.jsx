@@ -48,6 +48,11 @@ export const UploadJobsProvider = ({ children }) => {
   // a page can refetch its own data (word list, sample counts, signer counts)
   // without the provider needing to know what that page fetches.
   const [finishedCount, setFinishedCount] = useState(0);
+  // Whether the floating card stack is shrunk to a pill. Lives here, not in
+  // the banner component, because Layout (and therefore the banner) remounts
+  // on every route change — component state would forget the choice on the
+  // very next navigation.
+  const [minimized, setMinimized] = useState(false);
 
   const uploadPollRef = useRef(null);
   // Mirrors uploadJobs for the poll interval to read. The interval is created
@@ -61,41 +66,67 @@ export const UploadJobsProvider = ({ children }) => {
   const currentUserIdRef = useRef(user?.id);
   useEffect(() => { currentUserIdRef.current = user?.id; }, [user?.id]);
 
-  // Re-adopt every clip-extraction batch still running on the server, on login
-  // and on every route change. Cheap (one query for all live jobs) and it is
-  // what lets the banner reappear on whichever page the admin lands on next,
-  // including a hard reload.
-  //
-  // One request for all live jobs, rather than one per visible word. The old
+  // Re-adopt every clip-extraction batch still running on the server. One
+  // request for all live jobs, rather than one per visible word — the old
   // per-word scan cost a request per row AND only saw the current page, so a
   // batch on another page — or a second admin's batch on a word not shown
   // there — was invisible.
   //
-  // Wrapped in an async IIFE rather than calling setState directly in the
-  // effect body — the state write below only happens after its own await.
+  // Takes a "still relevant" check rather than a plain cancelled flag, since
+  // the 5-second poller below calls this repeatedly from ONE effect and needs
+  // every tick, not just the first, to bail out once torn down.
+  const adoptActiveJobs = useCallback(async (stillRelevant) => {
+    try {
+      const { jobs } = await getActiveUploadJobs();
+      if (!stillRelevant() || !jobs?.length) return;
+      setUploadJobs((current) => {
+        const next = { ...current };
+        for (const job of jobs) {
+          // Leave a job set moments ago by the modal alone — the fetch that
+          // started before it may only now be landing, and it carries the
+          // fresher count.
+          if (!next[job.word_id]) next[job.word_id] = job;
+        }
+        return next;
+      });
+    } catch {
+      // Non-blocking: the app still works without the banners.
+    }
+  }, []);
+
+  // Re-adopt on login and on every route change. Cheap (one query for all
+  // live jobs) and it is what lets the banner reappear on whichever page the
+  // admin lands on next, including a hard reload.
+  //
+  // Wrapped in an async IIFE rather than calling adoptActiveJobs directly in
+  // the effect body — the state write inside it only happens after its own
+  // await, but the linter cannot see through the extracted callback to know
+  // that, so the indirection here keeps the effect body itself free of any
+  // synchronous setState call.
   useEffect(() => {
     if (!isLoggedIn) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const { jobs } = await getActiveUploadJobs();
-        if (cancelled || !jobs?.length) return;
-        setUploadJobs((current) => {
-          const next = { ...current };
-          for (const job of jobs) {
-            // Leave a job set moments ago by the modal alone — the fetch that
-            // started before it may only now be landing, and it carries the
-            // fresher count.
-            if (!next[job.word_id]) next[job.word_id] = job;
-          }
-          return next;
-        });
-      } catch {
-        // Non-blocking: the app still works without the banners.
-      }
-    })();
+    (async () => { await adoptActiveJobs(() => !cancelled); })();
     return () => { cancelled = true; };
-  }, [isLoggedIn, location.pathname]);
+  }, [isLoggedIn, location.pathname, adoptActiveJobs]);
+
+  // On Manage Words specifically, keep re-adopting every 5 seconds — the same
+  // pace as the per-job poll below. Without this, a SECOND admin's upload only
+  // appeared here after a navigation away and back, since the route-change
+  // effect above fires once per visit, not while the admin sits on the page.
+  // Other pages don't need this: they show only the current admin's own jobs,
+  // which are tracked from the moment that admin starts them.
+  useEffect(() => {
+    if (!isLoggedIn || location.pathname !== "/dataset") return;
+    let cancelled = false;
+    const id = setInterval(() => {
+      adoptActiveJobs(() => !cancelled);
+    }, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isLoggedIn, location.pathname, adoptActiveJobs]);
 
   // Logging out must not leave a stale job map for the next admin on this
   // browser to inherit, or keep polling for someone who is no longer signed in.
@@ -208,6 +239,9 @@ export const UploadJobsProvider = ({ children }) => {
       ...current,
       [job.word_id]: { ...job, word: job.word || word },
     }));
+    // A fresh batch must never start out hidden inside a pill the admin
+    // minimized for a PREVIOUS, unrelated upload.
+    setMinimized(false);
   }, []);
 
   const value = {
@@ -216,6 +250,8 @@ export const UploadJobsProvider = ({ children }) => {
     setUploadResults,
     startJob,
     finishedCount,
+    minimized,
+    setMinimized,
   };
 
   return (

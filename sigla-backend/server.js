@@ -6,6 +6,7 @@ console.log('🔍 All env keys containing DB:', Object.keys(process.env).filter(
 
 const { connectDB } = require("./src/config/db.js");
 const { seedSuperAdmin } = require("./src/seeders/seedSuperAdmin.js");
+const { failStaleUploadJobs } = require("./src/controllers/wordController.js");
 
 // module dependencies
 const express = require("express");
@@ -68,8 +69,13 @@ app.use("/api/ml", mlRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 
-// database connection, then seed the super administrator (idempotent)
-connectDB().then(() => seedSuperAdmin());
+// database connection, then seed the super administrator (idempotent), then
+// fail any upload batch orphaned by a previous restart. A batch killed moments
+// ago still has a fresh heartbeat and is left for the read-time sweep to catch
+// once it goes stale — see failStaleUploadJobs.
+connectDB()
+  .then(() => seedSuperAdmin())
+  .then(() => failStaleUploadJobs());
 
 // server
 const PORT = process.env.PORT || 3000;

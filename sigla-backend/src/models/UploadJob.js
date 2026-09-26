@@ -78,6 +78,15 @@ const UploadJob = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // Heartbeat, stamped by the extraction loop before and after every clip.
+    // A 'processing' row whose heartbeat has gone stale has no live loop behind
+    // it (the backend restarted mid-batch) — see failStaleUploadJobs and
+    // migrations/009_upload_jobs_heartbeat.sql.
+    last_progress_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: DataTypes.NOW,
+    },
   },
   {
     tableName: "upload_jobs",

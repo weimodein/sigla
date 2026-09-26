@@ -1898,6 +1898,10 @@ const uploadVideos = async (req, res) => {
     // Refuse a second concurrent batch for the same word. The UI disables its
     // upload button while a job is live, but the server cannot rely on that —
     // two batches would race on the same counters below.
+    //
+    // Sweep first: a batch orphaned by a backend restart would otherwise hold
+    // this lock forever and refuse every new upload for the word.
+    await failStaleUploadJobs();
     const live = await UploadJob.findOne({
       where: { word_id: word.id, status: "processing" },
     });
@@ -1914,6 +1918,7 @@ const uploadVideos = async (req, res) => {
       session_id: sessionId,
       status: "processing",
       total_count: files.length,
+      last_progress_at: new Date(),
     });
 
     // Answer before doing any extraction. 50 clips x 60s of MediaPipe is up to 50
@@ -1937,6 +1942,11 @@ const uploadVideos = async (req, res) => {
 
       try {
         for (const file of files) {
+          // Heartbeat BEFORE the clip, so the stale window starts from when this
+          // clip was sent rather than when the previous one finished — which
+          // keeps a slow-but-live clip from being mistaken for a dead batch.
+          await job.update({ last_progress_at: new Date() }).catch(() => {});
+
           const result = await extractAndStoreSample(
             word,
             file.buffer,
@@ -1952,11 +1962,18 @@ const uploadVideos = async (req, res) => {
 
           // Per-clip so the client shows real progress. Best-effort: a failed
           // progress write must not abort a batch that is otherwise fine.
+          //
+          // `results` is written here too, not only at the end, so a batch killed
+          // by a restart still records which clips were stored. A copy, because
+          // Sequelize compares JSON values and would skip saving a mutated array
+          // it already holds.
           await job
             .update({
               processed_count: results.length,
               success_count: successCount,
               fail_count: failCount,
+              results: [...results],
+              last_progress_at: new Date(),
             })
             .catch(() => {});
         }
@@ -2020,20 +2037,100 @@ const uploadVideos = async (req, res) => {
   }
 };
 
+// ── Orphaned upload batches ───────────────────────────────────
+// The extraction loop in uploadVideos is an in-process async IIFE, so a backend
+// restart mid-batch kills it along with the clips still held in memory. The row
+// is left at 'processing' forever: the banner freezes, the word's upload lock
+// refuses every new batch with 409, and nothing ever reports what happened.
+//
+// The loop stamps last_progress_at before and after every clip, and one clip
+// either returns or times out within the ML extraction timeout. A 'processing'
+// row whose heartbeat is older than that timeout plus a margin therefore has no
+// live loop behind it — on this server or any other sharing the database, which
+// is why this checks the heartbeat instead of failing every 'processing' row on
+// startup.
+const UPLOAD_JOB_STALE_MS =
+  Number(process.env.ML_EXTRACT_TIMEOUT_MS || 180000) + 2 * 60 * 1000;
+
+const failStaleUploadJobs = async () => {
+  try {
+    const stale = await UploadJob.findAll({
+      where: {
+        status: "processing",
+        last_progress_at: { [Op.lt]: new Date(Date.now() - UPLOAD_JOB_STALE_MS) },
+      },
+    });
+    for (const job of stale) {
+      const stored = job.success_count || 0;
+      // Conditional on status, so two servers sweeping at once cannot both
+      // rewrite the same row, and a job that finished in the meantime is left
+      // alone.
+      const [updated] = await UploadJob.update(
+        {
+          status: "failed",
+          error:
+            `The server stopped during this batch (it restarted or crashed). ` +
+            `${job.processed_count} of ${job.total_count} clip(s) were processed ` +
+            `and ${stored} stored; the rest were never sent. Re-upload the missing clips.`,
+          finished_at: new Date(),
+        },
+        { where: { id: job.id, status: "processing" } },
+      );
+      if (updated) {
+        console.warn(
+          `[failStaleUploadJobs] job ${job.id} (word ${job.word_id}) orphaned at ` +
+            `${job.processed_count}/${job.total_count} — marked failed`,
+        );
+      }
+    }
+  } catch (err) {
+    // Best-effort: a failed sweep must not break the read or upload that ran
+    // it. The next call tries again.
+    console.error("[failStaleUploadJobs] sweep failed:", err.message);
+  }
+};
+
 // Label and category of the job's word, so the results modal and banners can
 // name it even when that word is not on the admin's current page.
+//
+// Word has no `category` column — only category_id, a foreign key — so the
+// name has to come through Category via the word's own "category_ref"
+// association (see models/index.js and withCategoryName above). Selecting a
+// bare "category" attribute here throws (Sequelize rejects an unknown
+// column), which is why this used to 500 on every call to these two routes,
+// for every admin, without ever reaching the try/catch's own logging.
 const UPLOAD_JOB_WORD_INCLUDE = [
-  { model: Word, as: "word", attributes: ["id", "label", "category"] },
+  {
+    model: Word,
+    as: "word",
+    attributes: ["id", "label"],
+    include: [{ model: Category, as: "category_ref", attributes: ["name"] }],
+  },
 ];
+
+// Flattens job.word.category_ref.name to job.word.category, matching the
+// `category` shape withCategoryName gives Word elsewhere in this file.
+const withJobWordCategoryName = (job) => {
+  const json = typeof job.toJSON === "function" ? job.toJSON() : job;
+  if (json.word) {
+    const name = json.word.category_ref?.name || "additional words";
+    delete json.word.category_ref;
+    json.word = { ...json.word, category: name };
+  }
+  return json;
+};
 
 // Poll target for a single upload batch. Mirrors modelController.getModelStatus.
 const getUploadJob = async (req, res) => {
   try {
+    // The admin UI polls this every 5 seconds, so sweeping here is what turns an
+    // orphaned batch into a visible failure without anyone restarting anything.
+    await failStaleUploadJobs();
     const job = await UploadJob.findByPk(req.params.jobId, {
       include: UPLOAD_JOB_WORD_INCLUDE,
     });
     if (!job) return res.status(404).json({ message: "Upload job not found" });
-    return res.json({ job });
+    return res.json({ job: withJobWordCategoryName(job) });
   } catch (err) {
     console.error("Get upload job error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -2045,6 +2142,7 @@ const getUploadJob = async (req, res) => {
 // does not survive either, but this row does.
 const getActiveUploadJob = async (req, res) => {
   try {
+    await failStaleUploadJobs();
     const job = await UploadJob.findOne({
       where: { word_id: req.params.id, status: "processing" },
       order: [["created_at", "DESC"]],
@@ -2068,12 +2166,14 @@ const getActiveUploadJob = async (req, res) => {
 // and the clips really are being stored meanwhile.
 const getActiveUploadJobs = async (req, res) => {
   try {
+    // Without this an orphaned batch is re-adopted as live forever.
+    await failStaleUploadJobs();
     const jobs = await UploadJob.findAll({
       where: { status: "processing" },
       include: UPLOAD_JOB_WORD_INCLUDE,
       order: [["created_at", "ASC"]],
     });
-    return res.json({ jobs });
+    return res.json({ jobs: jobs.map(withJobWordCategoryName) });
   } catch (err) {
     console.error("Get active upload jobs error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -2081,6 +2181,7 @@ const getActiveUploadJobs = async (req, res) => {
 };
 
 module.exports = {
+  failStaleUploadJobs,
   getAllWords,
   getSignerIds,
   getActiveUploadJobs,

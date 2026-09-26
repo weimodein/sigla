@@ -233,14 +233,17 @@ const Layout = ({ children }) => {
             minWidth: 0,
           }}
         >
-          {/* Every admin page, not just Manage Words — a running batch used to
-              vanish from view on navigation because its state lived inside the
-              page that unmounts. Tracking now lives in UploadJobsProvider
-              (App.jsx), which survives route changes. */}
-          <UploadJobBanner />
           {children}
         </main>
       </div>
+
+      {/* Fixed to the viewport, deliberately OUTSIDE <main> — it must float
+          over page content rather than push it down when a batch starts or
+          finishes. Rendered on every admin page, not just Manage Words: a
+          running batch used to vanish from view on navigation because its
+          state lived inside the page that unmounts. Tracking now lives in
+          UploadJobsProvider (App.jsx), which survives route changes. */}
+      <UploadJobBanner />
 
       {/* Logout confirmation — triggered from the sidebar */}
       {showLogoutModal && (
