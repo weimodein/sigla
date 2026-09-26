@@ -21,6 +21,7 @@ import {
 } from "../../api/wordApi.js";
 import { getCategories } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
   Plus,
   Upload,
@@ -240,7 +241,10 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    getSignerIds()
+    // Scoped to this word: sample_count is that signer's APPROVED samples for
+    // word.id, not their total across the whole dataset. Re-fetches whenever
+    // the modal is opened for a different word.
+    getSignerIds(word?.id)
       .then((data) => {
         if (cancelled) return;
         const list = data?.signers || [];
@@ -258,7 +262,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
         setAddingNew(true);
       });
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, word?.id]);
 
   const handleFiles = (e) => {
     setFiles(Array.from(e.target.files));
@@ -349,6 +353,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
         <p style={{ fontSize: "var(--type-meta)", color: C.muted, marginTop: "4px" }}>
           Reuse this ID across every word and batch from the same person. Never put
           clips from different people in one batch; signer-held-out evaluation depends on it.
+          Counts above are each signer's approved samples for <strong>{word?.label}</strong> only.
         </p>
       </div>
 
@@ -667,6 +672,7 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
 // ── Main Page ─────────────────────────────────────────────────
 const ManageWord = () => {
   const { success, error: errorToast } = useToast();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [words, setWords] = useState([]);
   const [total, setTotal] = useState(0);
@@ -704,6 +710,11 @@ const ManageWord = () => {
   // counts existed at creation and overwrite fresher ones on every tick.
   const uploadJobsRef = useRef({});
   useEffect(() => { uploadJobsRef.current = uploadJobs; }, [uploadJobs]);
+  // Every admin's live batches are tracked so their banners show and the Clips
+  // button stays locked, but only the admin who STARTED a batch gets its toast
+  // and results modal. Read through a ref for the same stale-closure reason.
+  const currentUserIdRef = useRef(user?.id);
+  useEffect(() => { currentUserIdRef.current = user?.id; }, [user?.id]);
   // Full category list for the filter dropdown. Derived from the words on the
   // current page it could only ever offer the ~10 categories visible, and
   // selecting one narrowed `words`, which then dropped the selected value from
@@ -861,6 +872,11 @@ const ManageWord = () => {
       for (const trackedJob of tracked) {
         try {
           const { job } = await getUploadJob(trackedJob.id);
+          // Another admin's batch finishing still clears its banner and
+          // refreshes the table, but its outcome is theirs to review. A job
+          // with no started_by predates that column and belongs to nobody.
+          const isMine =
+            job.started_by != null && job.started_by === currentUserIdRef.current;
           if (job.status === "completed") {
             anyFinished = true;
             setUploadJobs((current) => {
@@ -868,10 +884,12 @@ const ManageWord = () => {
               delete next[job.word_id];
               return next;
             });
-            success(
-              `${job.success_count} clip(s) stored${job.fail_count ? `, ${job.fail_count} failed/skipped` : ""}`,
-            );
-            setUploadResults(job);
+            if (isMine) {
+              success(
+                `${job.success_count} clip(s) stored${job.fail_count ? `, ${job.fail_count} failed/skipped` : ""}`,
+              );
+              setUploadResults(job);
+            }
           } else if (job.status === "failed") {
             anyFinished = true;
             setUploadJobs((current) => {
@@ -879,9 +897,11 @@ const ManageWord = () => {
               delete next[job.word_id];
               return next;
             });
-            errorToast(`Upload failed: ${job.error || "Unknown error"}`);
-            // Partial results still matter — those clips really were stored.
-            if (job.results?.length) setUploadResults(job);
+            if (isMine) {
+              errorToast(`Upload failed: ${job.error || "Unknown error"}`);
+              // Partial results still matter — those clips really were stored.
+              if (job.results?.length) setUploadResults(job);
+            }
           } else {
             // Still processing — advance this banner's count.
             setUploadJobs((current) => ({ ...current, [job.word_id]: job }));
@@ -1014,7 +1034,8 @@ const ManageWord = () => {
                 // A batch may belong to a word on another page, or to another
                 // admin entirely, so the label is often absent from `words`.
                 // The banner still has to name something, hence the fallback.
-                const label = words.find((w) => w.id === job.word_id)?.label;
+                const label =
+                  job.word?.label || words.find((w) => w.id === job.word_id)?.label;
                 return label
                   ? <> for <span className="font-mono">{label}</span></>
                   : <> for word #{job.word_id}</>;
@@ -1289,19 +1310,52 @@ const ManageWord = () => {
           word={uploadWord}
           open={!!uploadWord}
           onClose={() => setUploadWord(null)}
-          onStarted={(job) => setUploadJobs((current) => ({ ...current, [job.word_id]: job }))}
+          // The 202 response carries no word, so seed it from the row that was
+          // clicked — otherwise the banner can read "word #id" until the first poll.
+          onStarted={(job) => setUploadJobs((current) => ({
+            ...current,
+            [job.word_id]: { ...job, word: job.word || uploadWord },
+          }))}
         />
       )}
 
       {/* Per-clip breakdown, opened by the poller when a batch finishes — even if
           the upload modal was closed or the admin was on another page. */}
-      {uploadResults && (
+      {uploadResults && (() => {
+        const resultWord =
+          uploadResults.word || words.find((w) => w.id === uploadResults.word_id);
+        const formatTime = (value) => (value ? new Date(value).toLocaleString() : "—");
+        const details = [
+          ["Word", resultWord?.label || `#${uploadResults.word_id}`],
+          ["Category", resultWord?.category || "—"],
+          ["Signer ID", uploadResults.session_id || "—"],
+          ["Started", formatTime(uploadResults.created_at)],
+          ["Finished", formatTime(uploadResults.finished_at)],
+        ];
+        return (
         <AppModal
-          title={`Upload Results — ${uploadResults.word?.label || words.find((w) => w.id === uploadResults.word_id)?.label || "clips"}`}
+          title={`Upload Results — ${resultWord?.label || "clips"}`}
           onClose={() => setUploadResults(null)}
           onEnter={() => setUploadResults(null)}
           footer={<Button onClick={() => setUploadResults(null)}>Close</Button>}
         >
+          {/* Which word and signer the clips were filed under — a batch stored
+              under the wrong signer ID skews signer-held-out evaluation, so the
+              uploader should be able to confirm it here. */}
+          <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 16px", fontSize: "var(--type-meta)", background: "#f9fafb", border: `1px solid ${C.border}`, borderRadius: "8px", padding: "10px 12px", marginBottom: "12px" }}>
+            {details.map(([term, value]) => (
+              <div key={term} style={{ display: "contents" }}>
+                <dt style={{ color: C.muted, fontWeight: 600 }}>{term}</dt>
+                <dd style={{
+                  margin: 0, color: "#374151", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  textTransform: term === "Category" ? "capitalize" : "none",
+                  fontFamily: term === "Signer ID" ? "monospace" : "inherit",
+                }} title={String(value)}>
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
           <p style={{ fontSize: "var(--type-body)", color: "#374151", marginBottom: "12px" }}>
             <strong>{uploadResults.success_count}</strong> clip(s) stored
             {uploadResults.fail_count > 0 && (
@@ -1318,7 +1372,8 @@ const ManageWord = () => {
             <ClipResultsList results={uploadResults.results} />
           )}
         </AppModal>
-      )}
+        );
+      })()}
 
       {demoVideoWord && (
         <DemoVideoModal

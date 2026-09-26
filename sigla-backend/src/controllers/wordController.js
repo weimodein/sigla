@@ -191,22 +191,44 @@ const getSignerCoverage = async (wordId) => {
 //
 // Offering the known IDs for selection removes the common case of the mistake
 // without preventing a genuinely new signer from being added.
+//
+// With ?word_id=, sample_count instead reports that signer's APPROVED samples
+// for that one word — counted the same way getSignerCoverage does, since that
+// is what the activation gate reads. Without it, a signer with hundreds of
+// clips on other words looked like they already had coverage on a word they
+// had never signed. The signer LIST is still every signer ID in the dataset,
+// word_id or not, so someone new to this word remains selectable instead of
+// forcing a retyped id.
 const getSignerIds = async (req, res) => {
   try {
+    const wordId = req.query.word_id ? Number.parseInt(req.query.word_id, 10) : null;
+
     const rows = await GestureSample.findAll({
       where: { session_id: { [Op.ne]: null } },
       attributes: ["session_id"],
       raw: true,
     });
-    const counts = new Map();
+    const allSigners = new Set();
     for (const row of rows) {
       // Normalized the same way uploadVideos stores it, so a difference in case
       // cannot present the same person as two options.
       const signer = String(row.session_id || "").trim().toLowerCase();
-      if (signer) counts.set(signer, (counts.get(signer) || 0) + 1);
+      if (signer) allSigners.add(signer);
     }
-    const signers = [...counts.entries()]
-      .map(([session_id, sample_count]) => ({ session_id, sample_count }))
+
+    let counts;
+    if (wordId) {
+      counts = (await getSignerCoverage(wordId)).counts;
+    } else {
+      counts = {};
+      for (const row of rows) {
+        const signer = String(row.session_id || "").trim().toLowerCase();
+        if (signer) counts[signer] = (counts[signer] || 0) + 1;
+      }
+    }
+
+    const signers = [...allSigners]
+      .map((session_id) => ({ session_id, sample_count: counts[session_id] || 0 }))
       .sort((a, b) => a.session_id.localeCompare(b.session_id));
 
     return res.status(200).json({ signers });
@@ -2006,10 +2028,18 @@ const uploadVideos = async (req, res) => {
   }
 };
 
+// Label and category of the job's word, so the results modal and banners can
+// name it even when that word is not on the admin's current page.
+const UPLOAD_JOB_WORD_INCLUDE = [
+  { model: Word, as: "word", attributes: ["id", "label", "category"] },
+];
+
 // Poll target for a single upload batch. Mirrors modelController.getModelStatus.
 const getUploadJob = async (req, res) => {
   try {
-    const job = await UploadJob.findByPk(req.params.jobId);
+    const job = await UploadJob.findByPk(req.params.jobId, {
+      include: UPLOAD_JOB_WORD_INCLUDE,
+    });
     if (!job) return res.status(404).json({ message: "Upload job not found" });
     return res.json({ job });
   } catch (err) {
@@ -2048,6 +2078,7 @@ const getActiveUploadJobs = async (req, res) => {
   try {
     const jobs = await UploadJob.findAll({
       where: { status: "processing" },
+      include: UPLOAD_JOB_WORD_INCLUDE,
       order: [["created_at", "ASC"]],
     });
     return res.json({ jobs });

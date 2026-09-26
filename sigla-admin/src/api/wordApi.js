@@ -148,8 +148,10 @@ export const uploadVideos = async (wordId, files, sessionId, onProgress) => {
 // typo splits one person into two and quietly inflates reported accuracy. The
 // upload dialog offers these for selection rather than relying on the operator
 // retyping an id correctly every time.
-export const getSignerIds = async () => {
-  const response = await api.get("/words/signers");
+export const getSignerIds = async (wordId) => {
+  const response = await api.get("/words/signers", {
+    params: wordId ? { word_id: wordId } : undefined,
+  });
   return response.data;
 };
 
