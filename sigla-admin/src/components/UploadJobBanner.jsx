@@ -29,6 +29,13 @@ const STACK_Z_INDEX = 1000;
 const CARD_WIDTH = 360;
 const CARD_HEIGHT = 92;
 const MAX_VISIBLE_CARDS = 3;
+// Above MAX_VISIBLE_CARDS, individual cards give way to one scrollable panel —
+// a "+N more" row that could never be opened (its click just re-opened the
+// same page the admin was already on) used to be the only way to reach the
+// rest. The panel's row height and visible-row count below are what keep ITS
+// footprint fixed regardless of whether 4 or 40 batches are running.
+const PANEL_ROW_HEIGHT = 44;
+const PANEL_VISIBLE_ROWS = 5;
 
 // Rendered by Layout, fixed above every page, so a running upload batch stays
 // visible no matter where the admin navigates to. On /dataset every admin's
@@ -44,9 +51,18 @@ const UploadJobBanner = () => {
   const navigate = useNavigate();
 
   const onDatasetPage = location.pathname === "/dataset";
-  const visibleJobs = Object.values(uploadJobs).filter(
-    (job) => onDatasetPage || job.started_by === user?.id,
-  );
+  // Own uploads first, then everyone else's by start time. Without this, a
+  // batch the admin started themselves could land past MAX_VISIBLE_CARDS and
+  // be invisible behind other admins' cards — the one job they most need to
+  // see is the one they're least guaranteed to see.
+  const visibleJobs = Object.values(uploadJobs)
+    .filter((job) => onDatasetPage || job.started_by === user?.id)
+    .sort((a, b) => {
+      const aMine = a.started_by === user?.id ? 0 : 1;
+      const bMine = b.started_by === user?.id ? 0 : 1;
+      if (aMine !== bMine) return aMine - bMine;
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    });
 
   const resultWord = uploadResults ? uploadResults.word || null : null;
   const formatTime = (value) => (value ? new Date(value).toLocaleString() : "—");
@@ -64,12 +80,11 @@ const UploadJobBanner = () => {
   const totalProcessed = visibleJobs.reduce((sum, j) => sum + (j.processed_count || 0), 0);
   const totalCount = visibleJobs.reduce((sum, j) => sum + (j.total_count || 0), 0);
 
-  // Capped so the stack's height is bounded regardless of how many batches are
-  // running — otherwise five admins uploading at once would grow the stack
-  // past the viewport, which is exactly the "different dimensions" problem
-  // this pass is fixing, just triggered by job count instead of page.
-  const shownJobs = visibleJobs.slice(0, MAX_VISIBLE_CARDS);
-  const hiddenCount = visibleJobs.length - shownJobs.length;
+  // At MAX_VISIBLE_CARDS or fewer, each batch gets its own full card (below).
+  // Past that, individual cards would grow the stack past the viewport, so
+  // they give way to one fixed-size scrollable panel instead — see
+  // PANEL_ROW_HEIGHT/PANEL_VISIBLE_ROWS.
+  const useCards = visibleJobs.length <= MAX_VISIBLE_CARDS;
 
   return (
     <>
@@ -115,9 +130,9 @@ const UploadJobBanner = () => {
                   : <>{visibleJobs.length} uploads · {totalProcessed}/{totalCount} clips</>}
               </span>
             </button>
-          ) : (
+          ) : useCards ? (
             <>
-              {shownJobs.map((job, i) => {
+              {visibleJobs.map((job, i) => {
                 const wordLabel = job.word?.label || `word #${job.word_id}`;
                 // Whose upload this is, shown only for someone else's — an
                 // admin's own card stays "Extracting · WORD" as before, since
@@ -211,20 +226,102 @@ const UploadJobBanner = () => {
                 );
               })}
 
-              {hiddenCount > 0 && (
-                <button
-                  type="button"
-                  onClick={onDatasetPage ? undefined : () => navigate("/dataset")}
-                  style={{
-                    height: "32px", background: "white", border: `1px solid ${C.border}`, borderRadius: "8px",
-                    boxShadow: "0 4px 16px rgba(0,0,0,0.1)", fontSize: "var(--type-meta)", fontWeight: 600,
-                    color: "#374151", cursor: onDatasetPage ? "default" : "pointer",
-                  }}
-                >
-                  +{hiddenCount} more upload{hiddenCount === 1 ? "" : "s"}
-                </button>
-              )}
             </>
+          ) : (
+            // 4+ concurrent batches: one fixed-size panel with a scrolling list
+            // instead of one card per batch, so the footprint stays the same
+            // whether 4 or 40 uploads are running.
+            <div
+              className="bg-white border rounded-xl"
+              style={{
+                borderColor: C.border,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                boxSizing: "border-box",
+                overflow: "hidden",
+              }}
+            >
+              {/* Panel header: overall progress across every visible job. */}
+              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, background: "#eff6ff" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent shrink-0" />
+                  <p className="text-sm font-semibold text-blue-800" style={{ flex: 1, minWidth: 0, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {visibleJobs.length} uploads running
+                  </p>
+                  <span className="text-sm font-semibold text-blue-800" style={{ flexShrink: 0 }}>
+                    {totalProcessed}/{totalCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMinimized(true)}
+                    aria-label="Minimize upload progress"
+                    title="Minimize"
+                    style={{ background: "none", border: "none", padding: "2px", cursor: "pointer", color: "#1e40af", opacity: 0.6, display: "flex", flexShrink: 0 }}
+                  >
+                    <Minus size={16} />
+                  </button>
+                </div>
+                <div style={{ background: "#bfdbfe", borderRadius: "4px", height: "6px", marginTop: "8px" }}>
+                  <div
+                    style={{
+                      height: "6px", borderRadius: "4px", background: C.primary,
+                      width: `${totalCount ? Math.round((totalProcessed / totalCount) * 100) : 0}%`,
+                      transition: "width var(--dur-slow) var(--ease-standard)",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Scrolling list, one fixed-height row per batch. Capped at
+                  PANEL_VISIBLE_ROWS so the panel itself never grows — any
+                  extra rows are reached by scrolling, not by the panel resizing. */}
+              <div style={{ maxHeight: `${PANEL_ROW_HEIGHT * PANEL_VISIBLE_ROWS}px`, overflowY: "auto" }}>
+                {visibleJobs.map((job) => {
+                  const wordLabel = job.word?.label || `word #${job.word_id}`;
+                  const isMine = job.started_by === user?.id;
+                  const starterName = job.starter?.username || "another admin";
+                  const pct = job.total_count ? Math.round((job.processed_count / job.total_count) * 100) : 0;
+                  return (
+                    <div
+                      key={job.id}
+                      style={{
+                        height: `${PANEL_ROW_HEIGHT}px`,
+                        padding: "6px 14px",
+                        borderBottom: `1px solid ${C.border}`,
+                        boxSizing: "border-box",
+                        cursor: onDatasetPage ? "default" : "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        gap: "4px",
+                      }}
+                      onClick={onDatasetPage ? undefined : () => navigate("/dataset")}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <p
+                          className="text-xs font-semibold text-blue-800"
+                          style={{ flex: 1, minWidth: 0, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={
+                            isMine
+                              ? `Extracting landmarks for ${wordLabel}`
+                              : `Uploaded by ${starterName} — extracting landmarks for ${wordLabel}`
+                          }
+                        >
+                          {isMine
+                            ? <span className="font-mono">{wordLabel}</span>
+                            : <>{starterName} · <span className="font-mono">{wordLabel}</span></>}
+                        </p>
+                        <span className="text-xs font-semibold text-blue-800" style={{ flexShrink: 0 }}>
+                          {job.processed_count}/{job.total_count}
+                        </span>
+                      </div>
+                      <div style={{ background: "#bfdbfe", borderRadius: "4px", height: "3px" }}>
+                        <div style={{ height: "3px", borderRadius: "4px", background: C.primary, width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
       )}
