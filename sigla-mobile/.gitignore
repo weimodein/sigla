@@ -24,6 +24,13 @@ navigation/
 local.properties
 .env
 
+# Release signing — the keystore and its passwords never go in git. Losing
+# the keystore means no future update can install over the existing app, so
+# it's backed up outside the repo instead.
+keystore.properties
+*.jks
+*.keystore
+
 # OS
 .DS_Store
 Thumbs.db
