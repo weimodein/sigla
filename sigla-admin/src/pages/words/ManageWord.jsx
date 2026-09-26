@@ -980,7 +980,7 @@ const ManageWord = () => {
           {/* The proportional columns consume the full card width. The desktop
               minimum keeps all five actions on one line; smaller viewports use
               the existing horizontal scroll instead of compressing the row. */}
-          <table className="data-table mobile-card-table words-mobile-table table-text text-left" style={{ minWidth: 1050, tableLayout: "fixed" }}>
+          <table className="data-table mobile-card-table words-mobile-table table-text text-left" style={{ width: "100%", minWidth: 0, tableLayout: "fixed" }}>
             <colgroup>
               {/* Allocate space by information density. Actions begin at their
                   column boundary so they stay visually connected to Availability. */}
