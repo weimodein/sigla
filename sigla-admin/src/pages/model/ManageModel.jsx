@@ -3,6 +3,7 @@ import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { SkeletonBlock, TableSkeletonRows } from "../../components/Skeleton.jsx";
+import PageNav from "../../components/PageNav.jsx";
 import { listStagger } from "../../utils/motion.js";
 import { invalidate } from "../../utils/apiCache.js";
 import {
@@ -761,6 +762,9 @@ const ManageModel = () => {
                 {filteredModels.length !== 1 ? "s" : ""}
               </span>
             )}
+            {/* Same Prev/Next as the bottom bar — paging without scrolling down
+                to it first, on a table that can run to many pages. */}
+            <PageNav page={page} totalPages={totalPages} onChange={setPage} disabled={loading} />
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
+import PageNav from "../../components/PageNav.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { SkeletonBlock, TableSkeletonRows } from "../../components/Skeleton.jsx";
 import { listStagger } from "../../utils/motion.js";
@@ -948,13 +949,18 @@ const ManageWord = () => {
             <h3 className="section-title">Vocabulary entries</h3>
             <p className="section-subtitle">Training coverage and deployed availability</p>
           </div>
-          {loading ? (
-            <SkeletonBlock className="h-7 w-24 rounded-full" />
-          ) : (
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-              {total} {total === 1 ? "entry" : "entries"}
-            </span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {loading ? (
+              <SkeletonBlock className="h-7 w-24 rounded-full" />
+            ) : (
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                {total} {total === 1 ? "entry" : "entries"}
+              </span>
+            )}
+            {/* Same Prev/Next as the bottom bar — paging without scrolling down
+                to it first, on a table that can run to many pages. */}
+            <PageNav page={page} totalPages={totalPages} onChange={setPage} disabled={loading} />
+          </div>
         </div>
         <div className="table-scroll" role="region" aria-label="Vocabulary entries table" tabIndex={0}>
           {/* The proportional columns consume the full card width. The desktop

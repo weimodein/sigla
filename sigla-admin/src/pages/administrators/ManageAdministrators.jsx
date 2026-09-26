@@ -3,6 +3,7 @@ import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { TableSkeletonRows } from "../../components/Skeleton.jsx";
+import PageNav from "../../components/PageNav.jsx";
 import { listStagger } from "../../utils/motion.js";
 import {
   getAllAdministrators,
@@ -843,6 +844,13 @@ const ManageAdministrators = () => {
           </div>
         ) : (
           <>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-end px-5 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+                {/* Same Prev/Next as the bottom bar — paging without scrolling
+                    down to it first, on a table that can run to many pages. */}
+                <PageNav page={page} totalPages={totalPages} onChange={setPage} />
+              </div>
+            )}
             <div className="table-scroll" role="region" aria-label="Administrators table" tabIndex={0}>
               <table className="data-table mobile-card-table administrators-mobile-table table-text text-left" style={{ minWidth: 800 }}>
                 <thead style={{ background: "#f9fafb" }}>

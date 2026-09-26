@@ -3,6 +3,7 @@ import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { listStagger } from "../../utils/motion.js";
 import { TableSkeletonRows } from "../../components/Skeleton.jsx";
+import PageNav from "../../components/PageNav.jsx";
 import {
   Search,
   ChevronsLeft,
@@ -369,6 +370,13 @@ const ActivityLogs = () => {
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
       >
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end px-5 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+            {/* Same Prev/Next as the bottom bar — paging without scrolling down
+                to it first, on a table that can run to many pages. */}
+            <PageNav page={page} totalPages={totalPages} onChange={setPage} disabled={loading} />
+          </div>
+        )}
         <div className="table-scroll" role="region" aria-label="Activity logs table" tabIndex={0}>
           <table className="data-table mobile-card-table activity-mobile-table table-text text-left" style={{ minWidth: 860, tableLayout: "fixed" }}>
             <colgroup>

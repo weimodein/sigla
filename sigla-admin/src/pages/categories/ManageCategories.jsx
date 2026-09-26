@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import AppModal from "../../components/AppModal.jsx";
 import Button from "../../components/Button.jsx";
+import PageNav from "../../components/PageNav.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { TableSkeletonRows } from "../../components/Skeleton.jsx";
 import { listStagger } from "../../utils/motion.js";
@@ -246,6 +247,13 @@ const ManageCategories = () => {
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
       >
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end px-5 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+            {/* Same Prev/Next as the bottom bar — paging without scrolling down
+                to it first, on a table that can run to many pages. */}
+            <PageNav page={page} totalPages={totalPages} onChange={setPage} disabled={loading} />
+          </div>
+        )}
         <div className="table-scroll" role="region" aria-label="Categories table" tabIndex={0}>
           <table className="data-table mobile-card-table categories-mobile-table table-text text-left" style={{ minWidth: 600 }}>
             <thead style={{ background: "#f9fafb" }}>
