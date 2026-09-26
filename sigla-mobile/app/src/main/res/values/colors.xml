@@ -95,4 +95,7 @@
 
     <color name="sig_switch_thumb">#FFFFFF</color>
 
+    <!-- Word detail video stage: dark in both themes, like a video player -->
+    <color name="sig_stage_bg">#0A0E21</color>
+    <color name="sig_stage_text">#B0BEC5</color>
 </resources>

@@ -60,7 +60,23 @@ class CategoryGridAdapter(
         val item = items[position]
         val p = palette(holder.itemView.context)
 
-        holder.name.text = item.displayName.capitalizeFirst()
+        // Every tile here is either a pinned tile (Favorites/All Words, whose
+        // displayName is already the literal label) or a server category —
+        // this grid never receives a user-typed custom category (see
+        // WordBankActivity.refreshCategoryGrid). Title-casing is what keeps a
+        // long all-caps name like "RELATIONSHIPS" from filling the card's
+        // width edge-to-edge and forcing a mid-word hyphenation.
+        val displayText = if (item.isFavorites || item.isAllWords) {
+            item.displayName
+        } else {
+            item.displayName.toTitleCase()
+        }
+        // Set before the text: a single-word name must never wrap, since a
+        // wrapped single word is what triggered the hyphenation this card
+        // used to show (there is no space to break at, so Android split the
+        // word between letters instead).
+        holder.name.maxLines = if (displayText.contains(' ')) 2 else 1
+        holder.name.text = displayText
         holder.count.text = "${item.wordCount} Word${if (item.wordCount != 1) "s" else ""}"
 
         when {

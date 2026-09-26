@@ -2,14 +2,21 @@
 <!--
     activity_word_detail.xml
     Scope:
-      - Full-screen word detail (replaces the old bottom sheet): the word
-        itself, its demo video/image, and an Add to Favorites toggle
+      - Full-screen word detail: the word, its demo video/image, player
+        controls for learning the sign, offline download, and Favorites
       - Header matches activity_category_word_list.xml (back button + the
         word's category as title) so the whole flow reads as one screen family
+      - The media stage (cardMedia) is resized in code to the video's own
+        aspect ratio — see WordDetailActivity.fitStageTo(). Portrait and
+        landscape clips both fill it with no dead band; a portrait clip is
+        capped in height and centred so the controls stay on screen.
+      - Everything under the header scrolls, so a tall portrait stage plus the
+        controls still fit on a small phone.
 -->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/sig_page_bg">
@@ -70,154 +77,451 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- WORD -->
-    <TextView
-        android:id="@+id/tvDetailWord"
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollContent"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="36dp"
-        android:layout_marginStart="24dp"
-        android:layout_marginEnd="24dp"
-        android:gravity="center"
-        android:text="Hello"
-        android:textColor="@color/sig_text_primary"
-        android:textSize="38sp"
-        android:fontFamily="@font/poppins_bold"
+        android:layout_height="0dp"
+        android:fillViewport="true"
+        android:clipToPadding="false"
         app:layout_constraintTop_toBottomOf="@id/topBarOuterWrapper"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <!-- DEMO VIDEO / IMAGE BOX -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/cardMedia"
-        android:layout_width="0dp"
-        android:layout_height="220dp"
-        android:layout_marginTop="28dp"
-        android:layout_marginStart="24dp"
-        android:layout_marginEnd="24dp"
-        app:cardCornerRadius="18dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="@color/sig_page_bg"
-        app:strokeColor="@color/sig_icon_accent"
-        app:strokeWidth="1.5dp"
-        app:layout_constraintTop_toBottomOf="@id/tvDetailWord"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageView
-            android:id="@+id/ivThumbnail"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:contentDescription="Gesture demonstration image"
-            android:visibility="gone" />
-
-        <VideoView
-            android:id="@+id/videoDemo"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="gone" />
-
-        <!-- No media placeholder (shown when neither image nor video is set) -->
         <LinearLayout
-            android:id="@+id/noMediaPlaceholder"
+            android:id="@+id/contentColumn"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:gravity="center"
-            android:visibility="gone">
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="24dp"
+            android:paddingBottom="28dp">
 
-            <TextView
+            <!-- WORD + replay pronunciation -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/tvDetailWord"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Hello"
+                    android:textColor="@color/sig_text_primary"
+                    android:textSize="34sp"
+                    android:fontFamily="@font/poppins_bold"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSpeak"
+                    style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="12dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:padding="0dp"
+                    android:contentDescription="Say the word again"
+                    app:icon="@drawable/ic_volume_up"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconSize="22dp"
+                    app:iconTint="@color/sig_icon_accent"
+                    app:backgroundTint="@color/sig_icon_bg_soft"
+                    app:cornerRadius="24dp" />
+
+            </LinearLayout>
+
+            <!-- Category chip + offline badge -->
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🤟"
-                android:textSize="40sp" />
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="No demo available yet"
-                android:textColor="@color/sig_text_secondary"
-                android:textSize="12sp"
-                android:layout_marginTop="8dp" />
+                <TextView
+                    android:id="@+id/tvCategoryChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_chip_pill"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:text="Category"
+                    android:textColor="@color/sig_text_primary"
+                    android:textSize="12sp"
+                    android:fontFamily="@font/poppins_medium" />
 
-        </LinearLayout>
+                <TextView
+                    android:id="@+id/tvOfflineBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_chip_pill"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:drawableStart="@drawable/ic_check_circle"
+                    android:drawablePadding="4dp"
+                    android:gravity="center_vertical"
+                    android:text="Saved offline"
+                    android:textColor="@color/sig_text_primary"
+                    android:textSize="12sp"
+                    android:fontFamily="@font/poppins_medium"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
 
-        <!-- Play button outline (shown until the video/image starts) -->
-        <FrameLayout
-            android:id="@+id/playOverlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:visibility="visible">
+            </LinearLayout>
 
+            <!-- MEDIA STAGE: sized in code to the media's aspect ratio -->
             <com.google.android.material.card.MaterialCardView
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:layout_gravity="center"
-                app:cardCornerRadius="36dp"
+                android:id="@+id/cardMedia"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:layout_marginTop="20dp"
+                android:layout_gravity="center_horizontal"
+                app:cardCornerRadius="18dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="#00000000"
-                app:strokeColor="@color/sig_icon_accent"
-                app:strokeWidth="2dp">
+                app:cardBackgroundColor="@color/sig_stage_bg"
+                app:strokeWidth="0dp">
 
                 <ImageView
-                    android:layout_width="26dp"
-                    android:layout_height="26dp"
+                    android:id="@+id/ivThumbnail"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Gesture demonstration image"
+                    android:visibility="gone" />
+
+                <VideoView
+                    android:id="@+id/videoDemo"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
                     android:layout_gravity="center"
-                    android:src="@android:drawable/ic_media_play"
-                    app:tint="@color/sig_icon_accent"
-                    android:contentDescription="Play demo" />
+                    android:contentDescription="Sign demonstration video"
+                    android:visibility="gone" />
+
+                <!-- Shown when there is no video and no image -->
+                <LinearLayout
+                    android:id="@+id/noMediaPlaceholder"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tvPlaceholderIcon"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🤟"
+                        android:textSize="40sp" />
+
+                    <TextView
+                        android:id="@+id/tvPlaceholderText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="No demo available yet"
+                        android:textColor="@color/sig_stage_text"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRetry"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="10dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="Retry"
+                        android:textAllCaps="false"
+                        android:textColor="#FFFFFF"
+                        app:strokeColor="#FFFFFF"
+                        app:cornerRadius="22dp"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+                <!-- Outlined play button (kept from the previous design) -->
+                <FrameLayout
+                    android:id="@+id/playOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="#33000000"
+                    android:contentDescription="Play demo"
+                    android:visibility="gone">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="72dp"
+                        android:layout_height="72dp"
+                        android:layout_gravity="center"
+                        app:cardCornerRadius="36dp"
+                        app:cardElevation="0dp"
+                        app:cardBackgroundColor="#40000000"
+                        app:strokeColor="#FFFFFF"
+                        app:strokeWidth="2dp">
+
+                        <ImageView
+                            android:layout_width="30dp"
+                            android:layout_height="30dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_play"
+                            android:importantForAccessibility="no" />
+
+                    </com.google.android.material.card.MaterialCardView>
+
+                </FrameLayout>
+
+                <ProgressBar
+                    android:id="@+id/progressVideo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="center"
+                    android:indeterminateTint="#FFFFFF"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tvMediaCaption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|start"
+                    android:layout_margin="12dp"
+                    android:background="@drawable/bg_badge_glass"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:text="Demo Video"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:fontFamily="@font/poppins_medium" />
 
             </com.google.android.material.card.MaterialCardView>
 
-        </FrameLayout>
+            <!-- PLAYER CONTROLS (only when the word has a video) -->
+            <LinearLayout
+                android:id="@+id/controlsPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:visibility="visible">
 
-        <ProgressBar
-            android:id="@+id/progressVideo"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="center"
-            android:indeterminateTint="@color/sig_icon_accent"
-            android:visibility="gone" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/tvMediaCaption"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|start"
-            android:layout_margin="14dp"
-            android:text="Demo Video"
-            android:textColor="@color/sig_text_secondary"
-            android:textSize="12sp"
-            android:fontFamily="@font/poppins_medium" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPlayPause"
+                        style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:padding="0dp"
+                        android:contentDescription="Play"
+                        app:icon="@drawable/ic_play"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:iconSize="24dp"
+                        app:iconTint="#FFFFFF"
+                        app:backgroundTint="@color/sig_chrome_navy"
+                        app:cornerRadius="24dp" />
 
-    </com.google.android.material.card.MaterialCardView>
+                    <SeekBar
+                        android:id="@+id/seekVideo"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:progressTint="@color/sig_accent"
+                        android:thumbTint="@color/sig_chrome_navy"
+                        android:progressBackgroundTint="@color/sig_accent_pill"
+                        android:contentDescription="Video position" />
 
-    <!-- ADD TO FAVORITES -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnAddToFavorites"
-        android:layout_width="wrap_content"
-        android:layout_height="48dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginEnd="24dp"
-        android:insetTop="0dp"
-        android:insetBottom="0dp"
-        android:paddingStart="16dp"
-        android:paddingEnd="20dp"
-        android:text="Add to Favorites"
-        android:textAllCaps="false"
-        android:textSize="14sp"
-        android:fontFamily="@font/poppins_medium"
-        android:textColor="@color/sig_text_primary"
-        android:elevation="3dp"
-        app:icon="@android:drawable/btn_star_big_off"
-        app:iconTint="@color/sig_accent"
-        app:iconSize="20dp"
-        app:iconGravity="textStart"
-        app:iconPadding="8dp"
-        app:cornerRadius="24dp"
-        app:backgroundTint="@color/sig_surface_card"
-        app:layout_constraintTop_toBottomOf="@id/cardMedia"
-        app:layout_constraintEnd_toEndOf="@id/cardMedia" />
+                    <TextView
+                        android:id="@+id/tvTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0:00 / 0:00"
+                        android:textColor="@color/sig_text_secondary"
+                        android:textSize="12sp"
+                        android:fontFamily="@font/poppins_medium" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnReplay"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="10dp"
+                        android:text="Replay"
+                        android:textAllCaps="false"
+                        android:textColor="@color/sig_text_primary"
+                        android:fontFamily="@font/poppins_medium"
+                        android:contentDescription="Replay from the start"
+                        app:icon="@drawable/ic_replay"
+                        app:iconTint="@color/sig_icon_accent"
+                        app:iconSize="20dp"
+                        app:iconPadding="4dp" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <!-- Playback speed. Slowing a sign down is the main reason
+                         to open this screen, so it's always one tap away. -->
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/speedGroup"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:checkedButton="@id/btnSpeed100">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSpeed50"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:minWidth="48dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp"
+                            android:text="0.5×"
+                            android:textAllCaps="false"
+                            android:textSize="13sp"
+                            android:contentDescription="Half speed"
+                            android:textColor="@color/speed_toggle_text"
+                            app:backgroundTint="@color/speed_toggle_bg"
+                            app:strokeColor="@color/sig_accent_pill" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSpeed75"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:minWidth="48dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp"
+                            android:text="0.75×"
+                            android:textAllCaps="false"
+                            android:textSize="13sp"
+                            android:contentDescription="Three quarter speed"
+                            android:textColor="@color/speed_toggle_text"
+                            app:backgroundTint="@color/speed_toggle_bg"
+                            app:strokeColor="@color/sig_accent_pill" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSpeed100"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:minWidth="48dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp"
+                            android:text="1×"
+                            android:textAllCaps="false"
+                            android:textSize="13sp"
+                            android:contentDescription="Normal speed"
+                            android:textColor="@color/speed_toggle_text"
+                            app:backgroundTint="@color/speed_toggle_bg"
+                            app:strokeColor="@color/sig_accent_pill" />
+
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFullscreen"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="4dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:padding="0dp"
+                        android:contentDescription="Full screen"
+                        app:icon="@drawable/ic_fullscreen"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:iconSize="24dp"
+                        app:iconTint="@color/sig_icon_accent" />
+
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- DOWNLOAD FOR OFFLINE (replaces the old Yes/No dialog) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDownload"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="Download for offline"
+                android:textAllCaps="false"
+                android:textSize="14sp"
+                android:fontFamily="@font/poppins_medium"
+                android:textColor="@color/sig_text_primary"
+                app:icon="@drawable/ic_download"
+                app:iconTint="@color/sig_icon_accent"
+                app:iconGravity="textStart"
+                app:iconSize="20dp"
+                app:strokeColor="@color/sig_accent_pill"
+                app:cornerRadius="24dp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <!-- ADD TO FAVORITES -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddToFavorites"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="12dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="Add to Favorites"
+                android:textAllCaps="false"
+                android:textSize="15sp"
+                android:fontFamily="@font/poppins_medium"
+                android:textColor="@color/sig_text_primary"
+                android:elevation="2dp"
+                app:icon="@android:drawable/btn_star_big_off"
+                app:iconTint="@color/sig_accent"
+                app:iconSize="20dp"
+                app:iconGravity="textStart"
+                app:iconPadding="8dp"
+                app:cornerRadius="26dp"
+                app:backgroundTint="@color/sig_surface_card" />
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

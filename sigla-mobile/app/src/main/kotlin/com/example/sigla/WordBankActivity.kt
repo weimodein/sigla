@@ -372,7 +372,15 @@ class WordBankActivity : AppCompatActivity() {
         } else {
             FSL_CATEGORIES  // fallback if API hasn't returned yet, or failed
         }
-        val systemCategories = listOf("All Categories") + baseCategories.map { it.capitalizeFirst() }
+        // toTitleCase(), not capitalizeFirst(): a long all-caps name like
+        // RELATIONSHIPS or TRANSACTIONAL filled the category grid card's width
+        // edge-to-edge and forced a mid-word hyphenation — see
+        // item_category_card.xml and CategoryGridAdapter. gridCategoryFilter
+        // is matched against countsByCategory by .lowercase() in
+        // refreshCategoryGrid(), so this case change doesn't break filtering.
+        val systemCategories = listOf("All Categories") + baseCategories.map { it.toTitleCase() }
+        // Custom names are user-typed and must keep their own casing, same as
+        // everywhere else in the app that touches them.
         val customCategoryNames = customCategories.map { it.name }
         return systemCategories + customCategoryNames
     }

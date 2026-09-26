@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Category / "Saved offline" chips on the word detail screen. Theme colour, so it follows dark mode. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/sig_icon_bg_soft" />
+    <corners android:radius="14dp" />
+</shape>

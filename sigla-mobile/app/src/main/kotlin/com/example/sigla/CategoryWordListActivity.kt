@@ -64,7 +64,10 @@ class CategoryWordListActivity : AppCompatActivity() {
         tvCategoryTitle.text = when {
             isFavorites -> "Favorites"
             isAllWords -> "All Words"
-            else -> categoryName.capitalizeFirst()
+            // Only ever reached from WordBankActivity's category grid, which
+            // only ever passes server categories (never a user-typed custom
+            // one) — see the same note in CategoryGridAdapter.
+            else -> categoryName.toTitleCase()
         }
 
         btnBack.setOnClickListener { finish() }
