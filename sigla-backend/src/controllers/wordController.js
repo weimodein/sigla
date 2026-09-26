@@ -2023,7 +2023,10 @@ const uploadVideos = async (req, res) => {
           action: "uploaded_samples",
           target_type: "word",
           target_id: word.id,
-          details: `Uploaded gesture samples for word: ${word.label} — ${successCount} processed, ${failCount} failed/skipped`,
+          // Signer ID included so a mislabelled batch can be traced from the
+          // log alone: the wrong ID splits one person into two and skews
+          // signer-held-out evaluation, and nothing else records it per batch.
+          details: `Uploaded gesture samples for word: ${word.label} (signer: ${sessionId}) — ${successCount} processed, ${failCount} failed/skipped`,
         });
 
         await job.update({
