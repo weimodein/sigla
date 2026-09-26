@@ -262,20 +262,20 @@ textarea:focus-visible,
   }
 }
 
-/* The words table must react to its available content width, which changes
-   when the desktop sidebar expands or collapses. Keep the full table on wider
-   cards and turn each row into a labeled card before its columns get cramped. */
+/* Data tables react to their available content width, which changes when the
+   desktop sidebar expands or collapses. Keep tables on wider cards and turn
+   each row into a labeled card before its columns get cramped. */
 @container data-table (max-width: 1000px) {
-  .words-mobile-table {
+  .mobile-card-table {
     display: block;
     width: 100%;
     min-width: 0 !important;
     table-layout: auto !important;
   }
-  .words-mobile-table colgroup {
+  .mobile-card-table colgroup {
     display: none;
   }
-  .words-mobile-table thead {
+  .mobile-card-table thead {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -284,13 +284,13 @@ textarea:focus-visible,
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .words-mobile-table tbody {
+  .mobile-card-table tbody {
     display: grid;
     width: 100%;
     gap: 0.625rem;
     padding: 0.5rem;
   }
-  .words-mobile-table tbody > tr {
+  .mobile-card-table tbody > tr {
     display: grid;
     width: 100%;
     overflow: hidden;
@@ -299,7 +299,7 @@ textarea:focus-visible,
     background: #fff;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
-  .words-mobile-table td {
+  .mobile-card-table td {
     display: grid;
     width: 100%;
     max-width: none !important;
@@ -314,29 +314,60 @@ textarea:focus-visible,
     white-space: normal !important;
     overflow-wrap: anywhere;
   }
-  .words-mobile-table td::before {
+  .mobile-card-table td::before {
     grid-column: 1;
     grid-row: 1 / span 20;
     color: var(--text-muted);
+    content: attr(data-label);
     font-size: 0.8125rem;
     font-weight: 700;
     letter-spacing: 0.035em;
     line-height: 1.4;
     text-transform: uppercase;
   }
+  .mobile-card-table td > * {
+    grid-column: 2;
+    min-width: 0;
+  }
+  .mobile-card-table td > span {
+    justify-self: start;
+  }
+  .mobile-card-table td[colspan] {
+    display: block;
+    padding: 1.25rem 0.75rem !important;
+  }
+  .mobile-card-table td[colspan]::before {
+    display: none;
+  }
+
+  .administrators-mobile-table td:nth-child(1)::before { content: "ID"; }
+  .administrators-mobile-table td:nth-child(2)::before { content: "Username"; }
+  .administrators-mobile-table td:nth-child(3)::before { content: "Email"; }
+  .administrators-mobile-table td:nth-child(4)::before { content: "Status"; }
+  .administrators-mobile-table td:nth-child(5)::before { content: "Registered"; }
+  .administrators-mobile-table td:nth-child(6)::before { content: "Actions"; }
   .words-mobile-table td:nth-child(1)::before { content: "Vocabulary"; }
   .words-mobile-table td:nth-child(2)::before { content: "Category"; }
   .words-mobile-table td:nth-child(3)::before { content: "Type"; }
   .words-mobile-table td:nth-child(4)::before { content: "Samples"; }
   .words-mobile-table td:nth-child(5)::before { content: "Status"; }
   .words-mobile-table td:nth-child(6)::before { content: "Actions"; }
-  .words-mobile-table td > * {
-    grid-column: 2;
-    min-width: 0;
-  }
-  .words-mobile-table td > span {
-    justify-self: start;
-  }
+  .categories-mobile-table td:nth-child(1)::before { content: "Name"; }
+  .categories-mobile-table td:nth-child(2)::before { content: "Description"; }
+  .categories-mobile-table td:nth-child(3)::before { content: "Words"; }
+  .categories-mobile-table td:nth-child(4)::before { content: "Actions"; }
+  .activity-mobile-table td:nth-child(1)::before { content: "User"; }
+  .activity-mobile-table td:nth-child(2)::before { content: "Action"; }
+  .activity-mobile-table td:nth-child(3)::before { content: "Affected item"; }
+  .activity-mobile-table td:nth-child(4)::before { content: "Description"; }
+  .activity-mobile-table td:nth-child(5)::before { content: "Date & time"; }
+  .models-mobile-table td:nth-child(1)::before { content: "Details"; }
+  .models-mobile-table td:nth-child(2)::before { content: "Version"; }
+  .models-mobile-table td:nth-child(3)::before { content: "Words model"; }
+  .models-mobile-table td:nth-child(4)::before { content: "Alphabet model"; }
+  .models-mobile-table td:nth-child(5)::before { content: "Status"; }
+  .models-mobile-table td:nth-child(6)::before { content: "Training"; }
+  .models-mobile-table td:nth-child(7)::before { content: "Actions"; }
   .words-mobile-table td:first-child {
     display: block;
     border-top: 0;
@@ -356,6 +387,56 @@ textarea:focus-visible,
   .words-mobile-table td:first-child p + p {
     margin-top: 0.2rem;
     font-size: 0.8125rem;
+  }
+  .categories-mobile-table td:first-child,
+  .activity-mobile-table td:first-child,
+  .reports-mobile-table td:first-child,
+  .administrators-mobile-table td:nth-child(2),
+  .models-mobile-table td:nth-child(2) {
+    display: block;
+    border-top: 0;
+    background: #f8fafc;
+    padding-block: 0.75rem !important;
+    color: var(--text);
+    font-weight: 700;
+  }
+  .categories-mobile-table td:first-child::before,
+  .activity-mobile-table td:first-child::before,
+  .reports-mobile-table td:first-child::before,
+  .administrators-mobile-table td:nth-child(2)::before,
+  .models-mobile-table td:nth-child(2)::before {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .administrators-mobile-table td:nth-child(2),
+  .models-mobile-table td:nth-child(2) {
+    order: -1;
+  }
+  .administrators-mobile-table td:nth-child(1),
+  .models-mobile-table td:nth-child(1) {
+    border-top: 1px solid #f1f5f9;
+  }
+  .administrators-mobile-table td:nth-child(6),
+  .words-mobile-table td:nth-child(6),
+  .categories-mobile-table td:nth-child(4),
+  .models-mobile-table td:nth-child(7) {
+    display: block;
+  }
+  .administrators-mobile-table td:nth-child(6)::before,
+  .words-mobile-table td:nth-child(6)::before,
+  .categories-mobile-table td:nth-child(4)::before,
+  .models-mobile-table td:nth-child(7)::before {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+  .administrators-mobile-table td:nth-child(6) > div,
+  .categories-mobile-table td:nth-child(4) > div,
+  .models-mobile-table td:nth-child(7) > div {
+    flex-wrap: wrap;
+    white-space: normal !important;
   }
   .words-mobile-table td:nth-child(6) {
     display: block;
@@ -377,13 +458,6 @@ textarea:focus-visible,
     padding: 0.5rem !important;
     justify-content: center;
     white-space: normal !important;
-  }
-  .words-mobile-table td[colspan] {
-    display: block;
-    padding: 1.25rem 0.75rem !important;
-  }
-  .words-mobile-table td[colspan]::before {
-    display: none;
   }
 }
 
