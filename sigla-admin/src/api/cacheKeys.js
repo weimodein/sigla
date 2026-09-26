@@ -10,6 +10,7 @@ import { invalidate } from "../utils/apiCache.js";
 export const CACHE_KEYS = {
   wordStats: "words:stats",
   words: "words:list",          // prefix; per-params entries hang off this
+  signers: "words:signers",     // prefix; per-word entries hang off this
   categories: "categories:list",
   models: "models:list",
   modelStats: "models:stats",

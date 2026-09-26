@@ -199,36 +199,28 @@ const getSignerCoverage = async (wordId) => {
 // had never signed. The signer LIST is still every signer ID in the dataset,
 // word_id or not, so someone new to this word remains selectable instead of
 // forcing a retyped id.
+// One aggregate query rather than loading every gesture_samples row (~2,600 and
+// growing) into Node to group and count by hand. word_id is always bound as a
+// query parameter, never interpolated into the SQL string.
 const getSignerIds = async (req, res) => {
   try {
     const wordId = req.query.word_id ? Number.parseInt(req.query.word_id, 10) : null;
 
-    const rows = await GestureSample.findAll({
-      where: { session_id: { [Op.ne]: null } },
-      attributes: ["session_id"],
-      raw: true,
-    });
-    const allSigners = new Set();
-    for (const row of rows) {
-      // Normalized the same way uploadVideos stores it, so a difference in case
-      // cannot present the same person as two options.
-      const signer = String(row.session_id || "").trim().toLowerCase();
-      if (signer) allSigners.add(signer);
-    }
+    // COUNT(*) FILTER only counts rows matching the given word — 0 for a signer
+    // with plenty of samples elsewhere but none on this word. With no word_id,
+    // the filter is dropped so sample_count is the dataset-wide total, matching
+    // the endpoint's un-scoped behaviour.
+    const rows = await sequelize.query(
+      `SELECT LOWER(TRIM(session_id)) AS session_id,
+              COUNT(*) FILTER (WHERE :wordId::int IS NULL OR (word_id = :wordId AND status = 'approved')) AS sample_count
+       FROM gesture_samples
+       WHERE session_id IS NOT NULL AND TRIM(session_id) != ''
+       GROUP BY LOWER(TRIM(session_id))`,
+      { replacements: { wordId }, type: sequelize.QueryTypes.SELECT },
+    );
 
-    let counts;
-    if (wordId) {
-      counts = (await getSignerCoverage(wordId)).counts;
-    } else {
-      counts = {};
-      for (const row of rows) {
-        const signer = String(row.session_id || "").trim().toLowerCase();
-        if (signer) counts[signer] = (counts[signer] || 0) + 1;
-      }
-    }
-
-    const signers = [...allSigners]
-      .map((session_id) => ({ session_id, sample_count: counts[session_id] || 0 }))
+    const signers = rows
+      .map((r) => ({ session_id: r.session_id, sample_count: Number(r.sample_count) }))
       .sort((a, b) => a.session_id.localeCompare(b.session_id));
 
     return res.status(200).json({ signers });

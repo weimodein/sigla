@@ -12,6 +12,7 @@ import {
 } from "./sidebarState.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 import { navItems } from "./navItems.js";
+import UploadJobBanner from "./UploadJobBanner.jsx";
 import { X, Menu } from "lucide-react";
 
 const Layout = ({ children }) => {
@@ -232,6 +233,11 @@ const Layout = ({ children }) => {
             minWidth: 0,
           }}
         >
+          {/* Every admin page, not just Manage Words — a running batch used to
+              vanish from view on navigation because its state lived inside the
+              page that unmounts. Tracking now lives in UploadJobsProvider
+              (App.jsx), which survives route changes. */}
+          <UploadJobBanner />
           {children}
         </main>
       </div>

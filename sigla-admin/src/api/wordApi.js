@@ -1,6 +1,6 @@
 import api from "./authApi.js";
 import axios from "axios";
-import { cachedFetch } from "../utils/apiCache.js";
+import { cachedFetch, cacheKey } from "../utils/apiCache.js";
 import { CACHE_KEYS, withInvalidation } from "./cacheKeys.js";
 
 export const getAllWords = async (params) => {
@@ -142,18 +142,25 @@ export const uploadVideos = async (wordId, files, sessionId, onProgress) => {
   return response.data;
 };
 
-// Signer IDs already present in the dataset, with each one's sample count.
+// Signer IDs already present in the dataset, with each one's sample count for
+// the given word (dataset-wide if wordId is omitted).
 //
 // session_id is the grouping key for signer-held-out cross-validation, so a
 // typo splits one person into two and quietly inflates reported accuracy. The
 // upload dialog offers these for selection rather than relying on the operator
 // retyping an id correctly every time.
-export const getSignerIds = async (wordId) => {
-  const response = await api.get("/words/signers", {
-    params: wordId ? { word_id: wordId } : undefined,
+//
+// Cached per word: reopening the upload modal for the same word within the TTL
+// shows the list instantly instead of re-running the query. The upload poller's
+// invalidate("words:") already clears this on completion, since the key shares
+// that prefix, so a finished batch's counts are never served stale.
+export const getSignerIds = (wordId) =>
+  cachedFetch(cacheKey(CACHE_KEYS.signers, { word_id: wordId || "" }), async () => {
+    const response = await api.get("/words/signers", {
+      params: wordId ? { word_id: wordId } : undefined,
+    });
+    return response.data;
   });
-  return response.data;
-};
 
 export const getUploadJob = async (jobId) => {
   const response = await api.get(`/words/upload-jobs/${jobId}`);

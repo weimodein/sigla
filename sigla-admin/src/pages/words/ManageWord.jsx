@@ -5,7 +5,6 @@ import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { SkeletonBlock, TableSkeletonRows } from "../../components/Skeleton.jsx";
 import { listStagger } from "../../utils/motion.js";
-import { invalidate } from "../../utils/apiCache.js";
 import {
   getAllWords,
   getWordStats,
@@ -15,13 +14,11 @@ import {
   deleteAllWordSamples,
   uploadVideos,
   getSignerIds,
-  getUploadJob,
-  getActiveUploadJobs,
   setWordVideo,
 } from "../../api/wordApi.js";
 import { getCategories } from "../../api/categoryApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useUploadJobs } from "../../context/UploadJobsContext.jsx";
 import {
   Plus,
   Upload,
@@ -188,42 +185,6 @@ const WordFormModal = ({ open, mode, word, onClose, onSuccess }) => {
 };
 
 // ── Upload Videos Modal ───────────────────────────────────────
-// Per-clip outcomes from a finished batch. Shared by the upload modal and the
-// page-level results modal, which is what the admin sees when a batch finishes
-// after they already closed the upload modal.
-const ClipResultsList = ({ results }) => (
-  <div style={{ maxHeight: "260px", overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: "8px" }}>
-    {results.map((r, i) => {
-      const statusColor =
-        r.status === "ok" ? C.green : r.status === "skipped" ? "#d97706" : C.red;
-      const statusLabel =
-        r.status === "ok" ? "OK" : r.status === "skipped" ? "Skipped" : "Failed";
-      return (
-        <div key={i} style={{ padding: "6px 12px", borderBottom: `1px solid ${C.border}`, fontSize: "var(--type-meta)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-            <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-              {r.file}
-            </span>
-            <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
-              {r.type && r.type !== "unknown" && (
-                <span style={{ padding: "1px 6px", borderRadius: "8px", fontSize: "var(--type-meta)", fontWeight: 600, background: r.type === "image" ? "#fef3c7" : "#eff6ff", color: r.type === "image" ? "#92400e" : "#1e40af", textTransform: "uppercase" }}>
-                  {r.type}
-                </span>
-              )}
-              <span style={{ color: statusColor, fontWeight: 600 }}>{statusLabel}</span>
-            </div>
-          </div>
-          {(r.reason || r.error) && (
-            <p style={{ marginTop: "2px", fontSize: "var(--type-meta)", color: C.muted }}>
-              {r.reason || r.error}
-            </p>
-          )}
-        </div>
-      );
-    })}
-  </div>
-);
-
 const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
   const { error: errorToast } = useToast();
   const fileRef = useRef();
@@ -237,6 +198,10 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
   const [knownSigners, setKnownSigners] = useState([]);
   // True while the operator is naming a signer who has no samples yet.
   const [addingNew, setAddingNew] = useState(false);
+  // True only for the fetch itself — cachedFetch resolves instantly on a cache
+  // hit, so this rarely shows, but a cold word or an expired entry still has to
+  // say something rather than flash an empty dropdown.
+  const [loadingSigners, setLoadingSigners] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -244,8 +209,14 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
     // Scoped to this word: sample_count is that signer's APPROVED samples for
     // word.id, not their total across the whole dataset. Re-fetches whenever
     // the modal is opened for a different word.
-    getSignerIds(word?.id)
-      .then((data) => {
+    //
+    // Wrapped in an async function rather than setting loading state directly
+    // in the effect body — that would run synchronously during commit and
+    // trigger a cascading render.
+    (async () => {
+      setLoadingSigners(true);
+      try {
+        const data = await getSignerIds(word?.id);
         if (cancelled) return;
         const list = data?.signers || [];
         setKnownSigners(list);
@@ -254,13 +225,15 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
         // choose, and the free-text field opens instead.
         setAddingNew(list.length === 0);
         setSessionId(list.length ? list[0].session_id : "");
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) return;
         // The dropdown is a convenience, so losing it must not block an upload.
         setKnownSigners([]);
         setAddingNew(true);
-      });
+      } finally {
+        if (!cancelled) setLoadingSigners(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [open, word?.id]);
 
@@ -299,7 +272,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
           <Button variant="secondary" onClick={onClose} disabled={sending}>
             Cancel
           </Button>
-          <Button onClick={handleUpload} loading={sending} disabled={!files.length || !sessionId.trim()}>
+          <Button onClick={handleUpload} loading={sending} disabled={loadingSigners || !files.length || !sessionId.trim()}>
             Upload &amp; Extract
           </Button>
         </>
@@ -309,7 +282,14 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
         <label style={{ fontSize: "var(--type-meta)", fontWeight: 600, color: "#374151" }}>
           Signer ID
         </label>
-        {addingNew ? (
+        {loadingSigners ? (
+          <select
+            disabled
+            style={{ width: "100%", padding: "8px", border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "var(--type-body)", marginTop: "4px", boxSizing: "border-box", background: "#f3f4f6", color: C.muted }}
+          >
+            <option>Loading signers…</option>
+          </select>
+        ) : addingNew ? (
           <input
             value={sessionId}
             onChange={(e) => setSessionId(e.target.value)}
@@ -333,7 +313,7 @@ const UploadVideosModal = ({ word, open, onClose, onStarted }) => {
             ))}
           </select>
         )}
-        {knownSigners.length > 0 && (
+        {!loadingSigners && knownSigners.length > 0 && (
           <button
             type="button"
             onClick={() => {
@@ -672,7 +652,6 @@ const DemoVideoModal = ({ word, open, onClose, onSuccess }) => {
 // ── Main Page ─────────────────────────────────────────────────
 const ManageWord = () => {
   const { success, error: errorToast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [words, setWords] = useState([]);
   const [total, setTotal] = useState(0);
@@ -690,31 +669,12 @@ const ManageWord = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [clearSamplesConfirm, setClearSamplesConfirm] = useState(null);
   const [stats, setStats] = useState(null);
-  // Every in-flight clip-extraction batch, keyed by word_id, held at PAGE level
-  // so a batch survives the upload modal closing. Seeded from the 202 response
-  // and re-adopted from the server on mount, so a reload or navigating away does
-  // not lose it.
-  //
-  // A MAP rather than one job: the upload lock is per word, so two admins
-  // uploading to different words both proceed. Tracking a single job meant the
-  // second batch ran with no progress shown — and an upload that looks like
-  // nothing is happening invites a re-upload while the clips are really being
-  // stored.
-  const [uploadJobs, setUploadJobs] = useState({});
-  // Per-clip breakdown of a finished batch, shown even if the upload modal was
-  // already closed — losing this silently is the bug this flow fixes.
-  const [uploadResults, setUploadResults] = useState(null);
-  const uploadPollRef = useRef(null);
-  // Mirrors uploadJobs for the poll interval to read. The interval is created
-  // once per SET of tracked ids, so its closure would otherwise hold whichever
-  // counts existed at creation and overwrite fresher ones on every tick.
-  const uploadJobsRef = useRef({});
-  useEffect(() => { uploadJobsRef.current = uploadJobs; }, [uploadJobs]);
-  // Every admin's live batches are tracked so their banners show and the Clips
-  // button stays locked, but only the admin who STARTED a batch gets its toast
-  // and results modal. Read through a ref for the same stale-closure reason.
-  const currentUserIdRef = useRef(user?.id);
-  useEffect(() => { currentUserIdRef.current = user?.id; }, [user?.id]);
+  // Upload tracking (which batches are running, their toasts, the results
+  // modal) lives in UploadJobsProvider — mounted once in App.jsx, so it
+  // survives this page unmounting when the admin navigates away and back.
+  // `uploadJobs` here is only read, to lock the per-word Clips button and to
+  // refetch the table when a batch finishes.
+  const { uploadJobs, finishedCount, startJob } = useUploadJobs();
   // Full category list for the filter dropdown. Derived from the words on the
   // current page it could only ever offer the ~10 categories visible, and
   // selecting one narrowed `words`, which then dropped the selected value from
@@ -736,35 +696,6 @@ const ManageWord = () => {
     }
   };
 
-  // Re-adopt every clip-extraction batch still running on the server.
-  // Extraction happens in a background job, so it survives the admin closing the
-  // modal, navigating away, or reloading — but the job map is component state and
-  // does not. Without this, coming back to the page showed no banner and the
-  // batch's results appeared out of nowhere.
-  //
-  // One request for all live jobs, rather than one per visible word. The old
-  // per-word scan cost a request per row AND only saw the current page, so a
-  // batch on another page — or a second admin's batch on a word not shown here —
-  // was invisible.
-  const adoptActiveUploadJobs = async () => {
-    try {
-      const { jobs } = await getActiveUploadJobs();
-      if (!jobs?.length) return;
-      setUploadJobs((current) => {
-        const next = { ...current };
-        for (const job of jobs) {
-          // Leave a job set moments ago by the modal alone — the fetch that
-          // started before it may only now be landing, and it carries the
-          // fresher count.
-          if (!next[job.word_id]) next[job.word_id] = job;
-        }
-        return next;
-      });
-    } catch {
-      // Non-blocking: the table still renders without the banners.
-    }
-  };
-
   const fetchWords = async () => {
     const requestId = ++fetchIdRef.current;
     setLoading(true);
@@ -778,7 +709,6 @@ const ManageWord = () => {
       setWords(data.words || []);
       setTotal(data.total || 0);
       fetchStats();
-      adoptActiveUploadJobs();
     } catch {
       if (requestId !== fetchIdRef.current) return;
       errorToast("Failed to load words");
@@ -836,103 +766,19 @@ const ManageWord = () => {
     return () => { cancelled = true; };
   }, []);
 
-  // Poll the clip-extraction batch every 5 seconds while one is in flight.
-  //
-  // The interval is cleared on unmount and whenever the job id changes, and
-  // fetchWords re-adopts a live job on mount, so navigating away and back resumes
-  // tracking rather than losing the batch.
+  // The provider polls and reports outcomes on its own; this page only needs
+  // to refetch once ANY tracked batch finishes, so its sample counts and
+  // signer counts (cached per word — see getSignerIds) catch up. Skipped on
+  // the very first render, when finishedCount is still its initial value and
+  // fetchWords has not run yet via the effect above.
+  const isFirstFinishedCount = useRef(true);
   useEffect(() => {
-    const ids = Object.keys(uploadJobs);
-    if (ids.length === 0) return;
-
-    // A row stranded at "processing" (backend restarted mid-run, so nothing will
-    // ever finish it) would otherwise poll for the whole session and keep the
-    // upload button disabled forever. Give up after 30 minutes and say so.
-    const startedAt = Date.now();
-    const POLL_TIMEOUT_MS = 30 * 60 * 1000;
-
-    // One interval for ALL tracked jobs rather than one per job: a separate
-    // effect per job would re-subscribe every time any single job's count
-    // advanced, since the map identity changes on each poll.
-    uploadPollRef.current = setInterval(async () => {
-      const tracked = Object.values(uploadJobsRef.current);
-      if (tracked.length === 0) return;
-
-      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
-        clearInterval(uploadPollRef.current);
-        setUploadJobs({});
-        errorToast(
-          "Stopped tracking these uploads — they have not reported back. Reload to check their status.",
-        );
-        fetchWords();
-        return;
-      }
-
-      let anyFinished = false;
-      for (const trackedJob of tracked) {
-        try {
-          const { job } = await getUploadJob(trackedJob.id);
-          // Another admin's batch finishing still clears its banner and
-          // refreshes the table, but its outcome is theirs to review. A job
-          // with no started_by predates that column and belongs to nobody.
-          const isMine =
-            job.started_by != null && job.started_by === currentUserIdRef.current;
-          if (job.status === "completed") {
-            anyFinished = true;
-            setUploadJobs((current) => {
-              const next = { ...current };
-              delete next[job.word_id];
-              return next;
-            });
-            if (isMine) {
-              success(
-                `${job.success_count} clip(s) stored${job.fail_count ? `, ${job.fail_count} failed/skipped` : ""}`,
-              );
-              setUploadResults(job);
-            }
-          } else if (job.status === "failed") {
-            anyFinished = true;
-            setUploadJobs((current) => {
-              const next = { ...current };
-              delete next[job.word_id];
-              return next;
-            });
-            if (isMine) {
-              errorToast(`Upload failed: ${job.error || "Unknown error"}`);
-              // Partial results still matter — those clips really were stored.
-              if (job.results?.length) setUploadResults(job);
-            }
-          } else {
-            // Still processing — advance this banner's count.
-            setUploadJobs((current) => ({ ...current, [job.word_id]: job }));
-          }
-        } catch (err) {
-          // A missing or forbidden job will never resolve — drop just that one
-          // rather than hammering the endpoint or abandoning the others.
-          const status = err.response?.status;
-          if (status === 404 || status === 403 || status === 401) {
-            anyFinished = true;
-            setUploadJobs((current) => {
-              const next = { ...current };
-              delete next[trackedJob.word_id];
-              return next;
-            });
-          }
-        }
-      }
-
-      if (anyFinished) {
-        // The sample counts changed on the SERVER, so no mutation call ran on
-        // this client to clear them. Without this, fetchWords would re-serve
-        // the pre-upload numbers from cache.
-        invalidate("words:");
-        fetchWords();
-      }
-    }, 5000);
-    return () => clearInterval(uploadPollRef.current);
-    // Keyed on WHICH jobs are tracked, not on their contents: depending on the
-    // map itself would tear down and restart the interval on every count update.
-  }, [Object.keys(uploadJobs).sort().join(",")]);
+    if (isFirstFinishedCount.current) {
+      isFirstFinishedCount.current = false;
+      return;
+    }
+    fetchWords();
+  }, [finishedCount]);
 
   const handleDelete = async (word) => {
     try {
@@ -1021,45 +867,9 @@ const ManageWord = () => {
         </div>
       </div>
 
-      {/* ── Clip extraction in progress ──
-          Lives here rather than in the upload modal so it survives the modal
-          closing, and is re-adopted from the server after a reload. */}
-      {Object.values(uploadJobs).map((job) => (
-        <div key={job.id} className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4">
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent shrink-0" />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p className="text-sm font-semibold text-blue-800">
-              Extracting landmarks
-              {(() => {
-                // A batch may belong to a word on another page, or to another
-                // admin entirely, so the label is often absent from `words`.
-                // The banner still has to name something, hence the fallback.
-                const label =
-                  job.word?.label || words.find((w) => w.id === job.word_id)?.label;
-                return label
-                  ? <> for <span className="font-mono">{label}</span></>
-                  : <> for word #{job.word_id}</>;
-              })()}
-              {" — "}
-              {job.processed_count} of {job.total_count} clip
-              {job.total_count === 1 ? "" : "s"}…
-            </p>
-            <div style={{ background: "#bfdbfe", borderRadius: "4px", height: "6px", margin: "6px 0 4px" }}>
-              <div
-                style={{
-                  height: "6px", borderRadius: "4px", background: C.primary,
-                  width: `${job.total_count ? Math.round((job.processed_count / job.total_count) * 100) : 0}%`,
-                  transition: "width var(--dur-slow) var(--ease-standard)",
-                }}
-              />
-            </div>
-            <p className="small-text text-blue-500">
-              This may take a few minutes. You can safely navigate away — this page
-              will update automatically.
-            </p>
-          </div>
-        </div>
-      ))}
+      {/* The extraction-progress banner renders in Layout (UploadJobBanner),
+          above every page's content, so it survives navigating away from this
+          page. It reads the same uploadJobs from UploadJobsContext. */}
 
       {/* ── Summary cards ── */}
       {!stats ? (
@@ -1310,70 +1120,13 @@ const ManageWord = () => {
           word={uploadWord}
           open={!!uploadWord}
           onClose={() => setUploadWord(null)}
-          // The 202 response carries no word, so seed it from the row that was
-          // clicked — otherwise the banner can read "word #id" until the first poll.
-          onStarted={(job) => setUploadJobs((current) => ({
-            ...current,
-            [job.word_id]: { ...job, word: job.word || uploadWord },
-          }))}
+          onStarted={(job) => startJob(job, uploadWord)}
         />
       )}
 
-      {/* Per-clip breakdown, opened by the poller when a batch finishes — even if
-          the upload modal was closed or the admin was on another page. */}
-      {uploadResults && (() => {
-        const resultWord =
-          uploadResults.word || words.find((w) => w.id === uploadResults.word_id);
-        const formatTime = (value) => (value ? new Date(value).toLocaleString() : "—");
-        const details = [
-          ["Word", resultWord?.label || `#${uploadResults.word_id}`],
-          ["Category", resultWord?.category || "—"],
-          ["Signer ID", uploadResults.session_id || "—"],
-          ["Started", formatTime(uploadResults.created_at)],
-          ["Finished", formatTime(uploadResults.finished_at)],
-        ];
-        return (
-        <AppModal
-          title={`Upload Results — ${resultWord?.label || "clips"}`}
-          onClose={() => setUploadResults(null)}
-          onEnter={() => setUploadResults(null)}
-          footer={<Button onClick={() => setUploadResults(null)}>Close</Button>}
-        >
-          {/* Which word and signer the clips were filed under — a batch stored
-              under the wrong signer ID skews signer-held-out evaluation, so the
-              uploader should be able to confirm it here. */}
-          <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 16px", fontSize: "var(--type-meta)", background: "#f9fafb", border: `1px solid ${C.border}`, borderRadius: "8px", padding: "10px 12px", marginBottom: "12px" }}>
-            {details.map(([term, value]) => (
-              <div key={term} style={{ display: "contents" }}>
-                <dt style={{ color: C.muted, fontWeight: 600 }}>{term}</dt>
-                <dd style={{
-                  margin: 0, color: "#374151", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  textTransform: term === "Category" ? "capitalize" : "none",
-                  fontFamily: term === "Signer ID" ? "monospace" : "inherit",
-                }} title={String(value)}>
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p style={{ fontSize: "var(--type-body)", color: "#374151", marginBottom: "12px" }}>
-            <strong>{uploadResults.success_count}</strong> clip(s) stored
-            {uploadResults.fail_count > 0 && (
-              <>, <strong>{uploadResults.fail_count}</strong> failed/skipped</>
-            )}
-            .
-          </p>
-          {uploadResults.status === "failed" && (
-            <p style={{ fontSize: "var(--type-meta)", color: C.red, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", padding: "8px 10px", marginBottom: "12px" }}>
-              The batch stopped early: {uploadResults.error || "Unknown error"}
-            </p>
-          )}
-          {uploadResults.results?.length > 0 && (
-            <ClipResultsList results={uploadResults.results} />
-          )}
-        </AppModal>
-        );
-      })()}
+      {/* The per-clip results modal, shown when a batch this admin started
+          finishes, renders in Layout (UploadJobBanner) — even if this page was
+          unmounted at the time. */}
 
       {demoVideoWord && (
         <DemoVideoModal
