@@ -149,7 +149,7 @@ private val FALLBACK_XY: IntArray = (0..1).flatMap { hand ->
     FALLBACK_LANDMARKS.flatMap { i -> listOf(hand * 63 + i * 3, hand * 63 + i * 3 + 1) }
 }.toIntArray()
 
-private fun posePresent(frame: FloatArray): Boolean {
+internal fun posePresent(frame: FloatArray): Boolean {
     for (k in POSE_BASE until FEATURE_SIZE) if (frame[k] != 0f) return true
     return false
 }
