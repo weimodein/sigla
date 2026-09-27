@@ -362,3 +362,33 @@ def test_offline_sampling_rate_matches_device_fps_floor():
         f"extract.TARGET_SAMPLE_FPS ({TARGET_SAMPLE_FPS}) must equal "
         f"MainActivity.MIN_ACCEPTABLE_FPS ({device_floor})."
     )
+
+
+_CLIP_PREPARER = os.path.join(_MOBILE, "ClipPreparer.kt")
+
+
+def test_tap_clip_constants_match_training():
+    """ClipPreparer must prepare a tap recording with the numbers extract.py
+    used for training clips; otherwise tap mode feeds the model inputs unlike
+    anything it was trained on."""
+    from app.services import clip_prep, extract
+    from app.utils.preprocessor import FEATURE_SIZE, SEQUENCE_LENGTH
+
+    src = _read(_CLIP_PREPARER)
+    pairs = {
+        "TAP_SEQUENCE_LENGTH": SEQUENCE_LENGTH,
+        "TAP_FEATURE_SIZE": FEATURE_SIZE,
+        "TAP_TARGET_SAMPLE_FPS": clip_prep.TARGET_SAMPLE_FPS,
+        "TAP_MIN_DETECTED_HAND_FRAMES": clip_prep.MIN_DETECTED_HAND_FRAMES,
+        "TAP_MIN_HAND_COVERAGE": clip_prep.MIN_HAND_COVERAGE,
+        "TAP_MIN_POSE_COVERAGE": clip_prep.MIN_POSE_COVERAGE,
+        "TAP_MAX_MISSING_HAND_SECONDS": clip_prep.MAX_MISSING_HAND_SECONDS,
+        "TAP_MAX_ANALYZED_FRAMES": clip_prep.MAX_ANALYZED_FRAMES,
+        "TAP_TRIM_PAD_FRAMES": extract.TRIM_PAD_FRAMES,
+        "TAP_DEFAULT_SOURCE_FPS": extract.DEFAULT_SOURCE_FPS,
+    }
+    for name, py_value in pairs.items():
+        kt_value = _kotlin_float(src, name)
+        assert abs(kt_value - float(py_value)) < 1e-9, (
+            f"ClipPreparer.{name} = {kt_value} but Python has {py_value}"
+        )
