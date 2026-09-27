@@ -94,14 +94,8 @@
     gap: 56px;
     align-items: center;
   }
-  /* Hero copy column is centered — text, buttons and the fine print all sit
-     on the column's own center line rather than flush against the phones. */
-  .hero-copy {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
+  /* Keep the copy vertically centered beside the phone stage. */
+  .hero-copy { align-self: center; }
   .eyebrow {
     font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
     color: var(--ink-faint);
@@ -125,7 +119,7 @@
     color: var(--ink-soft);
     max-width: 48ch;
   }
-  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 20px; margin-top: 34px; }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 34px; }
   .btn {
     display: inline-flex; align-items: center;
     padding: 15px 28px; border-radius: 12px;
