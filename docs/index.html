@@ -1,0 +1,479 @@
+<title>SigLa</title>
+<meta name="description" content="A Filipino Sign Language translator that reads signs through your camera and speaks them out loud, with a Word Bank for learning offline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0A0E21;
+    --blue: #3F8EFC;
+    --teal: #2FBF9F;
+    --ink: #0D1B33;
+    --ink-soft: #58698F;
+    --ink-faint: #8792AC;
+    --paper: #FAFBFD;
+    --card: #FFFFFF;
+    --line: #E4E9F3;
+    --shadow: 0 20px 44px -22px rgba(10, 14, 33, 0.28);
+    --shadow-sm: 0 10px 26px -14px rgba(10, 14, 33, 0.22);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #EFF3FF;
+      --ink-soft: #A8B3D6;
+      --ink-faint: #6C7796;
+      --paper: #06081A;
+      --card: #10142C;
+      --line: #232A4E;
+      --shadow: 0 20px 44px -22px rgba(0, 0, 0, 0.6);
+      --shadow-sm: 0 10px 26px -14px rgba(0, 0, 0, 0.5);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #EFF3FF;
+    --ink-soft: #A8B3D6;
+    --ink-faint: #6C7796;
+    --paper: #06081A;
+    --card: #10142C;
+    --line: #232A4E;
+    --shadow: 0 20px 44px -22px rgba(0, 0, 0, 0.6);
+    --shadow-sm: 0 10px 26px -14px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: "Sora", "Inter", sans-serif; text-wrap: balance; margin: 0; }
+  p { margin: 0; }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 22px; }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 20;
+    background: color-mix(in srgb, var(--paper) 86%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-row { display: flex; align-items: center; justify-content: space-between; padding-block: 16px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 17px; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  .nav-cta {
+    font-size: 14px; font-weight: 700; text-decoration: none;
+    padding: 9px 18px; border-radius: 999px;
+    background: var(--navy); color: #fff;
+    box-shadow: var(--shadow-sm);
+    white-space: nowrap;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative;
+    padding-block: 72px 56px;
+    overflow: hidden;
+    background:
+      radial-gradient(58% 60% at 88% -8%, color-mix(in srgb, var(--teal) 22%, transparent), transparent 62%),
+      radial-gradient(46% 46% at 6% 12%, color-mix(in srgb, var(--blue) 18%, transparent), transparent 60%);
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 0.75fr;
+    gap: 56px;
+    align-items: center;
+  }
+  .eyebrow {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
+    color: var(--ink-faint);
+    margin-bottom: 22px;
+  }
+  /* Three fixed lines. The size tracks the text column's width so the longest
+     line, "Point your camera.", always fits on one row instead of wrapping. */
+  .hero h1 {
+    font-size: clamp(30px, 5vw, 54px);
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    text-wrap: initial;
+  }
+  .hero h1 .line { display: block; }
+  .hero h1 .accent { color: var(--blue); }
+  .hero-sub {
+    margin-top: 24px;
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    max-width: 48ch;
+  }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 34px; }
+  .btn {
+    display: inline-flex; align-items: center;
+    padding: 15px 28px; border-radius: 12px;
+    font-weight: 700; font-size: 16px; text-decoration: none;
+    border: 1px solid transparent;
+  }
+  .btn-primary { background: var(--navy); color: #fff; box-shadow: var(--shadow); }
+  .btn-text {
+    font-weight: 600; font-size: 15px; color: var(--ink);
+    text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--line);
+  }
+  .hero-fine { margin-top: 18px; font-size: 13.5px; color: var(--ink-faint); }
+
+  /* Phone stage — main screenshot with a second one floating over its
+     corner, and a plain text/number badge (no icon) tucked opposite it. */
+  .phone-stage { position: relative; display: flex; justify-content: center; }
+  .phone {
+    width: min(272px, 66vw);
+    border-radius: 32px;
+    overflow: hidden;
+    border: 8px solid var(--navy);
+    box-shadow: var(--shadow);
+    position: relative;
+    z-index: 2;
+  }
+  .phone-float {
+    position: absolute;
+    width: min(168px, 42vw);
+    border-radius: 22px;
+    overflow: hidden;
+    border: 6px solid var(--card);
+    box-shadow: var(--shadow);
+    bottom: -8%;
+    left: -6%;
+    z-index: 3;
+    transform: rotate(-5deg);
+  }
+  .badge-float {
+    position: absolute;
+    top: 10%;
+    right: -6%;
+    z-index: 4;
+    background: var(--card);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    border-radius: 16px;
+    padding: 14px 16px;
+    max-width: 152px;
+  }
+  .badge-float .num { font-family: "Sora", sans-serif; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .badge-float .label { margin-top: 4px; font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
+
+  /* ---------- Stat band ---------- */
+  .stats {
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding-block: 56px;
+  }
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+  .stat .num {
+    font-family: "Sora", sans-serif;
+    font-size: clamp(38px, 5vw, 56px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .stat .num .unit { font-size: 0.5em; font-weight: 600; color: var(--ink-faint); margin-left: 2px; }
+  .stat .label { margin-top: 10px; font-size: 14.5px; color: var(--ink-soft); }
+
+  /* ---------- Section shell ---------- */
+  section { padding-block: 80px; }
+  .section-head { max-width: 640px; margin-bottom: 48px; }
+  .kicker {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
+    color: var(--ink-faint); margin-bottom: 14px; display: block;
+  }
+  .section-head h2 { font-size: clamp(28px, 3.8vw, 42px); line-height: 1.1; letter-spacing: -0.02em; }
+  .section-head p { margin-top: 16px; color: var(--ink-soft); font-size: 17px; line-height: 1.6; max-width: 56ch; }
+
+  /* ---------- Features: cards, no icons — headline + copy carry it ---------- */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .feature-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow-sm);
+    padding: 28px 26px;
+  }
+  .feature-card h3 {
+    font-size: 19px;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+  }
+  .feature-card p { font-size: 15px; line-height: 1.6; color: var(--ink-soft); }
+
+  /* ---------- Showcase (onboarding screens) ---------- */
+  .showcase {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 56px;
+  }
+  .showcase-item img {
+    width: 100%;
+    max-width: 280px;
+    border-radius: 24px;
+    border: 6px solid var(--navy);
+    box-shadow: var(--shadow);
+    margin-bottom: 26px;
+  }
+  .showcase-item .step-label {
+    font-family: "Sora", sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--blue); margin-bottom: 10px;
+  }
+  .showcase-item h3 { font-size: 20px; margin-bottom: 8px; }
+  .showcase-item p { font-size: 15px; color: var(--ink-soft); line-height: 1.6; max-width: 40ch; }
+
+  /* ---------- Install steps ---------- */
+  .steps { display: flex; flex-direction: column; }
+  .step {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 20px;
+    padding-block: 28px;
+    border-top: 1px solid var(--line);
+  }
+  .step:last-child { border-bottom: 1px solid var(--line); }
+  .step .idx {
+    font-family: "Sora", sans-serif;
+    font-size: 15px; font-weight: 700; color: var(--ink-faint);
+    padding-top: 2px;
+  }
+  .step h3 { font-size: 18px; margin-bottom: 6px; }
+  .step p { font-size: 15.5px; color: var(--ink-soft); line-height: 1.6; max-width: 60ch; }
+  .step strong { color: var(--ink); }
+
+  /* ---------- CTA band ---------- */
+  .cta-band {
+    position: relative;
+    overflow: hidden;
+    background: var(--navy);
+    border-radius: 24px;
+    padding: 64px 40px;
+    text-align: center;
+    color: #fff;
+    box-shadow: var(--shadow);
+  }
+  .cta-band::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(50% 80% at 12% 0%, color-mix(in srgb, var(--teal) 30%, transparent), transparent 60%),
+      radial-gradient(50% 80% at 92% 100%, color-mix(in srgb, var(--blue) 30%, transparent), transparent 60%);
+  }
+  .cta-band > * { position: relative; }
+  .cta-band h2 { font-size: clamp(28px, 3.8vw, 40px); color: #fff; letter-spacing: -0.02em; }
+  .cta-band p { margin-top: 16px; color: #AEB9DE; font-size: 16.5px; max-width: 48ch; margin-inline: auto; }
+  .cta-band .btn-primary { background: #fff; color: var(--navy); margin-top: 32px; }
+  .cta-fine { margin-top: 16px; font-size: 13px; color: #6C79A3; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    border-top: 1px solid var(--line);
+    padding-block: 32px;
+    font-size: 13.5px;
+    color: var(--ink-faint);
+    display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding-bottom: max(32px, env(safe-area-inset-bottom, 0px));
+  }
+  footer .fbrand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-soft); }
+  footer .fbrand img { width: 20px; height: 20px; border-radius: 6px; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; }
+    /* Single column: the text gets the full width, so size off the viewport. */
+    .hero h1 { font-size: clamp(28px, 7.6vw, 54px); }
+    .phone-stage { order: -1; margin-bottom: 12px; }
+    .feature-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 760px) {
+    .hero { padding-block: 48px 36px; }
+    .stat-row { grid-template-columns: 1fr; gap: 28px; }
+    .showcase { grid-template-columns: 1fr; gap: 44px; }
+    .step { grid-template-columns: 40px 1fr; }
+  }
+  @media (max-width: 480px) {
+    .nav-cta span.long { display: none; }
+    .cta-band { padding: 44px 24px; border-radius: 20px; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .badge-float { display: none; }
+  }
+</style>
+
+<div class="nav">
+  <div class="wrap nav-row">
+    <div class="brand"><img src="assets/sigla-logo.png" alt="SigLa logo">SigLa</div>
+    <a class="nav-cta" href="https://github.com/weimodein/sigla/releases/download/1.0.0/app-release.apk">
+      <span class="long">Download for </span>Android
+    </a>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">SigLa &mdash; Filipino Sign Language, translated live</p>
+      <h1><span class="line">Point your camera.</span><span class="line">Watch the sign</span><span class="line accent">become words.</span></h1>
+      <p class="hero-sub">
+        SigLa turns Filipino Sign Language into text and speech, live.
+        Then it teaches you to sign back, one word at a time.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://github.com/weimodein/sigla/releases/download/1.0.0/app-release.apk">Download APK &middot; v1.0.0</a>
+        <a class="btn-text" href="#how-it-works">See how it works</a>
+      </div>
+      <p class="hero-fine">Android 7.0 and up &middot; ~203 MB &middot; no account needed</p>
+    </div>
+    <div class="phone-stage">
+      <div class="badge-float">
+        <div class="num">73</div>
+        <div class="label">signs in the Word Bank</div>
+      </div>
+      <div class="phone">
+        <img src="assets/screenshot-wordbank-dark.jpg" alt="SigLa's Word Bank in dark mode, showing sign categories like Alphabet, Color, Days and Drink">
+      </div>
+      <div class="phone-float">
+        <img src="assets/screenshot-wordbank-light.jpg" alt="SigLa's Word Bank, showing sign categories like Alphabet, Color, Days and Family">
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="wrap stat-row">
+    <div class="stat">
+      <div class="num" style="font-size:clamp(26px,3.4vw,38px)">On&#8209;device</div>
+      <div class="label">Hand and pose detection run on your phone, not a server</div>
+    </div>
+    <div class="stat">
+      <div class="num">2<span class="unit">languages</span></div>
+      <div class="label">Toggle a translation between English and Filipino</div>
+    </div>
+    <div class="stat">
+      <div class="num">1<span class="unit">tap</span></div>
+      <div class="label">No account or sign-up &mdash; open the app and start translating</div>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section class="wrap" id="features">
+    <div class="section-head">
+      <span class="kicker">What SigLa does</span>
+      <h2>Two ways to bridge the gap</h2>
+      <p>One camera, two directions: understand what someone signs to you, and learn how to sign back.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <h3>Live translation</h3>
+        <p>Position the signer in front of the camera and SigLa recognizes their gestures as text and speech, as they sign. No recording, no waiting for a result.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Word Bank library</h3>
+        <p>73 signs across Alphabet, Colors, Days, Family and more, each with a demo video at adjustable playback speed and its own pronunciation.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Filipino toggle</h3>
+        <p>Switch a translation between English and Filipino mid-conversation, and flip between the front and back camera without losing your place.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Emergency SOS</h3>
+        <p>Hold the SOS button on the translator screen for two seconds &mdash; there for the moment a conversation needs to turn into a call for help.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Runs on-device</h3>
+        <p>Hand and pose detection happen locally on your phone's GPU, so translation keeps working even on a weak or absent connection.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Save demos offline</h3>
+        <p>Download Word Bank videos ahead of time and practice signs with no data connection at all &mdash; useful in a classroom or a clinic.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" id="how-it-works">
+    <div class="section-head">
+      <span class="kicker">Inside the app</span>
+      <h2>Built around one camera screen</h2>
+      <p>Taken straight from SigLa's own onboarding &mdash; what you'll see in your first minute.</p>
+    </div>
+    <div class="showcase">
+      <div class="showcase-item">
+        <img src="assets/screenshot-onboarding-translate.jpg" alt="Onboarding screen introducing the Translate main interface">
+        <div class="step-label">Translate</div>
+        <h3>Position &amp; translate</h3>
+        <p>Point the camera at the person signing and keep their gestures in frame. SigLa recognizes the signs and speaks the translation aloud.</p>
+      </div>
+      <div class="showcase-item">
+        <img src="assets/screenshot-onboarding-wordbank.jpg" alt="Onboarding screen introducing the Word Bank">
+        <div class="step-label">Learn</div>
+        <h3>Browse the Word Bank</h3>
+        <p>Browse signs by category, tap any word to watch a demo video and hear it pronounced, and build vocabulary at your own pace.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" id="install">
+    <div class="section-head">
+      <span class="kicker">Getting it onto your phone</span>
+      <h2>Install in under a minute</h2>
+      <p>SigLa isn't on the Play Store yet &mdash; it installs straight from the file below, the same way apps worked before app stores existed.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="idx">01</div>
+        <div>
+          <h3>Download the APK</h3>
+          <p>Tap the download button above on your Android phone, or open this page's link directly from the phone's browser.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="idx">02</div>
+        <div>
+          <h3>Allow installs from this source</h3>
+          <p>Android asks permission the first time. Tap <strong>Settings</strong> in that prompt, turn on <strong>Allow from this source</strong>, then go back.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="idx">03</div>
+        <div>
+          <h3>Tap install, then open</h3>
+          <p>SigLa asks for camera access on first launch &mdash; that's the only thing it needs to start translating. No sign-in required.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="cta-band">
+      <h2>Try SigLa on your own phone</h2>
+      <p>Free, works offline for the Word Bank, and takes about a minute to set up.</p>
+      <a class="btn btn-primary" href="https://github.com/weimodein/sigla/releases/download/1.0.0/app-release.apk">Download for Android</a>
+      <p class="cta-fine">v1.0.0 &middot; Android 7.0 (API 24) or newer &middot; ~203 MB</p>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <div class="fbrand"><img src="assets/sigla-logo.png" alt="">SigLa</div>
+  <div>Filipino Sign Language, translated in real time.</div>
+</footer>
