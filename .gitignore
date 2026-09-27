@@ -26,3 +26,6 @@ sigla-ml/ds*.json
 sigla-ml/fsl105_import.json
 sigla-ml/dedupe_backup.json
 sigla-ml/cv_run.log
+
+# Claude Code local worktrees — scratch state, never meant to be committed
+.claude/worktrees/
