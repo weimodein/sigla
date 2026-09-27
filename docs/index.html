@@ -94,8 +94,9 @@
     gap: 56px;
     align-items: center;
   }
-  /* Keep the copy vertically centered beside the phone stage. */
-  .hero-copy { align-self: center; }
+  /* Start the copy near the phone mockup's top instead of leaving a large
+     gap above it while the taller phone stage determines the row height. */
+  .hero-copy { align-self: start; margin-top: 32px; }
   .eyebrow {
     font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
     color: var(--ink-faint);
@@ -411,6 +412,7 @@
   /* ---------- Responsive ---------- */
   @media (max-width: 860px) {
     .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+    .hero-copy { align-self: center; margin-top: 0; }
     /* Single column: the text gets the full width, so size off the viewport. */
     .hero h1 { font-size: clamp(28px, 7.6vw, 54px); }
     /* Copy (and the Download button) stays first: on a phone it has to be on
