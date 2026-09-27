@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Revamp design tokens (spec §4). Screens migrate from the older sig_* colours
+     to these; dark values live in values-night/colors_sigla.xml. -->
+<resources>
+    <color name="sg_brand">#13306B</color>
+    <color name="sg_brand_text">#13306B</color>
+    <color name="sg_bg">#FFFFFF</color>
+    <color name="sg_tint">#EEF3FC</color>
+    <color name="sg_bar_bg">#FFFFFF</color>
+    <color name="sg_text">#0F1B33</color>
+    <!-- 62% of sg_text -->
+    <color name="sg_text_secondary">#9E0F1B33</color>
+    <!-- 8% of brand -->
+    <color name="sg_divider">#1413306B</color>
+    <color name="sg_danger">#E53935</color>
+    <color name="sg_success">#2E7D32</color>
+    <color name="sg_on_brand">#FFFFFF</color>
+    <color name="sg_on_brand_secondary">#CCFFFFFF</color>
+</resources>

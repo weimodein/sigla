@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sg_brand">#2A55B8</color>
+    <color name="sg_brand_text">#9DB8F2</color>
+    <color name="sg_bg">#0B1530</color>
+    <color name="sg_tint">#15244B</color>
+    <color name="sg_bar_bg">#101D3F</color>
+    <color name="sg_text">#E8EDF7</color>
+    <color name="sg_text_secondary">#9EE8EDF7</color>
+    <!-- 6% white -->
+    <color name="sg_divider">#0FFFFFFF</color>
+    <color name="sg_danger">#E53935</color>
+    <color name="sg_success">#2E7D32</color>
+    <color name="sg_on_brand">#FFFFFF</color>
+    <color name="sg_on_brand_secondary">#CCFFFFFF</color>
+</resources>

@@ -60,7 +60,8 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:screenOrientation="portrait">
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.Sigla.Immersive">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -76,7 +77,7 @@
              configChanges keeps the playing video alive across that rotation. -->
         <activity android:name=".FullscreenVideoActivity" android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
-            android:theme="@style/Theme.Sigla" />
+            android:theme="@style/Theme.Sigla.Immersive" />
         <activity android:name=".SettingsActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
         <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="portrait" />
         

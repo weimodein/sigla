@@ -18,6 +18,10 @@ class AppSettings(context: Context) {
         private const val KEY_FRONT_CAMERA = "front_camera"
         private const val KEY_ONBOARDING = "onboarding_done"
         private const val KEY_TRANSLATION_MODE = "translation_mode"
+        private const val KEY_USER_NAME = "user_name"
+        // Light is the default from the revamp on (spec §4). A stored value always
+        // wins, so users who switched dark mode on keep it.
+        private const val DEFAULT_DARK_MODE = false
         const val MODE_TAP = "tap"
         const val MODE_LIVE = "live"
 
@@ -42,7 +46,7 @@ class AppSettings(context: Context) {
         set(v) = prefs.edit().putString(KEY_VOICE_TYPE, v).apply()
 
     var isDarkMode: Boolean
-        get() = prefs.getBoolean(KEY_DARK_MODE, true)
+        get() = prefs.getBoolean(KEY_DARK_MODE, DEFAULT_DARK_MODE)
         set(v) = prefs.edit().putBoolean(KEY_DARK_MODE, v).apply()
 
     var showFilipino: Boolean
@@ -68,11 +72,24 @@ class AppSettings(context: Context) {
         get() = onboardingPrefs.getBoolean(KEY_ONBOARDING, false)
         set(v) = onboardingPrefs.edit().putBoolean(KEY_ONBOARDING, v).apply()
 
+    /**
+     * Optional first name for the Home greeting, stored on this phone only.
+     * Trimmed on write; blank is stored as null so "no name" has one meaning.
+     */
+    var userName: String?
+        get() = prefs.getString(KEY_USER_NAME, null)
+        set(v) {
+            val clean = v?.trim()?.takeIf { it.isNotEmpty() }
+            prefs.edit().apply {
+                if (clean == null) remove(KEY_USER_NAME) else putString(KEY_USER_NAME, clean)
+            }.apply()
+        }
+
     fun resetToDefault() {
         prefs.edit()
             .putInt(KEY_VOLUME, 80)
             .putString(KEY_VOICE_TYPE, VOICE_FEMALE)
-            .putBoolean(KEY_DARK_MODE, true)
+            .putBoolean(KEY_DARK_MODE, DEFAULT_DARK_MODE)
             .putBoolean(KEY_SHOW_FILIPINO, true)
             .apply()
     }

@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- App theme: navy brand, light by default (spec §4). windowBackground matches
-         the Home screen so the starting window and the first frame are the same
-         colour (a mismatch reads as a stutter on launch). -->
+    <!-- Light status-bar icons on the dark background. -->
     <style name="Theme.Sigla" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/sg_brand</item>
         <item name="colorPrimaryVariant">@color/sg_brand</item>
@@ -12,15 +10,6 @@
         <item name="android:windowBackground">@color/sg_bg</item>
         <item name="android:statusBarColor">@color/sg_bg</item>
         <item name="android:navigationBarColor">@color/sg_bar_bg</item>
-        <item name="android:windowLightStatusBar">true</item>
-    </style>
-
-    <!-- Translator and fullscreen video: always dark, like a camera or video app.
-         These are the values Theme.Sigla had before the revamp. -->
-    <style name="Theme.Sigla.Immersive">
-        <item name="android:windowBackground">#08162a</item>
-        <item name="android:statusBarColor">#0A0E21</item>
-        <item name="android:navigationBarColor">#0D1127</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

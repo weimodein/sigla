@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 8-point spacing scale -->
+    <dimen name="sg_space_4">4dp</dimen>
+    <dimen name="sg_space_8">8dp</dimen>
+    <dimen name="sg_space_12">12dp</dimen>
+    <dimen name="sg_space_16">16dp</dimen>
+    <dimen name="sg_space_20">20dp</dimen>
+    <dimen name="sg_space_24">24dp</dimen>
+    <dimen name="sg_space_32">32dp</dimen>
+    <dimen name="sg_screen_padding">20dp</dimen>
+
+    <dimen name="sg_radius_lg">24dp</dimen>
+    <dimen name="sg_radius_md">20dp</dimen>
+    <dimen name="sg_radius_sm">16dp</dimen>
+
+    <dimen name="sg_text_title">22sp</dimen>
+    <dimen name="sg_text_card">17sp</dimen>
+    <dimen name="sg_text_body">13sp</dimen>
+    <dimen name="sg_text_caption">11sp</dimen>
+    <!-- Word detail only (Plan 2) -->
+    <dimen name="sg_text_display">26sp</dimen>
+
+    <dimen name="sg_badge_size">40dp</dimen>
+    <dimen name="sg_search_height">44dp</dimen>
+    <dimen name="sg_touch_min">48dp</dimen>
+
+    <dimen name="sg_bottom_bar_height">64dp</dimen>
+    <!-- Bottom padding for scrolling content so the bar and the raised centre
+         button never cover the last item. -->
+    <dimen name="sg_bottom_bar_clearance">96dp</dimen>
+</resources>

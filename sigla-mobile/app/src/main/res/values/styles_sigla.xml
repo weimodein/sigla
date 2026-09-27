@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ── Text ── (4 sizes, 2 weights; spec §4) -->
+    <style name="Sigla.Text" parent="">
+        <item name="android:fontFamily">@font/poppins_regular</item>
+        <item name="android:textSize">@dimen/sg_text_body</item>
+        <item name="android:textColor">@color/sg_text</item>
+    </style>
+    <style name="Sigla.Text.Title">
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+        <item name="android:textSize">@dimen/sg_text_title</item>
+        <item name="android:textColor">@color/sg_brand_text</item>
+    </style>
+    <style name="Sigla.Text.Section">
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+        <item name="android:textSize">@dimen/sg_text_card</item>
+    </style>
+    <style name="Sigla.Text.CardTitle">
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+        <item name="android:textSize">@dimen/sg_text_card</item>
+        <item name="android:textColor">@color/sg_brand_text</item>
+    </style>
+    <style name="Sigla.Text.Body" />
+    <style name="Sigla.Text.BodyStrong">
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+    </style>
+    <style name="Sigla.Text.Secondary">
+        <item name="android:textColor">@color/sg_text_secondary</item>
+    </style>
+    <style name="Sigla.Text.Caption">
+        <item name="android:textSize">@dimen/sg_text_caption</item>
+        <item name="android:textColor">@color/sg_text_secondary</item>
+    </style>
+    <style name="Sigla.Text.Link">
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+        <item name="android:textSize">@dimen/sg_text_caption</item>
+        <item name="android:textColor">@color/sg_text_secondary</item>
+    </style>
+    <style name="Sigla.Text.StatValue">
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+        <item name="android:textSize">@dimen/sg_text_title</item>
+        <item name="android:textColor">@color/sg_on_brand</item>
+    </style>
+    <style name="Sigla.Text.StatLabel">
+        <item name="android:textSize">@dimen/sg_text_caption</item>
+        <item name="android:textColor">@color/sg_on_brand_secondary</item>
+    </style>
+    <style name="Sigla.Text.Display">
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+        <item name="android:textSize">@dimen/sg_text_display</item>
+        <item name="android:textColor">@color/sg_brand_text</item>
+    </style>
+
+    <!-- ── Buttons ── -->
+    <style name="Widget.Sigla.Button" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">@color/sg_brand</item>
+        <item name="android:textColor">@color/sg_on_brand</item>
+        <item name="cornerRadius">@dimen/sg_radius_sm</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">@font/poppins_semibold</item>
+        <item name="android:textSize">@dimen/sg_text_body</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:minHeight">@dimen/sg_touch_min</item>
+    </style>
+
+    <!-- ── Cards ── -->
+    <style name="Widget.Sigla.Card" parent="Widget.MaterialComponents.CardView">
+        <item name="cardElevation">0dp</item>
+        <item name="cardCornerRadius">@dimen/sg_radius_md</item>
+        <item name="cardBackgroundColor">@color/sg_tint</item>
+        <item name="strokeWidth">0dp</item>
+    </style>
+    <style name="Widget.Sigla.Card.Tint" />
+    <style name="Widget.Sigla.Card.Brand">
+        <item name="cardCornerRadius">@dimen/sg_radius_lg</item>
+        <item name="cardBackgroundColor">@color/sg_brand</item>
+    </style>
+    <style name="Widget.Sigla.Card.Outlined">
+        <item name="cardCornerRadius">@dimen/sg_radius_lg</item>
+        <item name="cardBackgroundColor">@color/sg_bg</item>
+        <item name="strokeColor">@color/sg_divider</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <!-- ── Bottom bar ── -->
+    <style name="Widget.Sigla.BottomAppBar" parent="Widget.MaterialComponents.BottomAppBar">
+        <item name="backgroundTint">@color/sg_bar_bg</item>
+        <item name="fabAlignmentMode">center</item>
+        <item name="fabCradleMargin">6dp</item>
+        <item name="fabCradleRoundedCornerRadius">12dp</item>
+        <item name="fabCradleVerticalOffset">0dp</item>
+        <item name="contentInsetStart">0dp</item>
+        <item name="contentInsetEnd">0dp</item>
+        <item name="contentInsetStartWithNavigation">0dp</item>
+        <item name="elevation">8dp</item>
+    </style>
+    <style name="Widget.Sigla.Tab" parent="">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+    <style name="Widget.Sigla.TabIcon" parent="">
+        <item name="android:layout_width">24dp</item>
+        <item name="android:layout_height">24dp</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+    <style name="Widget.Sigla.TabLabel" parent="Sigla.Text.Caption">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:maxLines">1</item>
+    </style>
+</resources>
