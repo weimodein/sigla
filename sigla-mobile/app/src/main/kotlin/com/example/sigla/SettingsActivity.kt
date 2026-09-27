@@ -9,8 +9,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.view.GravityCompat
-import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -29,7 +27,6 @@ import com.google.android.material.button.MaterialButton
  */
 class SettingsActivity : AppCompatActivity() {
 
-    private lateinit var drawer: DrawerLayout
     private lateinit var appSettings: AppSettings
 
     // In-memory state, mirrors AppSettings (the store MainActivity/WordDetailActivity's
@@ -43,30 +40,14 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(R.layout.activity_settings)
 
         appSettings = AppSettings.getInstance(this)
-        drawer = findViewById(R.id.drawerLayout)
 
-        setupTopBar()
-        setupSidebar()
+        BottomNavHelper.setup(this, Tab.SETTINGS)
         loadPreferences()
         bindVolumeSeekBar()
         bindVoiceToggle()
         bindDarkModeSwitch()
         bindResetButton()
         bindReplayTutorial()
-    }
-
-    // ── Top bar ───────────────────────────────────────────────────────────────
-
-    private fun setupTopBar() {
-        val btnSidebar = findViewById<View>(R.id.btnSidebar)
-        btnSidebar.setOnClickListener { drawer.openDrawer(GravityCompat.START) }
-    }
-
-    // ── Sidebar ───────────────────────────────────────────────────────────────
-
-    private fun setupSidebar() {
-        val sidebar = findViewById<View>(R.id.sidebarDrawer)
-        NavigationHelper.setup(this, drawer, sidebar, Screen.SETTINGS)
     }
 
     // ── Load saved preferences ────────────────────────────────────────────────
@@ -211,11 +192,6 @@ class SettingsActivity : AppCompatActivity() {
 
     @Deprecated("Use OnBackPressedDispatcher instead")
     override fun onBackPressed() {
-        if (drawer.isDrawerOpen(GravityCompat.START)) {
-            drawer.closeDrawer(GravityCompat.START)
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
+        BottomNavHelper.open(this, Tab.HOME)
     }
 }

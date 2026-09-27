@@ -16,10 +16,8 @@ import android.widget.ProgressBar
 import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.GravityCompat
 import androidx.core.view.WindowCompat
 import androidx.core.widget.addTextChangedListener
-import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -40,8 +38,6 @@ class WordBankActivity : AppCompatActivity() {
     private val searchHandler = Handler(Looper.getMainLooper())
     private var searchRunnable: Runnable? = null
 
-    private lateinit var drawerLayout: DrawerLayout
-    private lateinit var btnSidebar: MaterialButton
     private lateinit var btnCategoryPill: MaterialButton
     private lateinit var etSearch: TextInputEditText
     private lateinit var rvWords: RecyclerView
@@ -102,12 +98,10 @@ class WordBankActivity : AppCompatActivity() {
         window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
 
-        drawerLayout = findViewById(R.id.drawerLayout) // ← ADD THIS
         favoritesManager = FavoritesManager.getInstance(this)
 
         bindViews()
-        setupTopBar()
-        setupSidebar()
+        BottomNavHelper.setup(this, Tab.WORD_BANK)
         setupRecyclerView()
         setupCategoryGrid()
         setupCategoryDropdown()
@@ -123,6 +117,24 @@ class WordBankActivity : AppCompatActivity() {
         // Load words from backend
         loadWords()
         loadCategories()   // ← ADD THIS
+        maybeFocusSearch(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeFocusSearch(intent)
+    }
+
+    /** Home's search bar opens this screen with the search field focused. */
+    private fun maybeFocusSearch(intent: Intent) {
+        if (!intent.getBooleanExtra(EXTRA_FOCUS_SEARCH, false)) return
+        intent.removeExtra(EXTRA_FOCUS_SEARCH)
+        etSearch.requestFocus()
+        etSearch.post {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showSoftInput(etSearch, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
     }
 
     override fun onResume() {
@@ -133,8 +145,6 @@ class WordBankActivity : AppCompatActivity() {
         }
     }
     private fun bindViews() {
-        drawerLayout = findViewById(R.id.drawerLayout)
-        btnSidebar = findViewById(R.id.btnSidebar)
         btnCategoryPill = findViewById(R.id.btnCategoryPill)
         etSearch = findViewById(R.id.etSearch)
         rvWords = findViewById(R.id.rvWords)
@@ -237,21 +247,6 @@ class WordBankActivity : AppCompatActivity() {
         progressLoading.visibility = if (isLoading && allWords.isEmpty()) View.VISIBLE else View.GONE
     }
 
-
-    // ── Top bar ───────────────────────────────────────────────────────────────
-
-    private fun setupTopBar() {
-        findViewById<View>(R.id.btnSidebar).setOnClickListener {
-            drawerLayout.openDrawer(GravityCompat.START)
-        }
-    }
-
-    // ── Sidebar ───────────────────────────────────────────────────────────────
-
-    private fun setupSidebar() {
-        val sidebar = findViewById<View>(R.id.sidebarDrawer)
-        NavigationHelper.setup(this, drawerLayout, sidebar, Screen.WORD_BANK)
-    }
 
     // ── Load Words from Backend ───────────────────────────────────────────────
 
@@ -859,13 +854,10 @@ class WordBankActivity : AppCompatActivity() {
 
     @Deprecated("Use OnBackPressedDispatcher instead")
     override fun onBackPressed() {
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START)
-        } else if (!isGridMode) {
+        if (!isGridMode) {
             showGridMode()
         } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
+            BottomNavHelper.open(this, Tab.HOME)
         }
     }
 

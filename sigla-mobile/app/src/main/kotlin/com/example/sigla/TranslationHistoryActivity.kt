@@ -7,8 +7,6 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.GravityCompat
-import androidx.drawerlayout.widget.DrawerLayout
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -18,8 +16,6 @@ import com.google.android.material.button.MaterialButton
 
 class TranslationHistoryActivity : AppCompatActivity() {
 
-    private lateinit var drawerLayout: DrawerLayout
-    private lateinit var btnSidebar: MaterialButton
     private lateinit var btnClearAll: MaterialButton
     private lateinit var rvHistory: RecyclerView
     private lateinit var emptyState: View
@@ -35,13 +31,10 @@ class TranslationHistoryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_translation_history)
 
-        drawerLayout = findViewById(R.id.drawerLayout)  // ← ADD THIS
-
         historyManager = TranslationHistoryManager.getInstance(this)
 
         bindViews()
-        setupTopBar()
-        setupSidebar()
+        BottomNavHelper.setup(this, Tab.HISTORY)
         setupRecyclerView()
         setupSwipeToDelete()
         refreshList()
@@ -51,27 +44,10 @@ class TranslationHistoryActivity : AppCompatActivity() {
     // ── Views ─────────────────────────────────────────────────────────────────
 
     private fun bindViews() {
-        drawerLayout = findViewById(R.id.drawerLayout)
-        btnSidebar   = findViewById(R.id.btnSidebar)
         btnClearAll  = findViewById(R.id.btnClearAll)
         rvHistory    = findViewById(R.id.rvHistory)
         emptyState   = findViewById(R.id.emptyState)
         tvEntryCount = findViewById(R.id.tvEntryCount)
-    }
-
-    // ── Top bar ───────────────────────────────────────────────────────────────
-
-    private fun setupTopBar() {
-        btnSidebar.setOnClickListener {
-            drawerLayout.openDrawer(GravityCompat.START)
-        }
-    }
-
-    // ── Sidebar ───────────────────────────────────────────────────────────────
-
-    private fun setupSidebar() {
-        val sidebar = findViewById<View>(R.id.sidebarDrawer)
-        NavigationHelper.setup(this, drawerLayout, sidebar, Screen.HISTORY)
     }
 
     // ── RecyclerView ──────────────────────────────────────────────────────────
@@ -178,12 +154,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
 
     @Deprecated("Use OnBackPressedDispatcher instead")
     override fun onBackPressed() {
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START)
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
+        BottomNavHelper.open(this, Tab.HOME)
     }
 }
 

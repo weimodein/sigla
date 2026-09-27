@@ -7,22 +7,17 @@
       - Light / Dark mode (toggle switch)
       - Reset to Default button
       - Replay onboarding tutorial
-      - Retractable sidebar (no back button — sidebar matches activity_main.xml pattern)
+      - Bottom bar navigation (view_bottom_nav.xml)
 
     Header matches activity_word_bank.xml (same outer halo + navy curve
     drawables/heights) so this screen reads as part of the same app family.
 -->
-<androidx.drawerlayout.widget.DrawerLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <androidx.coordinatorlayout.widget.CoordinatorLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/sig_page_bg">
+    android:layout_height="match_parent"
+    android:background="@color/sig_page_bg">
 
         <!-- TOP BAR -->
         <FrameLayout
@@ -43,24 +38,6 @@
                 android:paddingStart="18dp"
                 android:paddingEnd="18dp"
                 android:gravity="center_vertical">
-
-                <!-- Sidebar 3-line hamburger button -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnSidebar"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:padding="0dp"
-                    android:contentDescription="Open menu"
-                    app:icon="@drawable/ic_menu_lines"
-                    app:iconGravity="textStart"
-                    app:iconPadding="0dp"
-                    app:iconSize="24dp"
-                    app:iconTint="@color/sig_icon_accent"
-                    app:backgroundTint="@color/sig_header_button_bg"
-                    app:cornerRadius="14dp" />
 
                 <!-- Screen title + subtitle -->
                 <LinearLayout
@@ -103,7 +80,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingBottom="32dp">
+                android:paddingBottom="@dimen/sg_bottom_bar_clearance">
 
                 <!-- ════════════════════════════════════
                      SECTION: AUDIO
@@ -471,8 +448,6 @@
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
 
-    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+    <include layout="@layout/view_bottom_nav" />
 
-    <include layout="@layout/nav_sidebar" />
-
-</androidx.drawerlayout.widget.DrawerLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

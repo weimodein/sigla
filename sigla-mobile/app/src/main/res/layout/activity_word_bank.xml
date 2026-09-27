@@ -5,7 +5,7 @@
       - Category dropdown to filter entries
       - Selecting an entry plays audio + shows demo video
       - Users can create custom categories
-      - Retractable sidebar (no back button — sidebar matches activity_main.xml pattern)
+      - Bottom bar navigation (view_bottom_nav.xml)
 
     Top bar structure: page background (light blue-gray) → outer halo (topBarOuterWrapper,
     fixed 116dp, elevation 6dp for a soft drop shadow) → inner navy curve (fixed
@@ -18,17 +18,12 @@
     (wrap_content so "All Category" + icon always stay on one line) — 12dp gap
     between them.
 -->
-<androidx.drawerlayout.widget.DrawerLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <androidx.coordinatorlayout.widget.CoordinatorLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/sig_page_bg">
+    android:layout_height="match_parent"
+    android:background="@color/sig_page_bg">
 
         <!-- TOP BAR + SEARCH/CATEGORY ROW -->
         <androidx.constraintlayout.widget.ConstraintLayout
@@ -59,24 +54,6 @@
                     android:paddingStart="18dp"
                     android:paddingEnd="18dp"
                     android:gravity="center_vertical">
-
-                    <!-- Sidebar 3-line hamburger button -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnSidebar"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:padding="0dp"
-                        android:contentDescription="Open menu"
-                        app:icon="@drawable/ic_menu_lines"
-                        app:iconGravity="textStart"
-                        app:iconPadding="0dp"
-                        app:iconSize="24dp"
-                        app:iconTint="@color/sig_icon_accent"
-                        app:backgroundTint="@color/sig_header_button_bg"
-                        app:cornerRadius="14dp" />
 
                     <!-- Screen title + subtitle -->
                     <LinearLayout
@@ -259,7 +236,7 @@
                 android:layout_weight="1"
                 android:paddingStart="10dp"
                 android:paddingEnd="10dp"
-                android:paddingBottom="24dp"
+                android:paddingBottom="@dimen/sg_bottom_bar_clearance"
                 android:clipToPadding="false"
                 android:scrollbars="vertical" />
 
@@ -298,7 +275,7 @@
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:paddingTop="6dp"
-            android:paddingBottom="20dp"
+            android:paddingBottom="@dimen/sg_bottom_bar_clearance"
             android:clipToPadding="false"
             android:scrollbars="vertical"
             android:visibility="gone" />
@@ -341,8 +318,6 @@
 
         </LinearLayout>
 
-    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+    <include layout="@layout/view_bottom_nav" />
 
-    <include layout="@layout/nav_sidebar" />
-
-</androidx.drawerlayout.widget.DrawerLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
