@@ -41,19 +41,10 @@ const GestureSample = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    // Number of images in this submission batch
-    sample_count: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0,
-    },
-    // Whether MediaPipe validation passed during collection
-    is_validated: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-    },
     // Admin review result — pending until reviewed
     status: {
       type: DataTypes.STRING(20),
+      allowNull: false,
       defaultValue: "pending",
       validate: {
         isIn: [["pending", "approved", "rejected"]],

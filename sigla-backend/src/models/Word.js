@@ -63,13 +63,11 @@ const Word = sequelize.define(
         isIn: [["pending", "approved", "rejected"]],
       },
     },
-    total_samples: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0,
-    },
-    // Number of samples currently marked as approved
+    // Number of samples currently marked as approved. The total is not stored:
+    // it is derived from gesture_samples at read time (see getSampleCounts).
     approved_sample_count: {
       type: DataTypes.INTEGER,
+      allowNull: false,
       defaultValue: 0,
     },
     reviewed_by: {
@@ -83,11 +81,7 @@ const Word = sequelize.define(
     // When true the word is ready for translation in the mobile app
     is_active: {
       type: DataTypes.BOOLEAN,
-      defaultValue: false,
-    },
-    // When true no new gesture sample submissions are accepted for this word
-    is_locked: {
-      type: DataTypes.BOOLEAN,
+      allowNull: false,
       defaultValue: false,
     },
     // Filipino translation of the word/phrase

@@ -12,13 +12,13 @@ const getApprovedDataset = async (req, res) => {
   try {
     // Fetch all training-eligible samples:
     // - "approved" samples (admin-reviewed) for any word
-    // - "pending" samples that passed MediaPipe validation (is_validated=true)
-    //   but only for words the admin has approved (status="approved" or is_active=true)
+    // - "pending" samples, but only for words the admin has approved
+    //   (status="approved" or is_active=true)
     const samples = await GestureSample.findAll({
       where: {
         [Op.or]: [
           { status: "approved" },
-          { status: "pending", is_validated: true },
+          { status: "pending" },
         ],
       },
       include: [

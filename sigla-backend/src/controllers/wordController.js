@@ -314,9 +314,7 @@ const extractAndStoreSample = async (
       submitted_by: userId,
       file_url: fileUrl || `video_upload_${Date.now()}`,
       session_id: sessionId,
-      sample_count: 1,
       status: "approved",
-      is_validated: true,
       sequence: sequence,
     });
 
@@ -640,7 +638,6 @@ const submitWord = async (req, res) => {
       category_id: await resolveCategoryId(category),
       submitted_by: req.user.id,
       status: "pending",
-      is_locked: false,
       is_active: false,
       approved_sample_count: 0,
     });
@@ -708,7 +705,6 @@ const adminAddWord = async (req, res) => {
       filipino_translation: filipino_translation || null,
       submitted_by: req.user.id,
       status: "approved",
-      is_locked: false,
       is_active: false,
       approved_sample_count: 0,
       reviewed_by: req.user.id,
@@ -765,9 +761,7 @@ const adminUploadSamples = async (req, res) => {
         word_id: word.id,
         submitted_by: req.user.id,
         file_url: url,
-        sample_count: 1,
         status: "approved",
-        is_validated: true,
       });
       samples.push(sample);
     }
@@ -1436,10 +1430,10 @@ const deleteAllSamplesForWord = async (req, res) => {
 
     const deleted = await GestureSample.destroy({ where: { word_id: word.id } });
 
-    // Keep the stored counter consistent with the rows. The API derives
-    // total_samples at read time (see getSampleCounts), but approved_sample_count
-    // is read back by checkAndActivateWord, so it must not be left stale.
-    await word.update({ total_samples: 0, approved_sample_count: 0 });
+    // Keep the stored counter consistent with the rows. total_samples is always
+    // derived at read time (see getSampleCounts), but approved_sample_count is
+    // read back by checkAndActivateWord, so it must not be left stale.
+    await word.update({ approved_sample_count: 0 });
 
     await logActivity({
       administrator_id: req.user.id,

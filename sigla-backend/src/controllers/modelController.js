@@ -35,7 +35,7 @@ async function getTrainedWordIds(kind = null) {
     where: {
       [Op.or]: [
         { status: "approved" },
-        { status: "pending", is_validated: true },
+        { status: "pending" },
       ],
     },
     include: [

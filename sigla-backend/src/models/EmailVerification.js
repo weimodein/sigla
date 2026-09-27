@@ -11,7 +11,7 @@ const EmailVerification = sequelize.define(
     },
     administrator_id: {
       type: DataTypes.INTEGER,
-      allowNull: true,
+      allowNull: false,
     },
     email: {
       type: DataTypes.STRING(100),
@@ -30,6 +30,7 @@ const EmailVerification = sequelize.define(
     },
     is_used: {
       type: DataTypes.BOOLEAN,
+      allowNull: false,
       defaultValue: false,
     },
     expires_at: {
@@ -39,11 +40,13 @@ const EmailVerification = sequelize.define(
     // Tracks how many wrong codes were entered — session expires after 5
     attempt_count: {
       type: DataTypes.INTEGER,
+      allowNull: false,
       defaultValue: 0,
     },
     // Set to true when attempt_count hits 5 or a new code is requested
     session_invalidated: {
       type: DataTypes.BOOLEAN,
+      allowNull: false,
       defaultValue: false,
     },
     // Used to enforce the 1-minute resend cooldown
