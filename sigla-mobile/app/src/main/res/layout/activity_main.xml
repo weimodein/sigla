@@ -1,17 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.drawerlayout.widget.DrawerLayout
+<androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <!-- ── Main content ── -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/sig_page_bg">
+    android:layout_height="match_parent"
+    android:background="@color/sig_page_bg">
 
         <!-- Camera preview card occupying the main screen area -->
         <com.google.android.material.card.MaterialCardView
@@ -215,17 +209,17 @@
                 android:padding="10dp"
                 android:gravity="center_vertical">
 
-                <!-- Sidebar hamburger button -->
+                <!-- Back button -->
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnSidebar"
+                    android:id="@+id/btnBack"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="38dp"
                     android:layout_height="38dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:padding="0dp"
-                    android:contentDescription="Open menu"
-                    app:icon="@drawable/ic_menu_lines"
+                    android:contentDescription="Back"
+                    app:icon="@drawable/ic_back"
                     app:iconGravity="textStart"
                     app:iconPadding="0dp"
                     app:iconSize="20dp"
@@ -666,8 +660,3 @@
         </FrameLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <!-- ── Sidebar ── -->
-    <include layout="@layout/nav_sidebar" />
-
-</androidx.drawerlayout.widget.DrawerLayout>

@@ -15,8 +15,6 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
-import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -32,7 +30,6 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.example.sigla.databinding.ActivityMainBinding
@@ -271,11 +268,6 @@ class MainActivity : AppCompatActivity() {
         // the untrained orientation. See FORCE_BACK_CAMERA_ONLY.
         isFrontCamera = if (FORCE_BACK_CAMERA_ONLY) false else appSettings.isFrontCamera
 
-        if (!appSettings.isOnboardingDone) {
-            startActivity(Intent(this, OnboardingActivity::class.java))
-            return  // Exit onCreate, onboarding will start MainActivity when done
-        }
-
         // Everything below ran; onStart() may now bring the camera up. Without
         // this the onboarding early-return above would still fall through to
         // onStart and load the models for a screen the user never sees.
@@ -292,7 +284,8 @@ class MainActivity : AppCompatActivity() {
         // setupCallbacks() is wired inside startVision(), which rebinds them to
         // each newly created predictor.
         setupButtons()
-        setupSidebar()
+        // Back returns to whichever screen opened the translator.
+        binding.btnBack.setOnClickListener { finish() }
         updateFilipinoToggleLabel()
         updateModeToggleLabel()
         renderTapState()
@@ -1016,68 +1009,6 @@ class MainActivity : AppCompatActivity() {
         return filipinoMap[label.lowercase()]
     }
 
-    // ── Sidebar ───────────────────────────────────────────────────────────────
-
-private fun setupSidebar() {
-    val drawer = binding.drawerLayout
-
-    setActiveNavItem(R.id.navMainInterface)
-
-    binding.btnSidebar.setOnClickListener {
-        drawer.openDrawer(GravityCompat.START)
-    }
-
-    findViewById<View>(R.id.navMainInterface)?.setOnClickListener {
-        drawer.closeDrawer(GravityCompat.START)
-    }
-
-    findViewById<View>(R.id.navWordBank)?.setOnClickListener {
-        drawer.closeDrawer(GravityCompat.START)
-        startActivity(Intent(this, WordBankActivity::class.java))
-        finish()
-    }
-
-    findViewById<View>(R.id.navTranslationHistory)?.setOnClickListener {
-        drawer.closeDrawer(GravityCompat.START)
-        startActivity(Intent(this, TranslationHistoryActivity::class.java))
-        finish()
-    }
-
-    findViewById<View>(R.id.navSettings)?.setOnClickListener {
-        drawer.closeDrawer(GravityCompat.START)
-        startActivity(Intent(this, SettingsActivity::class.java))
-        finish()
-    }
-
-}
-
-private fun setActiveNavItem(activeId: Int) {
-    val navIds = listOf(
-        R.id.navMainInterface, R.id.navWordBank, R.id.navTranslationHistory,
-        R.id.navSettings
-    )
-    navIds.forEach { id ->
-        val view = findViewById<LinearLayout>(id)
-        if (id == activeId) {
-            view?.setBackgroundResource(R.drawable.bg_nav_item_selected)
-            (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                android.content.res.ColorStateList.valueOf(0xFF4A90E2.toInt())
-            (view?.getChildAt(1) as? TextView)?.apply {
-                setTextColor(0xFF4A90E2.toInt())
-                setTypeface(null, android.graphics.Typeface.BOLD)
-            }
-        } else {
-            view?.setBackgroundResource(R.drawable.bg_nav_item_default)
-            (view?.getChildAt(0) as? ImageView)?.imageTintList =
-                android.content.res.ColorStateList.valueOf(0xFF6C757D.toInt())
-            (view?.getChildAt(1) as? TextView)?.apply {
-                setTextColor(0xFF6C757D.toInt())
-                setTypeface(null, android.graphics.Typeface.NORMAL)
-            }
-        }
-    }
-}
-
     // ── Camera ────────────────────────────────────────────────────────────────
 
     private fun startCamera() {
@@ -1493,16 +1424,6 @@ private fun setActiveNavItem(activeId: Int) {
         // populate tvNotifBadge, which exists in no inflated layout.
         // Picks up translations edited in the admin panel without needing a restart.
         loadFilipinoTranslations()
-    }
-
-    @Deprecated("Use OnBackPressedDispatcher instead")
-    override fun onBackPressed() {
-        if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            binding.drawerLayout.closeDrawer(GravityCompat.START)
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
     }
 
     override fun onStart() {
