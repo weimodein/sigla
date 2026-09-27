@@ -1,0 +1,142 @@
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  .phones { display:flex; gap:28px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  .phone-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .phone-label { font-size:14px; font-weight:600; opacity:.7; }
+  .phone { --navy:#13306B; --tint:#EEF3FC; --text:#0F1B33; --text2:rgba(15,27,51,.62); --line:rgba(19,48,107,.08); --shadow:rgba(19,48,107,.10);
+    width:340px; height:720px; border-radius:40px; background:#fff; font-family:'Poppins',system-ui,sans-serif;
+    position:relative; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.18); border:8px solid #111; color:var(--text); }
+  .scroll { position:absolute; inset:0 0 84px 0; overflow:hidden; padding:20px 20px 0; }
+  .title { font-size:22px; font-weight:600; color:var(--navy); margin-top:8px; }
+  .sub { font-size:12px; color:var(--text2); }
+  .search { margin-top:14px; height:44px; border-radius:22px; background:var(--tint); display:flex; align-items:center; gap:10px; padding:0 16px; font-size:13px; color:var(--text2); }
+  .pills { display:flex; gap:8px; margin-top:14px; overflow:hidden; }
+  .pill { font-size:12px; font-weight:500; padding:7px 14px; border-radius:16px; background:var(--tint); color:var(--navy); white-space:nowrap; }
+  .pill.on { background:var(--navy); color:#fff; }
+  .sec { display:flex; justify-content:space-between; align-items:baseline; margin:18px 0 10px; }
+  .sec h5 { margin:0; font-size:15px; font-weight:600; }
+  .sec a { font-size:12px; color:var(--text2); font-weight:500; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .cat { border-radius:20px; background:var(--tint); padding:12px; box-shadow:0 6px 16px var(--shadow); }
+  .cat.navy { background:var(--navy); color:#fff; }
+  .cat .ic { font-size:22px; }
+  .cat b { display:block; font-size:13px; font-weight:600; margin-top:6px; }
+  .cat span { font-size:11px; opacity:.7; }
+  .row { display:flex; align-items:center; gap:12px; padding:10px 0; }
+  .badge { width:40px; height:40px; border-radius:50%; background:var(--tint); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .row .t { flex:1; }
+  .row b { font-size:13px; font-weight:600; display:block; }
+  .row span { font-size:11px; color:var(--text2); }
+  .row .end { font-size:11px; color:var(--text2); }
+  .datehdr { font-size:11px; font-weight:600; color:var(--text2); letter-spacing:.06em; margin:16px 0 4px; }
+  .summary { margin-top:14px; border-radius:20px; background:var(--navy); color:#fff; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+  .summary b { font-size:18px; font-weight:600; display:block; }
+  .summary span { font-size:11px; opacity:.8; }
+  .ghost { font-size:12px; font-weight:500; padding:7px 14px; border-radius:16px; background:rgba(255,255,255,.15); }
+  .profile { margin-top:14px; border-radius:24px; background:var(--navy); color:#fff; padding:16px; display:flex; align-items:center; gap:12px; }
+  .profile .av { width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; font-weight:600; font-size:18px; }
+  .profile b { font-size:16px; font-weight:600; display:block; }
+  .profile span { font-size:12px; opacity:.8; }
+  .group { margin-top:16px; }
+  .glabel { font-size:11px; font-weight:600; color:var(--text2); letter-spacing:.06em; margin-bottom:6px; }
+  .gcard { border-radius:20px; background:var(--tint); padding:4px 14px; }
+  .srow { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .srow:last-child { border-bottom:none; }
+  .sicon { width:34px; height:34px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .srow .t { flex:1; font-size:13px; font-weight:500; }
+  .srow .v { font-size:12px; color:var(--text2); }
+  .toggle { width:38px; height:22px; border-radius:11px; background:var(--navy); position:relative; }
+  .toggle::after { content:''; position:absolute; right:3px; top:3px; width:16px; height:16px; border-radius:50%; background:#fff; }
+  .toggle.off { background:rgba(15,27,51,.2); }
+  .toggle.off::after { right:auto; left:3px; }
+  .bar { position:absolute; left:0; right:0; bottom:0; height:84px; background:#fff; border-top:1px solid var(--line); display:flex; justify-content:space-around; align-items:center; padding:0 6px 8px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:10px; color:var(--text2); width:56px; }
+  .tab .ti { font-size:20px; filter:grayscale(1); opacity:.7; }
+  .tab.on { color:var(--navy); font-weight:600; }
+  .tab.on .ti { filter:none; opacity:1; }
+  .fab { width:60px; height:60px; border-radius:50%; background:var(--navy); color:#fff; display:flex; align-items:center; justify-content:center; font-size:26px; margin-top:-38px; box-shadow:0 8px 20px rgba(19,48,107,.35); border:6px solid #fff; }
+</style>
+
+<h2>Word Bank, History, Settings</h2>
+<p class="subtitle">Same cards, rows and navy accents as Home, so every tab feels like one app. Word detail, category lists and the name step would follow the same patterns.</p>
+
+<div class="phones">
+  <div class="phone-wrap">
+    <div class="phone-label">Word Bank</div>
+    <div class="phone">
+      <div class="scroll">
+        <div class="title">Word Bank</div>
+        <div class="sub">130 Filipino Sign Language words</div>
+        <div class="search">🔍 Search words…</div>
+        <div class="pills"><span class="pill on">All</span><span class="pill">Words</span><span class="pill">Letters</span><span class="pill">My collections</span></div>
+        <div class="sec"><h5>Categories</h5><a>+ Collection</a></div>
+        <div class="grid">
+          <div class="cat navy"><div class="ic">⭐</div><b>Favorites</b><span>9 words</span></div>
+          <div class="cat"><div class="ic">📚</div><b>All Words</b><span>130 words</span></div>
+          <div class="cat"><div class="ic">👋</div><b>Greetings</b><span>14 words</span></div>
+          <div class="cat"><div class="ic">👪</div><b>Family</b><span>10 words</span></div>
+          <div class="cat"><div class="ic">📅</div><b>Days</b><span>7 words</span></div>
+          <div class="cat"><div class="ic">❓</div><b>Questions</b><span>12 words</span></div>
+        </div>
+      </div>
+      <div class="bar">
+        <div class="tab"><div class="ti">🏠</div>Home</div><div class="tab on"><div class="ti">📚</div>Word Bank</div>
+        <div class="fab">🤟</div>
+        <div class="tab"><div class="ti">🕘</div>History</div><div class="tab"><div class="ti">⚙️</div>Settings</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone-label">History</div>
+    <div class="phone">
+      <div class="scroll">
+        <div class="title">History</div>
+        <div class="sub">Your recent translations</div>
+        <div class="summary"><div><b>148 / 200</b><span>entries kept · oldest drop off</span></div><span class="ghost">Clear all</span></div>
+        <div class="datehdr">TODAY</div>
+        <div class="row"><div class="badge">💬</div><div class="t"><b>Good morning</b><span>Magandang umaga</span></div><div class="end">9:41 AM</div></div>
+        <div class="row"><div class="badge">💬</div><div class="t"><b>Thank you</b><span>Salamat</span></div><div class="end">9:38 AM</div></div>
+        <div class="row"><div class="badge">🔤</div><div class="t"><b>M</b><span>Letter</span></div><div class="end">9:30 AM</div></div>
+        <div class="datehdr">YESTERDAY</div>
+        <div class="row"><div class="badge">💬</div><div class="t"><b>Hello</b><span>Kumusta</span></div><div class="end">6:12 PM</div></div>
+        <div class="row"><div class="badge">💬</div><div class="t"><b>See you tomorrow</b><span>Kita tayo bukas</span></div><div class="end">6:05 PM</div></div>
+      </div>
+      <div class="bar">
+        <div class="tab"><div class="ti">🏠</div>Home</div><div class="tab"><div class="ti">📚</div>Word Bank</div>
+        <div class="fab">🤟</div>
+        <div class="tab on"><div class="ti">🕘</div>History</div><div class="tab"><div class="ti">⚙️</div>Settings</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone-label">Settings</div>
+    <div class="phone">
+      <div class="scroll">
+        <div class="title">Settings</div>
+        <div class="profile"><div class="av">M</div><div style="flex:1"><b>Maria</b><span>Tap to change your name</span></div><span>›</span></div>
+        <div class="group"><div class="glabel">AUDIO</div>
+          <div class="gcard">
+            <div class="srow"><div class="sicon">🔊</div><div class="t">Volume</div><div class="v">70%</div></div>
+            <div class="srow"><div class="sicon">🗣️</div><div class="t">Voice</div><div class="v">Female</div></div>
+          </div></div>
+        <div class="group"><div class="glabel">DISPLAY</div>
+          <div class="gcard">
+            <div class="srow"><div class="sicon">🌙</div><div class="t">Dark mode</div><div class="toggle off"></div></div>
+            <div class="srow"><div class="sicon">🇵🇭</div><div class="t">Show Filipino</div><div class="toggle"></div></div>
+          </div></div>
+        <div class="group"><div class="glabel">APP</div>
+          <div class="gcard">
+            <div class="srow"><div class="sicon">🎓</div><div class="t">Replay tutorial</div><div class="v">›</div></div>
+            <div class="srow"><div class="sicon">↺</div><div class="t">Reset to default</div><div class="v">›</div></div>
+          </div></div>
+      </div>
+      <div class="bar">
+        <div class="tab"><div class="ti">🏠</div>Home</div><div class="tab"><div class="ti">📚</div>Word Bank</div>
+        <div class="fab">🤟</div>
+        <div class="tab"><div class="ti">🕘</div>History</div><div class="tab on"><div class="ti">⚙️</div>Settings</div>
+      </div>
+    </div>
+  </div>
+</div>

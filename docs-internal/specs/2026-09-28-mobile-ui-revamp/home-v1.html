@@ -1,0 +1,153 @@
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  .phones { display:flex; gap:40px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  .phone-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .phone-label { font-size:14px; font-weight:600; opacity:.7; }
+  .phone {
+    --navy:#13306B; --navy2:#1E3F85; --bg:#FFFFFF; --tint:#EEF3FC; --text:#0F1B33;
+    --text2:rgba(15,27,51,.62); --line:rgba(19,48,107,.08); --barbg:#FFFFFF; --shadow:rgba(19,48,107,.10);
+    --catA:#13306B; --catAtext:#FFFFFF; --accentOnTint:#13306B;
+    width:360px; height:760px; border-radius:40px; background:var(--bg); color:var(--text);
+    font-family:'Poppins',system-ui,sans-serif; position:relative; overflow:hidden;
+    box-shadow:0 20px 50px rgba(0,0,0,.18); border:8px solid #111;
+  }
+  .phone.dark {
+    --navy:#2A55B8; --navy2:#1E3F85; --bg:#0B1530; --tint:#15244B; --text:#E8EDF7;
+    --text2:rgba(232,237,247,.62); --line:rgba(255,255,255,.06); --barbg:#101D3F; --shadow:rgba(0,0,0,.35);
+    --catA:#2A55B8; --catAtext:#FFFFFF; --accentOnTint:#9DB8F2;
+  }
+  .scroll { position:absolute; inset:0 0 84px 0; overflow:hidden; padding:24px 20px 0; }
+  .hdr { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  .hi { font-size:22px; font-weight:600; color:var(--accentOnTint); line-height:1.2; }
+  .phone:not(.dark) .hi { color:var(--navy); }
+  .sub { font-size:13px; color:var(--text2); margin-top:2px; }
+  .avatar { width:40px; height:40px; border-radius:50%; background:var(--tint); color:var(--accentOnTint);
+    display:flex; align-items:center; justify-content:center; font-weight:600; font-size:15px; }
+  .search { margin-top:16px; height:44px; border-radius:22px; background:var(--tint); display:flex;
+    align-items:center; gap:10px; padding:0 16px; font-size:13px; color:var(--text2); }
+  .hero { margin-top:16px; border-radius:24px; border:1px solid var(--line); background:var(--bg);
+    padding:16px; display:flex; align-items:center; gap:8px; box-shadow:0 8px 24px var(--shadow); }
+  .hero h4 { margin:0; font-size:17px; font-weight:600; color:var(--accentOnTint); }
+  .phone:not(.dark) .hero h4 { color:var(--navy); }
+  .hero p { margin:4px 0 12px; font-size:12px; color:var(--text2); line-height:1.4; }
+  .btn { display:inline-block; background:var(--navy); color:#fff; font-size:12px; font-weight:500;
+    padding:8px 16px; border-radius:16px; }
+  .illo { width:88px; height:88px; border-radius:50%; background:var(--tint); display:flex;
+    align-items:center; justify-content:center; font-size:44px; flex-shrink:0; }
+  .stats { margin-top:16px; border-radius:24px; background:var(--navy); color:#fff; padding:16px 8px;
+    display:flex; justify-content:space-around; text-align:center; }
+  .stats b { display:block; font-size:20px; font-weight:600; }
+  .stats span { font-size:11px; opacity:.8; }
+  .sec { display:flex; justify-content:space-between; align-items:baseline; margin:20px 0 12px; }
+  .sec h5 { margin:0; font-size:15px; font-weight:600; }
+  .sec a { font-size:12px; color:var(--text2); font-weight:500; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .cat { border-radius:20px; background:var(--tint); padding:12px; box-shadow:0 6px 16px var(--shadow); }
+  .cat.first { background:var(--catA); color:var(--catAtext); }
+  .cat .ic { font-size:22px; }
+  .cat b { display:block; font-size:13px; font-weight:600; margin-top:6px; }
+  .cat span { font-size:11px; opacity:.7; }
+  .row { display:flex; align-items:center; gap:12px; padding:8px 0; }
+  .badge { width:40px; height:40px; border-radius:50%; background:var(--tint); display:flex;
+    align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .row b { font-size:13px; font-weight:600; display:block; }
+  .row span { font-size:11px; color:var(--text2); }
+  .bar { position:absolute; left:0; right:0; bottom:0; height:84px; background:var(--barbg);
+    border-top:1px solid var(--line); display:flex; justify-content:space-around; align-items:center;
+    padding:0 8px 8px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:10px; color:var(--text2); width:60px; }
+  .tab .ti { font-size:20px; filter:grayscale(1); opacity:.7; }
+  .tab.on { color:var(--accentOnTint); font-weight:600; }
+  .phone:not(.dark) .tab.on { color:var(--navy); }
+  .tab.on .ti { filter:none; opacity:1; }
+  .fab { width:64px; height:64px; border-radius:50%; background:var(--navy); color:#fff; display:flex;
+    align-items:center; justify-content:center; font-size:28px; margin-top:-40px;
+    box-shadow:0 8px 20px rgba(19,48,107,.35); border:6px solid var(--barbg); }
+</style>
+
+<h2>Home screen: visual direction</h2>
+<p class="subtitle">Navy on white like your reference, with a matching dark mode. Content is placeholder but uses real app data types. Does this feel like the direction you want?</p>
+
+<div class="phones">
+  <div class="phone-wrap">
+    <div class="phone-label">Light (default)</div>
+    <div class="phone">
+      <div class="scroll">
+        <div class="hdr">
+          <div><div class="hi">Hi Maria!</div><div class="sub">Good morning</div></div>
+          <div class="avatar">M</div>
+        </div>
+        <div class="search">🔍 Search FSL signs</div>
+        <div class="hero">
+          <div style="flex:1">
+            <h4>Start translating</h4>
+            <p>Tap, sign one word, and SigLa reads it for you.</p>
+            <span class="btn">Open camera</span>
+          </div>
+          <div class="illo">🤟</div>
+        </div>
+        <div class="stats">
+          <div><b>12</b><span>Today</span></div>
+          <div><b>248</b><span>Translations</span></div>
+          <div><b>9</b><span>Favorites</span></div>
+        </div>
+        <div class="sec"><h5>Categories</h5><a>View all</a></div>
+        <div class="grid">
+          <div class="cat first"><div class="ic">👋</div><b>Greetings</b><span>14 words</span></div>
+          <div class="cat"><div class="ic">👪</div><b>Family</b><span>10 words</span></div>
+        </div>
+        <div class="sec"><h5>Recent translations</h5><a>View all</a></div>
+        <div class="row"><div class="badge">💬</div><div><b>Good morning</b><span>Today · 9:41 AM</span></div></div>
+      </div>
+      <div class="bar">
+        <div class="tab on"><div class="ti">🏠</div>Home</div>
+        <div class="tab"><div class="ti">📚</div>Word Bank</div>
+        <div class="fab">🤟</div>
+        <div class="tab"><div class="ti">🕘</div>History</div>
+        <div class="tab"><div class="ti">⚙️</div>Settings</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone-label">Dark</div>
+    <div class="phone dark">
+      <div class="scroll">
+        <div class="hdr">
+          <div><div class="hi">Hi Maria!</div><div class="sub">Good morning</div></div>
+          <div class="avatar">M</div>
+        </div>
+        <div class="search">🔍 Search FSL signs</div>
+        <div class="hero">
+          <div style="flex:1">
+            <h4>Start translating</h4>
+            <p>Tap, sign one word, and SigLa reads it for you.</p>
+            <span class="btn">Open camera</span>
+          </div>
+          <div class="illo">🤟</div>
+        </div>
+        <div class="stats">
+          <div><b>12</b><span>Today</span></div>
+          <div><b>248</b><span>Translations</span></div>
+          <div><b>9</b><span>Favorites</span></div>
+        </div>
+        <div class="sec"><h5>Categories</h5><a>View all</a></div>
+        <div class="grid">
+          <div class="cat first"><div class="ic">👋</div><b>Greetings</b><span>14 words</span></div>
+          <div class="cat"><div class="ic">👪</div><b>Family</b><span>10 words</span></div>
+        </div>
+        <div class="sec"><h5>Recent translations</h5><a>View all</a></div>
+        <div class="row"><div class="badge">💬</div><div><b>Good morning</b><span>Today · 9:41 AM</span></div></div>
+      </div>
+      <div class="bar">
+        <div class="tab on"><div class="ti">🏠</div>Home</div>
+        <div class="tab"><div class="ti">📚</div>Word Bank</div>
+        <div class="fab">🤟</div>
+        <div class="tab"><div class="ti">🕘</div>History</div>
+        <div class="tab"><div class="ti">⚙️</div>Settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:24px">Emoji stand in for icons here; the app would use one consistent outline icon set. The page scrolls on the phone, so more categories and recent rows sit below what's visible.</p>

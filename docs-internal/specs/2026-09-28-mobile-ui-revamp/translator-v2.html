@@ -1,0 +1,86 @@
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  .phones { display:flex; gap:40px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  .phone-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .phone-label { font-size:14px; font-weight:600; opacity:.7; }
+  .phone { --navy:#13306B; --tint:#EEF3FC; --text:#0F1B33; --text2:rgba(15,27,51,.62); --sheet:150px;
+    width:360px; height:760px; border-radius:40px; background:#fff; font-family:'Poppins',system-ui,sans-serif;
+    position:relative; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.18); border:8px solid #111; color:var(--text); }
+  .cam { position:absolute; left:0; right:0; top:0; bottom:calc(var(--sheet) - 28px); background:linear-gradient(160deg,#3a4a5e,#1c2533);
+    display:flex; align-items:center; justify-content:center; }
+  .person { font-size:140px; opacity:.55; }
+  .topbtn { position:absolute; top:20px; width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.92);
+    display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--navy); box-shadow:0 4px 12px rgba(0,0,0,.2); }
+  .modepill { position:absolute; top:24px; left:50%; transform:translateX(-50%); background:rgba(255,255,255,.92);
+    border-radius:18px; padding:4px; display:flex; gap:2px; font-size:12px; font-weight:500; }
+  .modepill span { padding:6px 14px; border-radius:14px; color:var(--text2); }
+  .modepill span.on { background:var(--navy); color:#fff; }
+  .result { position:absolute; left:20px; right:20px; top:84px; background:#fff; border-radius:20px; padding:12px 16px;
+    box-shadow:0 8px 24px rgba(0,0,0,.18); display:flex; align-items:center; gap:12px; }
+  .result .rb { width:40px; height:40px; border-radius:50%; background:var(--tint); display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .result b { font-size:18px; font-weight:600; color:var(--navy); display:block; }
+  .result span { font-size:12px; color:var(--text2); }
+  .rec { position:absolute; bottom:calc(var(--sheet) + 16px); left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .prompt { background:rgba(0,0,0,.65); color:#fff; font-size:13px; padding:6px 14px; border-radius:14px; white-space:nowrap; }
+  .recbtn { width:84px; height:84px; border-radius:50%; background:var(--navy); color:#fff; display:flex; align-items:center;
+    justify-content:center; font-size:12px; font-weight:600; text-align:center; border:5px solid #fff; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+  .recbtn.recording { background:#E53935; box-shadow:0 0 0 6px rgba(229,57,53,.35), 0 8px 24px rgba(0,0,0,.3); }
+  .sheet { position:absolute; left:0; right:0; bottom:0; height:var(--sheet); background:#fff; border-radius:28px 28px 0 0;
+    padding:12px 20px 16px; box-shadow:0 -8px 24px rgba(0,0,0,.12); box-sizing:border-box; }
+  .grab { width:40px; height:4px; border-radius:2px; background:rgba(15,27,51,.15); margin:0 auto 12px; }
+  .toprow { display:flex; align-items:center; justify-content:space-between; }
+  .status { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#2E7D32; }
+  .sos { height:32px; padding:0 14px; border-radius:16px; background:#E53935; color:#fff; display:flex; align-items:center;
+    gap:6px; font-weight:600; font-size:12px; box-shadow:0 4px 12px rgba(229,57,53,.35); }
+  .chips { display:flex; gap:8px; margin-top:14px; }
+  .chip { font-size:12px; font-weight:500; padding:8px 14px; border-radius:16px; background:var(--tint); color:var(--navy); }
+  .chip.on { background:var(--navy); color:#fff; }
+  .hint { margin-top:10px; font-size:11px; color:var(--text2); }
+</style>
+
+<h2>Translator screen, v2: compact bottom sheet</h2>
+<p class="subtitle">Sheet shrinks from 250 to ~150px; SOS moves inline with the status line. The freed height goes to the camera.</p>
+
+<div class="phones">
+  <div class="phone-wrap">
+    <div class="phone-label">Tap mode: ready, last result showing</div>
+    <div class="phone">
+      <div class="cam"><div class="person">🧍</div></div>
+      <div class="topbtn" style="left:20px">←</div>
+      <div class="modepill"><span class="on">Tap</span><span>Live</span></div>
+      <div class="topbtn" style="right:20px">🔄</div>
+      <div class="result"><div class="rb">💬</div><div><b>GOOD MORNING</b><span>Magandang umaga</span></div></div>
+      <div class="rec"><div class="recbtn">Tap to<br>sign</div></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="toprow">
+          <div class="status"><span class="dot"></span>Ready</div>
+          <div class="sos">🆘 Hold for SOS</div>
+        </div>
+        <div class="chips"><span class="chip on">Words</span><span class="chip">Letters</span><span class="chip on">Filipino</span></div>
+        <div class="hint">Tap, sign one word, lower your hands.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone-label">Tap mode: recording</div>
+    <div class="phone">
+      <div class="cam"><div class="person">🙋</div></div>
+      <div class="topbtn" style="left:20px">←</div>
+      <div class="modepill"><span class="on">Tap</span><span>Live</span></div>
+      <div class="topbtn" style="right:20px">🔄</div>
+      <div class="rec"><div class="prompt">Recording… 1.8s</div><div class="recbtn recording">Stop</div></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="toprow">
+          <div class="status"><span class="dot" style="background:#E53935"></span>Recording</div>
+          <div class="sos">🆘 Hold for SOS</div>
+        </div>
+        <div class="chips"><span class="chip on">Words</span><span class="chip">Letters</span><span class="chip on">Filipino</span></div>
+        <div class="hint">Lower your hands when you finish.</div>
+      </div>
+    </div>
+  </div>
+</div>
