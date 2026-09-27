@@ -8,6 +8,7 @@ internal const val TAP_STOP_AFTER_NO_HAND_FRAMES = 6
 
 internal const val TAP_NOT_RECOGNIZED = "Not recognized — try again"
 internal const val TAP_NO_HANDS_SEEN = "No hands seen — tap and try again"
+internal const val TAP_MODEL_NOT_READY = "Still loading the model — try again in a moment"
 
 /** User-facing copy for each rejection. Exhaustive: a new reason fails to compile. */
 internal fun tapRejectionMessage(reason: ClipRejection): String = when (reason) {

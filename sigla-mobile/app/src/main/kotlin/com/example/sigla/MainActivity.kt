@@ -721,6 +721,7 @@ class MainActivity : AppCompatActivity() {
                 when {
                     result != null -> { showResult(result); renderTapState() }
                     outcome is ClipOutcome.Rejected -> showTapMessage(tapRejectionMessage(outcome.reason))
+                    outcome is ClipOutcome.Window -> showTapMessage(TAP_MODEL_NOT_READY)
                     else -> showTapMessage(TAP_NOT_RECOGNIZED)
                 }
             }
@@ -939,6 +940,7 @@ class MainActivity : AppCompatActivity() {
             predictor?.onNoHands?.invoke()
             updateModeToggleLabel()
             cancelTap()
+            binding.cardResult.visibility = View.INVISIBLE
         }
 
         // Emergency — hold 2 seconds
@@ -1508,6 +1510,14 @@ private fun setActiveNavItem(activeId: Int) {
         // Re-acquire after a previous onStop() released the pipeline. No-op on
         // the cold path, where onCreate has already called this.
         startVision()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // A transient pause (system dialog, split-screen, brief backgrounding)
+        // may not reach onStop. A tap recording must not keep running on frames
+        // from a screen the user is no longer looking at.
+        cancelTap()
     }
 
     /**

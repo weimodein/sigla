@@ -53,7 +53,13 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_FRONT_CAMERA, false)
         set(v) = prefs.edit().putBoolean(KEY_FRONT_CAMERA, v).apply()
 
-    /** Tap-to-sign or realtime. Tap is the default for fresh installs. */
+    /**
+     * Tap-to-sign or realtime. Defaults to Tap whenever this preference has no
+     * stored value — which includes fresh installs, but ALSO any existing
+     * install upgrading to a build that introduced this key, since
+     * SharedPreferences cannot distinguish the two. An upgrading user who never
+     * touched this setting is silently switched into Tap mode.
+     */
     var translationMode: String
         get() = prefs.getString(KEY_TRANSLATION_MODE, MODE_TAP) ?: MODE_TAP
         set(v) = prefs.edit().putString(KEY_TRANSLATION_MODE, v).apply()
