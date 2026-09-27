@@ -477,18 +477,14 @@
     .feature-card { padding: 18px 16px; border-radius: 16px; }
     .feature-card h3 { font-size: 17px; margin-bottom: 6px; }
     .feature-card p { font-size: 14.5px; }
-    /* Onboarding screenshots: cropped to their top portion (status bar,
-       icon, headline) instead of the full scrollable screen down to
-       SKIP/NEXT — the copy beside each one already carries the content
-       that mattered from the cropped part. */
-    .showcase { grid-template-columns: 1fr; gap: 20px; }
-    .showcase-item img {
-      width: min(100%, 280px);
-      height: 260px;
-      margin-inline: auto;
-      object-fit: cover;
-      object-position: top;
-    }
+    /* Full screenshots, not cropped: a cropped top-only version (status bar
+       + icon) made the two onboarding images nearly indistinguishable from
+       each other — the in-image label ("TRANSLATE / Main interface" vs.
+       "LEARN / Word bank") was exactly the part that got cut off, and a
+       small camera-vs-book icon wasn't enough on its own to tell them apart
+       at a glance. */
+    .showcase { grid-template-columns: 1fr; gap: 30px; }
+    .showcase-item img { max-width: min(100%, 280px); margin-inline: auto; }
     .showcase-item h3 { font-size: 18px; }
     .showcase-item p { font-size: 14.5px; }
     .steps .step { padding-block: 18px; }
