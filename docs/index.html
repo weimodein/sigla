@@ -1,5 +1,6 @@
 <title>SigLa</title>
 <meta name="description" content="A Filipino Sign Language translator that reads signs through your camera and speaks them out loud, with a Word Bank for learning offline.">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -93,6 +94,14 @@
     gap: 56px;
     align-items: center;
   }
+  /* Hero copy column is centered — text, buttons and the fine print all sit
+     on the column's own center line rather than flush against the phones. */
+  .hero-copy {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
   .eyebrow {
     font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
     color: var(--ink-faint);
@@ -116,7 +125,7 @@
     color: var(--ink-soft);
     max-width: 48ch;
   }
-  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 34px; }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 20px; margin-top: 34px; }
   .btn {
     display: inline-flex; align-items: center;
     padding: 15px 28px; border-radius: 12px;
@@ -462,7 +471,7 @@
 
 <header class="hero">
   <div class="wrap hero-grid">
-    <div>
+    <div class="hero-copy">
       <p class="eyebrow">SigLa &mdash; Filipino Sign Language, translated live</p>
       <h1><span class="line">Point your camera.</span><span class="line">Watch the sign</span><span class="line accent">become words.</span></h1>
       <p class="hero-sub">
