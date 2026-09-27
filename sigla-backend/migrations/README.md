@@ -24,7 +24,7 @@ psql "$PG_URI" -f migrations/001_model_versions_trained_word_ids.sql
 | `007_words_vocabulary.sql` | yes — 2026-09-22 | Word carries its model explicitly, not by label shape |
 | `008_revoked_auth_tokens.sql` | yes — 2026-09-24 | Make JWT logout enforceable by the backend |
 | `009_upload_jobs_heartbeat.sql` | yes — 2026-09-26 | Fail upload batches orphaned by a backend restart |
-| `010_schema_cleanup.sql` | **not yet** | Drop dead columns, fix indexes, nullability matches usage |
+| `010_schema_cleanup.sql` | yes — 2026-09-27 | Drop dead columns, fix indexes, nullability matches usage |
 
 **010 runs AFTER its code is deployed, not before.** Unlike the migrations above,
 it removes columns: the old code still names them in every INSERT and SELECT, so
