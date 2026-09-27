@@ -1,0 +1,111 @@
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  .phones { display:flex; gap:28px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  .phone-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .phone-label { font-size:14px; font-weight:600; opacity:.7; }
+  .pick { cursor:pointer; border-radius:48px; padding:6px; border:3px solid transparent; }
+  .pick.selected { border-color:#13306B; }
+  .phone { --navy:#13306B; --tint:#EEF3FC; --text:#0F1B33; --text2:rgba(15,27,51,.62); --line:rgba(19,48,107,.08); --shadow:rgba(19,48,107,.10);
+    width:340px; height:720px; border-radius:40px; background:#fff; font-family:'Poppins',system-ui,sans-serif;
+    position:relative; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.18); border:8px solid #111; color:var(--text); }
+  .scroll { position:absolute; inset:0; overflow:hidden; padding:20px 20px 0; }
+  .top { display:flex; align-items:center; gap:12px; margin-top:8px; }
+  .back { width:40px; height:40px; border-radius:50%; background:var(--tint); display:flex; align-items:center; justify-content:center; color:var(--navy); font-size:18px; flex-shrink:0; }
+  .top .title { font-size:22px; font-weight:600; color:var(--navy); line-height:1.1; }
+  .top .sub { font-size:12px; color:var(--text2); }
+  .search { margin-top:14px; height:44px; border-radius:22px; background:var(--tint); display:flex; align-items:center; gap:10px; padding:0 16px; font-size:13px; color:var(--text2); }
+  .thumb { background:linear-gradient(135deg,#d7e2f6,#b9c9ea); display:flex; align-items:center; justify-content:center; font-size:22px; }
+  .wrow { display:flex; align-items:center; gap:12px; padding:10px 12px; margin-top:10px; border-radius:20px; background:var(--tint); }
+  .wrow .thumb { width:52px; height:52px; border-radius:14px; flex-shrink:0; }
+  .wrow .t { flex:1; }
+  .wrow b { display:block; font-size:14px; font-weight:600; }
+  .wrow span { font-size:11px; color:var(--text2); }
+  .star { font-size:16px; color:var(--navy); }
+  .wgrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+  .wcard { border-radius:20px; background:var(--tint); overflow:hidden; box-shadow:0 6px 16px var(--shadow); }
+  .wcard .thumb { height:92px; font-size:30px; }
+  .wcard .t { padding:8px 12px 10px; }
+  .wcard b { display:block; font-size:13px; font-weight:600; }
+  .wcard span { font-size:11px; color:var(--text2); }
+  .media { margin-top:16px; border-radius:24px; overflow:hidden; background:#1c2533; position:relative; height:250px; }
+  .media .thumb { position:absolute; inset:0; font-size:90px; background:linear-gradient(160deg,#3a4a5e,#1c2533); }
+  .play { position:absolute; left:50%; top:45%; transform:translate(-50%,-50%); width:60px; height:60px; border-radius:50%; background:rgba(255,255,255,.92); display:flex; align-items:center; justify-content:center; color:var(--navy); font-size:22px; }
+  .controls { position:absolute; left:12px; right:12px; bottom:12px; display:flex; align-items:center; gap:10px; color:#fff; font-size:11px; }
+  .seek { flex:1; height:4px; border-radius:2px; background:rgba(255,255,255,.3); position:relative; }
+  .seek::after { content:''; position:absolute; left:0; top:0; bottom:0; width:35%; border-radius:2px; background:#fff; }
+  .wordhdr { display:flex; align-items:flex-start; justify-content:space-between; margin-top:18px; }
+  .word { font-size:26px; font-weight:600; color:var(--navy); line-height:1.1; }
+  .fil { font-size:14px; color:var(--text2); margin-top:2px; }
+  .speak { width:48px; height:48px; border-radius:50%; background:var(--navy); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .chips { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .chip { font-size:11px; font-weight:500; padding:6px 12px; border-radius:14px; background:var(--tint); color:var(--navy); }
+  .chip.ok { background:#E7F3E8; color:#2E7D32; }
+  .actions { position:absolute; left:20px; right:20px; bottom:24px; display:flex; gap:12px; }
+  .btn { flex:1; height:48px; border-radius:16px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; font-weight:600; }
+  .btn.primary { background:var(--navy); color:#fff; }
+  .btn.secondary { background:var(--tint); color:var(--navy); flex:0 0 48px; }
+  .tipcard { margin-top:16px; border-radius:20px; border:1px solid var(--line); padding:12px 14px; display:flex; gap:12px; align-items:center; }
+  .tipcard .badge { width:36px; height:36px; border-radius:50%; background:var(--tint); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .tipcard b { font-size:12px; font-weight:600; display:block; }
+  .tipcard span { font-size:11px; color:var(--text2); }
+</style>
+
+<h2>Word list and word detail</h2>
+<p class="subtitle">Pick A or B for how a category's words are listed (click a phone). The third phone is the proposed word detail screen.</p>
+
+<div class="phones">
+  <div class="phone-wrap">
+    <div class="phone-label">A · Rows with thumbnail</div>
+    <div class="pick" data-choice="list-rows" onclick="toggleSelect(this)">
+      <div class="phone">
+        <div class="scroll">
+          <div class="top"><div class="back">←</div><div><div class="title">Greetings</div><div class="sub">14 words</div></div></div>
+          <div class="search">🔍 Search in Greetings…</div>
+          <div class="wrow"><div class="thumb">👋</div><div class="t"><b>Hello</b><span>Kumusta</span></div><span class="star">★</span></div>
+          <div class="wrow"><div class="thumb">🌅</div><div class="t"><b>Good morning</b><span>Magandang umaga</span></div><span class="star">☆</span></div>
+          <div class="wrow"><div class="thumb">🌇</div><div class="t"><b>Good afternoon</b><span>Magandang hapon</span></div><span class="star">☆</span></div>
+          <div class="wrow"><div class="thumb">🌙</div><div class="t"><b>Good evening</b><span>Magandang gabi</span></div><span class="star">☆</span></div>
+          <div class="wrow"><div class="thumb">🙏</div><div class="t"><b>Thank you</b><span>Salamat</span></div><span class="star">★</span></div>
+          <div class="wrow"><div class="thumb">👋</div><div class="t"><b>See you tomorrow</b><span>Kita tayo bukas</span></div><span class="star">☆</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone-label">B · 2-column grid</div>
+    <div class="pick" data-choice="list-grid" onclick="toggleSelect(this)">
+      <div class="phone">
+        <div class="scroll">
+          <div class="top"><div class="back">←</div><div><div class="title">Greetings</div><div class="sub">14 words</div></div></div>
+          <div class="search">🔍 Search in Greetings…</div>
+          <div class="wgrid">
+            <div class="wcard"><div class="thumb">👋</div><div class="t"><b>Hello</b><span>Kumusta</span></div></div>
+            <div class="wcard"><div class="thumb">🌅</div><div class="t"><b>Good morning</b><span>Magandang umaga</span></div></div>
+            <div class="wcard"><div class="thumb">🌇</div><div class="t"><b>Good afternoon</b><span>Magandang hapon</span></div></div>
+            <div class="wcard"><div class="thumb">🌙</div><div class="t"><b>Good evening</b><span>Magandang gabi</span></div></div>
+            <div class="wcard"><div class="thumb">🙏</div><div class="t"><b>Thank you</b><span>Salamat</span></div></div>
+            <div class="wcard"><div class="thumb">👋</div><div class="t"><b>See you tomorrow</b><span>Kita tayo bukas</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone-label">Word detail</div>
+    <div class="phone">
+      <div class="scroll">
+        <div class="top"><div class="back">←</div><div class="sub" style="font-size:13px;font-weight:500">Greetings</div></div>
+        <div class="media"><div class="thumb">🧍</div><div class="play">▶</div>
+          <div class="controls"><span>⟲</span><div class="seek"></div><span>0:02 / 0:05</span><span>⛶</span></div></div>
+        <div class="wordhdr"><div><div class="word">Good morning</div><div class="fil">Magandang umaga</div></div><div class="speak">🔊</div></div>
+        <div class="chips"><span class="chip">Greetings</span><span class="chip ok">✓ Saved offline</span></div>
+        <div class="tipcard"><div class="badge">🤟</div><div><b>Try it yourself</b><span>Open the translator and sign this word.</span></div></div>
+      </div>
+      <div class="actions"><div class="btn secondary">⬇</div><div class="btn primary">☆ Add to Favorites</div></div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:24px">Word detail changes from today: video moves to the top as the hero, controls overlay it; the word and its Filipino translation sit under it with a navy speak button; Download and Favorites become a pinned bottom bar in the thumb zone. "Try it yourself" is a proposed small addition that opens the translator.</p>

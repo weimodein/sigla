@@ -2,9 +2,10 @@
 
 **Date:** 2026-09-28
 **Status:** Approved in design review, pending spec review
-**Area:** sigla-mobile only
+**Area:** sigla-mobile (plus one additive field on the backend word-bank endpoint)
 **Approved mockups:** `docs-internal/specs/2026-09-28-mobile-ui-revamp/`
-(`home-v1.html`, `translator-v2.html`, `tabs-v1.html` — open in a browser; they are
+(`home-v1.html`, `translator-v2.html`, `tabs-v1.html`, `words-v1.html` (list
+option A was chosen) — open in a browser; they are
 HTML fragments, so page chrome is minimal, but each carries its own styles).
 Where a mockup and this spec disagree, this spec wins — e.g. the Home stat
 labelled "Translations" in the mockup is "Saved" here, and emoji in the mockups
@@ -41,6 +42,8 @@ adopted, not its content.
 | Theme | Light by default; matching dark theme kept as a Settings toggle |
 | Translator layout | Full-screen camera, no bottom bar, compact ~150dp bottom sheet |
 | Category colours | Uniform pale cards with one navy highlight; per-category colours retired |
+| Word lists | One word per row: thumbnail, word, Filipino translation, favorite star |
+| Word detail | Video first, word + Filipino + speak button, "Try it yourself", pinned Download / Favorites bar |
 | Build approach | Keep one Activity per screen; shared design system in XML resources (no Fragments, no Compose) |
 
 ## 3. Structure and navigation
@@ -149,8 +152,26 @@ Layouts follow the approved mockups.
 - **Word Bank:** title + word count; search; filter pills (All · Words · Letters
   · My collections) replacing the category dropdown; section header with
   "+ Collection"; 2-column category grid with Favorites as the navy card.
-- **Category word list / Word detail / Fullscreen video:** same list rows,
-  cards and header styles.
+- **Word rows** (category word list, and Word Bank search results): a tint
+  row with 20dp radius, 52dp rounded thumbnail on the left (sign image; a hand
+  icon when there is none), word (SemiBold) with its Filipino translation below
+  (secondary; omitted when absent), and a star on the right showing favorite
+  state (display only; favoriting stays on the detail screen). One word per
+  row — the 2-column grid option was rejected.
+- **Category word list:** round back button, category title with word count,
+  "Search in {category}…" bar, then word rows. Existing empty state ("No words
+  found") restyled.
+- **Word detail:** round back button with the category name; the demo video is
+  the first element (24dp radius, 16:10-ish, poster = thumbnail) with play
+  overlay and overlaid controls (replay, seek, time, fullscreen); below it the
+  word (26sp SemiBold — a deliberate display size for this one screen) with its
+  Filipino translation and a round navy speak button; chips for category and
+  "Saved offline"; a "Try it yourself" card (hand badge, "Open the translator
+  and sign this word.") that opens the translator; a bottom bar pinned in the
+  thumb zone with a square Download button and a full-width "Add to Favorites"
+  / "Added to Favorites" button. The existing no-media placeholder, Retry and
+  loading states are kept, restyled.
+- **Fullscreen video:** restyled controls only.
 - **History:** navy summary card ("N / 200 entries kept", Clear all); rows
   grouped under date headers, each with badge, word, Filipino translation, time.
 - **Settings:** navy profile card (initial avatar, name, "Tap to change your
@@ -177,6 +198,19 @@ Layouts follow the approved mockups.
 
 - Home recomputes on every `onResume`. It never triggers a network refresh;
   Word Bank keeps doing that.
+- **Filipino translation** is already in `WordBankWord.filipino_translation`;
+  the word screens start displaying it.
+- **Vocabulary for "Try it yourself":**
+  - Backend (only backend change in this project): `GET /api/words/word-bank`
+    adds `vocabulary` (`"words"` | `"letters"`) to each word's `attributes`.
+    Additive; older app versions ignore it.
+  - App: `WordBankWord` gains `vocabulary: String? = null`. The cached word
+    bank written before this change has no such field; it parses as null.
+  - "Try it yourself" starts the translator with an intent extra for the
+    word's vocabulary. The translator applies it once its predictor is ready
+    (the predictor is created asynchronously) by calling the existing
+    `setVocabulary`, only when the letters model is loaded; otherwise it stays
+    on Words. A null or unknown vocabulary means no switch.
 
 ## 7. Empty and edge states
 
@@ -194,7 +228,11 @@ Layouts follow the approved mockups.
   - greeting text from hour and optional name, including the boundary hours;
   - home stats from a list of history entries (today counting by local date)
     and a favorites count;
-  - category selection and ordering for the Home grid.
+  - category selection and ordering for the Home grid;
+  - mapping a word's vocabulary string to the translator's starting vocabulary
+    (words, letters, null, unknown value, letters model not loaded).
+- Backend: confirm the word-bank response includes `vocabulary` (existing
+  backend `npm test` keeps passing).
 - The existing 63 Kotlin unit tests and the sigla-ml suite keep passing.
 - Tap-to-sign logic (`TapSignSession`, `ClipPreparer`, frame routing,
   `processCapture`, cancel call sites) is not modified; translator changes are
@@ -211,7 +249,10 @@ Each phase leaves the app working.
 2. Home + bottom bar: `HomeActivity` as launcher, `BottomNavHelper`, drawer
    removed from all screens, onboarding gate moved.
 3. Translator restyle, including the recording timer.
-4. Word Bank, category word list, word detail, fullscreen video.
+4. Word Bank, category word list, word detail (including Filipino translation
+   and "Try it yourself"), fullscreen video. The backend `vocabulary` field
+   ships and is deployed to Hostinger in this phase; the app must work whether
+   or not the deployed backend sends it yet.
 5. History and Settings, including the name setting.
 6. Onboarding restyle and the name step.
 7. Dark-theme pass and a final on-device check of every screen.
@@ -220,6 +261,8 @@ Each phase leaves the app working.
 
 - Accounts, login, or syncing the name anywhere off the phone.
 - Notifications (the reference's bell icon).
-- New features beyond the name setting and the recording timer.
+- New features beyond: the name setting, the recording timer, showing the
+  Filipino translation on word screens, and "Try it yourself".
 - Migrating to Fragments or Jetpack Compose.
-- Changes to the model, backend, admin panel, or translation logic.
+- Changes to the model, admin panel, or translation logic; backend changes
+  other than adding `vocabulary` to the word-bank response.
