@@ -117,16 +117,23 @@ def test_gap_gate_is_measured_in_time_not_sampled_frames():
     sampled frames directly made the gate mean 0.21s on a 3s/30fps clip and 0.70s
     on a 10s/60fps one — the same recording passing or failing on length alone.
     """
-    from app.services import extract
+    from app.services import clip_prep, extract
 
-    src = _read(extract.__file__.replace(".pyc", ".py"))
+    # The gating logic moved into clip_prep.py (see clip_prep.finalize_sampled);
+    # extract.py now only decodes frames and delegates. Both files must be clean
+    # of the frame-counted gate and clip_prep must carry the time-based one.
+    src = _read(extract.__file__.replace(".pyc", ".py")) + _read(
+        clip_prep.__file__.replace(".pyc", ".py")
+    )
     assert "MAX_CONSECUTIVE_MISSING_FRAMES" not in src, (
         "the frame-counted gap gate is back; it is length-dependent by construction"
     )
     assert "stride = (total_frames / analyzed_frames)" in src, (
         "the gap must be scaled by the sampling stride before comparing to seconds"
     )
-    assert "CAP_PROP_FPS" in src, "source fps must be read to convert frames to time"
+    assert "CAP_PROP_FPS" in _read(extract.__file__.replace(".pyc", ".py")), (
+        "source fps must be read to convert frames to time"
+    )
 
 
 def test_pose_window_coverage_matches_device_gate():
@@ -225,11 +232,12 @@ def test_sampling_budget_makes_coverage_floor_reachable():
 
 def test_no_padding_floor_is_enforced():
     """A stored window must be all real frames — never repeat-padded."""
-    from app.services import extract
+    from app.services import clip_prep
 
-    src = _read(extract.__file__.replace(".pyc", ".py"))
+    # This gate lives in clip_prep.finalize_sampled now; extract.py delegates.
+    src = _read(clip_prep.__file__.replace(".pyc", ".py"))
     assert "if len(sequence) < SEQUENCE_LENGTH:" in src, (
-        "extract.py must reject short sequences instead of letting "
+        "clip_prep.py must reject short sequences instead of letting "
         "center_on_peak_velocity pad them by repeating the last frame."
     )
 
@@ -243,9 +251,10 @@ def test_motion_gate_measures_the_stored_window():
     scaling with MIN_HAND_COVERAGE, a long clip could clear a gate that an equally
     static short one failed, purely from having more terms in the sum.
     """
-    from app.services import extract
+    from app.services import clip_prep
 
-    src = _read(extract.__file__.replace(".pyc", ".py"))
+    # Both the windowing call and the motion gate live in clip_prep.py now.
+    src = _read(clip_prep.__file__.replace(".pyc", ".py"))
     window_at = src.find("center_on_peak_velocity(seq_np, force=True)")
     motion_at = src.find("motion_energy = sum(")
     assert window_at != -1 and motion_at != -1
