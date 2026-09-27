@@ -46,8 +46,15 @@
   }
 
   * { box-sizing: border-box; }
+  /* Safety net: the phone stage intentionally positions .phone-float and
+     .badge-float past their container's edge (see .phone-stage below) to get
+     the overlapping-cards look. That's contained per-breakpoint, but this
+     stops any single miscalculated offset from ever widening the whole page
+     and shrinking every other section's viewport-relative sizing with it. */
+  html { overflow-x: hidden; }
   body {
     margin: 0;
+    overflow-x: hidden;
     background: var(--paper);
     color: var(--ink);
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -446,27 +453,46 @@
     .hero-actions .btn-primary { justify-content: center; }
     .hero-actions .btn-text { text-align: center; }
     .hero-fine { text-align: center; font-size: 12px; margin-top: 14px; }
-    /* Compact phone stack with less overlap at narrow widths. */
+    /* Compact phone stack with less overlap at narrow widths. Extra bottom
+       padding on .phone-stage plus a lower phone-float position give the
+       floating card and second phone room to clear the main screenshot's
+       own category rows instead of sitting flush against them. */
+    .phone-stage { padding-bottom: 14%; }
     .phone { width: min(196px, 60vw); border-width: 5px; border-radius: 24px; }
-    .phone-float { width: min(116px, 35vw); left: 2%; border-width: 4px; border-radius: 16px; }
-    .badge-float { right: 0; top: 2%; padding: 9px 10px; max-width: 108px; border-radius: 13px; }
+    .phone-float { width: min(116px, 35vw); left: 2%; bottom: -14%; border-width: 4px; border-radius: 16px; }
+    .badge-float { right: 0; top: -4%; padding: 9px 10px; max-width: 108px; border-radius: 13px; }
     .badge-float .num { font-size: 19px; }
     .badge-float .label { font-size: 10.5px; }
-    .stats { padding-block: 32px; }
+    /* Tighter vertical rhythm on phones — the page is ~15 screens tall at
+       this width with desktop-scale section padding; every section here
+       breathes a little less so the CTA is reached sooner without cutting
+       any content. */
+    .stats { padding-block: 24px; }
     .stat-row { gap: 18px; }
-    section { padding-block: 48px; }
-    .section-head { margin-bottom: 24px; }
+    section { padding-block: 36px; }
+    .section-head { margin-bottom: 20px; }
     .section-head h2 { font-size: clamp(25px, 7vw, 32px); }
-    .section-head p { margin-top: 12px; font-size: 15.5px; }
-    .feature-grid { grid-template-columns: 1fr; gap: 14px; }
-    .feature-card { padding: 20px 18px; border-radius: 16px; }
-    .feature-card h3 { font-size: 17px; }
+    .section-head p { margin-top: 10px; font-size: 15.5px; }
+    .feature-grid { grid-template-columns: 1fr; gap: 12px; }
+    .feature-card { padding: 18px 16px; border-radius: 16px; }
+    .feature-card h3 { font-size: 17px; margin-bottom: 6px; }
     .feature-card p { font-size: 14.5px; }
-    .showcase { grid-template-columns: 1fr; gap: 30px; }
-    .showcase-item img { max-width: min(100%, 280px); margin-inline: auto; }
+    /* Onboarding screenshots: cropped to their top portion (status bar,
+       icon, headline) instead of the full scrollable screen down to
+       SKIP/NEXT — the copy beside each one already carries the content
+       that mattered from the cropped part. */
+    .showcase { grid-template-columns: 1fr; gap: 20px; }
+    .showcase-item img {
+      width: min(100%, 280px);
+      height: 260px;
+      margin-inline: auto;
+      object-fit: cover;
+      object-position: top;
+    }
     .showcase-item h3 { font-size: 18px; }
     .showcase-item p { font-size: 14.5px; }
-    .cta-band { padding: 44px 22px; border-radius: 20px; }
+    .steps .step { padding-block: 18px; }
+    .cta-band { padding: 36px 22px; border-radius: 20px; }
     .cta-band .btn-primary { width: 100%; justify-content: center; }
   }
 </style>
