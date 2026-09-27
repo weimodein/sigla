@@ -268,8 +268,63 @@ def upload_model_to_supabase(local_path: str, version_number: str, model_type: s
 
 
 def train(version_number: str, model_id: int,
-          word_labels: list[str] | None = None) -> dict:
+          word_labels: list[str] | None = None,
+          progress_callback=None) -> dict:
     from tensorflow import keras
+
+    def report_progress(stage: str, progress: float, stage_label: str,
+                        current_epoch: int | None = None,
+                        total_epochs: int | None = None,
+                        current_batch: int | None = None,
+                        total_batches: int | None = None) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback({
+                "progress": round(max(0.0, min(100.0, progress)), 1),
+                "stage": stage,
+                "stage_label": stage_label,
+                "current_epoch": current_epoch,
+                "total_epochs": total_epochs,
+                "current_batch": current_batch,
+                "total_batches": total_batches,
+            })
+        except Exception as error:  # Progress reporting must never fail training.
+            print(f"[train] progress update failed: {error}")
+
+    def epoch_progress(stage: str, start: float, span: float, stage_label: str,
+                       steps_per_epoch: int):
+        class EpochProgress(keras.callbacks.Callback):
+            def on_epoch_begin(self, epoch, logs=None):
+                self.current_epoch = epoch
+
+            def on_train_batch_end(self, batch, logs=None):
+                total = int(self.params.get("epochs", 1))
+                batches = max(steps_per_epoch, 1)
+                current_batch = min(batch + 1, batches)
+                completed_epochs = self.current_epoch + current_batch / batches
+                report_progress(
+                    stage,
+                    start + span * completed_epochs / max(total, 1),
+                    stage_label,
+                    self.current_epoch + 1,
+                    total,
+                    current_batch,
+                    batches,
+                )
+
+        return EpochProgress()
+
+    def dataset_progress(start: float, span: float, stage_label: str):
+        def report_class(current_class: int, total_classes: int, label: str) -> None:
+            fraction = current_class / max(total_classes, 1)
+            report_progress(
+                "preparing_data",
+                start + span * fraction,
+                f"{stage_label} ({current_class}/{total_classes} classes)",
+            )
+
+        return report_class
 
     # Seed before anything touches TF, so weight init is reproducible.
     set_global_seed(TRAIN_SEED)
@@ -283,6 +338,7 @@ def train(version_number: str, model_id: int,
     print(f"\n{'='*50}")
     print(f"Starting training for version: {version_number}")
     print(f"{'='*50}\n")
+    report_progress("loading_data", 2, "Loading approved samples")
 
     os.makedirs(MODELS_DIR, exist_ok=True)
     version_dir = os.path.join(MODELS_DIR, version_number)
@@ -303,6 +359,7 @@ def train(version_number: str, model_id: int,
     # None means every approved class, which is what every caller did before
     # this parameter existed and what a plain words model still wants.
     dataset = fetch_approved_samples()
+    report_progress("preparing_data", 6, "Preparing training data")
 
     motion_dataset = {
         k: [s for s in v if "sequence" in s]
@@ -334,6 +391,7 @@ def train(version_number: str, model_id: int,
     # Refuse a flattering but non-generalizing model before spending minutes on
     # TensorFlow. Defaults require 20 unique clips from four signers per word.
     validate_training_coverage(motion_dataset)
+    report_progress("preparing_data", 10, "Building training batches")
 
     # ── Step 2: Train motion model (LSTM) ─────────────────────
     # Split happens BEFORE augmentation inside prepare_motion_dataset, so X_val/y_val
@@ -343,9 +401,11 @@ def train(version_number: str, model_id: int,
         motion_dataset,
         fold=MODEL_SELECTION_SIGNER_FOLD if GROUP_MODEL_SELECTION else None,
         group_by_session=GROUP_MODEL_SELECTION,
+        progress_callback=dataset_progress(10, 8, "Preparing model-selection data"),
     )
 
     selection_model = build_motion_model(len(motion_label_map))
+    report_progress("selecting_model", 18, "Starting model selection")
 
     # Class weights from REAL pre-augmentation counts, not from y_train.
     #
@@ -376,6 +436,10 @@ def train(version_number: str, model_id: int,
     # has no validation loss, so a ReduceLROnPlateau(val_loss) schedule selected
     # here could not be reproduced there. This also matches cross_validate.py.
     callbacks = [
+        epoch_progress(
+            "selecting_model", 18, 36, "Selecting best model",
+            steps_per_epoch=max(1, (len(X_train) + 31) // 32),
+        ),
         keras.callbacks.EarlyStopping(
             monitor="val_accuracy", patience=20, restore_best_weights=True
         ),
@@ -390,6 +454,7 @@ def train(version_number: str, model_id: int,
         class_weight=class_weight_dict,
         verbose=1,
     )
+    report_progress("evaluating_model", 54, "Evaluating model")
 
     # `max(val_accuracy)` is the best epoch on the SAME split EarlyStopping used to
     # select the weights (restore_best_weights=True) — an optimistic maximum by
@@ -449,13 +514,17 @@ def train(version_number: str, model_id: int,
     # all-data model on those same rows would be training accuracy, not evidence.
     best_epoch = int(np.argmax(history.history["val_accuracy"])) + 1
     print(f"[train] selected epoch {best_epoch}; rebuilding deployment model on 100% of real samples")
+    report_progress("preparing_final_model", 55, "Preparing final model")
 
     del selection_model
     keras.backend.clear_session()
     set_global_seed(TRAIN_SEED)
 
     X_full, y_full, _, _, full_label_map, full_real_counts = prepare_motion_dataset(
-        motion_dataset, random_state=TRAIN_SEED, train_all=True
+        motion_dataset,
+        random_state=TRAIN_SEED,
+        train_all=True,
+        progress_callback=dataset_progress(55, 5, "Preparing final dataset"),
     )
     if full_label_map != motion_label_map:
         raise ValueError("Label map changed between model selection and final fit")
@@ -477,10 +546,15 @@ def train(version_number: str, model_id: int,
         epochs=best_epoch,
         batch_size=32,
         class_weight=full_weight_dict,
+        callbacks=[epoch_progress(
+            "training_final_model", 60, 25, "Training final model",
+            steps_per_epoch=max(1, (len(X_full) + 31) // 32),
+        )],
         verbose=1,
     )
 
     # ── Step 3: Save + convert + upload ───────────────────────
+    report_progress("converting_model", 87, "Converting model")
     h5_path = os.path.join(version_dir, "sign_model_motion.h5")
     model.save(h5_path)
     tflite_path = convert_to_tflite(model, h5_path)
@@ -511,13 +585,18 @@ def train(version_number: str, model_id: int,
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(selection_metrics, f, indent=2)
 
+    report_progress("uploading_model", 92, "Uploading model files")
     motion_tflite_url = upload_model_to_supabase(tflite_path, version_number, "motion")
+    report_progress("uploading_model", 95, "Uploading model archive")
     motion_h5_url     = upload_model_to_supabase(h5_path,     version_number, "motion_h5")
 
     with open(label_map_path, "rb") as f:
         upload_file(BUCKET_MODELS, f"{version_number}/labels_motion.json", f.read(), "application/json")
+    report_progress("uploading_model", 98, "Uploading evaluation metrics")
     with open(metrics_path, "rb") as f:
         upload_file(BUCKET_MODELS, f"{version_number}/selection_metrics.json", f.read(), "application/json")
+
+    report_progress("completed", 100, "Training complete")
 
     print(f"\n{'='*50}")
     print(f"Training complete for version: {version_number}")

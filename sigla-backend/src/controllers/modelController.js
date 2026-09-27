@@ -694,7 +694,25 @@ const getModelStatus = async (req, res) => {
       include: [{ model: Administrator, as: "trainer", attributes: ["id", "username"] }],
     });
     if (!model) return res.status(404).json({ message: "Model not found" });
-    return res.status(200).json({ model });
+
+    let progress = null;
+    if (model.status === "training" && process.env.ML_API_KEY) {
+      try {
+        const response = await axios.get(
+          `${ML_SERVICE_URL}/training/${model.id}/progress`,
+          {
+            timeout: 2000,
+            headers: { "X-API-Key": process.env.ML_API_KEY },
+          },
+        );
+        progress = response.data?.progress ?? null;
+      } catch {
+        // Progress is best-effort; the model's persisted status still works if
+        // the ML process has not published its first update or is restarting.
+      }
+    }
+
+    return res.status(200).json({ model, progress });
   } catch (err) {
     console.error("Get model status error:", err);
     return res.status(500).json({ message: "Server error" });

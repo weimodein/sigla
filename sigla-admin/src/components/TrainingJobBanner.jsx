@@ -56,12 +56,41 @@ const TrainingJobBanner = () => {
   const location = useLocation();
   const onModelPage = location.pathname === "/model";
   const elapsed = useElapsed(job?.startedAt);
+  const progressStages = {
+    starting: "Starting",
+    loading_data: "Loading data",
+    preparing_data: "Preparing data",
+    selecting_model: "Selecting",
+    evaluating_model: "Evaluating",
+    preparing_final_model: "Preparing final model",
+    training_final_model: "Final fit",
+    converting_model: "Converting",
+    uploading_model: "Uploading",
+    completed: "Complete",
+  };
 
   // Step count mirrors the upload card's "12/20" slot — 1/2 while the words
   // model trains, 2/2 once it has and the alphabet is running.
   const wordsDone = job?.wordsStatus === "trained" || job?.wordsStatus === "failed";
   const step = wordsDone ? 2 : 1;
   const stepLabel = wordsDone ? "Alphabet model" : "Words model";
+  const activeProgress = wordsDone ? job?.lettersProgress ?? 0 : job?.wordsProgress ?? 0;
+  const activeStageLabel = wordsDone ? job?.lettersStageLabel : job?.wordsStageLabel;
+  const activeStage = wordsDone ? job?.lettersStage : job?.wordsStage;
+  const activeEpoch = wordsDone ? job?.lettersEpoch : job?.wordsEpoch;
+  const activeTotalEpochs = wordsDone ? job?.lettersTotalEpochs : job?.wordsTotalEpochs;
+  const activeBatch = wordsDone ? job?.lettersBatch : job?.wordsBatch;
+  const activeTotalBatches = wordsDone ? job?.lettersTotalBatches : job?.wordsTotalBatches;
+  const stepName = wordsDone ? "Alphabet" : "Words";
+  const compactStage = progressStages[activeStage] || activeStageLabel || "Waiting";
+  const activeDetail = activeEpoch && activeTotalEpochs
+    ? `${compactStage} · E${activeEpoch}/${activeTotalEpochs}${activeBatch && activeTotalBatches ? ` · B${activeBatch}/${activeTotalBatches}` : ""}`
+    : compactStage;
+  const fullActiveDetail = [
+    activeStageLabel || compactStage,
+    activeEpoch && activeTotalEpochs ? `epoch ${activeEpoch}/${activeTotalEpochs}` : null,
+    activeBatch && activeTotalBatches ? `batch ${activeBatch}/${activeTotalBatches}` : null,
+  ].filter(Boolean).join(" · ");
   // Whose run this is, shown only for someone else's — matches
   // UploadJobBanner's isMine/starterName treatment. Compared by id, not by
   // whether trainedById is merely present: a route change re-adopts and
@@ -166,32 +195,45 @@ const TrainingJobBanner = () => {
                 </div>
               </div>
 
-              {/* Row 2: two-segment bar — words then alphabet — instead of a
-                  clip count, since training reports no finer progress than
-                  which of the two halves is currently running (see
-                  fetch_approved_samples in train.py: the dataset is snapshotted
-                  once per half, not polled clip-by-clip like an upload). */}
+              {/* Each segment follows the ML trainer's reported progress for
+                  that model. The alphabet segment remains empty until its run
+                  actually starts. */}
               <div style={{ display: "flex", gap: "4px" }}>
-                <div style={{ flex: 1, background: "#bfdbfe", borderRadius: "4px", height: "6px", overflow: "hidden" }}>
-                  <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: "100%" }} />
+                <div
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(job.wordsProgress ?? 0)}
+                  aria-label={`Words model ${Math.round(job.wordsProgress ?? 0)}%`}
+                  style={{ flex: 1, background: "#bfdbfe", borderRadius: "4px", height: "6px", overflow: "hidden" }}
+                >
+                  <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${job.wordsProgress ?? 0}%`, transition: "width 400ms ease" }} />
                 </div>
-                <div style={{ flex: 1, background: "#bfdbfe", borderRadius: "4px", height: "6px", overflow: "hidden" }}>
-                  <div
-                    style={{
-                      height: "6px", borderRadius: "4px", background: C.primary,
-                      width: step === 2 ? "100%" : "40%",
-                      transition: "width var(--dur-slow) var(--ease-standard)",
-                    }}
-                  />
+                <div
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(job.lettersProgress ?? 0)}
+                  aria-label={`Alphabet model ${Math.round(job.lettersProgress ?? 0)}%`}
+                  style={{ flex: 1, background: "#bfdbfe", borderRadius: "4px", height: "6px", overflow: "hidden" }}
+                >
+                  <div style={{ height: "6px", borderRadius: "4px", background: C.primary, width: `${job.lettersProgress ?? 0}%`, transition: "width 400ms ease" }} />
                 </div>
               </div>
 
               {/* Row 3: which half is running plus elapsed time, and a View
                   link off /model — same slot the upload card uses. */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                <p className="small-text text-blue-500" style={{ margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {stepLabel} · {elapsed}
+                <p
+                  className="small-text text-blue-500"
+                  title={`${stepName} · ${fullActiveDetail} · ${Math.round(activeProgress)}% · ${elapsed}`}
+                  style={{ margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                >
+                  {stepName} · {activeDetail} · {elapsed}
                 </p>
+                <span className="small-text" style={{ color: C.primary, fontWeight: 700, flexShrink: 0 }}>
+                  {Math.round(activeProgress)}%
+                </span>
                 {!onModelPage && (
                   <span className="small-text" style={{ color: "#1e40af", fontWeight: 600, flexShrink: 0 }}>
                     View →

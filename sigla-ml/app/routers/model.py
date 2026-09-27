@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Header
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import List, Optional
 import hashlib
 import httpx
 import os
+import secrets
+from threading import Lock
 from app.services.train   import train
 from app.services.test    import test
 from app.services.deploy  import deploy
@@ -12,6 +14,30 @@ from app.services.video   import generate_word_video
 from app.services.extract import extract_motion_landmarks
 
 router = APIRouter(prefix="", tags=["Model"])
+
+# The backend asks for this while the long-running /train request is executing.
+# Keep progress in this process so epoch callbacks can update it without making
+# an extra network request (or slowing TensorFlow down).
+_training_progress = {}
+_training_progress_lock = Lock()
+
+
+def _record_training_progress(model_id: int, update: dict) -> None:
+    with _training_progress_lock:
+        _training_progress[model_id] = update
+
+
+@router.get("/training/{model_id}/progress")
+async def get_training_progress(model_id: int, x_api_key: Optional[str] = Header(default=None)):
+    expected_key = os.getenv("ML_API_KEY")
+    if not expected_key or not x_api_key or not secrets.compare_digest(x_api_key, expected_key):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    with _training_progress_lock:
+        progress = _training_progress.get(model_id)
+    if progress is None:
+        raise HTTPException(status_code=404, detail="No progress is available for this model")
+    return {"progress": progress}
 
 
 # ── Why every handler below offloads its work ─────────────────
@@ -76,13 +102,32 @@ async def train_model(request: TrainRequest):
     Trigger model training.
     Called by Node.js backend when admin clicks Train Model.
     """
+    _record_training_progress(request.model_id, {
+        "progress": 0,
+        "stage": "starting",
+        "stage_label": "Starting training",
+        "current_epoch": None,
+        "total_epochs": None,
+    })
+
+    def report_progress(update: dict) -> None:
+        _record_training_progress(request.model_id, update)
+
     try:
         result = await run_in_threadpool(
             train,
             version_number=request.version_number,
             model_id=request.model_id,
             word_labels=request.word_labels,
+            progress_callback=report_progress,
         )
+        report_progress({
+            "progress": 100,
+            "stage": "completed",
+            "stage_label": "Training complete",
+            "current_epoch": None,
+            "total_epochs": None,
+        })
         return {
             "message":           "Model trained successfully",
             "result":            result,
@@ -95,8 +140,22 @@ async def train_model(request: TrainRequest):
             "trained_labels":    result.get("trained_labels"),
         }
     except ValueError as e:
+        report_progress({
+            "progress": 0,
+            "stage": "failed",
+            "stage_label": "Training failed",
+            "current_epoch": None,
+            "total_epochs": None,
+        })
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        report_progress({
+            "progress": 0,
+            "stage": "failed",
+            "stage_label": "Training failed",
+            "current_epoch": None,
+            "total_epochs": None,
+        })
         raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
 
 

@@ -67,15 +67,22 @@ export const TrainingJobsProvider = ({ children }) => {
       if (!stillRelevant()) return;
       const list = models || [];
       const training = list.filter((m) => m.status === "training");
-      const inFlight = training.find((m) => m.model_kind !== "letters") || training[0];
+      const active = training.find((m) => m.model_kind !== "letters") || training[0];
 
       setJob((current) => {
-        if (!inFlight) {
+        if (!active) {
           // Only clear when the server no longer reports ANY training run —
           // leave a job set moments ago by startJob alone, since the list
           // fetched here may predate it.
           return current && !list.some((m) => m.status === "training") ? null : current;
         }
+        // If the words model has finished and only the alphabet is still
+        // training, track the original words row as the run anchor and the
+        // alphabet row as its companion. Otherwise a reload would label the
+        // alphabet's progress as the words model's progress.
+        const inFlight = active.model_kind === "letters"
+          ? list.find((m) => m.version_number === active.version_number && m.model_kind !== "letters") || active
+          : active;
         const companion = list.find(
           (m) =>
             m.version_number === inFlight.version_number &&
@@ -98,7 +105,25 @@ export const TrainingJobsProvider = ({ children }) => {
           trainedByName: inFlight.trainer?.username || null,
           wordsStatus: inFlight.status,
           lettersStatus: companion?.status ?? null,
-          startedAt: sameRun ? current.startedAt : Date.now(),
+          wordsProgress: inFlight.status === "trained" ? 100 : current?.wordsProgress ?? 0,
+          wordsStage: current?.wordsStage ?? "starting",
+          wordsStageLabel: current?.wordsStageLabel ?? "Waiting for training updates",
+          wordsEpoch: current?.wordsEpoch ?? null,
+          wordsTotalEpochs: current?.wordsTotalEpochs ?? null,
+          wordsBatch: current?.wordsBatch ?? null,
+          wordsTotalBatches: current?.wordsTotalBatches ?? null,
+          lettersProgress: companion?.status === "trained" ? 100 : current?.lettersProgress ?? 0,
+          lettersStage: current?.lettersStage ?? "starting",
+          lettersStageLabel: current?.lettersStageLabel ?? "Waiting for training updates",
+          lettersEpoch: current?.lettersEpoch ?? null,
+          lettersTotalEpochs: current?.lettersTotalEpochs ?? null,
+          lettersBatch: current?.lettersBatch ?? null,
+          lettersTotalBatches: current?.lettersTotalBatches ?? null,
+          startedAt: sameRun
+            ? current.startedAt
+            : Number.isFinite(Date.parse(inFlight.created_at))
+              ? Date.parse(inFlight.created_at)
+              : Date.now(),
           startedByMe: sameRun ? current.startedByMe : false,
         };
       });
@@ -132,7 +157,7 @@ export const TrainingJobsProvider = ({ children }) => {
 
     const startedAt = job.startedAt || Date.now();
 
-    pollRef.current = setInterval(async () => {
+    const poll = async () => {
       const tracked = jobRef.current;
       if (!tracked) return;
 
@@ -148,74 +173,82 @@ export const TrainingJobsProvider = ({ children }) => {
       }
 
       try {
-        const { model } = await getModelStatus(tracked.wordsId);
+        const [wordsResponse, lettersResponse] = await Promise.all([
+          getModelStatus(tracked.wordsId),
+          tracked.lettersId
+            ? getModelStatus(tracked.lettersId).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        const { model, progress: wordsProgress } = wordsResponse;
+        const letters = lettersResponse?.model ?? null;
+        const lettersProgress = lettersResponse?.progress ?? null;
 
-        let letters = null;
-        if (tracked.lettersId) {
-          try {
-            letters = (await getModelStatus(tracked.lettersId)).model;
-          } catch {
-            // Treat an unreadable letters row as still running rather than a
-            // failure; the next tick retries, and the poll timeout is the
-            // backstop if it never resolves.
-            letters = null;
+        const updateProgress = (current, prefix, row, progress) => {
+          const status = row?.status ?? current[`${prefix}Status`];
+          const value = Number(progress?.progress);
+          return {
+            [`${prefix}Status`]: status,
+            [`${prefix}Progress`]: status === "trained"
+              ? 100
+              : Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : current[`${prefix}Progress`] ?? 0,
+            [`${prefix}Stage`]: progress?.stage ?? current[`${prefix}Stage`],
+            [`${prefix}StageLabel`]: progress?.stage_label ?? current[`${prefix}StageLabel`],
+            [`${prefix}Epoch`]: progress?.current_epoch ?? null,
+            [`${prefix}TotalEpochs`]: progress?.total_epochs ?? null,
+            [`${prefix}Batch`]: progress?.current_batch ?? null,
+            [`${prefix}TotalBatches`]: progress?.total_batches ?? null,
+          };
+        };
+        setJob((current) => current && current.wordsId === tracked.wordsId
+          ? {
+              ...current,
+              ...updateProgress(current, "words", model, wordsProgress),
+              ...(letters
+                ? updateProgress(current, "letters", letters, lettersProgress)
+                : {}),
+            }
+          : current);
+
+        const isSettled = (status) => status === "trained" || status === "failed";
+        const pairSettled = isSettled(model.status) &&
+          (!tracked.lettersId || (letters && isSettled(letters.status)));
+        if (!pairSettled) return;
+
+        clearInterval(pollRef.current);
+        setJob(null);
+
+        const isMine =
+          currentUserIdRef.current != null &&
+          (model.trained_by === currentUserIdRef.current || tracked.startedByMe);
+        const wordsFailed = model.status === "failed";
+        const lettersFailed = letters?.status === "failed";
+
+        if (wordsFailed || lettersFailed) {
+          const errors = [
+            wordsFailed ? `Words model: ${model.training_error || "Unknown error"}` : null,
+            lettersFailed ? `Alphabet model: ${letters.training_error || "Unknown error"}` : null,
+          ].filter(Boolean);
+          const error = errors.join("\n");
+          if (isMine) {
+            errorToast(`Training failed: ${errors[0] || "Unknown error"}`);
+            setTrainingResult({ kind: "failure", versionNumber: model.version_number, error });
           }
-          // The alphabet trains after the words model in the same run, so the
-          // words row reaching "trained" does not mean the run is over.
-          if (model.status === "trained" && letters && letters.status === "training") {
-            setJob((current) => current && current.wordsId === tracked.wordsId
-              ? { ...current, wordsStatus: model.status, lettersStatus: letters.status }
-              : current);
-            return;
-          }
+        } else if (isMine) {
+          const lettersNote = letters
+            ? { kind: "letters-ok", accuracy: letters.accuracy, totalClasses: letters.total_classes }
+            : { kind: "no-letters" };
+          success(`Model ${model.version_number} trained successfully`);
+          setTrainingResult({
+            kind: "success",
+            versionNumber: model.version_number,
+            accuracy: model.accuracy ?? null,
+            totalClasses: model.total_classes ?? null,
+            letters: lettersNote,
+          });
         }
 
-        if (model.status === "trained" || model.status === "failed") {
-          clearInterval(pollRef.current);
-          setJob(null);
-
-          const isMine =
-            currentUserIdRef.current != null &&
-            (model.trained_by === currentUserIdRef.current || tracked.startedByMe);
-
-          if (model.status === "failed") {
-            if (isMine) {
-              errorToast(`Training failed: ${model.training_error || "Unknown error"}`);
-              setTrainingResult({
-                kind: "failure",
-                versionNumber: model.version_number,
-                error: model.training_error || "Unknown error",
-              });
-            }
-          } else {
-            const lettersNote =
-              letters?.status === "trained"
-                ? { kind: "letters-ok", accuracy: letters.accuracy, totalClasses: letters.total_classes }
-                : letters?.status === "failed"
-                  ? { kind: "letters-failed", error: letters.training_error || "unknown error" }
-                  : !tracked.lettersId
-                    ? { kind: "no-letters" }
-                    : null;
-
-            if (isMine) {
-              success(`Model ${model.version_number} trained successfully`);
-              setTrainingResult({
-                kind: "success",
-                versionNumber: model.version_number,
-                accuracy: model.accuracy ?? null,
-                totalClasses: model.total_classes ?? null,
-                letters: lettersNote,
-              });
-            }
-          }
-
-          invalidate("models:");
-          setFinishedCount((n) => n + 1);
-        } else {
-          setJob((current) => current && current.wordsId === tracked.wordsId
-            ? { ...current, wordsStatus: model.status, lettersStatus: letters?.status ?? current.lettersStatus }
-            : current);
-        }
+        invalidate("models:");
+        setFinishedCount((n) => n + 1);
       } catch (err) {
         const status = err.response?.status;
         if (status === 404 || status === 403 || status === 401) {
@@ -225,7 +258,10 @@ export const TrainingJobsProvider = ({ children }) => {
           setFinishedCount((n) => n + 1);
         }
       }
-    }, POLL_INTERVAL_MS);
+    };
+
+    pollRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    void poll();
     return () => clearInterval(pollRef.current);
     // Keyed on the tracked run's identity, not its contents — depending on the
     // whole job object would tear down and restart the interval on every
@@ -242,7 +278,21 @@ export const TrainingJobsProvider = ({ children }) => {
       trainedByName: null,
       wordsStatus: "training",
       lettersStatus: "training",
-      startedAt: Date.now(),
+      wordsProgress: 0,
+      wordsStage: "starting",
+      wordsStageLabel: "Waiting for training updates",
+      wordsEpoch: null,
+      wordsTotalEpochs: null,
+      wordsBatch: null,
+      wordsTotalBatches: null,
+      lettersProgress: 0,
+      lettersStage: "starting",
+      lettersStageLabel: "Waiting for training updates",
+      lettersEpoch: null,
+      lettersTotalEpochs: null,
+      lettersBatch: null,
+      lettersTotalBatches: null,
+      startedAt: Number.isFinite(Date.parse(model.created_at)) ? Date.parse(model.created_at) : Date.now(),
       // This client made the call, so it owns the outcome even before the
       // first poll tick reads trained_by back from the server.
       startedByMe: true,

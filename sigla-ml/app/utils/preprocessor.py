@@ -640,7 +640,8 @@ def validate_training_coverage(dataset: dict) -> dict:
 def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: int = 42,
                            fold: int | None = None, n_splits: int = 5,
                            group_by_session: bool = False,
-                           train_all: bool = False):
+                           train_all: bool = False,
+                           progress_callback=None):
     """
     Prepare a motion dataset split BEFORE augmentation, so the evaluation split is
     always pure real (unaugmented) data. Augmenting first and splitting after (the
@@ -721,7 +722,7 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
     X_val,   y_val   = [], []
     real_train_counts = {}   # class index -> real (pre-augmentation) train count
 
-    for label in labels:
+    for class_number, label in enumerate(labels, start=1):
         sequences = real[label]
         idx = label_idx[label]
 
@@ -806,6 +807,8 @@ def prepare_motion_dataset(dataset: dict, test_size: float = 0.2, random_state: 
         y_train.extend([idx] * len(train_seqs_all))
         X_val.extend(val_seqs)
         y_val.extend([idx] * len(val_seqs))
+        if progress_callback is not None:
+            progress_callback(class_number, len(labels), label)
 
     X_train = np.array(X_train, dtype=np.float32)
     y_train = np.array(y_train, dtype=np.int32)
