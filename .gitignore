@@ -30,3 +30,8 @@ sigla-ml/cv_run.log
 # Claude Code local state (worktrees, plugin settings) — machine-specific,
 # never meant to be committed
 .claude/
+
+# Locally installed Claude/agent skills (npx skills add) and their lockfile —
+# personal AI-tooling preferences, not app source
+.agents/
+skills-lock.json
