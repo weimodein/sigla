@@ -17,6 +17,9 @@ class AppSettings(context: Context) {
         private const val KEY_SHOW_FILIPINO = "show_filipino"
         private const val KEY_FRONT_CAMERA = "front_camera"
         private const val KEY_ONBOARDING = "onboarding_done"
+        private const val KEY_TRANSLATION_MODE = "translation_mode"
+        const val MODE_TAP = "tap"
+        const val MODE_LIVE = "live"
 
         const val VOICE_FEMALE = "female"
         const val VOICE_MALE = "male"
@@ -49,6 +52,11 @@ class AppSettings(context: Context) {
     var isFrontCamera: Boolean
         get() = prefs.getBoolean(KEY_FRONT_CAMERA, false)
         set(v) = prefs.edit().putBoolean(KEY_FRONT_CAMERA, v).apply()
+
+    /** Tap-to-sign or realtime. Tap is the default for fresh installs. */
+    var translationMode: String
+        get() = prefs.getString(KEY_TRANSLATION_MODE, MODE_TAP) ?: MODE_TAP
+        set(v) = prefs.edit().putString(KEY_TRANSLATION_MODE, v).apply()
 
     var isOnboardingDone: Boolean
         get() = onboardingPrefs.getBoolean(KEY_ONBOARDING, false)

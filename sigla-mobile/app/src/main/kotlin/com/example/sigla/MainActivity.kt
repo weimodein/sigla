@@ -1,8 +1,11 @@
 package com.example.sigla
 
 import android.Manifest
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Matrix
@@ -227,6 +230,21 @@ class MainActivity : AppCompatActivity() {
     private var showFilipino       = true
     private var emergencyHoldStart = 0L
 
+    // Tap-to-sign. `tapMode` is read on MediaPipe's callback thread to route
+    // each frame, hence @Volatile.
+    @Volatile private var tapMode = true
+    private val tapSession = TapSignSession { SystemClock.elapsedRealtime() }
+    private var tapPulse: ObjectAnimator? = null
+    private val tapRingTicker = object : Runnable {
+        override fun run() {
+            if (tapSession.state != TapSignSession.State.RECORDING) return
+            val pct = (tapSession.recordingElapsedMs() * 100 / TAP_MAX_RECORDING_MS).toInt()
+            binding.tapRecordRing.setProgressCompat(pct.coerceIn(0, 100), false)
+            binding.tapRecordRing.postDelayed(this, 100)
+        }
+    }
+    private val hideTapPrompt = Runnable { renderTapState() }
+
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
 
@@ -247,6 +265,7 @@ class MainActivity : AppCompatActivity() {
         historyManager = TranslationHistoryManager.getInstance(this)
         appSettings = AppSettings.getInstance(this)
         showFilipino = appSettings.showFilipino
+        tapMode = appSettings.translationMode == AppSettings.MODE_TAP
         // Ignore any saved front-camera preference while the scope is back-only —
         // a device that had it set before the flag landed would otherwise start in
         // the untrained orientation. See FORCE_BACK_CAMERA_ONLY.
@@ -275,6 +294,8 @@ class MainActivity : AppCompatActivity() {
         setupButtons()
         setupSidebar()
         updateFilipinoToggleLabel()
+        updateModeToggleLabel()
+        renderTapState()
 
     }
 
@@ -330,7 +351,11 @@ class MainActivity : AppCompatActivity() {
                         ordered, result.handedness, result.handednessScore, result.handsDetected
                     )
                     val c1 = if (PIPELINE_PROFILING) System.nanoTime() else 0L
-                    predictor?.processFrame(features, result.handsDetected)
+                    if (tapMode) {
+                        tapSession.onFrame(features, result.handsDetected)?.let { handleTapEvent(it) }
+                    } else {
+                        predictor?.processFrame(features, result.handsDetected)
+                    }
                     if (PIPELINE_PROFILING) {
                         val c2 = System.nanoTime()
                         PipelineProfiler.recordCallback(
@@ -443,6 +468,7 @@ class MainActivity : AppCompatActivity() {
      * onDestroy(). Both close() implementations are idempotent.
      */
     private fun stopVision() {
+        cancelTap()
         if (!visionActive) return
         visionActive = false
         pendingOverlayResult = null
@@ -598,49 +624,7 @@ class MainActivity : AppCompatActivity() {
         // a local so the three registrations can't race a concurrent teardown.
         val predictor = this.predictor ?: return
 
-        predictor.onResult = { result ->
-            runOnUiThread {
-                // Confidence is no longer shown to the user, but it is still recorded
-                // with each history entry (see historyManager.add below).
-                val pct = (result.confidence * 100).toInt()
-
-                lastLabel = result.label
-                binding.tvResult.text         = result.label.uppercase()
-                binding.cardResult.visibility = View.VISIBLE
-                binding.progressBuffer.progress = 0
-                binding.tvBufferPercent.text = "0%"
-
-                // Text-to-speech
-                speak(result.label)
-
-                // Save to history off the main thread: add() serializes the whole
-                // list and writes prefs, and this fires at the exact moment the
-                // result card animates in.
-                val gestureType = if (result.isMotion) "motion" else "static"
-                val label = result.label
-                lifecycleScope.launch(Dispatchers.IO) {
-                    historyManager.add(label, pct, gestureType)
-                }
-
-                // Filipino translation
-                val filipino = getFilipinoTranslation(result.label)
-                if (filipino != null && showFilipino) {
-                    binding.tvFilipinoResult.text = filipino
-                    binding.tvFilipinoResult.visibility = View.VISIBLE
-                } else {
-                    binding.tvFilipinoResult.visibility = View.GONE
-                    // Distinguishes "no translation for this label" from "toggle is off" —
-                    // the missing-entry case used to fail silently.
-                    if (filipino == null) {
-                        Log.d(TAG, "No Filipino translation for '${result.label}' " +
-                            "(${filipinoMap.size} translation(s) loaded)")
-                    }
-                }
-
-                binding.cardResult.postDelayed(
-                    { binding.cardResult.visibility = View.INVISIBLE }, 2000)
-            }
-        }
+        predictor.onResult = { result -> runOnUiThread { showResult(result) } }
 
         // Stage only — no runOnUiThread here. This fires on MediaPipe's callback
         // thread once per buffered frame, and the landmarker callback that invoked
@@ -669,6 +653,155 @@ class MainActivity : AppCompatActivity() {
                 binding.tvHandsWarning.visibility = View.GONE
             }
         }
+    }
+
+    /** Renders a recognition result. Called on the UI thread. */
+    private fun showResult(result: PredictionResult) {
+        // Confidence is no longer shown to the user, but it is still recorded
+        // with each history entry (see historyManager.add below).
+        val pct = (result.confidence * 100).toInt()
+
+        lastLabel = result.label
+        binding.tvResult.text         = result.label.uppercase()
+        binding.cardResult.visibility = View.VISIBLE
+        binding.progressBuffer.progress = 0
+        binding.tvBufferPercent.text = "0%"
+
+        // Text-to-speech
+        speak(result.label)
+
+        // Save to history off the main thread: add() serializes the whole
+        // list and writes prefs, and this fires at the exact moment the
+        // result card animates in.
+        val gestureType = if (result.isMotion) "motion" else "static"
+        val label = result.label
+        lifecycleScope.launch(Dispatchers.IO) {
+            historyManager.add(label, pct, gestureType)
+        }
+
+        // Filipino translation
+        val filipino = getFilipinoTranslation(result.label)
+        if (filipino != null && showFilipino) {
+            binding.tvFilipinoResult.text = filipino
+            binding.tvFilipinoResult.visibility = View.VISIBLE
+        } else {
+            binding.tvFilipinoResult.visibility = View.GONE
+            // Distinguishes "no translation for this label" from "toggle is off" —
+            // the missing-entry case used to fail silently.
+            if (filipino == null) {
+                Log.d(TAG, "No Filipino translation for '${result.label}' " +
+                    "(${filipinoMap.size} translation(s) loaded)")
+            }
+        }
+
+        if (!tapMode) {
+            binding.cardResult.postDelayed(
+                { binding.cardResult.visibility = View.INVISIBLE }, 2000)
+        }
+    }
+
+    /** Called on MediaPipe's callback thread (onFrame) or the UI thread (tap). */
+    private fun handleTapEvent(event: TapSignSession.Event) {
+        when (event) {
+            is TapSignSession.Event.Captured -> processCapture(event)
+            TapSignSession.Event.NoHandsTimeout -> runOnUiThread { showTapMessage(TAP_NO_HANDS_SEEN) }
+            else -> runOnUiThread { renderTapState() }
+        }
+    }
+
+    private fun processCapture(event: TapSignSession.Event.Captured) {
+        runOnUiThread { renderTapState() }
+        lifecycleScope.launch(Dispatchers.Default) {
+            val outcome = ClipPreparer.prepare(event.frames)
+            val result = (outcome as? ClipOutcome.Window)?.let { predictor?.classifyWindow(it.frames) }
+            withContext(Dispatchers.Main) {
+                // Cancelled meanwhile (mode, vocabulary, camera, or screen left):
+                // the result belongs to a setup the user has moved away from.
+                if (!tapSession.finishProcessing(event.generation)) return@withContext
+                when {
+                    result != null -> { showResult(result); renderTapState() }
+                    outcome is ClipOutcome.Rejected -> showTapMessage(tapRejectionMessage(outcome.reason))
+                    else -> showTapMessage(TAP_NOT_RECOGNIZED)
+                }
+            }
+        }
+    }
+
+    /** Shows a one-line message above the record button for 3 s, then the normal prompt. */
+    private fun showTapMessage(message: String) {
+        renderTapState()
+        binding.tvTapPrompt.text = message
+        binding.tvTapPrompt.visibility = View.VISIBLE
+        binding.tvTapPrompt.removeCallbacks(hideTapPrompt)
+        binding.tvTapPrompt.postDelayed(hideTapPrompt, 3000)
+    }
+
+    private fun cancelTap() {
+        tapSession.cancel()
+        renderTapState()
+    }
+
+    /** Draws the tap controls for the current mode and session state. Main thread only. */
+    private fun renderTapState() {
+        val liveVisibility = if (tapMode) View.GONE else View.VISIBLE
+        binding.tvDetectionLabel.visibility = liveVisibility
+        binding.progressBuffer.visibility = liveVisibility
+        binding.liveStatsRow.visibility = liveVisibility
+        binding.tapControls.visibility = if (tapMode) View.VISIBLE else View.GONE
+
+        tapPulse?.cancel(); tapPulse = null
+        binding.btnTapRecord.alpha = 1f
+        binding.tapRecordRing.removeCallbacks(tapRingTicker)
+        if (!tapMode) return
+
+        val accent = ContextCompat.getColor(this, R.color.sig_accent)
+        val red = Color.parseColor("#E53935")
+        binding.tvTapPrompt.removeCallbacks(hideTapPrompt)
+        when (tapSession.state) {
+            TapSignSession.State.IDLE -> {
+                binding.btnTapRecord.text = "Tap to sign"
+                binding.btnTapRecord.isEnabled = true
+                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(accent)
+                binding.tapRecordRing.visibility = View.INVISIBLE
+                binding.tvTapPrompt.visibility = View.GONE
+            }
+            TapSignSession.State.READY -> {
+                binding.btnTapRecord.text = "Cancel"
+                binding.btnTapRecord.isEnabled = true
+                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(accent)
+                binding.tapRecordRing.visibility = View.INVISIBLE
+                binding.tvTapPrompt.text = "Ready — start signing"
+                binding.tvTapPrompt.visibility = View.VISIBLE
+                tapPulse = ObjectAnimator.ofFloat(binding.btnTapRecord, View.ALPHA, 1f, 0.45f).apply {
+                    duration = 600
+                    repeatMode = ValueAnimator.REVERSE
+                    repeatCount = ValueAnimator.INFINITE
+                    start()
+                }
+            }
+            TapSignSession.State.RECORDING -> {
+                binding.btnTapRecord.text = "Stop"
+                binding.btnTapRecord.isEnabled = true
+                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(red)
+                binding.tapRecordRing.setProgressCompat(0, false)
+                binding.tapRecordRing.visibility = View.VISIBLE
+                binding.tvTapPrompt.text = "Recording…"
+                binding.tvTapPrompt.visibility = View.VISIBLE
+                binding.tapRecordRing.post(tapRingTicker)
+            }
+            TapSignSession.State.PROCESSING -> {
+                binding.btnTapRecord.text = "…"
+                binding.btnTapRecord.isEnabled = false
+                binding.tapRecordRing.visibility = View.INVISIBLE
+                binding.tvTapPrompt.text = "Recognizing…"
+                binding.tvTapPrompt.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun updateModeToggleLabel() {
+        binding.btnToggleMode.text = if (tapMode) "Tap" else "Live"
+        applyToggleStyle(binding.btnToggleMode, tapMode)
     }
 
     private fun enqueueOverlayUpdate(result: LandmarkResult) {
@@ -749,6 +882,7 @@ class MainActivity : AppCompatActivity() {
             // No-op if the models are still loading — flipping is still valid.
             predictor?.reset()
             resetHandednessLatch()
+            cancelTap()
             bindCamera()
         }
 
@@ -788,6 +922,23 @@ class MainActivity : AppCompatActivity() {
             // same way the end of a gesture does, so the buffer bar does not
             // appear to carry on across the switch.
             predictor.onNoHands?.invoke()
+            cancelTap()
+        }
+
+        // Tap-to-sign record button.
+        binding.btnTapRecord.setOnClickListener {
+            tapSession.tap()?.let { handleTapEvent(it) }
+        }
+
+        // Live / Tap mode switch. Cancels any tap recording in progress and
+        // clears the realtime buffer, so neither mode inherits the other's frames.
+        binding.btnToggleMode.setOnClickListener {
+            tapMode = !tapMode
+            appSettings.translationMode = if (tapMode) AppSettings.MODE_TAP else AppSettings.MODE_LIVE
+            predictor?.reset()
+            predictor?.onNoHands?.invoke()
+            updateModeToggleLabel()
+            cancelTap()
         }
 
         // Emergency — hold 2 seconds
