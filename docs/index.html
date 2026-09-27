@@ -187,7 +187,7 @@
     letter-spacing: -0.02em;
     line-height: 1;
   }
-  .stat .num .unit { font-size: 0.5em; font-weight: 600; color: var(--ink-faint); margin-left: 2px; }
+  .stat .num .unit { font-size: 0.5em; font-weight: 600; color: var(--ink-faint); margin-left: 0.3em; }
   .stat .label { margin-top: 10px; font-size: 14.5px; color: var(--ink-soft); }
 
   /* ---------- Section shell ---------- */
@@ -297,25 +297,157 @@
   footer .fbrand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-soft); }
   footer .fbrand img { width: 20px; height: 20px; border-radius: 6px; }
 
+  /* ---------- Motion ----------
+     One orchestrated hero entrance, one ambient loop (the scan line), and
+     quiet feedback elsewhere. Nothing starts invisible except for the ~1s
+     entrance; scroll reveals slide content up but never hide it. All of it
+     is switched off under prefers-reduced-motion at the bottom. */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes stage-in {
+    from { opacity: 0; transform: translateY(24px) scale(0.96); }
+    to   { opacity: 1; transform: none; }
+  }
+  /* A highlight passes once across "become words." and leaves it blue. */
+  @keyframes translate-sweep {
+    from { background-position: 100% 0; }
+    to   { background-position: 0 0; }
+  }
+  /* Camera detection: a soft line sweeps down the phone screen. */
+  @keyframes scan {
+    0%   { transform: translateY(-40%); opacity: 0; }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { transform: translateY(1100%); opacity: 0; }
+  }
+  @keyframes drift-float {
+    from { transform: rotate(-5deg) translateY(0); }
+    to   { transform: rotate(-3deg) translateY(-10px); }
+  }
+  @keyframes drift-badge {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-8px); }
+  }
+
+  .hero .eyebrow,
+  .hero h1 .line,
+  .hero-sub,
+  .hero-actions,
+  .hero-fine {
+    animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .hero .eyebrow        { animation-delay: 0.05s; }
+  .hero h1 .line:nth-child(1) { animation-delay: 0.15s; }
+  .hero h1 .line:nth-child(2) { animation-delay: 0.27s; }
+  .hero h1 .line:nth-child(3) { animation-delay: 0.39s; }
+  .hero-sub             { animation-delay: 0.55s; }
+  .hero-actions         { animation-delay: 0.65s; }
+  .hero-fine            { animation-delay: 0.75s; }
+
+  .hero h1 .accent {
+    background: linear-gradient(90deg, var(--blue) 0 38%, var(--teal) 50%, var(--blue) 62% 100%);
+    background-size: 260% 100%;
+    background-position: 0 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation:
+      rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.39s both,
+      translate-sweep 1.3s ease-in-out 1s both;
+  }
+
+  .phone-stage { animation: stage-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both; }
+  .phone { transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1); transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); }
+  .phone::after {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 0;
+    height: 9%;
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--teal) 55%, transparent) 70%, color-mix(in srgb, var(--teal) 90%, white));
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--teal) 45%, transparent);
+    pointer-events: none;
+    animation: scan 3.6s ease-in-out 1.6s infinite;
+    opacity: 0;
+  }
+  .phone-float { animation: drift-float 5.5s ease-in-out 1.2s infinite alternate; }
+  .badge-float { animation: drift-badge 4.5s ease-in-out 1.4s infinite alternate; }
+
+  /* Scroll reveal: script marks below-the-fold items "pending" (shifted down,
+     still fully visible) and releases them as they enter the viewport. */
+  .reveal-pending { transform: translateY(28px); }
+  /* "body" raises this above .feature-card's own hover transition while the
+     reveal runs; the script removes the class once it finishes. */
+  body .reveal-ready { transition: transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1); transition-delay: var(--stagger, 0ms); }
+
+  /* Hover feedback */
+  .btn, .nav-cta { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  .btn-primary:hover, .nav-cta:hover { transform: translateY(-2px); }
+  .btn-primary:active, .nav-cta:active { transform: translateY(0) scale(0.98); }
+  .btn-text { transition: text-decoration-color 0.2s ease; }
+  .btn-text:hover { text-decoration-color: var(--blue); }
+  .feature-card { transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
+  .feature-card:hover { transform: translateY(-5px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
+  .showcase-item img { transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .showcase-item:hover img { transform: translateY(-6px) rotate(-1.5deg); }
+  .nav { transition: box-shadow 0.25s ease; }
+  .nav.scrolled { box-shadow: 0 8px 24px -16px rgba(10, 14, 33, 0.35); }
+
+  a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 8px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+    .hero h1 .accent { background: none; color: var(--blue); }
+    .reveal-pending { transform: none; }
+    .phone { transform: none; }
+  }
+
   /* ---------- Responsive ---------- */
   @media (max-width: 860px) {
-    .hero-grid { grid-template-columns: 1fr; }
+    .hero-grid { grid-template-columns: 1fr; gap: 40px; }
     /* Single column: the text gets the full width, so size off the viewport. */
     .hero h1 { font-size: clamp(28px, 7.6vw, 54px); }
-    .phone-stage { order: -1; margin-bottom: 12px; }
+    /* Copy (and the Download button) stays first: on a phone it has to be on
+       the first screen, and the screenshots follow as proof. */
+    .phone-stage { padding-bottom: 6%; }
     .feature-grid { grid-template-columns: 1fr 1fr; }
   }
   @media (max-width: 760px) {
-    .hero { padding-block: 48px 36px; }
-    .stat-row { grid-template-columns: 1fr; gap: 28px; }
-    .showcase { grid-template-columns: 1fr; gap: 44px; }
-    .step { grid-template-columns: 40px 1fr; }
+    .hero { padding-block: 36px 40px; }
+    section { padding-block: 56px; }
+    .stats { padding-block: 40px; }
+    .section-head { margin-bottom: 32px; }
+    .stat-row { grid-template-columns: 1fr; gap: 24px; }
+    /* Onboarding screens side by side instead of two full-height images. */
+    .showcase { gap: 16px; }
+    .showcase-item img { max-width: 100%; border-width: 4px; border-radius: 18px; margin-bottom: 16px; }
+    .showcase-item h3 { font-size: 16px; }
+    .showcase-item p { font-size: 13.5px; }
+    .step { grid-template-columns: 40px 1fr; padding-block: 22px; }
   }
   @media (max-width: 480px) {
     .nav-cta span.long { display: none; }
-    .cta-band { padding: 44px 24px; border-radius: 20px; }
-    .feature-grid { grid-template-columns: 1fr; }
-    .badge-float { display: none; }
+    .hero h1 { font-size: clamp(27px, 8.2vw, 40px); }
+    .hero-sub { font-size: 16.5px; margin-top: 18px; }
+    /* Full-width download button: an easy thumb target on the first screen. */
+    .hero-actions { flex-direction: column; align-items: stretch; gap: 14px; margin-top: 26px; }
+    .hero-actions .btn-primary { justify-content: center; }
+    .hero-actions .btn-text { text-align: center; }
+    .hero-fine { text-align: center; }
+    /* Smaller phone stack that stays inside the screen edges. */
+    .phone { width: min(210px, 58vw); border-width: 6px; border-radius: 26px; }
+    .phone-float { width: min(128px, 36vw); left: 0; border-width: 5px; border-radius: 18px; }
+    .badge-float { right: 0; top: 4%; padding: 10px 12px; max-width: 120px; }
+    .badge-float .num { font-size: 20px; }
+    .badge-float .label { font-size: 11px; }
+    .feature-grid { grid-template-columns: 1fr; gap: 14px; }
+    .feature-card { padding: 22px 20px; }
+    .feature-card h3 { font-size: 17.5px; }
+    .cta-band { padding: 44px 22px; border-radius: 20px; }
+    .cta-band .btn-primary { width: 100%; justify-content: center; }
   }
 </style>
 
@@ -323,7 +455,7 @@
   <div class="wrap nav-row">
     <div class="brand"><img src="assets/sigla-logo.png" alt="SigLa logo">SigLa</div>
     <a class="nav-cta" href="https://github.com/weimodein/sigla/releases/download/1.0.0/app-release.apk">
-      <span class="long">Download for </span>Android
+      Download<span class="long"> for Android</span>
     </a>
   </div>
 </div>
@@ -345,7 +477,7 @@
     </div>
     <div class="phone-stage">
       <div class="badge-float">
-        <div class="num">73</div>
+        <div class="num">130+</div>
         <div class="label">signs in the Word Bank</div>
       </div>
       <div class="phone">
@@ -361,16 +493,16 @@
 <div class="stats">
   <div class="wrap stat-row">
     <div class="stat">
-      <div class="num" style="font-size:clamp(26px,3.4vw,38px)">On&#8209;device</div>
-      <div class="label">Hand and pose detection run on your phone, not a server</div>
-    </div>
-    <div class="stat">
-      <div class="num">2<span class="unit">languages</span></div>
-      <div class="label">Toggle a translation between English and Filipino</div>
+      <div class="num">0<span class="unit">servers</span></div>
+      <div class="label">Sign detection runs on your phone, not a server</div>
     </div>
     <div class="stat">
       <div class="num">1<span class="unit">tap</span></div>
       <div class="label">No account or sign-up &mdash; open the app and start translating</div>
+    </div>
+    <div class="stat">
+      <div class="num">2<span class="unit">languages</span></div>
+      <div class="label">Toggle a translation between English and Filipino</div>
     </div>
   </div>
 </div>
@@ -389,7 +521,7 @@
       </div>
       <div class="feature-card">
         <h3>Word Bank library</h3>
-        <p>73 signs across Alphabet, Colors, Days, Family and more, each with a demo video at adjustable playback speed and its own pronunciation.</p>
+        <p>130+ signs across Alphabet, Colors, Days, Family and more, each with a demo video at adjustable playback speed and its own pronunciation.</p>
       </div>
       <div class="feature-card">
         <h3>Filipino toggle</h3>
@@ -477,3 +609,65 @@
   <div class="fbrand"><img src="assets/sigla-logo.png" alt="">SigLa</div>
   <div>Filipino Sign Language, translated in real time.</div>
 </footer>
+
+<script>
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Nav gains a shadow once the page scrolls under it.
+    var nav = document.querySelector(".nav");
+    function onScroll() { nav.classList.toggle("scrolled", window.scrollY > 8); }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    if (reduce) return;
+
+    // Scroll reveal. Only items that start below the fold are shifted, and
+    // they stay fully visible the whole time — the slide is the only effect.
+    var groups = [".stat", ".feature-card", ".showcase-item", ".step", ".cta-band"];
+    if ("IntersectionObserver" in window) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          var el = e.target;
+          el.classList.remove("reveal-pending");
+          io.unobserve(el);
+          // Hand the element back to its normal (hover) transitions afterwards.
+          el.addEventListener("transitionend", function done(ev) {
+            if (ev.propertyName !== "transform") return;
+            el.classList.remove("reveal-ready");
+            el.removeEventListener("transitionend", done);
+          });
+        });
+      }, { rootMargin: "0px 0px -8% 0px" });
+
+      groups.forEach(function (sel) {
+        document.querySelectorAll(sel).forEach(function (el, i) {
+          if (el.getBoundingClientRect().top < window.innerHeight) return;
+          el.style.setProperty("--stagger", (i % 3) * 90 + "ms");
+          el.classList.add("reveal-pending");
+          // Add the transition a frame later so the initial shift doesn't animate.
+          requestAnimationFrame(function () { el.classList.add("reveal-ready"); });
+          io.observe(el);
+        });
+      });
+    }
+
+    // Phone stack leans slightly toward the pointer (mouse/trackpad only).
+    var stage = document.querySelector(".phone-stage");
+    var phone = document.querySelector(".phone");
+    if (stage && phone && window.matchMedia("(pointer: fine)").matches) {
+      stage.addEventListener("pointermove", function (ev) {
+        var r = stage.getBoundingClientRect();
+        var x = (ev.clientX - r.left) / r.width - 0.5;
+        var y = (ev.clientY - r.top) / r.height - 0.5;
+        phone.style.setProperty("--ry", (x * 10).toFixed(2) + "deg");
+        phone.style.setProperty("--rx", (-y * 8).toFixed(2) + "deg");
+      });
+      stage.addEventListener("pointerleave", function () {
+        phone.style.setProperty("--ry", "0deg");
+        phone.style.setProperty("--rx", "0deg");
+      });
+    }
+  })();
+</script>
