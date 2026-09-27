@@ -75,11 +75,14 @@ A pure Kotlin unit: no Android, camera, or UI dependencies. Input: the recorded
 frame list. Output: either a 30-frame window or a typed rejection. The steps and
 constants mirror `extract.py`:
 
-1. **Trim** to `[firstHandFrame − 4, lastHandFrame + 4]` (`TRIM_PAD_FRAMES = 4`).
+1. **Trim** to `[firstHandFrame − 4, lastHandFrame + 4]` (`TRIM_PAD_FRAMES = 4`). The
+   trailing pad is capped at `floor(0.25 s × fps)` frames so that below 16 fps the pad
+   alone cannot trip the hand-gap gate; at 16 fps and above it is exactly 4.
    The phone detects on every frame whereas `extract.py` scans 30 evenly spaced
    frames; the result is equivalent because step 3 drops hand-less frames anyway.
-2. **Resample to 24 fps** (`TARGET_SAMPLE_FPS`) by timestamp: for each 1/24 s tick
-   across the trimmed span, take the nearest recorded frame. Fallbacks as in
+2. **Resample to 24 fps** (`TARGET_SAMPLE_FPS`): measure the recording's frame rate
+   from its timestamps, then pick frames with `clip_prep.sample_indices`' exact index
+   formula (stride = fps / 24), so the phone and training select the same frames. Fallbacks as in
    training: if the rate-based count is below 30, use every trimmed frame; if it
    exceeds the budget of **86** frames
    (`min(max(60, ceil(30 / 0.35)), 120)`), spread 86 frames evenly.
