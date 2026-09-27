@@ -23,19 +23,32 @@ Whether the misses were wrong-word errors or no-result ("not recognized") was no
 tracked during this run, so the two modes' failure characters cannot be compared —
 only the raw correct-count.
 
-**Decision:** keep Tap as default.
+**Decision:** keep Tap as default — as a deliberate override of this document's
+own decision rule, not because the rule was satisfied. Recorded plainly below so
+this isn't mistaken for the rule having been met.
 
-The two modes scored within one attempt of each other out of 50 (45 vs 44), which
-is inside normal run-to-run variation for a sample this size — not a meaningful
-gap either way. Tap is kept as the default (unchanged from what Task 6 shipped)
-because it is the mode designed to match the model's training conditions (trim,
-24fps resample, peak-velocity window) exactly, and this result gives no evidence
-against that design intent. HELLO (Live's worst word, 3/5) improved to 4/5 under
-Tap, consistent with — though not proof of — the plan's expectation that clean
-sign boundaries help the harder classes most.
+**By the letter of the plan's rule, Tap did not qualify.** The plan's Task 7
+Step 2 sets the bar as "more correct results **and** no more wrong words than
+Live." Tap scored 44/50 against Live's 45/50 — it does not clear "more correct,"
+so the rule's plain reading is: revert the default to Live. Two further gaps
+make the rule even harder to apply as intended: wrong-word counts were not
+tracked in this run (the second half of the rule can't be evaluated at all),
+and KNOW / DON'T UNDERSTAND — named in the plan specifically because it's the
+project's known confusable pair and mislabeling hotspot — was not tested;
+DON'T KNOW was signed in its place, a different pair entirely.
 
-**Caveat:** wrong-word vs. no-result wasn't distinguished in this pass, and
-lighting/hand-rest position weren't recorded. If tap mode's accuracy is revisited
-later, capturing failure type (and which specific word was substituted, for
-confusable pairs like GOOD AFTERNOON/GOOD EVENING) would make the comparison more
-diagnostic than the correct-count alone.
+**The override was made knowingly, not by rationalizing the numbers.** The
+44-vs-45 result was put in front of the person who owns this decision, framed
+plainly as "essentially tied," with a direct choice between keeping Tap or
+reverting to Live. They chose to keep Tap. That is a considered decision to
+accept Tap despite the rule, not a claim that Tap passed the rule — this
+document previously blurred that line by saying the result "gives no evidence
+against" Tap, which reads as satisfying the rule rather than overriding it.
+That framing has been corrected here.
+
+**Caveat, and what a real re-test would need:** wrong-word vs. no-result wasn't
+distinguished in this pass, lighting/hand-rest position weren't recorded, and
+the plan's own named confusable pair (KNOW / DON'T UNDERSTAND) was never
+actually tried. If tap mode's accuracy is revisited, re-running with all three
+of those tracked would let the plan's rule be applied as written, rather than
+overridden again for lack of the data it needs.
