@@ -336,6 +336,21 @@ internal fun topPredictionMargin(probabilities: FloatArray, best: Int): Float {
     return if (second == Float.NEGATIVE_INFINITY) 1f else probabilities[best] - second
 }
 
+/**
+ * Tap mode's acceptance rule for ONE prepared window: the same confidence and
+ * runner-up margin Live mode requires, without the streak and consensus
+ * machinery that exists only to guess sign boundaries. Returns the class index,
+ * or -1 when the window is not confidently one word.
+ */
+internal fun acceptSingleWindow(probabilities: FloatArray): Int {
+    if (probabilities.isEmpty()) return -1
+    var best = 0
+    for (i in 1 until probabilities.size) if (probabilities[i] > probabilities[best]) best = i
+    if (probabilities[best] < MOTION_THRESHOLD) return -1
+    if (topPredictionMargin(probabilities, best) < MOTION_MIN_MARGIN) return -1
+    return best
+}
+
 /** Mean class probabilities across recent overlapping windows. Exposed for local
  * policy tests; production keeps only [PROBABILITY_CONSENSUS_WINDOWS] entries. */
 internal fun meanPredictionProbabilities(
@@ -672,6 +687,30 @@ class PredictionService(private val context: Context) {
         Log.i(TAG, "Vocabulary switched to $next")
     }
 
+    /**
+     * Tap mode: classify one window already prepared by [ClipPreparer]. Uses the
+     * model for the current vocabulary and [acceptSingleWindow]'s rule. Returns
+     * null when the window is not confidently one word, or when the service is
+     * not ready or already closed.
+     *
+     * Runs the interpreter under [lock], like processFrame, so it can never race
+     * close() or a vocabulary switch. Call it off the main thread.
+     */
+    fun classifyWindow(window: List<FloatArray>): PredictionResult? {
+        if (window.size != SEQUENCE_LENGTH) return null
+        if (window.any { it.size != FEATURE_SIZE }) return null
+        synchronized(lock) {
+            if (!isReady) return null
+            pinnedModel = if (vocabulary == Vocabulary.LETTERS) lettersModel else wordsModel
+            if (runOnWindow(window) < 0) return null
+            val probs = motionOutputArr[0]
+            val idx = acceptSingleWindow(probs)
+            if (idx < 0) return null
+            val label = motionLabels.getOrNull(idx) ?: return null
+            return PredictionResult(label = label, confidence = probs[idx], isMotion = true)
+        }
+    }
+
     // Load a model buffer from filesDir (downloaded) first, then bundled assets.
     private fun loadModelOrNull(filename: String): MappedByteBuffer? {
         val local = ModelUpdateManager.getInstalledModelFile(context, filename)
@@ -986,6 +1025,17 @@ class PredictionService(private val context: Context) {
         // so the model was never trained on it. See sequenceMotionEnergy.
         if (!hasSufficientMotion(seq)) return -1
 
+        return runOnWindow(seq)
+    }
+
+    /**
+     * One LSTM pass over an already-prepared 30-frame window. Caller must hold
+     * [lock]. Returns the argmax index, or -1; probabilities are left in
+     * `motionOutputArr[0]`. Shared by Live (runMotionInference) and Tap
+     * (classifyWindow).
+     */
+    private fun runOnWindow(seq: List<FloatArray>): Int {
+        val interp = motionInterp ?: return -1
         // Reused tensor; the inner references are rebound to this window's frames.
         val row = motionInputArr[0]
         for (i in 0 until SEQUENCE_LENGTH) row[i] = seq[i]
