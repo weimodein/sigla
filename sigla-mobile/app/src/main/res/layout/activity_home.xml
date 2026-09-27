@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home dashboard (spec §5; mockup home-v1.html). Top to bottom: greeting, search,
+     "Start translating" hero, stats, categories, recent translations. -->
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sg_bg">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/homeScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/sg_bottom_bar_clearance">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/sg_screen_padding"
+            android:paddingTop="@dimen/sg_space_24"
+            android:paddingEnd="@dimen/sg_screen_padding">
+
+            <!-- Greeting -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/tvGreetingTitle"
+                        style="@style/Sigla.Text.Title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        tools:text="Hi Maria!" />
+                    <TextView
+                        android:id="@+id/tvGreetingSubtitle"
+                        style="@style/Sigla.Text.Secondary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        tools:text="Good morning" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvAvatar"
+                    style="@style/Sigla.Text.BodyStrong"
+                    android:layout_width="@dimen/sg_badge_size"
+                    android:layout_height="@dimen/sg_badge_size"
+                    android:layout_marginStart="@dimen/sg_space_12"
+                    android:background="@drawable/bg_sg_circle_tint"
+                    android:gravity="center"
+                    android:importantForAccessibility="no"
+                    android:textColor="@color/sg_brand_text"
+                    android:visibility="gone"
+                    tools:text="M"
+                    tools:visibility="visible" />
+            </LinearLayout>
+
+            <!-- Search → Word Bank -->
+            <LinearLayout
+                android:id="@+id/homeSearch"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/sg_search_height"
+                android:layout_marginTop="@dimen/sg_space_16"
+                android:background="@drawable/bg_sg_search"
+                android:clickable="true"
+                android:contentDescription="Search FSL signs"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/sg_space_16"
+                android:paddingEnd="@dimen/sg_space_16">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_search_line"
+                    android:tint="@color/sg_text_secondary" />
+                <TextView
+                    style="@style/Sigla.Text.Secondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/sg_space_12"
+                    android:importantForAccessibility="no"
+                    android:text="Search FSL signs" />
+            </LinearLayout>
+
+            <!-- Hero -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardHero"
+                style="@style/Widget.Sigla.Card.Outlined"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_16"
+                android:clickable="true"
+                android:focusable="true">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/sg_space_16">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/Sigla.Text.CardTitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Start translating" />
+                        <TextView
+                            style="@style/Sigla.Text.Secondary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/sg_space_4"
+                            android:text="Tap, sign one word, and SigLa reads it for you." />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnHeroStart"
+                            style="@style/Widget.Sigla.Button"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/sg_space_12"
+                            android:text="Open camera" />
+                    </LinearLayout>
+                    <FrameLayout
+                        android:layout_width="88dp"
+                        android:layout_height="88dp"
+                        android:layout_marginStart="@dimen/sg_space_8"
+                        android:background="@drawable/bg_sg_circle_tint">
+                        <ImageView
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_hand_line"
+                            android:tint="@color/sg_brand_text" />
+                    </FrameLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Stats -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Sigla.Card.Brand"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_16">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="@dimen/sg_space_16"
+                    android:paddingBottom="@dimen/sg_space_16">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal"
+                        android:orientation="vertical">
+                        <TextView android:id="@+id/tvStatToday" style="@style/Sigla.Text.StatValue"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            tools:text="12" />
+                        <TextView style="@style/Sigla.Text.StatLabel"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Today" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal"
+                        android:orientation="vertical">
+                        <TextView android:id="@+id/tvStatSaved" style="@style/Sigla.Text.StatValue"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            tools:text="148" />
+                        <TextView style="@style/Sigla.Text.StatLabel"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Saved" />
+                    </LinearLayout>
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal"
+                        android:orientation="vertical">
+                        <TextView android:id="@+id/tvStatFavorites" style="@style/Sigla.Text.StatValue"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            tools:text="9" />
+                        <TextView style="@style/Sigla.Text.StatLabel"
+                            android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="Favorites" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Categories -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_20"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <TextView
+                    style="@style/Sigla.Text.Section"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Categories" />
+                <TextView
+                    android:id="@+id/tvCategoriesViewAll"
+                    style="@style/Sigla.Text.Link"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/sg_touch_min"
+                    android:gravity="center_vertical"
+                    android:paddingStart="@dimen/sg_space_8"
+                    android:text="View all" />
+            </LinearLayout>
+
+            <!-- 6dp negative side margins offset the 6dp margin on each card so
+                 the grid's outer edges line up with the screen padding. -->
+            <GridLayout
+                android:id="@+id/gridCategories"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="-6dp"
+                android:layout_marginEnd="-6dp"
+                android:columnCount="2"
+                android:useDefaultMargins="false" />
+
+            <TextView
+                android:id="@+id/tvCategoriesEmpty"
+                style="@style/Sigla.Text.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Connect to the internet once to download the word bank."
+                android:visibility="gone" />
+
+            <!-- Recent translations -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_20"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <TextView
+                    style="@style/Sigla.Text.Section"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Recent translations" />
+                <TextView
+                    android:id="@+id/tvRecentViewAll"
+                    style="@style/Sigla.Text.Link"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/sg_touch_min"
+                    android:gravity="center_vertical"
+                    android:paddingStart="@dimen/sg_space_8"
+                    android:text="View all" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/listRecent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <LinearLayout
+                android:id="@+id/recentEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+                <TextView
+                    style="@style/Sigla.Text.Secondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Your translations will appear here." />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRecentStart"
+                    style="@style/Widget.Sigla.Button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/sg_space_12"
+                    android:text="Start translating" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <include layout="@layout/view_bottom_nav" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -85,7 +85,7 @@ class OnboardingActivity : AppCompatActivity() {
 
     private fun completeOnboarding() {
         AppSettings.getInstance(this).isOnboardingDone = true
-        startActivity(Intent(this, MainActivity::class.java)
+        startActivity(Intent(this, HomeActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK))
         finish()
     }

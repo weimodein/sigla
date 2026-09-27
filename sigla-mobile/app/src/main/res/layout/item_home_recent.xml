@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="56dp"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingTop="@dimen/sg_space_8"
+    android:paddingBottom="@dimen/sg_space_8">
+
+    <FrameLayout
+        android:layout_width="@dimen/sg_badge_size"
+        android:layout_height="@dimen/sg_badge_size"
+        android:background="@drawable/bg_sg_circle_tint">
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chat_line"
+            android:tint="@color/sg_brand_text" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="@dimen/sg_space_12"
+        android:orientation="vertical">
+        <TextView
+            android:id="@+id/tvRecentWord"
+            style="@style/Sigla.Text.BodyStrong"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            tools:text="Good Morning" />
+        <TextView
+            android:id="@+id/tvRecentMeta"
+            style="@style/Sigla.Text.Caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="Today · 9:41 AM" />
+    </LinearLayout>
+</LinearLayout>
