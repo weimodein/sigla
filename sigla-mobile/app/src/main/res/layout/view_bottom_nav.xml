@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared bottom bar (spec §3). Include as the LAST child of a CoordinatorLayout;
+     the centre button anchors to the bar and sits in its cradle. Wired by
+     BottomNavHelper.setup(). -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:parentTag="androidx.coordinatorlayout.widget.CoordinatorLayout">
+
+    <com.google.android.material.bottomappbar.BottomAppBar
+        android:id="@+id/bottomAppBar"
+        style="@style/Widget.Sigla.BottomAppBar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/sg_bottom_bar_height"
+        android:layout_gravity="bottom">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <LinearLayout android:id="@+id/tabHome" style="@style/Widget.Sigla.Tab">
+                <ImageView android:id="@+id/tabHomeIcon" style="@style/Widget.Sigla.TabIcon"
+                    android:src="@drawable/ic_house_line" />
+                <TextView android:id="@+id/tabHomeLabel" style="@style/Widget.Sigla.TabLabel"
+                    android:text="Home" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/tabWordBank" style="@style/Widget.Sigla.Tab">
+                <ImageView android:id="@+id/tabWordBankIcon" style="@style/Widget.Sigla.TabIcon"
+                    android:src="@drawable/ic_book_line" />
+                <TextView android:id="@+id/tabWordBankLabel" style="@style/Widget.Sigla.TabLabel"
+                    android:text="Word Bank" />
+            </LinearLayout>
+
+            <!-- Room for the centre button -->
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+            <LinearLayout android:id="@+id/tabHistory" style="@style/Widget.Sigla.Tab">
+                <ImageView android:id="@+id/tabHistoryIcon" style="@style/Widget.Sigla.TabIcon"
+                    android:src="@drawable/ic_history_line" />
+                <TextView android:id="@+id/tabHistoryLabel" style="@style/Widget.Sigla.TabLabel"
+                    android:text="History" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/tabSettings" style="@style/Widget.Sigla.Tab">
+                <ImageView android:id="@+id/tabSettingsIcon" style="@style/Widget.Sigla.TabIcon"
+                    android:src="@drawable/ic_settings_line" />
+                <TextView android:id="@+id/tabSettingsLabel" style="@style/Widget.Sigla.TabLabel"
+                    android:text="Settings" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.bottomappbar.BottomAppBar>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabTranslate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="Translate"
+        app:srcCompat="@drawable/ic_hand_line"
+        app:tint="@color/sg_on_brand"
+        app:backgroundTint="@color/sg_brand"
+        app:fabCustomSize="60dp"
+        app:maxImageSize="28dp"
+        app:layout_anchor="@id/bottomAppBar" />
+</merge>

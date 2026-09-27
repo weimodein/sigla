@@ -68,6 +68,9 @@ class WordBankActivity : AppCompatActivity() {
     private var isLoading = false
 
     companion object {
+        /** Set by Home's search bar: focus the search field and open the keyboard. */
+        const val EXTRA_FOCUS_SEARCH = "extra_focus_search"
+
         val FSL_CATEGORIES = listOf(
             "introducing oneself",
             "ordering food",
