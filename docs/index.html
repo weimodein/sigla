@@ -436,22 +436,36 @@
   }
   @media (max-width: 480px) {
     .nav-cta span.long { display: none; }
-    .hero h1 { font-size: clamp(27px, 8.2vw, 40px); }
-    .hero-sub { font-size: 16.5px; margin-top: 18px; }
+    .hero { padding-block: 28px 32px; }
+    .hero-grid { gap: 28px; }
+    .eyebrow { font-size: 12px; margin-bottom: 16px; }
+    .hero h1 { font-size: clamp(27px, 8.2vw, 36px); }
+    .hero-sub { font-size: 16px; line-height: 1.5; margin-top: 16px; }
     /* Full-width download button: an easy thumb target on the first screen. */
-    .hero-actions { flex-direction: column; align-items: stretch; gap: 14px; margin-top: 26px; }
+    .hero-actions { flex-direction: column; align-items: stretch; gap: 10px; margin-top: 22px; }
     .hero-actions .btn-primary { justify-content: center; }
     .hero-actions .btn-text { text-align: center; }
-    .hero-fine { text-align: center; }
-    /* Smaller phone stack that stays inside the screen edges. */
-    .phone { width: min(210px, 58vw); border-width: 6px; border-radius: 26px; }
-    .phone-float { width: min(128px, 36vw); left: 0; border-width: 5px; border-radius: 18px; }
-    .badge-float { right: 0; top: 4%; padding: 10px 12px; max-width: 120px; }
-    .badge-float .num { font-size: 20px; }
-    .badge-float .label { font-size: 11px; }
+    .hero-fine { text-align: center; font-size: 12px; margin-top: 14px; }
+    /* Compact phone stack with less overlap at narrow widths. */
+    .phone { width: min(196px, 60vw); border-width: 5px; border-radius: 24px; }
+    .phone-float { width: min(116px, 35vw); left: 2%; border-width: 4px; border-radius: 16px; }
+    .badge-float { right: 0; top: 2%; padding: 9px 10px; max-width: 108px; border-radius: 13px; }
+    .badge-float .num { font-size: 19px; }
+    .badge-float .label { font-size: 10.5px; }
+    .stats { padding-block: 32px; }
+    .stat-row { gap: 18px; }
+    section { padding-block: 48px; }
+    .section-head { margin-bottom: 24px; }
+    .section-head h2 { font-size: clamp(25px, 7vw, 32px); }
+    .section-head p { margin-top: 12px; font-size: 15.5px; }
     .feature-grid { grid-template-columns: 1fr; gap: 14px; }
-    .feature-card { padding: 22px 20px; }
-    .feature-card h3 { font-size: 17.5px; }
+    .feature-card { padding: 20px 18px; border-radius: 16px; }
+    .feature-card h3 { font-size: 17px; }
+    .feature-card p { font-size: 14.5px; }
+    .showcase { grid-template-columns: 1fr; gap: 30px; }
+    .showcase-item img { max-width: min(100%, 280px); margin-inline: auto; }
+    .showcase-item h3 { font-size: 18px; }
+    .showcase-item p { font-size: 14.5px; }
     .cta-band { padding: 44px 22px; border-radius: 20px; }
     .cta-band .btn-primary { width: 100%; justify-content: center; }
   }
