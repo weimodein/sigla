@@ -58,8 +58,6 @@
     <color name="sig_accent_pill">#B9CDF0</color>
     <color name="sig_nav_selected_fill">#401E3B8B</color>
     <color name="sig_nav_selected_text">#4A90E2</color>
-    <color name="sig_nav_default_text">#1A2E5A</color>
-    <color name="sig_nav_default_subtitle">#6C7A9C</color>
     <color name="sig_divider">#E0E4F0</color>
     <color name="sig_delete_icon">#EF5350</color>
     <color name="sig_icon_bg_soft">#E3F2FD</color>

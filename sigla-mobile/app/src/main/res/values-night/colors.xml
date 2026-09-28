@@ -18,8 +18,6 @@
     <color name="sig_accent_pill">#2A355C</color>
     <color name="sig_nav_selected_fill">#3A4A8C</color>
     <color name="sig_nav_selected_text">#8FA4EF</color>
-    <color name="sig_nav_default_text">#F0F2FA</color>
-    <color name="sig_nav_default_subtitle">#9AA1C4</color>
     <color name="sig_divider">#2A3155</color>
     <color name="sig_delete_icon">#E8746F</color>
     <color name="sig_icon_bg_soft">#2A3363</color>
