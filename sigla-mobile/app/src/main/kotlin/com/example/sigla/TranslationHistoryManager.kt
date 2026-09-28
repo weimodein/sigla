@@ -40,6 +40,7 @@ class TranslationHistoryManager private constructor(context: Context) {
 
     companion object {
         private const val KEY_HISTORY = "translation_history"
+        private const val KEY_TOTAL_TRANSLATED = "total_translated"
         private const val MAX_ENTRIES = 200
 
         @Volatile private var INSTANCE: TranslationHistoryManager? = null
@@ -97,6 +98,28 @@ class TranslationHistoryManager private constructor(context: Context) {
             updated.add(entry)
         }
         saveToPrefs(updated)
+
+        // A lifetime counter, separate from the capped/editable list above: it is
+        // never reduced by the 200-entry cap, deleteAt() or clearAll(), so Home's
+        // "Total translated" reflects everything SigLa has ever helped translate,
+        // not just what is still kept in history.
+        prefs.edit().putInt(KEY_TOTAL_TRANSLATED, getTotalTranslated() + 1).apply()
+    }
+
+    /**
+     * Lifetime count of every successful translation, uncapped (see add()).
+     * A phone whose history predates this counter (KEY_TOTAL_TRANSLATED never
+     * written) is seeded from its current history size instead of reporting 0 —
+     * an undercount for anyone who already rolled past the 200-entry cap, but
+     * still closer to the truth than "0" for someone with a full history.
+     */
+    @Synchronized
+    fun getTotalTranslated(): Int {
+        val stored = prefs.getInt(KEY_TOTAL_TRANSLATED, -1)
+        if (stored >= 0) return stored
+        val seeded = getAll().size
+        prefs.edit().putInt(KEY_TOTAL_TRANSLATED, seeded).apply()
+        return seeded
     }
 
     @Synchronized

@@ -65,14 +65,13 @@ class HomeActivity : AppCompatActivity() {
     private fun refresh() {
         renderGreeting()
 
-        val entries = TranslationHistoryManager.getInstance(this).getAll()
-        val stats = homeStats(
-            entries = entries,
-            favoritesCount = FavoritesManager.getInstance(this).getAll().size,
-            nowMillis = System.currentTimeMillis(),
-        )
-        binding.tvStatWeek.text = stats.week.toString()
-        binding.tvStatFavorites.text = stats.favorites.toString()
+        val historyManager = TranslationHistoryManager.getInstance(this)
+        val entries = historyManager.getAll()
+        // Favorites/total-translated are on-device and instant; wordsAvailable
+        // needs the cached word bank, loaded below with the categories grid, so
+        // the stat banner's word count updates in the same pass as the grid.
+        binding.tvStatTotal.text = historyManager.getTotalTranslated().toString()
+        binding.tvStatFavorites.text = FavoritesManager.getInstance(this).getAll().size.toString()
 
         renderRecent(recentEntries(entries))
 
@@ -83,6 +82,7 @@ class HomeActivity : AppCompatActivity() {
             val names = withContext(Dispatchers.IO) {
                 ModelUpdateManager.loadCachedCategories(this@HomeActivity)
             }.orEmpty().map { it.name }
+            binding.tvStatWords.text = words.size.toString()
             renderCategories(homeCategories(words, names))
         }
     }

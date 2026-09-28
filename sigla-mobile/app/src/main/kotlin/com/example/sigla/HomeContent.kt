@@ -21,7 +21,19 @@ internal fun homeGreeting(hour: Int, name: String?): Greeting {
     return if (cleanName == null) Greeting(timeLine, null) else Greeting("Hi $cleanName!", timeLine)
 }
 
-data class HomeStats(val week: Int, val favorites: Int)
+/**
+ * The Home stat banner. SigLa bridges signers and non-signers in the moment,
+ * not a learning app, so these three describe capability and lifetime use
+ * rather than a streak or a "words learned" score: words available (the word
+ * bank's current size, what SigLa can recognize right now), total translated
+ * (every successful translation ever, not capped by the 200-entry history —
+ * see TranslationHistoryManager.getTotalTranslated), and favorites. Each
+ * value comes from its own on-device source (word bank cache, history
+ * manager, favorites manager) at a different point in HomeActivity.refresh(),
+ * so there is no single function here to compute it — this struct is just
+ * the three numbers the banner binds.
+ */
+data class HomeStats(val wordsAvailable: Int, val totalTranslated: Int, val favorites: Int)
 
 /** True when both instants fall on the same calendar date in [timeZone]. */
 internal fun isSameLocalDay(aMillis: Long, bMillis: Long, timeZone: TimeZone): Boolean {
@@ -29,26 +41,6 @@ internal fun isSameLocalDay(aMillis: Long, bMillis: Long, timeZone: TimeZone): B
     val b = Calendar.getInstance(timeZone).apply { timeInMillis = bMillis }
     return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
         a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
-}
-
-private const val WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000
-
-/**
- * SigLa bridges signers and non-signers in the moment, so a "streak" or a
- * "words learned" framing (a learning app's stats) doesn't fit what the app is
- * for. Week = translations in the trailing 7 days — a usage window a tool used
- * situationally, not daily, can actually fill. "Saved" (the capped history
- * total) was dropped: it just showed the 200-entry cap, not anything the user
- * did.
- */
-internal fun homeStats(
-    entries: List<TranslationEntry>,
-    favoritesCount: Int,
-    nowMillis: Long,
-): HomeStats {
-    val weekStart = nowMillis - WEEK_MILLIS
-    val week = entries.count { it.timestamp in weekStart..nowMillis }
-    return HomeStats(week = week, favorites = favoritesCount)
 }
 
 data class HomeCategory(val name: String, val wordCount: Int)
