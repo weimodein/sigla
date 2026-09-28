@@ -10,6 +10,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.DrawableRes
+import androidx.annotation.IdRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
@@ -18,12 +19,17 @@ import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 
-/** One onboarding feature page (Translate / Learn / Explore). */
+/**
+ * One onboarding feature page (Translate / Learn / Explore). [mockupViewId] is
+ * the id, within item_onboarding_page.xml, of that page's small preview of the
+ * real screen (e.g. mockupTranslate) — every other mockup view is hidden.
+ */
 data class OnboardingPage(
     @DrawableRes val iconRes: Int,
     val eyebrow: String,
     val title: String,
-    val description: String
+    val description: String,
+    @IdRes val mockupViewId: Int,
 )
 
 /**
@@ -49,19 +55,22 @@ class OnboardingActivity : AppCompatActivity() {
             R.drawable.ic_hand_line,
             "Translate",
             "Sign, and SigLa speaks",
-            "Tap the record button, sign one word, and SigLa translates it instantly. Switch to Live mode for continuous recognition, or flip the camera and turn on Filipino translations."
+            "Tap the record button, sign one word, and SigLa translates it instantly. Switch to Live mode for continuous recognition, or flip the camera and turn on Filipino translations.",
+            R.id.mockupTranslate,
         ),
         OnboardingPage(
             R.drawable.ic_onboard_learn,
             "Learn",
             "A word bank at your pace",
-            "Browse Filipino Sign Language words by category or search directly. Tap any word to watch a demo video, hear it spoken, and try it yourself in the translator."
+            "Browse Filipino Sign Language words by category or search directly. Tap any word to watch a demo video, hear it spoken, and try it yourself in the translator.",
+            R.id.mockupLearn,
         ),
         OnboardingPage(
             R.drawable.ic_onboard_explore,
             "Explore",
             "Everything, one tap away",
-            "Home for your stats and shortcuts, Word Bank to browse and learn, History for what you've translated, and Settings to make it yours."
+            "Home for your stats and shortcuts, Word Bank to browse and learn, History for what you've translated, and Settings to make it yours.",
+            R.id.mockupExplore,
         )
     )
 
@@ -102,6 +111,7 @@ class OnboardingActivity : AppCompatActivity() {
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 updateStep(position)
+                animatePageEntrance(position)
             }
         })
 
@@ -169,6 +179,36 @@ class OnboardingActivity : AppCompatActivity() {
         tvStepCount.text = getString(R.string.onboarding_step_count, position + 1, pageCount)
     }
 
+    /**
+     * Fades and slides the newly-shown feature page's icon badge and mockup
+     * preview in, staggered slightly so the mockup follows the icon. A no-op
+     * for the name page (it has no icon/mockup pair to animate — its own text
+     * field is the interactive element) and if the page's view isn't attached
+     * yet (a page that hasn't been laid out has nothing to animate).
+     */
+    private fun animatePageEntrance(position: Int) {
+        val page = featurePages.getOrNull(position) ?: return
+        // ViewPager2 hosts its own RecyclerView as its one child; that's how
+        // its pages' views are reached from the outside.
+        val innerRecycler = viewPager.getChildAt(0) as? RecyclerView ?: return
+        val pageView = innerRecycler.findViewHolderForAdapterPosition(position)?.itemView ?: return
+
+        val icon = pageView.findViewById<View>(R.id.iconBadge)
+        val mockup = pageView.findViewById<View>(page.mockupViewId)
+        val slide = dp(20).toFloat()
+
+        listOf(icon to 0L, mockup to 90L).forEach { (view, delay) ->
+            view.alpha = 0f
+            view.translationY = slide
+            view.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setStartDelay(delay)
+                .setDuration(320)
+                .start()
+        }
+    }
+
     private companion object {
         const val STATE_PENDING_NAME = "pending_name"
     }
@@ -190,6 +230,13 @@ class OnboardingAdapter(
         val eyebrow: TextView = view.findViewById(R.id.tvPageEyebrow)
         val title: TextView = view.findViewById(R.id.tvPageTitle)
         val description: TextView = view.findViewById(R.id.tvPageDescription)
+        // Every page's possible mockup preview, so onBindViewHolder can hide
+        // all but the one this page actually uses.
+        val allMockups: List<View> = listOf(
+            view.findViewById(R.id.mockupTranslate),
+            view.findViewById(R.id.mockupLearn),
+            view.findViewById(R.id.mockupExplore),
+        )
     }
 
     class NameVH(view: View) : RecyclerView.ViewHolder(view) {
@@ -221,6 +268,7 @@ class OnboardingAdapter(
                 holder.eyebrow.text = page.eyebrow
                 holder.title.text = page.title
                 holder.description.text = page.description
+                holder.allMockups.forEach { it.visibility = if (it.id == page.mockupViewId) View.VISIBLE else View.GONE }
             }
             is NameVH -> {
                 // setText before wiring the listener so restoring a saved name

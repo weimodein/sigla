@@ -21,9 +21,9 @@ class OnboardingNameStepTest {
     }
 
     private val threePages = listOf(
-        OnboardingPage(0, "A", "A", "A"),
-        OnboardingPage(0, "B", "B", "B"),
-        OnboardingPage(0, "C", "C", "C"),
+        OnboardingPage(0, "A", "A", "A", 0),
+        OnboardingPage(0, "B", "B", "B", 0),
+        OnboardingPage(0, "C", "C", "C", 0),
     )
 
     @Test
