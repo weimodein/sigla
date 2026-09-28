@@ -1,40 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Onboarding: 4 pages (Translate, Learn, Explore, then a name step), restyled
+     to the sg_* design system so it matches the rest of the revamped app. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/colorOnboardingBg">
+    android:background="@color/sg_bg">
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Brand mark + step counter, drawn on top of each page's navy header -->
+    <!-- Brand mark + step counter, drawn over each page's navy hero panel -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="24dp">
+        android:padding="@dimen/sg_space_24">
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/app_brand_mark"
-            android:fontFamily="@font/poppins_bold"
-            android:textSize="13sp"
+            android:fontFamily="@font/poppins_semibold"
+            android:textSize="@dimen/sg_text_body"
             android:letterSpacing="0.05"
-            android:textColor="@android:color/white" />
+            android:textColor="@color/sg_on_brand" />
 
         <TextView
             android:id="@+id/tvStepCount"
+            style="@style/Sigla.Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="@font/poppins_medium"
-            android:textSize="12sp"
-            android:textColor="#8AFFFFFF" />
+            android:textColor="@color/sg_on_brand_secondary"
+            tools:text="1 of 4" />
     </LinearLayout>
 
     <!-- Bottom controls -->
@@ -43,7 +46,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="@dimen/sg_space_24">
 
         <!-- Page indicators -->
         <LinearLayout
@@ -51,23 +54,24 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:orientation="horizontal"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="@dimen/sg_space_24"
+            android:orientation="horizontal" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSkip"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_semibold"
                 android:text="@string/skip"
-                android:fontFamily="@font/poppins_medium"
-                android:textColor="@color/colorTeal" />
+                android:textAllCaps="false"
+                android:textColor="@color/sg_brand_text" />
 
             <View
                 android:layout_width="0dp"
@@ -76,13 +80,10 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnNext"
+                style="@style/Widget.Sigla.Button"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="@string/next"
-                android:fontFamily="@font/poppins_bold"
-                android:textSize="16sp"
-                app:backgroundTint="@color/colorNavy"
-                app:cornerRadius="24dp" />
+                android:layout_height="@dimen/sg_touch_min"
+                android:text="@string/next" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

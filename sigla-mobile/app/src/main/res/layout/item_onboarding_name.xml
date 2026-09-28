@@ -1,25 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One onboarding feature page (Translate / Learn / Explore). Restyled to the
-     sg_* design system: a navy hero panel with rounded bottom corners (matching
-     the translator's bottom sheet / Word Bank's cards elsewhere in the app)
-     instead of the old CurvedHeaderView, plus Sigla.Text.* typography. -->
+<!-- Final onboarding step: "What should we call you?" (spec §5). Same hero-panel
+     shape as the feature pages, with a text field instead of body copy. -->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/sg_bg">
 
     <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/headerGuideline"
+        android:id="@+id/nameHeaderGuideline"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         app:layout_constraintGuide_percent="0.38" />
 
     <com.google.android.material.card.MaterialCardView
-        android:id="@+id/heroPanel"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:cardBackgroundColor="@color/sg_brand"
@@ -28,7 +24,7 @@
         app:shapeAppearanceOverlay="@style/ShapeAppearance.Sigla.OnboardHero"
         app:strokeWidth="0dp"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/headerGuideline"
+        app:layout_constraintBottom_toTopOf="@id/nameHeaderGuideline"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -39,18 +35,16 @@
             android:background="@drawable/bg_sg_circle_tint_on_brand">
 
             <ImageView
-                android:id="@+id/ivIcon"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:layout_gravity="center"
                 android:importantForAccessibility="no"
-                android:tint="@color/sg_on_brand"
-                tools:src="@drawable/ic_hand_line" />
+                android:src="@drawable/ic_onboard_name"
+                android:tint="@color/sg_on_brand" />
         </FrameLayout>
     </com.google.android.material.card.MaterialCardView>
 
     <TextView
-        android:id="@+id/tvPageEyebrow"
         style="@style/Sigla.Text.Caption"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -58,36 +52,62 @@
         android:letterSpacing="0.1"
         android:textAllCaps="true"
         android:textColor="@color/sg_brand_text"
-        app:layout_constraintTop_toBottomOf="@id/headerGuideline"
+        android:text="One last thing"
+        app:layout_constraintTop_toBottomOf="@id/nameHeaderGuideline"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        tools:text="Translate" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <TextView
-        android:id="@+id/tvPageTitle"
+        android:id="@+id/tvNameTitle"
         style="@style/Sigla.Text.Display"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/sg_space_8"
         android:gravity="center"
-        app:layout_constraintTop_toBottomOf="@id/tvPageEyebrow"
+        android:text="What should we call you?"
+        app:layout_constraintTop_toBottomOf="@id/nameHeaderGuideline"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        tools:text="Sign, and SigLa speaks" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <TextView
-        android:id="@+id/tvPageDescription"
+        android:id="@+id/tvNameSubtitle"
         style="@style/Sigla.Text.Body"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/sg_space_16"
+        android:layout_marginTop="@dimen/sg_space_8"
         android:gravity="center"
-        android:lineSpacingMultiplier="1.4"
         android:paddingHorizontal="@dimen/sg_space_32"
         android:textColor="@color/sg_text_secondary"
-        app:layout_constraintTop_toBottomOf="@id/tvPageTitle"
+        android:text="So Home can greet you by name. You can change this anytime in Settings."
+        app:layout_constraintTop_toBottomOf="@id/tvNameTitle"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        tools:text="Tap the record button, sign one word, and SigLa translates it instantly." />
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="@dimen/sg_search_height"
+        android:layout_marginTop="@dimen/sg_space_24"
+        android:layout_marginHorizontal="@dimen/sg_space_32"
+        android:background="@drawable/bg_sg_search"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="@dimen/sg_space_16"
+        app:layout_constraintTop_toBottomOf="@id/tvNameSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etUserName"
+            style="@style/Sigla.Text.Body"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@null"
+            android:hint="Your first name"
+            android:imeOptions="actionDone"
+            android:inputType="textPersonName|textCapWords"
+            android:maxLines="1"
+            android:textColor="@color/sg_text"
+            android:textColorHint="@color/sg_text_secondary" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

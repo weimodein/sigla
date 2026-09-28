@@ -171,4 +171,14 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">14dp</item>
     </style>
+
+    <!-- Onboarding hero panel: rounded bottom corners only (the panel sits at
+         the top of the screen, so only its lower edge needs rounding). -->
+    <style name="ShapeAppearance.Sigla.OnboardHero" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">0dp</item>
+        <item name="cornerSizeTopRight">0dp</item>
+        <item name="cornerSizeBottomLeft">32dp</item>
+        <item name="cornerSizeBottomRight">32dp</item>
+    </style>
 </resources>

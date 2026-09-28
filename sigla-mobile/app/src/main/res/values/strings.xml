@@ -5,6 +5,7 @@
     <string name="next">Next</string>
     <string name="get_started">Get Started</string>
     <string name="app_brand_mark">SigLa</string>
+    <string name="onboarding_step_count">%1$d of %2$d</string>
     <plurals name="home_word_count">
         <item quantity="one">%d word</item>
         <item quantity="other">%d words</item>
