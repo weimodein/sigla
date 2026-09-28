@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sg_nav_bar">@color/sg_bar_bg</color>
+</resources>

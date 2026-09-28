@@ -13,4 +13,5 @@
     <color name="sg_success">#2E7D32</color>
     <color name="sg_on_brand">#FFFFFF</color>
     <color name="sg_on_brand_secondary">#CCFFFFFF</color>
+    <color name="sg_nav_bar">@color/sg_bar_bg</color>
 </resources>

@@ -22,7 +22,7 @@
     <dimen name="sg_text_display">26sp</dimen>
 
     <dimen name="sg_badge_size">40dp</dimen>
-    <dimen name="sg_search_height">44dp</dimen>
+    <dimen name="sg_search_height">48dp</dimen>
     <dimen name="sg_touch_min">48dp</dimen>
 
     <dimen name="sg_bottom_bar_height">64dp</dimen>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- App theme: navy brand, light by default (spec §4). windowBackground matches
          the Home screen so the starting window and the first frame are the same
          colour (a mismatch reads as a stutter on launch). -->
@@ -11,8 +11,9 @@
         <item name="colorOnSecondary">@color/sg_on_brand</item>
         <item name="android:windowBackground">@color/sg_bg</item>
         <item name="android:statusBarColor">@color/sg_bg</item>
-        <item name="android:navigationBarColor">@color/sg_bar_bg</item>
+        <item name="android:navigationBarColor">@color/sg_nav_bar</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/sg_light_system_bars</item>
     </style>
 
     <!-- Translator and fullscreen video: always dark, like a camera or video app.
@@ -22,5 +23,6 @@
         <item name="android:statusBarColor">#0A0E21</item>
         <item name="android:navigationBarColor">#0D1127</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
     </style>
 </resources>

@@ -16,4 +16,6 @@
     <color name="sg_success">#2E7D32</color>
     <color name="sg_on_brand">#FFFFFF</color>
     <color name="sg_on_brand_secondary">#CCFFFFFF</color>
+    <!-- Light-mode fallback for API 24-26, which cannot draw dark nav icons. -->
+    <color name="sg_nav_bar">#0D1127</color>
 </resources>
