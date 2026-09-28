@@ -7,7 +7,6 @@ import android.os.Looper
 import android.text.InputFilter
 import android.text.InputType
 import android.view.View
-import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -16,7 +15,7 @@ import android.widget.ProgressBar
 import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -38,7 +37,6 @@ class WordBankActivity : AppCompatActivity() {
     private val searchHandler = Handler(Looper.getMainLooper())
     private var searchRunnable: Runnable? = null
 
-    private lateinit var btnCategoryPill: MaterialButton
     private lateinit var etSearch: TextInputEditText
     private lateinit var rvWords: RecyclerView
     private lateinit var emptyState: LinearLayout
@@ -49,6 +47,12 @@ class WordBankActivity : AppCompatActivity() {
     private lateinit var rvCategoryGrid: RecyclerView
     private lateinit var gridAdapter: CategoryGridAdapter
     private lateinit var btnDownloadAllVideos: MaterialButton
+    private lateinit var tvWordBankSubtitle: TextView
+    private lateinit var pillAll: MaterialButton
+    private lateinit var pillWords: MaterialButton
+    private lateinit var pillLetters: MaterialButton
+    private lateinit var listContainer: View
+    private var gridFilter = VocabularyFilter.ALL
     private var isGridMode = true
 
     // Bulk demo-video download state. The dialog reference is kept so onDestroy
@@ -57,7 +61,6 @@ class WordBankActivity : AppCompatActivity() {
     private var downloadDialog: AlertDialog? = null
 
     private var selectedCategory = "All Categories"
-    private var gridCategoryFilter = "All Categories"
     private var dbCategories = listOf<CategoryItem>()
     private var searchQuery = ""
     private var allWords = listOf<WordBankWord>()
@@ -66,21 +69,6 @@ class WordBankActivity : AppCompatActivity() {
     companion object {
         /** Set by Home's search bar: focus the search field and open the keyboard. */
         const val EXTRA_FOCUS_SEARCH = "extra_focus_search"
-
-        val FSL_CATEGORIES = listOf(
-            "introducing oneself",
-            "ordering food",
-            "buying items",
-            "asking for prices",
-            "giving numbers",
-            "requesting assistance",
-            "asking for directions",
-            "confirming information",
-            "communicating basic needs",
-            "alphabets",
-            "numbers",
-            "additional words"
-        )
     }
 
     // Custom categories management
@@ -92,19 +80,13 @@ class WordBankActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_word_bank)
 
-        // Some devices/Android versions ignore the theme's android:statusBarColor
-        // (newer edge-to-edge behavior), leaving a white status bar with a gap
-        // above the header. Setting it explicitly here is reliable everywhere.
-        window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
-
         favoritesManager = FavoritesManager.getInstance(this)
 
         bindViews()
         BottomNavHelper.setup(this, Tab.WORD_BANK)
         setupRecyclerView()
         setupCategoryGrid()
-        setupCategoryDropdown()
+        setupFilterPills()
         setupSearch()
         wireListeners()
         bindDownloadAllButton()
@@ -141,11 +123,15 @@ class WordBankActivity : AppCompatActivity() {
         super.onResume()
         // Favorites membership may have changed in the word detail screen.
         if (allWords.isNotEmpty()) {
-            if (isGridMode) refreshCategoryGrid() else applyFilters()
+            if (isGridMode) {
+                refreshCategoryGrid()
+            } else {
+                applyFilters()
+                adapter.refreshFavorites()
+            }
         }
     }
     private fun bindViews() {
-        btnCategoryPill = findViewById(R.id.btnCategoryPill)
         etSearch = findViewById(R.id.etSearch)
         rvWords = findViewById(R.id.rvWords)
         emptyState = findViewById(R.id.emptyState)
@@ -154,6 +140,11 @@ class WordBankActivity : AppCompatActivity() {
         categoryGridContainer = findViewById(R.id.categoryGridContainer)
         rvCategoryGrid = findViewById(R.id.rvCategoryGrid)
         btnDownloadAllVideos = findViewById(R.id.btnDownloadAllVideos)
+        tvWordBankSubtitle = findViewById(R.id.tvWordBankSubtitle)
+        pillAll = findViewById(R.id.pillAll)
+        pillWords = findViewById(R.id.pillWords)
+        pillLetters = findViewById(R.id.pillLetters)
+        listContainer = findViewById(R.id.listContainer)
     }
 
     // ── Category Grid ───────────────────────────────────────────────────────────────
@@ -173,6 +164,7 @@ class WordBankActivity : AppCompatActivity() {
             gridAdapter.setItems(emptyList())
             if (isGridMode) {
                 emptyState.visibility = if (isLoading) View.GONE else View.VISIBLE
+                listContainer.visibility = View.VISIBLE
             }
             return
         }
@@ -190,32 +182,18 @@ class WordBankActivity : AppCompatActivity() {
                 .sorted()
         }
 
-        // One pass over allWords instead of a full scan per category. This runs on
-        // every onResume, so the old shape was O(categories x words) on the main
-        // thread each time the screen came back. Keyed on lowercase to preserve the
-        // equals(ignoreCase = true) semantics the per-category counts used.
-        val countsByCategory = HashMap<String, Int>(categoryNames.size * 2)
-        var favoritesCount = 0
-        for (word in allWords) {
-            val key = word.category.lowercase()
-            countsByCategory[key] = (countsByCategory[key] ?: 0) + 1
-            if (favoritesManager.isFavorite(word.id)) favoritesCount++
-        }
+        tvWordBankSubtitle.text =
+            "${allWords.size} Filipino Sign Language word${if (allWords.size != 1) "s" else ""}"
 
         val items = mutableListOf<CategoryGridItem>()
-
-        if (gridCategoryFilter == "All Categories") {
+        if (gridFilter == VocabularyFilter.ALL) {
+            val favoritesCount = allWords.count { favoritesManager.isFavorite(it.id) }
             items.add(CategoryGridItem(displayName = "Favorites", wordCount = favoritesCount, isFavorites = true))
             items.add(CategoryGridItem(displayName = "All Words", wordCount = allWords.size, isAllWords = true))
-            categoryNames.forEach { catName ->
-                val count = countsByCategory[catName.lowercase()] ?: 0
-                items.add(CategoryGridItem(displayName = catName, wordCount = count))
-            }
-        } else {
-            val count = countsByCategory[gridCategoryFilter.lowercase()] ?: 0
-            items.add(CategoryGridItem(displayName = gridCategoryFilter, wordCount = count))
         }
-
+        gridCategories(allWords, categoryNames, gridFilter).forEach { cat ->
+            items.add(CategoryGridItem(displayName = cat.name, wordCount = cat.wordCount))
+        }
         gridAdapter.setItems(items)
     }
 
@@ -233,6 +211,7 @@ class WordBankActivity : AppCompatActivity() {
         categoryGridContainer.visibility = View.GONE
         tvEntryCount.visibility = View.VISIBLE
         rvWords.visibility = View.VISIBLE
+        listContainer.visibility = View.VISIBLE
         // emptyState visibility is still managed by applyFilters()
     }
 
@@ -244,7 +223,9 @@ class WordBankActivity : AppCompatActivity() {
         emptyState.visibility = View.GONE
         // Spinner reflects whether words are still loading — never gate it on the
         // categories API, which may legitimately return empty.
-        progressLoading.visibility = if (isLoading && allWords.isEmpty()) View.VISIBLE else View.GONE
+        val stillLoadingInitial = isLoading && allWords.isEmpty()
+        progressLoading.visibility = if (stillLoadingInitial) View.VISIBLE else View.GONE
+        listContainer.visibility = if (stillLoadingInitial) View.VISIBLE else View.GONE
     }
 
 
@@ -341,54 +322,33 @@ class WordBankActivity : AppCompatActivity() {
 
     private fun loadCustomCategories() {
         customCategories = customCategoryManager.getAll().toMutableList()
-        refreshCategoryDropdown()
     }
 
-    // ── Category dropdown ─────────────────────────────────────────────────────
+    // ── Filter pills ──────────────────────────────────────────────────────────
 
-    private fun setupCategoryDropdown() {
-        btnCategoryPill.setOnClickListener {
-            val popup = android.widget.PopupMenu(this, btnCategoryPill)
-            val categories = getCategoryDisplayList()
-            categories.forEachIndexed { index, name ->
-                popup.menu.add(0, index, index, name)
-            }
-            popup.setOnMenuItemClickListener { item ->
-                gridCategoryFilter = categories[item.itemId]
-                btnCategoryPill.text = if (gridCategoryFilter == "All Categories") "All Category" else gridCategoryFilter
-                showGridMode()       // stay/return to grid
-                refreshCategoryGrid()
-                true
-            }
-            popup.show()
-        }
-    }   
-
-    private fun getCategoryDisplayList(): List<String> {
-        val baseCategories = if (dbCategories.isNotEmpty()) {
-            dbCategories.map { it.name }
-        } else {
-            FSL_CATEGORIES  // fallback if API hasn't returned yet, or failed
-        }
-        // toTitleCase(), not capitalizeFirst(): a long all-caps name like
-        // RELATIONSHIPS or TRANSACTIONAL filled the category grid card's width
-        // edge-to-edge and forced a mid-word hyphenation — see
-        // item_category_card.xml and CategoryGridAdapter. gridCategoryFilter
-        // is matched against countsByCategory by .lowercase() in
-        // refreshCategoryGrid(), so this case change doesn't break filtering.
-        val systemCategories = listOf("All Categories") + baseCategories.map { it.toTitleCase() }
-        // Custom names are user-typed and must keep their own casing, same as
-        // everywhere else in the app that touches them.
-        val customCategoryNames = customCategories.map { it.name }
-        return systemCategories + customCategoryNames
+    private fun setupFilterPills() {
+        pillAll.setOnClickListener { selectGridFilter(VocabularyFilter.ALL) }
+        pillWords.setOnClickListener { selectGridFilter(VocabularyFilter.WORDS) }
+        pillLetters.setOnClickListener { selectGridFilter(VocabularyFilter.LETTERS) }
+        renderFilterPills()
     }
-    
-    private fun refreshCategoryDropdown() {
-        val allCategories = getCategoryDisplayList()
-        val dropdownAdapter = ArrayAdapter(
-            this, android.R.layout.simple_dropdown_item_1line, allCategories
-        )
-        //actvCategory.setAdapter(dropdownAdapter)
+
+    private fun selectGridFilter(filter: VocabularyFilter) {
+        gridFilter = filter
+        renderFilterPills()
+        refreshCategoryGrid()
+    }
+
+    private fun renderFilterPills() {
+        fun style(pill: MaterialButton, on: Boolean) {
+            val bg = if (on) R.color.sg_brand else R.color.sg_tint
+            val fg = if (on) R.color.sg_on_brand else R.color.sg_brand_text
+            pill.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, bg))
+            pill.setTextColor(ContextCompat.getColor(this, fg))
+        }
+        style(pillAll, gridFilter == VocabularyFilter.ALL)
+        style(pillWords, gridFilter == VocabularyFilter.WORDS)
+        style(pillLetters, gridFilter == VocabularyFilter.LETTERS)
     }
 
     // ── Search ────────────────────────────────────────────────────────────────
@@ -575,7 +535,6 @@ class WordBankActivity : AppCompatActivity() {
                     //actvCategory.setText(newName, false)
                 }
 
-                refreshCategoryDropdown()
                 applyFilters()
                 Toast.makeText(this, "Category renamed to \"$newName\"", Toast.LENGTH_SHORT).show()
             }
@@ -606,7 +565,6 @@ class WordBankActivity : AppCompatActivity() {
                     //actvCategory.setText("", false)
                 }
 
-                refreshCategoryDropdown()
                 applyFilters()
                 Toast.makeText(this, "\"${category.name}\" deleted", Toast.LENGTH_SHORT).show()
                 onDone?.invoke()

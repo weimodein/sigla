@@ -1,73 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Category card (spec §4: uniform pale cards, Favorites is the navy highlight). -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/cardCategory"
+    style="@style/Widget.Sigla.Card.Tint"
     android:layout_width="match_parent"
-    android:layout_height="130dp"
+    android:layout_height="wrap_content"
     android:layout_margin="6dp"
-    app:cardCornerRadius="20dp"
-    app:cardElevation="0dp"
-    app:cardBackgroundColor="#4A90E2"
     android:clickable="true"
-    android:focusable="true"
-    app:rippleColor="#33FFFFFF">
+    android:focusable="true">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="104dp"
         android:orientation="vertical"
-        android:padding="16dp">
-
-        <!-- Icon chip -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardIconChip"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            app:cardCornerRadius="10dp"
-            app:cardElevation="0dp"
-            app:cardBackgroundColor="#33FFFFFF">
-
-            <ImageView
-                android:id="@+id/ivCategoryIcon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:layout_gravity="center"
-                android:src="@android:drawable/ic_menu_agenda"
-                app:tint="#FFFFFF"
-                android:contentDescription="Category icon" />
-
-        </com.google.android.material.card.MaterialCardView>
-
+        android:padding="@dimen/sg_space_12">
+        <ImageView
+            android:id="@+id/ivCategoryIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_tag_line" />
         <TextView
             android:id="@+id/tvCategoryName"
+            style="@style/Sigla.Text.BodyStrong"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:layout_marginTop="10dp"
-            android:text="Category Name"
-            android:textColor="#FFFFFF"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            android:maxLines="2"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sg_space_8"
             android:ellipsize="end"
-            android:gravity="bottom"
-            android:breakStrategy="simple"
             android:hyphenationFrequency="none"
-            app:autoSizeTextType="uniform"
-            app:autoSizeMinTextSize="11sp"
-            app:autoSizeMaxTextSize="17sp"
-            app:autoSizeStepGranularity="1sp" />
-
+            tools:text="Greetings" />
         <TextView
             android:id="@+id/tvCategoryCount"
+            style="@style/Sigla.Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="0 Words"
-            android:textColor="#B3FFFFFF"
-            android:textSize="12sp" />
-
+            tools:text="14 words" />
     </LinearLayout>
-
 </com.google.android.material.card.MaterialCardView>
