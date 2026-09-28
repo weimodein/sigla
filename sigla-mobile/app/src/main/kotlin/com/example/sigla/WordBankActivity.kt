@@ -169,7 +169,10 @@ class WordBankActivity : AppCompatActivity() {
             return
         }
 
-        if (isGridMode) emptyState.visibility = View.GONE
+        if (isGridMode) {
+            emptyState.visibility = View.GONE
+            listContainer.visibility = View.GONE
+        }
 
         // Prefer the DB categories; fall back to the categories present on the
         // loaded words so the grid still works when /categories is empty.
