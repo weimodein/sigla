@@ -1,56 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- item_word_simple.xml
-     Minimal list row used by the category word-list screen and by search
-     results: just an icon and the word, tap to open the full detail sheet.
--->
+<!-- Word row (spec §5 "Word rows", mockup words-v1 option A). -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    style="@style/Widget.Sigla.Card.Tint"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
-    app:cardCornerRadius="12dp"
-    app:cardElevation="1.5dp"
-    app:strokeWidth="1dp"
-    app:strokeColor="@color/sig_border_card"
-    app:cardBackgroundColor="@color/sig_surface_card">
+    android:layout_marginBottom="@dimen/sg_space_12"
+    android:clickable="true"
+    android:focusable="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="12dp"
-        android:paddingEnd="14dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp">
+        android:minHeight="76dp"
+        android:orientation="horizontal"
+        android:padding="@dimen/sg_space_12">
 
-        <FrameLayout
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@drawable/bg_icon_circle_blue_light">
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/ivWordThumb"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_sg_thumb"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Sigla.Thumb" />
 
-            <ImageView
-                android:id="@+id/ivWordIcon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_one_hand"
-                android:contentDescription="Word icon" />
-
-        </FrameLayout>
-
-        <TextView
-            android:id="@+id/tvSimpleWord"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="10dp"
-            android:text="Hello"
-            android:textColor="@color/sig_text_primary"
-            android:textSize="14sp"
-            android:fontFamily="@font/poppins_medium" />
+            android:layout_marginStart="@dimen/sg_space_12"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/tvSimpleWord"
+                style="@style/Sigla.Text.BodyStrong"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                tools:text="Good morning" />
+            <TextView
+                android:id="@+id/tvWordFilipino"
+                style="@style/Sigla.Text.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                tools:text="Magandang umaga" />
+        </LinearLayout>
 
+        <ImageView
+            android:id="@+id/ivWordStar"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="@dimen/sg_space_12"
+            android:src="@drawable/ic_star_line"
+            android:tint="@color/sg_text_secondary"
+            tools:ignore="ContentDescription" />
     </LinearLayout>
-
 </com.google.android.material.card.MaterialCardView>

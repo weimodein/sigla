@@ -620,7 +620,10 @@ class WordBankActivity : AppCompatActivity() {
     // ── RecyclerView setup ────────────────────────────────────────────────────
 
     private fun setupRecyclerView() {
-        adapter = SimpleWordAdapter(mutableListOf()) { word -> openWordDetail(word) }
+        adapter = SimpleWordAdapter(
+            mutableListOf(),
+            isFavorite = { id -> favoritesManager.isFavorite(id) },
+        ) { word -> openWordDetail(word) }
         rvWords.layoutManager = LinearLayoutManager(this)
         // Row height doesn't depend on content, so RecyclerView can skip a full
         // layout pass whenever the data set changes.

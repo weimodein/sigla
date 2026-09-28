@@ -1,23 +1,34 @@
 package com.example.sigla
 
+import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 
 /**
- * Minimal word row (icon + label only) used by the category word-list screen
- * and by Word Bank search results — tapping a row opens the full detail sheet.
+ * Word row (thumbnail, word, Filipino translation, favorite star) used by the
+ * category word list and by Word Bank search results. Tapping a row opens the
+ * word's detail screen. The star only shows favorite state; favoriting stays on
+ * the detail screen (spec §5).
  */
 class SimpleWordAdapter(
     private val words: MutableList<WordBankWord>,
-    private val onWordClick: (WordBankWord) -> Unit
+    private val isFavorite: (Int) -> Boolean,
+    private val onWordClick: (WordBankWord) -> Unit,
 ) : RecyclerView.Adapter<SimpleWordAdapter.WordViewHolder>() {
 
     class WordViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val thumb: ImageView = view.findViewById(R.id.ivWordThumb)
         val tvWord: TextView = view.findViewById(R.id.tvSimpleWord)
+        val tvFilipino: TextView = view.findViewById(R.id.tvWordFilipino)
+        val star: ImageView = view.findViewById(R.id.ivWordStar)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): WordViewHolder {
@@ -28,7 +39,34 @@ class SimpleWordAdapter(
 
     override fun onBindViewHolder(holder: WordViewHolder, position: Int) {
         val word = words[position]
-        holder.tvWord.text = word.label
+        val context = holder.itemView.context
+
+        holder.tvWord.text = word.label.toTitleCase()
+        val filipino = word.filipino_translation?.trim().orEmpty()
+        holder.tvFilipino.text = filipino
+        holder.tvFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
+
+        // Saved copy first (works offline), then the URL; the hand placeholder when
+        // neither exists or loading fails.
+        val source: Any? = ModelUpdateManager.getLocalThumb(context, word.id)
+            ?: ApiClient.resolveUrl(word.thumbnail_url)
+        Glide.with(holder.thumb)
+            .load(source)
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .placeholder(R.drawable.ic_hand_placeholder)
+            .error(R.drawable.ic_hand_placeholder)
+            .fallback(R.drawable.ic_hand_placeholder)
+            .into(holder.thumb)
+
+        val fav = isFavorite(word.id)
+        holder.star.setImageResource(if (fav) R.drawable.ic_star_fill else R.drawable.ic_star_line)
+        holder.star.imageTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(context, if (fav) R.color.sg_brand_text else R.color.sg_text_secondary)
+        )
+        holder.star.contentDescription = if (fav) "In favorites" else null
+
+        holder.itemView.contentDescription =
+            if (filipino.isEmpty()) word.label else "${word.label}, $filipino"
         holder.itemView.setOnClickListener { onWordClick(word) }
     }
 
@@ -36,25 +74,24 @@ class SimpleWordAdapter(
 
     /**
      * Diffs against the current contents rather than calling notifyDataSetChanged().
-     *
-     * Word Bank calls this on every debounced keystroke, so a blanket rebind meant
-     * re-binding every visible row for what is usually a small change to the tail of
-     * the list.
+     * Word Bank calls this on every debounced keystroke.
      */
     fun setWords(newWords: List<WordBankWord>) {
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = words.size
             override fun getNewListSize() = newWords.size
-
             override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
                 words[oldPos].id == newWords[newPos].id
-
-            // WordBankWord is a data class, so equality covers every displayed field.
             override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
                 words[oldPos] == newWords[newPos]
         })
         words.clear()
         words.addAll(newWords)
         diff.dispatchUpdatesTo(this)
+    }
+
+    /** Re-draws the stars after favorites may have changed on the detail screen. */
+    fun refreshFavorites() {
+        if (words.isNotEmpty()) notifyItemRangeChanged(0, words.size)
     }
 }

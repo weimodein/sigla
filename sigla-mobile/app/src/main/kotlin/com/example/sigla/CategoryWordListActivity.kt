@@ -8,7 +8,6 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -52,9 +51,6 @@ class CategoryWordListActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_category_word_list)
 
-        window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
-
         favoritesManager = FavoritesManager.getInstance(this)
         categoryName = intent.getStringExtra(EXTRA_CATEGORY_NAME) ?: "All Categories"
         isFavorites = intent.getBooleanExtra(EXTRA_IS_FAVORITES, false)
@@ -77,7 +73,10 @@ class CategoryWordListActivity : AppCompatActivity() {
             applyFilters()
         }
 
-        adapter = SimpleWordAdapter(mutableListOf()) { word -> openWordDetail(word) }
+        adapter = SimpleWordAdapter(
+            mutableListOf(),
+            isFavorite = { id -> favoritesManager.isFavorite(id) },
+        ) { word -> openWordDetail(word) }
         rvCategoryWords.layoutManager = LinearLayoutManager(this)
         rvCategoryWords.setHasFixedSize(true)
         rvCategoryWords.adapter = adapter
@@ -87,8 +86,8 @@ class CategoryWordListActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Favorites membership may have changed in the detail screen.
-        if (isFavorites) onWordsUpdated()
+        // Favorites may have changed on the word detail screen.
+        if (isFavorites) onWordsUpdated() else if (::adapter.isInitialized) adapter.refreshFavorites()
     }
 
     private fun openWordDetail(word: WordBankWord) {
@@ -149,7 +148,8 @@ class CategoryWordListActivity : AppCompatActivity() {
             isAllWords -> allWords
             else -> allWords.filter { it.category.equals(categoryName, ignoreCase = true) }
         }
-        tvCategorySubtitle.text = "${categoryWords.size} Word${if (categoryWords.size != 1) "s" else ""}"
+        val n = categoryWords.size
+        tvCategorySubtitle.text = "$n word" + if (n == 1) "" else "s"
         applyFilters()
     }
 
