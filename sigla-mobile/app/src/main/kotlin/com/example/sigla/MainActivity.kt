@@ -197,6 +197,25 @@ class MainActivity : AppCompatActivity() {
     // Keep at most one overlay render queued. A newer MediaPipe result replaces
     // the staged result instead of building a visible backlog of stale frames.
     @Volatile private var pendingOverlayResult: LandmarkResult? = null
+
+    // Whether the landmark overlay is faded in. Changes only on the hands
+    // appear / lost edge — never per frame.
+    private var overlayShown = true
+
+    private fun showOverlay() {
+        if (overlayShown) return
+        overlayShown = true
+        Motion.fadeTo(binding.overlayView, 1f, Motion.QUICK, Motion.ENTER)
+    }
+
+    private fun hideOverlay() {
+        if (!overlayShown) return
+        overlayShown = false
+        Motion.fadeTo(binding.overlayView, 0f, Motion.STANDARD, Motion.EXIT) {
+            // Hands may have come back during the fade.
+            if (!overlayShown) binding.overlayView.clear()
+        }
+    }
     private val overlayPostPending = AtomicBoolean(false)
 
     // Last values actually written to the status views. progress is frames/30 capped,
@@ -664,14 +683,13 @@ class MainActivity : AppCompatActivity() {
 
     /** Sheet status line: text plus a coloured dot (spec §5). Main thread only. */
     private fun setStatus(text: String, kind: StatusKind) {
-        binding.tvStatus.text = text
+        Motion.swapText(binding.tvStatus, text)
         val colour = when (kind) {
             StatusKind.LOADING -> R.color.sg_text_secondary
             StatusKind.READY -> R.color.sg_success
             StatusKind.ERROR -> R.color.sg_danger
         }
-        binding.statusDot.backgroundTintList =
-            ColorStateList.valueOf(ContextCompat.getColor(this, colour))
+        Motion.tintTo(binding.statusDot, ContextCompat.getColor(this, colour))
     }
 
     // ── Predictor callbacks ───────────────────────────────────────────────────
@@ -701,12 +719,12 @@ class MainActivity : AppCompatActivity() {
                 lastShownPct         = -1
                 lastShownFrames      = -1
 
-                binding.tvFrames.text             = "No hands"
+                Motion.swapText(binding.tvFrames, "No hands")
                 binding.tvVelocity.text           = "—"
                 binding.tvStreak.visibility       = View.GONE
-                binding.progressBuffer.progress   = 0
+                binding.progressBuffer.setProgress(0, true)
                 binding.tvBufferPercent.text = "0%"
-                binding.overlayView.clear()
+                hideOverlay()
                 binding.tvHandsWarning.visibility = View.GONE
             }
         }
@@ -952,6 +970,7 @@ class MainActivity : AppCompatActivity() {
                     displayed.sourceHeight.toFloat(),
                     isFrontCamera,
                 )
+                if (displayed.landmarks.isNotEmpty()) showOverlay()
                 flushCollectingState()
             }
         } finally {
@@ -978,14 +997,16 @@ class MainActivity : AppCompatActivity() {
         val pct = pendingCollectPct
         if (pct >= 0 && pct != lastShownPct) {
             lastShownPct = pct
-            binding.progressBuffer.progress = pct
+            binding.progressBuffer.setProgress(pct, true)
             binding.tvBufferPercent.text    = "$pct%"
         }
 
         val frames = pendingCollectFrames
         if (frames >= 0 && frames != lastShownFrames) {
             lastShownFrames = frames
-            binding.tvFrames.text = "$frames"
+            // Changes almost every frame: immediate, and it cancels a "No hands"
+            // swap still in flight so that text cannot land on top of a count.
+            Motion.setText(binding.tvFrames, "$frames")
 
             // tvVelocity/tvStreak are NOT updated per frame any more. CollectingState's
             // isMotion and streak were always true/0 (the producer never overrode their
@@ -1099,14 +1120,16 @@ class MainActivity : AppCompatActivity() {
     private fun applyToggleStyle(button: MaterialButton, on: Boolean) {
         val bg = if (on) R.color.sg_brand else R.color.sg_tint
         val fg = if (on) R.color.sg_on_brand else R.color.sg_brand_text
-        button.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, bg))
+        Motion.tintTo(button, ContextCompat.getColor(this, bg), Motion.QUICK)
         button.setTextColor(ContextCompat.getColor(this, fg))
     }
 
     /** Filled brand when on, transparent when off (segments inside the white pill). */
     private fun applySegmentStyle(button: MaterialButton, on: Boolean) {
-        button.backgroundTintList = ColorStateList.valueOf(
-            if (on) ContextCompat.getColor(this, R.color.sg_brand) else Color.TRANSPARENT
+        Motion.tintTo(
+            button,
+            if (on) ContextCompat.getColor(this, R.color.sg_brand) else Color.TRANSPARENT,
+            Motion.QUICK,
         )
         button.setTextColor(ContextCompat.getColor(this, if (on) R.color.sg_on_brand else R.color.sg_text_secondary))
     }
