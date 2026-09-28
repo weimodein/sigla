@@ -45,6 +45,10 @@ import kotlinx.coroutines.delay
 
 private const val TAG               = "MainActivity"
 private const val CAMERA_PERMISSION = 100
+// Live mode: a result stays up this long after the LATEST recognition.
+private const val LIVE_RESULT_VISIBLE_MS = 2000L
+// The Filipino line follows the word slightly, so the eye reads the word first.
+private const val RESULT_FILIPINO_DELAY_MS = 80L
 
 // Steady-state text for the gesture indicator. CollectingState.isMotion was always
 // true, so the "○ static" branch it used to select between was unreachable.
@@ -250,6 +254,20 @@ class MainActivity : AppCompatActivity() {
     private fun recordingPromptText(elapsedMs: Long): String =
         String.format(java.util.Locale.US, "Recording… %.1fs", elapsedMs / 1000f)
     private val hideTapPrompt = Runnable { renderTapState() }
+
+    // One tracked hide for the Live result card. Each result re-posts it, so an
+    // earlier result's timer can no longer hide a newer result early.
+    private val hideResult = Runnable { Motion.hide(binding.cardResult, View.INVISIBLE) }
+
+    private fun scheduleResultHide() {
+        binding.cardResult.removeCallbacks(hideResult)
+        binding.cardResult.postDelayed(hideResult, LIVE_RESULT_VISIBLE_MS)
+    }
+
+    private fun clearResult() {
+        binding.cardResult.removeCallbacks(hideResult)
+        Motion.hide(binding.cardResult, View.INVISIBLE)
+    }
 
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
@@ -489,6 +507,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun stopVision() {
         cancelTap()
+        binding.cardResult.removeCallbacks(hideResult)
         if (!visionActive) return
         visionActive = false
         pendingOverlayResult = null
@@ -699,9 +718,41 @@ class MainActivity : AppCompatActivity() {
         val pct = (result.confidence * 100).toInt()
 
         lastLabel = result.label
-        binding.tvResult.text         = result.label.uppercase()
-        binding.cardResult.visibility = View.VISIBLE
-        binding.progressBuffer.progress = 0
+        val word = result.label.uppercase()
+        val filipino = getFilipinoTranslation(result.label)
+        val showFilipinoLine = filipino != null && showFilipino
+
+        when (resultMotion(Motion.isShowing(binding.cardResult))) {
+            ResultMotion.EMPHASIZE -> {
+                binding.tvResult.text = word
+                if (showFilipinoLine) {
+                    binding.tvFilipinoResult.text = filipino
+                    // INVISIBLE, not GONE: the line keeps its space, so the card
+                    // does not change height when it fades in a moment later.
+                    binding.tvFilipinoResult.visibility = View.INVISIBLE
+                    Motion.reveal(binding.tvFilipinoResult, startDelay = RESULT_FILIPINO_DELAY_MS)
+                } else {
+                    binding.tvFilipinoResult.visibility = View.GONE
+                }
+                Motion.emphasize(binding.cardResult)
+            }
+            ResultMotion.SWAP -> {
+                Motion.swapText(binding.tvResult, word)
+                if (showFilipinoLine) {
+                    if (binding.tvFilipinoResult.visibility == View.VISIBLE) {
+                        Motion.swapText(binding.tvFilipinoResult, filipino!!)
+                    } else {
+                        binding.tvFilipinoResult.text = filipino
+                        Motion.reveal(binding.tvFilipinoResult)
+                    }
+                } else {
+                    Motion.hide(binding.tvFilipinoResult, View.GONE)
+                }
+            }
+        }
+        Haptics.confirm(binding.root)
+
+        binding.progressBuffer.setProgress(0, true)
         binding.tvBufferPercent.text = "0%"
 
         // Text-to-speech
@@ -716,25 +767,14 @@ class MainActivity : AppCompatActivity() {
             historyManager.add(label, pct, gestureType)
         }
 
-        // Filipino translation
-        val filipino = getFilipinoTranslation(result.label)
-        if (filipino != null && showFilipino) {
-            binding.tvFilipinoResult.text = filipino
-            binding.tvFilipinoResult.visibility = View.VISIBLE
-        } else {
-            binding.tvFilipinoResult.visibility = View.GONE
-            // Distinguishes "no translation for this label" from "toggle is off" —
-            // the missing-entry case used to fail silently.
-            if (filipino == null) {
-                Log.d(TAG, "No Filipino translation for '${result.label}' " +
-                    "(${filipinoMap.size} translation(s) loaded)")
-            }
+        // Distinguishes "no translation for this label" from "toggle is off" —
+        // the missing-entry case used to fail silently.
+        if (filipino == null) {
+            Log.d(TAG, "No Filipino translation for '${result.label}' " +
+                "(${filipinoMap.size} translation(s) loaded)")
         }
 
-        if (!tapMode) {
-            binding.cardResult.postDelayed(
-                { binding.cardResult.visibility = View.INVISIBLE }, 2000)
-        }
+        if (!tapMode) scheduleResultHide()
     }
 
     /** Called on MediaPipe's callback thread (onFrame) or the UI thread (tap). */
@@ -791,7 +831,7 @@ class MainActivity : AppCompatActivity() {
         predictor?.onNoHands?.invoke()
         updateModeToggleLabel()
         cancelTap()
-        binding.cardResult.visibility = View.INVISIBLE
+        clearResult()
     }
 
     /**
@@ -967,9 +1007,9 @@ class MainActivity : AppCompatActivity() {
             val translation = if (showFilipino) lastLabel?.let { getFilipinoTranslation(it) } else null
             if (translation != null) {
                 binding.tvFilipinoResult.text = translation
-                binding.tvFilipinoResult.visibility = View.VISIBLE
+                Motion.reveal(binding.tvFilipinoResult)
             } else {
-                binding.tvFilipinoResult.visibility = View.GONE
+                Motion.hide(binding.tvFilipinoResult, View.GONE)
             }
         }
 
