@@ -149,9 +149,15 @@ Layouts follow the approved mockups.
   never built). The sheet holds: status line with a "Hold for SOS" pill on the
   same row; Words / Letters / Filipino chips; one-line hint. Live mode replaces
   the record button with the existing live status readout.
-- **Word Bank:** title + word count; search; filter pills (All · Words · Letters
-  · My collections) replacing the category dropdown; section header with
-  "+ Collection"; 2-column category grid with Favorites as the navy card.
+- **Word Bank:** title + word count; search; filter pills (All · Words ·
+  Letters) replacing the category dropdown; 2-column category grid with
+  Favorites as the navy card. Pills filter the grid: All shows Favorites, All
+  Words and every category; Words / Letters show only categories containing
+  words of that vocabulary. The mockup's "My collections" pill and
+  "+ Collection" header are dropped (decided 2026-09-28): custom collections
+  cannot be created or filled anywhere in the app today, so showing them would
+  be a new feature, which §10 excludes. The dormant rename/delete collection
+  code in WordBankActivity is left as is.
 - **Word rows** (category word list, and Word Bank search results): a tint
   row with 20dp radius, 52dp rounded thumbnail on the left (sign image; a hand
   icon when there is none), word (SemiBold) with its Filipino translation below
@@ -162,8 +168,11 @@ Layouts follow the approved mockups.
   "Search in {category}…" bar, then word rows. Existing empty state ("No words
   found") restyled.
 - **Word detail:** round back button with the category name; the demo video is
-  the first element (24dp radius, 16:10-ish, poster = thumbnail) with play
-  overlay and overlaid controls (replay, seek, time, fullscreen); below it the
+  the first element (24dp radius, 16:10-ish, poster = thumbnail) with a play
+  overlay; its controls (play/pause, seek, time, replay, 0.5×/0.75×/1× speed,
+  fullscreen) sit in a compact panel directly under the video rather than on
+  top of it (decided 2026-09-28: overlaid controls would cover the signer's
+  hands, and the speed buttons don't fit on the video); below that the
   word (26sp SemiBold — a deliberate display size for this one screen) with its
   Filipino translation and a round navy speak button; chips for category and
   "Saved offline"; a "Try it yourself" card (hand badge, "Open the translator
@@ -171,7 +180,8 @@ Layouts follow the approved mockups.
   thumb zone with a square Download button and a full-width "Add to Favorites"
   / "Added to Favorites" button. The existing no-media placeholder, Retry and
   loading states are kept, restyled.
-- **Fullscreen video:** restyled controls only.
+- **Fullscreen video:** unchanged. Its translucent dark controls over a black
+  player already suit a video screen, and it keeps `Theme.Sigla.Immersive`.
 - **History:** navy summary card ("N / 200 entries kept", Clear all); rows
   grouped under date headers, each with badge, word, Filipino translation, time.
 - **Settings:** navy profile card (initial avatar, name, "Tap to change your
