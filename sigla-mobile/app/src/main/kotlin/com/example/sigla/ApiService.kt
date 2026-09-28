@@ -20,7 +20,9 @@ data class WordBankWord(
     val category: String = "additional words",
     val thumbnail_url: String? = null,
     val video_url: String? = null,
-    val filipino_translation: String? = null
+    val filipino_translation: String? = null,
+    /** "words" | "letters" from the backend; null in word banks cached before it was sent. */
+    val vocabulary: String? = null
 )
 
 data class WordBankResponse(val words: List<WordBankWord>)
