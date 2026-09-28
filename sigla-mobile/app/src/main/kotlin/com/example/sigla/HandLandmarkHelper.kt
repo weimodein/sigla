@@ -366,25 +366,43 @@ class HandLandmarkHelper(
      * callback goes through [resultSink] for the same reason.
      */
     object Cache {
+        // Written only under buildLock; read without it by release().
+        @Volatile
         private var instance: HandLandmarkHelper? = null
+
+        // Serializes the slow first build ONLY. It must not be the Cache monitor:
+        // release() takes that monitor from onStop() on the main thread, and when
+        // the build held it, leaving the screen during "Loading hand tracking…"
+        // blocked the UI thread for the whole asset parse + GPU upload — an ANR.
+        private val buildLock = Any()
 
         /**
          * The shared helper, built on first use. Must be called off the main
          * thread the first time — that call does the asset parse and GPU upload.
          */
-        @Synchronized
         fun acquire(
             context: Context,
             onResult: (LandmarkResult) -> Unit,
         ): HandLandmarkHelper {
-            val existing = instance
-            if (existing != null) {
-                existing.resultSink = onResult
-                return existing
+            instance?.let { return install(it, onResult) }
+            synchronized(buildLock) {
+                instance?.let { return install(it, onResult) }
+                // The constructor installs onResult as the sink BEFORE the helper
+                // is published, so a screen that acquires after us (waiting on
+                // buildLock) always overwrites it rather than being overwritten.
+                val created = HandLandmarkHelper(context.applicationContext, onResult)
+                instance = created
+                return created
             }
-            val created = HandLandmarkHelper(context.applicationContext, onResult)
-            instance = created
-            return created
+        }
+
+        @Synchronized
+        private fun install(
+            helper: HandLandmarkHelper,
+            onResult: (LandmarkResult) -> Unit,
+        ): HandLandmarkHelper {
+            helper.resultSink = onResult
+            return helper
         }
 
         /**
@@ -409,11 +427,14 @@ class HandLandmarkHelper(
          * reclaims it when the process dies. Here for tests and for a deliberate
          * process-wide teardown if one is ever wanted.
          */
-        @Synchronized
         fun destroy() {
-            instance?.resultSink = null
-            instance?.close()
-            instance = null
+            synchronized(buildLock) {
+                synchronized(this) {
+                    instance?.resultSink = null
+                    instance?.close()
+                    instance = null
+                }
+            }
         }
     }
 }

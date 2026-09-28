@@ -152,7 +152,10 @@ class WordDetailActivity : AppCompatActivity() {
         btnSpeak.setOnClickListener { word?.let { speakWord(it.label) } }
         setupPlayerControls()
 
-        tts = TextToSpeech(this) { status ->
+        // applicationContext: onDestroy shuts this down off the main thread, so
+        // the unbind can land after the Activity is gone. Bound through the
+        // Activity, that would leak its ServiceConnection.
+        tts = TextToSpeech(applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.ENGLISH
                 isTtsReady = true
@@ -633,7 +636,15 @@ class WordDetailActivity : AppCompatActivity() {
     override fun onDestroy() {
         stageAnimator?.cancel()
         videoDemo.stopPlayback()
-        tts?.shutdown()
+        // shutdown() blocks until the engine connection started in onCreate has
+        // finished binding, so leaving right after entering stalled the main
+        // thread. Same fix as MainActivity.onDestroy.
+        val doomedTts = tts
+        tts = null
+        isTtsReady = false
+        if (doomedTts != null) {
+            teardownExecutor.execute { doomedTts.shutdown() }
+        }
         super.onDestroy()
     }
 }

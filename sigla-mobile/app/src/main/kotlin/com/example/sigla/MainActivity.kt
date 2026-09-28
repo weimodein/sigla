@@ -35,6 +35,7 @@ import com.google.android.material.button.MaterialButton
 import com.example.sigla.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -79,8 +80,10 @@ internal const val MIN_ACCEPTABLE_FPS = 24
  * would be silently discarded and the interpreter and GPU context would leak.
  * Single-threaded, so a predictor and landmarker released together are closed in
  * order, and a later screen's teardown cannot overlap an earlier one.
+ *
+ * internal: other screens hand their blocking TextToSpeech.shutdown() here too.
  */
-private val teardownExecutor = Executors.newSingleThreadExecutor { r ->
+internal val teardownExecutor = Executors.newSingleThreadExecutor { r ->
     Thread(r, "sigla-teardown").apply { isDaemon = true }
 }
 
@@ -386,6 +389,14 @@ class MainActivity : AppCompatActivity() {
                 // tracking..." wait. Only the FIRST entry pays it.
                 val helper = HandLandmarkHelper.Cache.acquire(applicationContext, sink)
 
+                // Navigated away during the build: the job is cancelled, so the
+                // withContext(Main) below would throw before its cleanup branch
+                // could run and this dead screen's sink would stay installed.
+                if (!isActive) {
+                    HandLandmarkHelper.Cache.release(sink)
+                    return@launch
+                }
+
                 val service = PredictionService(applicationContext)
 
                 // Publish both only if the screen is still active. Navigating away
@@ -520,7 +531,10 @@ class MainActivity : AppCompatActivity() {
     // ── Backend Initialization ────────────────────────────────────────────────
 
     private fun initTts() {
-        tts = TextToSpeech(this) { status ->
+        // applicationContext: onDestroy shuts this down off the main thread, so
+        // the unbind can land after the Activity is gone. Bound through the
+        // Activity, that would leak its ServiceConnection.
+        tts = TextToSpeech(applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.ENGLISH
                 // This callback lands on the main thread, and resolving the
@@ -1490,7 +1504,15 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         executor.shutdown()
         stopVision()          // defensive: onStop normally got here first
-        tts?.shutdown()
+        // shutdown() blocks until the engine connection that TextToSpeech's
+        // constructor started has finished binding. Leaving soon after entering
+        // (the usual case) stalled the main thread 0.6-1.25 s here.
+        val doomedTts = tts
+        tts = null
+        isTtsReady = false
+        if (doomedTts != null) {
+            teardownExecutor.execute { doomedTts.shutdown() }
+        }
         super.onDestroy()
     }
 }
