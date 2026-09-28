@@ -70,10 +70,8 @@ class HomeActivity : AppCompatActivity() {
             entries = entries,
             favoritesCount = FavoritesManager.getInstance(this).getAll().size,
             nowMillis = System.currentTimeMillis(),
-            timeZone = TimeZone.getDefault(),
         )
-        binding.tvStatToday.text = stats.today.toString()
-        binding.tvStatSaved.text = stats.saved.toString()
+        binding.tvStatWeek.text = stats.week.toString()
         binding.tvStatFavorites.text = stats.favorites.toString()
 
         renderRecent(recentEntries(entries))

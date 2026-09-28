@@ -21,7 +21,7 @@ internal fun homeGreeting(hour: Int, name: String?): Greeting {
     return if (cleanName == null) Greeting(timeLine, null) else Greeting("Hi $cleanName!", timeLine)
 }
 
-data class HomeStats(val today: Int, val saved: Int, val favorites: Int)
+data class HomeStats(val week: Int, val favorites: Int)
 
 /** True when both instants fall on the same calendar date in [timeZone]. */
 internal fun isSameLocalDay(aMillis: Long, bMillis: Long, timeZone: TimeZone): Boolean {
@@ -31,19 +31,24 @@ internal fun isSameLocalDay(aMillis: Long, bMillis: Long, timeZone: TimeZone): B
         a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
 }
 
+private const val WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000
+
 /**
- * Today = entries on today's local date. Saved = every stored entry; history is
- * capped (TranslationHistoryManager.MAX_ENTRIES), which is why the label is
- * "Saved" rather than "Total".
+ * SigLa bridges signers and non-signers in the moment, so a "streak" or a
+ * "words learned" framing (a learning app's stats) doesn't fit what the app is
+ * for. Week = translations in the trailing 7 days — a usage window a tool used
+ * situationally, not daily, can actually fill. "Saved" (the capped history
+ * total) was dropped: it just showed the 200-entry cap, not anything the user
+ * did.
  */
 internal fun homeStats(
     entries: List<TranslationEntry>,
     favoritesCount: Int,
     nowMillis: Long,
-    timeZone: TimeZone,
 ): HomeStats {
-    val today = entries.count { isSameLocalDay(it.timestamp, nowMillis, timeZone) }
-    return HomeStats(today = today, saved = entries.size, favorites = favoritesCount)
+    val weekStart = nowMillis - WEEK_MILLIS
+    val week = entries.count { it.timestamp in weekStart..nowMillis }
+    return HomeStats(week = week, favorites = favoritesCount)
 }
 
 data class HomeCategory(val name: String, val wordCount: Int)

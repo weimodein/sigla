@@ -61,21 +61,23 @@ class HomeContentTest {
 
     // Review Focus 3.
     @Test
-    fun todayCountsByLocalCalendarDate() {
+    fun weekCountsTheTrailingSevenDays() {
         val now = at(2026, 9, 28, 10, 0)
+        val dayMs = 24L * 60 * 60 * 1000
         val entries = listOf(
-            entry(at(2026, 9, 28, 9, 59)),   // today
-            entry(at(2026, 9, 28, 0, 5)),    // today, just after midnight
-            entry(at(2026, 9, 27, 23, 59)),  // yesterday, within 24h
-            entry(at(2025, 9, 28, 10, 0)),   // same date, last year
+            entry(now),                    // right now
+            entry(now - 6 * dayMs),        // 6 days ago, inside the window
+            entry(now - 7 * dayMs),        // exactly 7 days ago, the window's own edge
+            entry(now - 7 * dayMs - 1),    // just over 7 days ago, outside
+            entry(at(2025, 9, 28, 10, 0)), // same date, last year — well outside
         )
-        val stats = homeStats(entries, favoritesCount = 9, nowMillis = now, timeZone = manila)
-        assertEquals(HomeStats(today = 2, saved = 4, favorites = 9), stats)
+        val stats = homeStats(entries, favoritesCount = 9, nowMillis = now)
+        assertEquals(HomeStats(week = 3, favorites = 9), stats)
     }
 
     @Test
     fun statsForEmptyHistory() {
-        assertEquals(HomeStats(0, 0, 0), homeStats(emptyList(), 0, at(2026, 1, 1, 8, 0), manila))
+        assertEquals(HomeStats(0, 0), homeStats(emptyList(), 0, at(2026, 1, 1, 8, 0)))
     }
 
     @Test
