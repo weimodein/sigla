@@ -113,6 +113,9 @@ router.get("/word-bank", async (req, res) => {
         "thumbnail_url",
         "video_url",
         "filipino_translation",
+        // Which model the word belongs to ("words" | "letters"). The app uses it
+        // to open the translator on the right vocabulary from a word's page.
+        "vocabulary",
       ],
       include: [{ model: Category, as: "category_ref", attributes: ["name"] }],
       order: [["label", "ASC"]],
