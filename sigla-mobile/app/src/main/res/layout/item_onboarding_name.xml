@@ -45,6 +45,7 @@
     </com.google.android.material.card.MaterialCardView>
 
     <TextView
+        android:id="@+id/tvNameEyebrow"
         style="@style/Sigla.Text.Caption"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -65,7 +66,7 @@
         android:layout_marginTop="@dimen/sg_space_8"
         android:gravity="center"
         android:text="What should we call you?"
-        app:layout_constraintTop_toBottomOf="@id/nameHeaderGuideline"
+        app:layout_constraintTop_toBottomOf="@id/tvNameEyebrow"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

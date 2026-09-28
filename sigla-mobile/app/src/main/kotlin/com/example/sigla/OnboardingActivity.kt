@@ -5,16 +5,18 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
+import android.view.inputmethod.EditorInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
 
 /** One onboarding feature page (Translate / Learn / Explore). */
 data class OnboardingPage(
@@ -67,12 +69,18 @@ class OnboardingActivity : AppCompatActivity() {
     private var showNameStep = false
     private val pageCount get() = featurePages.size + if (showNameStep) 1 else 0
 
+    // The name field lives only on the name page's view, which RecyclerView can
+    // recycle or recreate (e.g. a dark-mode toggle mid-onboarding), so its text
+    // is mirrored here as the user types and survives that via onSaveInstanceState.
+    private var pendingName: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_onboarding)
 
         appSettings = AppSettings.getInstance(this)
         showNameStep = shouldShowNameStep(appSettings.userName)
+        pendingName = savedInstanceState?.getString(STATE_PENDING_NAME)
 
         viewPager = findViewById(R.id.viewPager)
         btnNext = findViewById(R.id.btnNext)
@@ -80,7 +88,13 @@ class OnboardingActivity : AppCompatActivity() {
         indicatorLayout = findViewById(R.id.indicatorLayout)
         tvStepCount = findViewById(R.id.tvStepCount)
 
-        viewPager.adapter = OnboardingAdapter(featurePages, showNameStep)
+        viewPager.adapter = OnboardingAdapter(
+            pages = featurePages,
+            showNameStep = showNameStep,
+            initialName = pendingName,
+            onNameChanged = { pendingName = it },
+            onNameDone = { goToNextOrFinish() },
+        )
 
         setupIndicators()
         updateStep(0)
@@ -91,25 +105,21 @@ class OnboardingActivity : AppCompatActivity() {
             }
         })
 
-        btnNext.setOnClickListener {
-            if (viewPager.currentItem < pageCount - 1) {
-                viewPager.currentItem = viewPager.currentItem + 1
-            } else {
-                completeOnboarding(readNameField())
-            }
-        }
-
+        btnNext.setOnClickListener { goToNextOrFinish() }
         btnSkip.setOnClickListener { completeOnboarding(userName = null) }
     }
 
-    /** Reads the name field on the currently-shown name page, if there is one. */
-    private fun readNameField(): String? {
-        if (!showNameStep || viewPager.currentItem != pageCount - 1) return null
-        // ViewPager2 hosts its own RecyclerView as its one child; that's how its
-        // pages' view holders are reached from the outside.
-        val innerRecycler = viewPager.getChildAt(0) as? RecyclerView ?: return null
-        val holder = innerRecycler.findViewHolderForAdapterPosition(viewPager.currentItem)
-        return holder?.itemView?.findViewById<EditText>(R.id.etUserName)?.text?.toString()
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_PENDING_NAME, pendingName)
+    }
+
+    private fun goToNextOrFinish() {
+        if (viewPager.currentItem < pageCount - 1) {
+            viewPager.currentItem = viewPager.currentItem + 1
+        } else {
+            completeOnboarding(pendingName)
+        }
     }
 
     private fun completeOnboarding(userName: String?) {
@@ -151,21 +161,28 @@ class OnboardingActivity : AppCompatActivity() {
 
         val isLastPage = position == pageCount - 1
         btnNext.text = getString(if (isLastPage) R.string.get_started else R.string.next)
-        // The name step has its own Skip action (skip just the name); once past
-        // it there is nothing left to skip.
-        btnSkip.visibility = if (isLastPage && showNameStep) View.VISIBLE
-            else if (isLastPage) View.INVISIBLE else View.VISIBLE
+        // Once on the last page with no name step left to skip, Skip has
+        // nothing left to do; every other page (including the name step
+        // itself, which Skip just leaves blank) keeps it visible.
+        btnSkip.visibility = if (isLastPage && !showNameStep) View.INVISIBLE else View.VISIBLE
 
         tvStepCount.text = getString(R.string.onboarding_step_count, position + 1, pageCount)
     }
+
+    private companion object {
+        const val STATE_PENDING_NAME = "pending_name"
+    }
 }
 
-private const val VIEW_TYPE_FEATURE = 0
-private const val VIEW_TYPE_NAME = 1
+internal const val VIEW_TYPE_FEATURE = 0
+internal const val VIEW_TYPE_NAME = 1
 
 class OnboardingAdapter(
     private val pages: List<OnboardingPage>,
-    private val showNameStep: Boolean
+    private val showNameStep: Boolean,
+    private val initialName: String?,
+    private val onNameChanged: (String) -> Unit,
+    private val onNameDone: () -> Unit,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     class FeatureVH(view: View) : RecyclerView.ViewHolder(view) {
@@ -175,7 +192,13 @@ class OnboardingAdapter(
         val description: TextView = view.findViewById(R.id.tvPageDescription)
     }
 
-    class NameVH(view: View) : RecyclerView.ViewHolder(view)
+    class NameVH(view: View) : RecyclerView.ViewHolder(view) {
+        val nameField: TextInputEditText = view.findViewById(R.id.etUserName)
+        // Listeners are wired once per holder, not per bind — RecyclerView can
+        // rebind the same holder (e.g. after a notifyItemChanged), and
+        // doAfterTextChanged/setOnEditorActionListener would otherwise stack.
+        var listenersWired = false
+    }
 
     override fun getItemViewType(position: Int): Int =
         if (position < pages.size) VIEW_TYPE_FEATURE else VIEW_TYPE_NAME
@@ -191,15 +214,34 @@ class OnboardingAdapter(
         }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        if (holder is FeatureVH) {
-            val page = pages[position]
-            holder.icon.setImageResource(page.iconRes)
-            holder.eyebrow.text = page.eyebrow
-            holder.title.text = page.title
-            holder.description.text = page.description
+        when (holder) {
+            is FeatureVH -> {
+                val page = pages[position]
+                holder.icon.setImageResource(page.iconRes)
+                holder.eyebrow.text = page.eyebrow
+                holder.title.text = page.title
+                holder.description.text = page.description
+            }
+            is NameVH -> {
+                // setText before wiring the listener so restoring a saved name
+                // doesn't immediately re-report itself as a "change".
+                if (holder.nameField.text.isNullOrEmpty() && !initialName.isNullOrEmpty()) {
+                    holder.nameField.setText(initialName)
+                }
+                if (!holder.listenersWired) {
+                    holder.listenersWired = true
+                    holder.nameField.doAfterTextChanged { onNameChanged(it?.toString().orEmpty()) }
+                    holder.nameField.setOnEditorActionListener { _, actionId, _ ->
+                        if (actionId == EditorInfo.IME_ACTION_DONE) {
+                            onNameDone()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                }
+            }
         }
-        // NameVH has no dynamic content to bind; OnboardingActivity reads its
-        // text field directly by id when the user taps "Get started".
     }
 
     override fun getItemCount(): Int = pages.size + if (showNameStep) 1 else 0
