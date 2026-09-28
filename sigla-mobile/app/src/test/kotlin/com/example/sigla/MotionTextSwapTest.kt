@@ -1,5 +1,6 @@
 package com.example.sigla
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,5 +32,24 @@ class MotionTextSwapTest {
         // A non-String CharSequence (the Android Spanned classes are stubbed on the JVM).
         val spanned = StringBuilder("HELLO")
         assertFalse(needsTextSwap(current = spanned, pending = null, next = "HELLO"))
+    }
+
+    @Test
+    fun showingTextOnAHiddenViewRevealsIt() {
+        assertEquals(ShowTextAction.REVEAL, showTextAction(visible = false, hiding = false, textChanges = true))
+        assertEquals(ShowTextAction.REVEAL, showTextAction(visible = false, hiding = false, textChanges = false))
+    }
+
+    @Test
+    fun showingNewTextOnAVisibleViewSwapsEvenWhileItIsHiding() {
+        // "Recognizing…" is fading out when "Not recognized" arrives: swap, don't snap.
+        assertEquals(ShowTextAction.SWAP, showTextAction(visible = true, hiding = true, textChanges = true))
+        assertEquals(ShowTextAction.SWAP, showTextAction(visible = true, hiding = false, textChanges = true))
+    }
+
+    @Test
+    fun showingTheSameTextOnAHidingViewCancelsTheHide() {
+        assertEquals(ShowTextAction.CANCEL_HIDE, showTextAction(visible = true, hiding = true, textChanges = false))
+        assertEquals(ShowTextAction.NONE, showTextAction(visible = true, hiding = false, textChanges = false))
     }
 }

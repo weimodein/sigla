@@ -26,3 +26,24 @@ internal enum class ResultMotion { EMPHASIZE, SWAP }
 
 internal fun resultMotion(cardShowing: Boolean): ResultMotion =
     if (cardShowing) ResultMotion.SWAP else ResultMotion.EMPHASIZE
+
+/** What the landmark overlay does with one camera frame. */
+internal enum class OverlayAction { DRAW, DRAW_AND_SHOW, HIDE, SKIP }
+
+/**
+ * Hands in frame: draw (fading in if hidden). No hands: do NOT draw the empty
+ * frame — that blanks the skeleton instantly — but fade the last one out, once.
+ * Decided per frame from two booleans, so the ~15 Hz path gains no animation.
+ */
+internal fun overlayAction(shown: Boolean, hasHands: Boolean): OverlayAction = when {
+    hasHands && shown -> OverlayAction.DRAW
+    hasHands -> OverlayAction.DRAW_AND_SHOW
+    shown -> OverlayAction.HIDE
+    else -> OverlayAction.SKIP
+}
+
+/**
+ * Leaving the translator drops the Live result's hide timer, so a Live card must
+ * go with it or it would still be up on return. A Tap result is meant to stay.
+ */
+internal fun clearResultOnStop(tapMode: Boolean): Boolean = !tapMode

@@ -47,4 +47,24 @@ class TranslatorFeedbackTest {
         assertEquals(ResultMotion.EMPHASIZE, resultMotion(cardShowing = false))
         assertEquals(ResultMotion.SWAP, resultMotion(cardShowing = true))
     }
+
+    @Test
+    fun overlayDrawsAndFadesInWhenHandsReturn() {
+        assertEquals(OverlayAction.DRAW_AND_SHOW, overlayAction(shown = false, hasHands = true))
+        assertEquals(OverlayAction.DRAW, overlayAction(shown = true, hasHands = true))
+    }
+
+    @Test
+    fun overlayKeepsTheLastSkeletonAndFadesItOnTheFirstEmptyFrame() {
+        // Drawing the empty frame would blank the skeleton instantly, before any fade.
+        assertEquals(OverlayAction.HIDE, overlayAction(shown = true, hasHands = false))
+        assertEquals(OverlayAction.SKIP, overlayAction(shown = false, hasHands = false))
+    }
+
+    @Test
+    fun aLiveResultIsClearedWhenTheScreenStopsButATapResultStays() {
+        // The Live hide timer is dropped on stop, so the card must go with it.
+        assertEquals(true, clearResultOnStop(tapMode = false))
+        assertEquals(false, clearResultOnStop(tapMode = true))
+    }
 }

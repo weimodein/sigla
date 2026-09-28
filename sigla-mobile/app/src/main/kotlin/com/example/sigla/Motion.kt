@@ -16,6 +16,20 @@ import android.widget.TextView
 internal fun needsTextSwap(current: CharSequence?, pending: CharSequence?, next: CharSequence): Boolean =
     (pending ?: current)?.toString() != next.toString()
 
+internal enum class ShowTextAction { REVEAL, SWAP, CANCEL_HIDE, NONE }
+
+/**
+ * How [Motion.showText] brings text on screen. Visibility, not "showing", picks
+ * swap vs reveal: a view still fading out is on screen, so new text swaps into
+ * it instead of snapping in under a reveal that has nothing left to fade.
+ */
+internal fun showTextAction(visible: Boolean, hiding: Boolean, textChanges: Boolean): ShowTextAction = when {
+    !visible -> ShowTextAction.REVEAL
+    textChanges -> ShowTextAction.SWAP
+    hiding -> ShowTextAction.CANCEL_HIDE
+    else -> ShowTextAction.NONE
+}
+
 /**
  * Shared motion tokens and helpers — docs-internal/specs/2026-09-29-translator-motion-design.md §3.
  *
@@ -92,6 +106,34 @@ object Motion {
             .setStartDelay(startDelay).setDuration(EMPHASIS).setInterpolator(ENTER)
     }
 
+    /** Make [view] show [text]: fade in if hidden, swap if on screen (even mid-exit). */
+    fun showText(view: TextView, text: CharSequence) {
+        val pending = view.getTag(R.id.motion_pending_text) as CharSequence?
+        when (showTextAction(
+            visible = view.visibility == View.VISIBLE,
+            hiding = view.getTag(R.id.motion_hiding) == true,
+            textChanges = needsTextSwap(view.text, pending, text),
+        )) {
+            ShowTextAction.REVEAL -> {
+                view.text = text
+                reveal(view)
+            }
+            ShowTextAction.SWAP -> swapText(view, text)
+            ShowTextAction.CANCEL_HIDE -> reveal(view)
+            ShowTextAction.NONE -> Unit
+        }
+    }
+
+    /** Hide at once, no animation — for views going away while off screen. */
+    fun hideNow(view: View, endVisibility: Int) {
+        begin(view)
+        view.visibility = endVisibility
+        view.alpha = 1f
+        view.translationY = 0f
+        view.scaleX = 1f
+        view.scaleY = 1f
+    }
+
     /** Quick fade out, change the text, fade back in. No-op if nothing would change. */
     fun swapText(view: TextView, text: CharSequence) {
         val pending = view.getTag(R.id.motion_pending_text) as CharSequence?
@@ -100,6 +142,7 @@ object Motion {
         if (view.visibility != View.VISIBLE) {
             view.text = text
             view.alpha = 1f
+            view.translationY = 0f
             return
         }
         view.setTag(R.id.motion_pending_text, text)
@@ -108,7 +151,9 @@ object Motion {
             .withEndAction {
                 view.setTag(R.id.motion_pending_text, null)
                 view.text = text
-                view.animate().alpha(1f)
+                // translationY too: a swap can cut a reveal short mid-slide,
+                // and would otherwise leave the text a few dp low.
+                view.animate().alpha(1f).translationY(0f)
                     .setStartDelay(0).setDuration(QUICK / 2).setInterpolator(ENTER)
             }
     }

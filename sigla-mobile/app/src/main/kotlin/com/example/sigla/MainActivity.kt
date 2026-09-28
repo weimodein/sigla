@@ -528,6 +528,7 @@ class MainActivity : AppCompatActivity() {
     private fun stopVision() {
         cancelTap()
         binding.cardResult.removeCallbacks(hideResult)
+        if (clearResultOnStop(tapMode)) Motion.hideNow(binding.cardResult, View.INVISIBLE)
         if (!visionActive) return
         visionActive = false
         pendingOverlayResult = null
@@ -832,14 +833,9 @@ class MainActivity : AppCompatActivity() {
         binding.tvTapPrompt.postDelayed(hideTapPrompt, 3000)
     }
 
-    /** Shows [text] in the Tap prompt: fades in if hidden, swaps if already up. */
+    /** Shows [text] in the Tap prompt: fades in if hidden, swaps if on screen. */
     private fun showTapPrompt(text: CharSequence) {
-        if (Motion.isShowing(binding.tvTapPrompt)) {
-            Motion.swapText(binding.tvTapPrompt, text)
-        } else {
-            binding.tvTapPrompt.text = text
-            Motion.reveal(binding.tvTapPrompt)
-        }
+        Motion.showText(binding.tvTapPrompt, text)
     }
 
     private fun cancelTap() {
@@ -964,13 +960,20 @@ class MainActivity : AppCompatActivity() {
         val displayed = pendingOverlayResult
         try {
             if (visionActive && displayed != null) {
-                binding.overlayView.setLandmarks(
-                    displayed.landmarks,
-                    displayed.sourceWidth.toFloat(),
-                    displayed.sourceHeight.toFloat(),
-                    isFrontCamera,
-                )
-                if (displayed.landmarks.isNotEmpty()) showOverlay()
+                val action = overlayAction(overlayShown, displayed.landmarks.isNotEmpty())
+                if (action == OverlayAction.DRAW || action == OverlayAction.DRAW_AND_SHOW) {
+                    binding.overlayView.setLandmarks(
+                        displayed.landmarks,
+                        displayed.sourceWidth.toFloat(),
+                        displayed.sourceHeight.toFloat(),
+                        isFrontCamera,
+                    )
+                }
+                when (action) {
+                    OverlayAction.DRAW_AND_SHOW -> showOverlay()
+                    OverlayAction.HIDE -> hideOverlay()
+                    OverlayAction.DRAW, OverlayAction.SKIP -> Unit
+                }
                 flushCollectingState()
             }
         } finally {
