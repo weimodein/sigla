@@ -182,7 +182,7 @@ class SettingsActivity : AppCompatActivity() {
             view.findViewById<TextView>(R.id.tvConfirmTitle).text = "Reset to default?"
             view.findViewById<TextView>(R.id.tvConfirmMessage).text =
                 "All settings will be restored to their original configuration."
-            view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "RESET"
+            view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "Reset"
 
             view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
             view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {

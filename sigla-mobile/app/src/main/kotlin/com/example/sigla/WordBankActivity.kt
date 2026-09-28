@@ -671,8 +671,8 @@ class WordBankActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.tvConfirmMessage).text =
             "$cached demo video${if (cached != 1) "s are" else " is"} saved for offline use " +
             "(${formatBytes(ModelUpdateManager.cachedVideoBytes(this, allWords))})."
-        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).text = "CLOSE"
-        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "CLEAR"
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).text = "Close"
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = "Clear"
 
         view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
         view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
@@ -711,7 +711,7 @@ class WordBankActivity : AppCompatActivity() {
         }
 
         view.findViewById<MaterialButton>(R.id.btnConfirmAction).text =
-            if (metered) "DOWNLOAD ANYWAY" else "DOWNLOAD"
+            if (metered) "Download anyway" else "Download"
 
         view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
         view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {

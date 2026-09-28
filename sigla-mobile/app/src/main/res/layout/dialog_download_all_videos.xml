@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- dialog_download_all_videos.xml
-     Progress popup for the Word Bank bulk demo-video download. Same navy
-     title bar / accent divider / light body shell as dialog_confirm_action.xml,
-     with a determinate bar, an "x of y" counter, the word currently in flight,
-     and an explicit Cancel (the dialog itself is not cancelable).
+     Progress popup for the Word Bank bulk demo-video download, restyled to
+     the sg_* design system. Same navy title bar / sg_bg body shell as
+     dialog_confirm_action.xml, with a determinate bar, an "x of y" counter,
+     the word currently in flight, and an explicit Cancel (the dialog itself
+     is not cancelable).
 -->
 <androidx.cardview.widget.CardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="300dp"
     android:layout_height="wrap_content"
-    app:cardCornerRadius="20dp"
+    app:cardCornerRadius="@dimen/sg_radius_lg"
     app:cardElevation="8dp"
-    app:cardBackgroundColor="@color/sig_surface_card">
+    app:cardBackgroundColor="@color/sg_bg">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -23,98 +24,72 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@color/sg_brand"
             android:orientation="vertical"
-            android:background="@color/sig_chrome_navy"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
-            android:paddingTop="20dp"
-            android:paddingBottom="14dp">
+            android:paddingStart="@dimen/sg_space_20"
+            android:paddingEnd="@dimen/sg_space_20"
+            android:paddingTop="@dimen/sg_space_20"
+            android:paddingBottom="@dimen/sg_space_16">
 
             <TextView
+                style="@style/Sigla.Text.CardTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Downloading demo videos"
-                android:textColor="#FFFFFF"
-                android:textSize="19sp"
-                android:fontFamily="@font/poppins_bold" />
-
+                android:textColor="@color/sg_on_brand" />
         </LinearLayout>
-
-        <!-- Accent divider -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="5dp"
-            android:background="@color/sig_chrome_halo" />
 
         <!-- Body -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@color/sg_bg"
             android:orientation="vertical"
-            android:background="@color/sig_page_bg"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
-            android:paddingTop="22dp"
-            android:paddingBottom="20dp">
+            android:paddingStart="@dimen/sg_space_20"
+            android:paddingEnd="@dimen/sg_space_20"
+            android:paddingTop="@dimen/sg_space_20"
+            android:paddingBottom="@dimen/sg_space_20">
 
             <TextView
                 android:id="@+id/tvDownloadCounter"
+                style="@style/Sigla.Text.BodyStrong"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Preparing…"
-                android:textColor="@color/sig_text_primary"
-                android:textSize="15sp"
-                android:fontFamily="@font/poppins_bold" />
+                android:text="Preparing…" />
 
             <ProgressBar
                 android:id="@+id/progressDownloadAll"
                 style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="@dimen/sg_space_12"
                 android:max="100"
-                android:progress="0" />
+                android:progress="0"
+                android:progressBackgroundTint="@color/sg_tint"
+                android:progressTint="@color/sg_brand" />
 
             <TextView
                 android:id="@+id/tvDownloadCurrentWord"
+                style="@style/Sigla.Text.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:maxLines="1"
+                android:layout_marginTop="@dimen/sg_space_8"
                 android:ellipsize="end"
-                android:text=""
-                android:textColor="@color/sig_text_secondary"
-                android:textSize="12sp"
-                android:fontFamily="@font/poppins_regular" />
+                android:maxLines="1"
+                android:text="" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:orientation="horizontal"
-                android:gravity="end">
+                android:layout_marginTop="@dimen/sg_space_20"
+                android:gravity="end"
+                android:orientation="horizontal">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnDownloadCancel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="42dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:paddingStart="18dp"
-                    android:paddingEnd="18dp"
-                    android:text="CANCEL"
-                    android:textAllCaps="false"
-                    android:textSize="12sp"
-                    android:letterSpacing="0.04"
-                    android:fontFamily="@font/poppins_bold"
-                    android:textColor="@color/sig_text_primary"
-                    app:cornerRadius="21dp"
-                    app:backgroundTint="@color/sig_accent_pill" />
-
+                    style="@style/Widget.Sigla.Chip"
+                    android:text="Cancel" />
             </LinearLayout>
-
         </LinearLayout>
-
     </LinearLayout>
-
 </androidx.cardview.widget.CardView>
