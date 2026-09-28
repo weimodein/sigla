@@ -4,10 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.InputFilter
-import android.text.InputType
 import android.view.View
-import android.widget.AutoCompleteTextView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -20,10 +17,8 @@ import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -71,9 +66,6 @@ class WordBankActivity : AppCompatActivity() {
         const val EXTRA_FOCUS_SEARCH = "extra_focus_search"
     }
 
-    // Custom categories management
-    private lateinit var customCategoryManager: CustomCategoryManager
-    private var customCategories = mutableListOf<CustomCategory>()
     private lateinit var favoritesManager: FavoritesManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,17 +80,12 @@ class WordBankActivity : AppCompatActivity() {
         setupCategoryGrid()
         setupFilterPills()
         setupSearch()
-        wireListeners()
         bindDownloadAllButton()
         showGridMode()
 
-        // Initialize custom category manager
-        customCategoryManager = CustomCategoryManager.getInstance(this)
-        loadCustomCategories()
-
         // Load words from backend
         loadWords()
-        loadCategories()   // ← ADD THIS
+        loadCategories()
         maybeFocusSearch(intent)
     }
 
@@ -321,12 +308,6 @@ class WordBankActivity : AppCompatActivity() {
         }
     }
 
-    // ── Custom Categories ─────────────────────────────────────────────────────
-
-    private fun loadCustomCategories() {
-        customCategories = customCategoryManager.getAll().toMutableList()
-    }
-
     // ── Filter pills ──────────────────────────────────────────────────────────
 
     private fun setupFilterPills() {
@@ -385,14 +366,7 @@ class WordBankActivity : AppCompatActivity() {
             val matchesCategory = when {
                 selectedCategory == "All Categories" -> true
                 selectedCategory == "Favorites" -> favoritesManager.isFavorite(word.id)
-                else -> {
-                    val customCat = customCategories.find { it.name == selectedCategory }
-                    if (customCat != null) {
-                        word.id in customCat.wordIds
-                    } else {
-                        word.category.equals(selectedCategory, ignoreCase = true)
-                    }
-                }
+                else -> word.category.equals(selectedCategory, ignoreCase = true)
             }
             val matchesSearch = searchQuery.isEmpty() ||
                     word.label.contains(searchQuery, ignoreCase = true) ||
@@ -409,173 +383,6 @@ class WordBankActivity : AppCompatActivity() {
             emptyState.visibility = if (count == 0 && !isLoading) View.VISIBLE else View.GONE
             rvWords.visibility = if (count == 0 && !isLoading) View.GONE else View.VISIBLE
         }
-    }
-
-    // ── Create category ───────────────────────────────────────────────────────
-
-    // FIX: only ONE definition of showCategoryEditDialog (duplicate removed)
-    private fun showCategoryEditDialog(
-        title: String,
-        hint: String,
-        subtitle: String = "",
-        currentValue: String = "",
-        maxLength: Int = 50,
-        extraValidate: ((String) -> String?)? = null,
-        onConfirm: (String) -> Unit
-    ) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_edit_field, null, false)
-        val til = dialogView.findViewById<TextInputLayout>(R.id.tilDialogField)
-        val et = dialogView.findViewById<TextInputEditText>(R.id.etDialogField)
-        val tvSub = dialogView.findViewById<TextView>(R.id.tvDialogSubtitle)
-
-        til.hint = hint
-        til.counterMaxLength = maxLength
-        til.isCounterEnabled = true
-        et.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        et.filters = arrayOf(InputFilter.LengthFilter(maxLength))
-        et.setText(currentValue)
-        et.setSelection(currentValue.length)
-
-        et.addTextChangedListener { til.error = null }
-
-        if (subtitle.isNotEmpty()) {
-            tvSub.text = subtitle
-            tvSub.visibility = View.VISIBLE
-        } else {
-            tvSub.visibility = View.GONE
-        }
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(title)
-            .setView(dialogView)
-            .setPositiveButton("Save", null)
-            .setNegativeButton("Cancel", null)
-            .create()
-
-        dialog.setOnShowListener {
-            et.requestFocus()
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val newValue = et.text.toString().trim()
-
-                if (newValue.isEmpty()) {
-                    til.error = "$hint cannot be empty"
-                    return@setOnClickListener
-                }
-
-                val extraError = extraValidate?.invoke(newValue)
-                if (extraError != null) {
-                    til.error = extraError
-                    return@setOnClickListener
-                }
-
-                til.error = null
-                dialog.dismiss()
-                onConfirm(newValue)
-            }
-        }
-
-        dialog.show()
-    }
-
-    // ── Manage category (rename / delete) ─────────────────────────────────────
-
-    private fun showManageCategoryDialog(
-        category: CustomCategory,
-        onDone: (() -> Unit)? = null
-    ) {
-        val sheet = BottomSheetDialog(this)
-        val view = layoutInflater.inflate(R.layout.bottom_sheet_category_actions, null)
-        sheet.setContentView(view)
-
-        view.findViewById<TextView>(R.id.tvSheetCategoryName).text = category.name
-
-        view.findViewById<LinearLayout>(R.id.rowRename).setOnClickListener {
-            sheet.dismiss()
-            showRenameCategoryDialog(category, onDone)
-        }
-
-        view.findViewById<LinearLayout>(R.id.rowDelete).setOnClickListener {
-            sheet.dismiss()
-            showDeleteCategoryDialog(category, onDone)
-        }
-
-        view.findViewById<TextView>(R.id.tvSheetCancel).setOnClickListener {
-            sheet.dismiss()
-            onDone?.invoke()
-        }
-
-        sheet.show()
-    }
-
-    private fun showRenameCategoryDialog(
-        category: CustomCategory,
-        onDone: (() -> Unit)? = null
-    ) {
-        showCategoryEditDialog(
-            title = "Rename category",
-            hint = "Category name",
-            subtitle = "Rename this category. Words inside it will not be affected.",
-            currentValue = category.name,
-            maxLength = 50,
-            extraValidate = { newName: String ->
-                when {
-                    newName.equals(category.name, ignoreCase = true) -> null
-                    customCategories.any { it.name.equals(newName, ignoreCase = true) } ->
-                        "\"$newName\" already exists"
-                    else -> null
-                }
-            }
-        ) { newName ->
-            if (!newName.equals(category.name, ignoreCase = true)) {
-                customCategoryManager.rename(category.id, newName)
-                val index = customCategories.indexOfFirst { it.id == category.id }
-                if (index >= 0) {
-                    customCategories[index] = customCategoryManager.get(category.id)!!
-                }
-
-                if (selectedCategory == category.name) {
-                    selectedCategory = newName
-                    //actvCategory.setText(newName, false)
-                }
-
-                applyFilters()
-                Toast.makeText(this, "Category renamed to \"$newName\"", Toast.LENGTH_SHORT).show()
-            }
-            onDone?.invoke()
-        }
-    }
-
-    private fun showDeleteCategoryDialog(
-        category: CustomCategory,
-        onDone: (() -> Unit)? = null
-    ) {
-        val wordCount = category.wordIds.size
-        val message = if (wordCount > 0)
-            "Delete \"${category.name}\"? This will also remove $wordCount " +
-            "word${if (wordCount != 1) "s" else ""} from this category."
-        else
-            "Delete \"${category.name}\"? This action cannot be undone."
-
-        AlertDialog.Builder(this)
-            .setTitle("Delete category")
-            .setMessage(message)
-            .setPositiveButton("Delete") { _, _ ->
-                customCategoryManager.delete(category.id)
-                customCategories.removeAll { it.id == category.id }
-
-                if (selectedCategory == category.name) {
-                    selectedCategory = "All Categories"
-                    //actvCategory.setText("", false)
-                }
-
-                applyFilters()
-                Toast.makeText(this, "\"${category.name}\" deleted", Toast.LENGTH_SHORT).show()
-                onDone?.invoke()
-            }
-            .setNegativeButton("Cancel") { _, _ ->
-                onDone?.invoke()
-            }
-            .show()
     }
 
     // ── RecyclerView setup ────────────────────────────────────────────────────
@@ -596,18 +403,6 @@ class WordBankActivity : AppCompatActivity() {
         startActivity(Intent(this, WordDetailActivity::class.java).apply {
             putExtra(WordDetailActivity.EXTRA_WORD_ID, word.id)
         })
-    }
-
-    // ── Wire listeners ────────────────────────────────────────────────────────
-
-    private fun wireListeners() {
-        //btnCreateCategory.setOnClickListener { showCreateCategoryDialog() }
-        //btnCreateCategory.setOnLongClickListener {
-        //    if (customCategories.isNotEmpty()) {
-        //        Toast.makeText(this, "Long press on a category in the dropdown to manage it", Toast.LENGTH_LONG).show()
-        //    }
-        //    true
-        //}
     }
 
     // ── Bulk demo-video download ──────────────────────────────────────────────
