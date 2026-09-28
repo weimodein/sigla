@@ -1,100 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- item_history_entry.xml
-     Row: hand icon, word + time, delete button.
--->
+<!-- History row: badge, word + Filipino translation, time, delete button. -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    style="@style/Widget.Sigla.Card.Tint"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="10dp"
-    app:cardCornerRadius="16dp"
-    app:cardElevation="1.5dp"
-    app:strokeWidth="1dp"
-    app:strokeColor="@color/sig_border_card"
-    app:cardBackgroundColor="@color/sig_surface_card">
+    android:layout_marginBottom="@dimen/sg_space_12">
 
-    <!-- Single-line row: icon → word → time → delete, all vertically centered.
-         The 40dp icon sets the row height. -->
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="@dimen/sg_space_12">
 
         <FrameLayout
-            android:id="@+id/flIconBox"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/bg_icon_circle_blue_light"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent">
-
+            android:layout_width="@dimen/sg_badge_size"
+            android:layout_height="@dimen/sg_badge_size"
+            android:background="@drawable/bg_sg_circle_tint">
             <ImageView
-                android:layout_width="22dp"
-                android:layout_height="22dp"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
                 android:layout_gravity="center"
-                android:src="@drawable/ic_one_hand"
-                android:contentDescription="Gesture" />
-
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_hand_line"
+                android:tint="@color/sg_brand_text" />
         </FrameLayout>
 
-        <TextView
-            android:id="@+id/tvWord"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="8dp"
-            android:text="Hello"
-            android:textColor="@color/sig_text_primary"
-            android:textSize="13sp"
-            android:fontFamily="@font/poppins_bold"
-            android:maxLines="2"
-            app:layout_constraintStart_toEndOf="@id/flIconBox"
-            app:layout_constraintEnd_toStartOf="@id/tvTime"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent" />
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/sg_space_12"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/tvWord"
+                style="@style/Sigla.Text.BodyStrong"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                tools:text="Good morning" />
+            <TextView
+                android:id="@+id/tvFilipino"
+                style="@style/Sigla.Text.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:visibility="gone"
+                tools:text="Magandang umaga"
+                tools:visibility="visible" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tvTime"
+            style="@style/Sigla.Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="10dp"
-            android:text="11:02 PM"
-            android:textColor="@color/sig_text_secondary"
-            android:textSize="11sp"
-            android:fontFamily="@font/poppins_regular"
-            app:layout_constraintEnd_toStartOf="@id/btnDelete"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent" />
+            android:layout_marginStart="@dimen/sg_space_8"
+            tools:text="11:02 PM" />
 
-        <!-- Owns the right edge; tvTime anchors to its start so the two never overlap. -->
-        <FrameLayout
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDelete"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:background="@drawable/bg_icon_circle_blue_light"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?attr/selectableItemBackgroundBorderless"
+            style="@style/Widget.Sigla.IconButton"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="@dimen/sg_space_8"
             android:contentDescription="Delete this entry"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent">
-
-            <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:layout_gravity="center"
-                android:src="@android:drawable/ic_menu_delete"
-                app:tint="@color/sig_delete_icon"
-                android:contentDescription="@null" />
-
-        </FrameLayout>
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
+            app:cornerRadius="18dp"
+            app:icon="@drawable/ic_close_line"
+            app:iconSize="16dp"
+            app:iconTint="@color/sg_text_secondary" />
+    </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

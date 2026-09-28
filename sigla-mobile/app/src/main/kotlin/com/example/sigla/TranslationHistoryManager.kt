@@ -135,4 +135,12 @@ class TranslationHistoryManager private constructor(context: Context) {
     fun setTranslation(word: String, translation: String) {
         translationPrefs.edit().putString(word.lowercase(), translation).apply()
     }
+
+    /**
+     * The Filipino translation for [word], if one was cached the last time the
+     * word bank loaded (see MainActivity's setTranslation loop). Null for a
+     * word never seen since the cache was last populated, or one with no
+     * Filipino translation in the word bank.
+     */
+    fun getTranslation(word: String): String? = translationPrefs.getString(word.lowercase(), null)
 }

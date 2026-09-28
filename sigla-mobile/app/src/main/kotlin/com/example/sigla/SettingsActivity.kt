@@ -15,6 +15,20 @@ import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.button.MaterialButton
 
 /**
+ * The profile card's name line: the stored name, or a friendly fallback when
+ * none has been set (spec §5's onboarding name step is optional).
+ */
+internal fun profileDisplayName(userName: String?): String =
+    userName?.trim()?.takeIf { it.isNotEmpty() } ?: "Add your name"
+
+/**
+ * The profile card's avatar initial: the first letter of the stored name,
+ * upper-cased, or a generic mark when there is no name to draw one from.
+ */
+internal fun profileInitial(userName: String?): String =
+    userName?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+
+/**
  * SettingsActivity.kt
  *
  * Preferences managed:
@@ -24,6 +38,7 @@ import com.google.android.material.button.MaterialButton
  *   - Dark / Light mode toggle
  *   - Reset to default
  *   - Replay onboarding tutorial
+ *   - Name (profile card, "Tap to change your name")
  */
 class SettingsActivity : AppCompatActivity() {
 
@@ -43,11 +58,19 @@ class SettingsActivity : AppCompatActivity() {
 
         BottomNavHelper.setup(this, Tab.SETTINGS)
         loadPreferences()
+        bindProfileCard()
         bindVolumeSeekBar()
         bindVoiceToggle()
         bindDarkModeSwitch()
         bindResetButton()
         bindReplayTutorial()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The name can also change from the onboarding replay flow, which
+        // returns here without recreating this Activity.
+        refreshProfileCard()
     }
 
     // ── Load saved preferences ────────────────────────────────────────────────
@@ -110,19 +133,21 @@ class SettingsActivity : AppCompatActivity() {
         currentVoice = voice
         val male   = findViewById<TextView>(R.id.btnVoiceMale)
         val female = findViewById<TextView>(R.id.btnVoiceFemale)
-        val selectedColor   = getColor(android.R.color.white)
-        val unselectedColor = getColor(R.color.sig_toggle_unselected_text)
+        val onColor  = getColor(R.color.sg_on_brand)
+        val offColor = getColor(R.color.sg_brand_text)
+        val onTint   = getColorStateList(R.color.sg_brand)
+        val offTint  = getColorStateList(R.color.sg_tint)
 
         if (voice == "MALE") {
-            male?.setBackgroundResource(R.drawable.bg_toggle_selected)
-            male?.setTextColor(selectedColor)
-            female?.setBackgroundResource(R.drawable.bg_toggle_unselected_blue)
-            female?.setTextColor(unselectedColor)
+            male?.backgroundTintList = onTint
+            male?.setTextColor(onColor)
+            female?.backgroundTintList = offTint
+            female?.setTextColor(offColor)
         } else {
-            female?.setBackgroundResource(R.drawable.bg_toggle_selected)
-            female?.setTextColor(selectedColor)
-            male?.setBackgroundResource(R.drawable.bg_toggle_unselected_blue)
-            male?.setTextColor(unselectedColor)
+            female?.backgroundTintList = onTint
+            female?.setTextColor(onColor)
+            male?.backgroundTintList = offTint
+            male?.setTextColor(offColor)
         }
     }
 
@@ -164,6 +189,7 @@ class SettingsActivity : AppCompatActivity() {
                 appSettings.resetToDefault()
                 TtsVoiceHelper.invalidate()   // resets voiceType as well
                 loadPreferences()
+                refreshProfileCard()
 
                 AppCompatDelegate.setDefaultNightMode(
                     if (currentDarkMode) AppCompatDelegate.MODE_NIGHT_YES
@@ -176,6 +202,52 @@ class SettingsActivity : AppCompatActivity() {
 
             dialog.show()
         }
+    }
+
+    // ── Profile (name) ────────────────────────────────────────────────────────
+
+    private fun bindProfileCard() {
+        refreshProfileCard()
+        findViewById<View>(R.id.rowProfile).setOnClickListener { showEditNameDialog() }
+    }
+
+    private fun refreshProfileCard() {
+        val name = appSettings.userName
+        findViewById<TextView>(R.id.tvProfileName).text = profileDisplayName(name)
+        findViewById<TextView>(R.id.tvProfileInitial).text = profileInitial(name)
+    }
+
+    private fun showEditNameDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_edit_field, null, false)
+        val til = dialogView.findViewById<TextInputLayout>(R.id.tilDialogField)
+        val et = dialogView.findViewById<TextInputEditText>(R.id.etDialogField)
+        val current = appSettings.userName.orEmpty()
+
+        til.hint = "Your first name"
+        til.counterMaxLength = 40
+        til.isCounterEnabled = true
+        et.setText(current)
+        et.setSelection(current.length)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("What should we call you?")
+            .setView(dialogView)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        dialog.setOnShowListener {
+            et.requestFocus()
+            // A blank name is a valid choice here (it clears the greeting back
+            // to "no name"), unlike WordBankActivity's category-name dialogs.
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                appSettings.userName = et.text.toString()
+                refreshProfileCard()
+                dialog.dismiss()
+            }
+        }
+
+        dialog.show()
     }
 
     // ── Replay tutorial ───────────────────────────────────────────────────────

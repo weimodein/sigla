@@ -54,8 +54,9 @@ class TranslationHistoryActivity : AppCompatActivity() {
 
     private fun setupRecyclerView() {
         adapter = HistoryAdapter(
-            items    = mutableListOf(),
-            onDelete = { flatIndex -> deleteEntry(flatIndex) }
+            items         = mutableListOf(),
+            historyManager = historyManager,
+            onDelete      = { flatIndex -> deleteEntry(flatIndex) }
         )
         rvHistory.layoutManager = LinearLayoutManager(this)
         rvHistory.setHasFixedSize(true)
@@ -144,7 +145,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
 
     private fun updateUI() {
         val count = adapter.entryCount()
-        tvEntryCount.text     = "$count / $MAX_ENTRIES entries"
+        tvEntryCount.text     = "$count / $MAX_ENTRIES entries kept"
         emptyState.visibility = if (count == 0) View.VISIBLE else View.GONE
         rvHistory.visibility  = if (count == 0) View.GONE   else View.VISIBLE
         btnClearAll.isEnabled = count > 0
@@ -171,8 +172,9 @@ sealed class HistoryItem {
 // ── Adapter ───────────────────────────────────────────────────────────────────
 
 class HistoryAdapter(
-    private val items   : MutableList<HistoryItem>,
-    private val onDelete: (Int) -> Unit          // receives flatIndex
+    private val items         : MutableList<HistoryItem>,
+    private val historyManager: TranslationHistoryManager,
+    private val onDelete      : (Int) -> Unit          // receives flatIndex
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -187,9 +189,10 @@ class HistoryAdapter(
     }
 
     class EntryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val tvWord    : TextView = view.findViewById(R.id.tvWord)
-        val tvTime    : TextView = view.findViewById(R.id.tvTime)
-        val btnDelete : View     = view.findViewById(R.id.btnDelete)
+        val tvWord     : TextView = view.findViewById(R.id.tvWord)
+        val tvFilipino : TextView = view.findViewById(R.id.tvFilipino)
+        val tvTime     : TextView = view.findViewById(R.id.tvTime)
+        val btnDelete  : View     = view.findViewById(R.id.btnDelete)
     }
 
     // ── Adapter overrides ─────────────────────────────────────────────────────
@@ -223,6 +226,10 @@ class HistoryAdapter(
 
                     tvWord.text = e.word
                     tvTime.text = TranslationHistoryManager.formatTime(e.timestamp)
+
+                    val filipino = historyManager.getTranslation(e.word)?.trim().orEmpty()
+                    tvFilipino.text = filipino
+                    tvFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
 
                     // Delete button passes flatIndex back to the Activity
                     btnDelete.setOnClickListener { onDelete(item.flatIndex) }

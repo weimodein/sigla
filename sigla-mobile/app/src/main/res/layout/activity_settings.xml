@@ -1,452 +1,377 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    activity_settings.xml  →  res/layout/
-    Scope:
-      - Volume level (SeekBar)
-      - Voice type (toggle/selector: Male / Female)
-      - Light / Dark mode (toggle switch)
-      - Reset to Default button
-      - Replay onboarding tutorial
-      - Bottom bar navigation (view_bottom_nav.xml)
-
-    Header matches activity_word_bank.xml (same outer halo + navy curve
-    drawables/heights) so this screen reads as part of the same app family.
--->
+<!-- Settings (spec §5). Bottom bar navigation (view_bottom_nav.xml).
+     Scope:
+       - Profile card (initial avatar, name, "Tap to change your name")
+       - Audio card: Volume level, Voice type
+       - Display card: Dark / Light mode toggle
+       - App card: Replay onboarding tutorial
+       - Reset to Default button
+     No settings are added or removed except the name. -->
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/sig_page_bg">
+    android:background="@color/sg_bg">
 
-        <!-- TOP BAR -->
-        <FrameLayout
-            android:id="@+id/topBarOuterWrapper"
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="122dp"
-            android:background="@drawable/bg_topbar_outer"
-            android:elevation="6dp">
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/sg_screen_padding"
+            android:paddingTop="@dimen/sg_space_24"
+            android:paddingEnd="@dimen/sg_screen_padding"
+            android:paddingBottom="@dimen/sg_bottom_bar_clearance">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="110dp"
-                android:background="@drawable/bg_topbar_curved"
-                android:layout_marginStart="6dp"
-                android:layout_marginEnd="6dp"
-                android:layout_marginBottom="6dp"
-                android:orientation="horizontal"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:gravity="center_vertical">
+            <TextView
+                style="@style/Sigla.Text.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Settings" />
 
-                <!-- Screen title + subtitle -->
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="14dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Settings"
-                        android:textColor="#FFFFFF"
-                        android:textSize="22sp"
-                        android:fontFamily="@font/poppins_bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="Filipino Sign Language Translator"
-                        android:textColor="#C2CFE3"
-                        android:textSize="11sp"
-                        android:fontFamily="@font/poppins_regular" />
-
-                </LinearLayout>
-
-            </LinearLayout>
-        </FrameLayout>
-
-        <!-- SCROLLABLE BODY -->
-        <androidx.core.widget.NestedScrollView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_marginTop="122dp"
-            android:fillViewport="true">
-
-            <LinearLayout
+            <!-- Profile card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/rowProfile"
+                style="@style/Widget.Sigla.Card.Brand"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:paddingBottom="@dimen/sg_bottom_bar_clearance">
+                android:layout_marginTop="@dimen/sg_space_16"
+                android:clickable="true"
+                android:focusable="true">
 
-                <!-- ════════════════════════════════════
-                     SECTION: AUDIO
-                ════════════════════════════════════ -->
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="AUDIO"
-                    android:textColor="@color/sig_text_secondary"
-                    android:textSize="11sp"
-                    android:letterSpacing="0.15"
-                    android:fontFamily="@font/poppins_bold"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
-                    android:paddingTop="18dp"
-                    android:paddingBottom="8dp" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/sg_space_16">
 
-                <androidx.cardview.widget.CardView
+                    <FrameLayout
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:background="@drawable/bg_sg_circle_tint_on_brand">
+                        <TextView
+                            android:id="@+id/tvProfileInitial"
+                            style="@style/Sigla.Text.Title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:textColor="@color/sg_on_brand"
+                            tools:text="J" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/sg_space_12"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/tvProfileName"
+                            style="@style/Sigla.Text.CardTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:textColor="@color/sg_on_brand"
+                            tools:text="Jhoren" />
+                        <TextView
+                            style="@style/Sigla.Text.Caption"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/sg_space_4"
+                            android:text="Tap to change your name"
+                            android:textColor="@color/sg_on_brand_secondary" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ════════════════════ AUDIO ════════════════════ -->
+            <TextView
+                style="@style/Sigla.Text.Section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_24"
+                android:layout_marginBottom="@dimen/sg_space_8"
+                android:text="Audio" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Sigla.Card.Tint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    app:cardBackgroundColor="@color/sig_surface_card"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="2dp">
+                    android:orientation="vertical"
+                    android:padding="@dimen/sg_space_16">
+
+                    <!-- Volume level -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+                        <TextView
+                            style="@style/Sigla.Text.BodyStrong"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Volume level" />
+                        <TextView
+                            android:id="@+id/tvVolumeValue"
+                            style="@style/Sigla.Text.BodyStrong"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            tools:text="70%" />
+                    </LinearLayout>
+
+                    <SeekBar
+                        android:id="@+id/seekVolume"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/sg_space_8"
+                        android:max="100"
+                        android:progress="70"
+                        android:progressTint="@color/sg_brand"
+                        android:thumbTint="@color/sg_brand" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginVertical="@dimen/sg_space_16"
+                        android:background="@color/sg_divider" />
+
+                    <!-- Voice type -->
+                    <TextView
+                        style="@style/Sigla.Text.BodyStrong"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Voice type" />
+                    <TextView
+                        style="@style/Sigla.Text.Caption"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/sg_space_4"
+                        android:layout_marginBottom="@dimen/sg_space_12"
+                        android:text="Voice used for text-to-speech" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:paddingTop="14dp"
-                        android:paddingBottom="18dp">
-
-                        <!-- Volume Level -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical"
-                            android:paddingBottom="10dp">
-
-                            <TextView
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1"
-                                android:text="Volume Level"
-                                android:textColor="@color/sig_text_primary"
-                                android:textSize="15sp"
-                                android:fontFamily="@font/poppins_bold" />
-
-                            <TextView
-                                android:id="@+id/tvVolumeValue"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="70%"
-                                android:textColor="@color/sig_text_primary"
-                                android:textSize="15sp"
-                                android:fontFamily="@font/poppins_bold" />
-
-                        </LinearLayout>
-
-                        <SeekBar
-                            android:id="@+id/seekVolume"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:max="100"
-                            android:progress="70"
-                            android:progressTint="@color/sig_icon_accent"
-                            android:thumbTint="@color/sig_icon_accent"
-                            android:layout_marginBottom="12dp" />
-
-                        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/sig_divider" android:layout_marginBottom="14dp" />
-
-                        <!-- Voice Type toggle -->
+                        android:orientation="horizontal">
                         <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Voice Type"
-                            android:textColor="@color/sig_text_primary"
-                            android:textSize="15sp"
-                            android:fontFamily="@font/poppins_bold"
-                            android:layout_marginBottom="4dp" />
+                            android:id="@+id/btnVoiceMale"
+                            style="@style/Sigla.Text.BodyStrong"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/sg_touch_min"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="@dimen/sg_space_8"
+                            android:background="@drawable/bg_sg_pill"
+                            android:backgroundTint="@color/sg_brand"
+                            android:gravity="center"
+                            android:text="Male"
+                            android:textColor="@color/sg_on_brand" />
 
                         <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Select voice for text-to-speech output"
-                            android:textColor="@color/sig_text_secondary"
-                            android:textSize="12sp"
-                            android:layout_marginBottom="14dp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal">
-
-                            <TextView
-                                android:id="@+id/btnVoiceMale"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_weight="1"
-                                android:layout_marginEnd="10dp"
-                                android:text="MALE"
-                                android:textColor="#FFFFFF"
-                                android:textSize="13sp"
-                                android:fontFamily="@font/poppins_bold"
-                                android:gravity="center"
-                                android:background="@drawable/bg_toggle_selected" />
-
-                            <TextView
-                                android:id="@+id/btnVoiceFemale"
-                                android:layout_width="0dp"
-                                android:layout_height="44dp"
-                                android:layout_weight="1"
-                                android:text="FEMALE"
-                                android:textColor="@color/sig_text_primary"
-                                android:textSize="13sp"
-                                android:fontFamily="@font/poppins_bold"
-                                android:gravity="center"
-                                android:background="@drawable/bg_toggle_unselected_blue" />
-
-                        </LinearLayout>
-
-                    </LinearLayout>
-                </androidx.cardview.widget.CardView>
-
-                <!-- ════════════════════════════════════
-                     SECTION: DISPLAY
-                ════════════════════════════════════ -->
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="DISPLAY"
-                    android:textColor="@color/sig_text_secondary"
-                    android:textSize="11sp"
-                    android:letterSpacing="0.15"
-                    android:fontFamily="@font/poppins_bold"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
-                    android:paddingTop="20dp"
-                    android:paddingBottom="8dp" />
-
-                <androidx.cardview.widget.CardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    app:cardBackgroundColor="@color/sig_surface_card"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="2dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="72dp"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp">
-
-                        <FrameLayout
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
-                            android:background="@drawable/bg_icon_circle_blue_light">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="center"
-                                android:text="🌙"
-                                android:textSize="16sp" />
-
-                        </FrameLayout>
-
-                        <LinearLayout
+                            android:id="@+id/btnVoiceFemale"
+                            style="@style/Sigla.Text.BodyStrong"
                             android:layout_width="0dp"
-                            android:layout_height="wrap_content"
+                            android:layout_height="@dimen/sg_touch_min"
                             android:layout_weight="1"
-                            android:layout_marginStart="14dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Dark Mode"
-                                android:textColor="@color/sig_text_primary"
-                                android:textSize="15sp"
-                                android:fontFamily="@font/poppins_bold" />
-
-                            <TextView
-                                android:id="@+id/tvDarkModeSubtitle"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Currently using Light mode"
-                                android:textColor="@color/sig_text_secondary"
-                                android:textSize="12sp"
-                                android:layout_marginTop="2dp" />
-
-                        </LinearLayout>
-
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/switchDarkMode"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:checked="false"
-                            app:trackTint="@color/switch_track_tint"
-                            app:thumbTint="@color/switch_thumb_tint" />
-
+                            android:background="@drawable/bg_sg_pill"
+                            android:backgroundTint="@color/sg_tint"
+                            android:gravity="center"
+                            android:text="Female"
+                            android:textColor="@color/sg_brand_text" />
                     </LinearLayout>
-                </androidx.cardview.widget.CardView>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-                <!-- ════════════════════════════════════
-                     SECTION: APP
-                ════════════════════════════════════ -->
-                <TextView
+            <!-- ════════════════════ DISPLAY ════════════════════ -->
+            <TextView
+                style="@style/Sigla.Text.Section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_24"
+                android:layout_marginBottom="@dimen/sg_space_8"
+                android:text="Display" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Sigla.Card.Tint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="APP"
-                    android:textColor="@color/sig_text_secondary"
-                    android:textSize="11sp"
-                    android:letterSpacing="0.15"
-                    android:fontFamily="@font/poppins_bold"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
-                    android:paddingTop="20dp"
-                    android:paddingBottom="8dp" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/sg_space_16">
 
-                <androidx.cardview.widget.CardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    app:cardBackgroundColor="@color/sig_surface_card"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="2dp">
-
-                    <LinearLayout
-                        android:id="@+id/rowReplayTutorial"
-                        android:layout_width="match_parent"
-                        android:layout_height="72dp"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp">
-
-                        <FrameLayout
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
-                            android:background="@drawable/bg_icon_circle_blue_light">
-
-                            <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
-                                android:layout_gravity="center"
-                                android:src="@android:drawable/ic_media_play"
-                                app:tint="@color/sig_icon_badge_icon"
-                                android:contentDescription="Tutorial" />
-
-                        </FrameLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginStart="14dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Replay Onboarding Tutorial"
-                                android:textColor="@color/sig_text_primary"
-                                android:textSize="15sp"
-                                android:fontFamily="@font/poppins_bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Review the app guide from the beginning"
-                                android:textColor="@color/sig_text_secondary"
-                                android:textSize="12sp"
-                                android:layout_marginTop="2dp" />
-
-                        </LinearLayout>
-
+                    <FrameLayout
+                        android:layout_width="@dimen/sg_badge_size"
+                        android:layout_height="@dimen/sg_badge_size"
+                        android:background="@drawable/bg_sg_circle_tint">
                         <ImageView
-                            android:layout_width="16dp"
-                            android:layout_height="16dp"
-                            android:src="@android:drawable/ic_media_play"
-                            app:tint="@color/sig_text_secondary"
-                            android:contentDescription="Go" />
-
-                    </LinearLayout>
-                </androidx.cardview.widget.CardView>
-
-                <!-- ════════════════════════════════════
-                     RESET TO DEFAULT BUTTON
-                ════════════════════════════════════ -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    android:layout_marginTop="20dp"
-                    app:cardBackgroundColor="@color/sig_reset_card_bg"
-                    app:cardCornerRadius="16dp"
-                    app:strokeWidth="1dp"
-                    app:strokeColor="@color/sig_border_reset_card"
-                    app:cardElevation="2dp">
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_onboard_name"
+                            android:tint="@color/sg_brand_text"
+                            tools:ignore="ContentDescription" />
+                    </FrameLayout>
 
                     <LinearLayout
-                        android:id="@+id/btnResetDefaults"
-                        android:layout_width="match_parent"
-                        android:layout_height="64dp"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp">
-
-                        <FrameLayout
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
-                            android:background="@drawable/bg_icon_circle_red_light">
-
-                            <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
-                                android:layout_gravity="center"
-                                android:src="@android:drawable/ic_menu_revert"
-                                app:tint="@color/sig_reset_accent"
-                                android:contentDescription="Reset" />
-
-                        </FrameLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/sg_space_12"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/Sigla.Text.BodyStrong"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginStart="14dp"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Reset to Default"
-                                android:textColor="@color/sig_reset_accent"
-                                android:textSize="15sp"
-                                android:fontFamily="@font/poppins_bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Restores all settings to their original configuration"
-                                android:textColor="@color/sig_reset_subtitle"
-                                android:textSize="12sp"
-                                android:layout_marginTop="2dp" />
-
-                        </LinearLayout>
-
+                            android:text="Dark mode" />
+                        <TextView
+                            android:id="@+id/tvDarkModeSubtitle"
+                            style="@style/Sigla.Text.Caption"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/sg_space_4"
+                            tools:text="Currently using Light mode" />
                     </LinearLayout>
 
-                </com.google.android.material.card.MaterialCardView>
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchDarkMode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:thumbTint="@color/sg_bg"
+                        app:trackTint="@color/sg_brand" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-            </LinearLayout>
-        </androidx.core.widget.NestedScrollView>
+            <!-- ════════════════════ APP ════════════════════ -->
+            <TextView
+                style="@style/Sigla.Text.Section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_24"
+                android:layout_marginBottom="@dimen/sg_space_8"
+                android:text="App" />
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Sigla.Card.Tint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/rowReplayTutorial"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/sg_space_16">
+
+                    <FrameLayout
+                        android:layout_width="@dimen/sg_badge_size"
+                        android:layout_height="@dimen/sg_badge_size"
+                        android:background="@drawable/bg_sg_circle_tint">
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_play"
+                            android:tint="@color/sg_brand_text" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/sg_space_12"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/Sigla.Text.BodyStrong"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Replay onboarding tutorial" />
+                        <TextView
+                            style="@style/Sigla.Text.Caption"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/sg_space_4"
+                            android:text="Review the app guide from the beginning" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- ════════════════════ RESET ════════════════════ -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.Sigla.Card.Outlined"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/sg_space_24"
+                app:strokeColor="@color/sg_danger">
+
+                <LinearLayout
+                    android:id="@+id/btnResetDefaults"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="@dimen/sg_space_16">
+
+                    <FrameLayout
+                        android:layout_width="@dimen/sg_badge_size"
+                        android:layout_height="@dimen/sg_badge_size"
+                        android:background="@drawable/bg_sg_circle_tint">
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_replay"
+                            android:tint="@color/sg_danger" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/sg_space_12"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/Sigla.Text.BodyStrong"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Reset to default"
+                            android:textColor="@color/sg_danger" />
+                        <TextView
+                            style="@style/Sigla.Text.Caption"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/sg_space_4"
+                            android:text="Restores all settings to their original configuration" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
     <include layout="@layout/view_bottom_nav" />
 
