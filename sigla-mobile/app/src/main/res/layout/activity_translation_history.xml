@@ -78,7 +78,7 @@
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
                 android:paddingBottom="@dimen/sg_bottom_bar_clearance"
-                android:scrollbars="vertical"
+                android:scrollbars="none"
                 android:visibility="gone"
                 tools:visibility="visible" />
 
