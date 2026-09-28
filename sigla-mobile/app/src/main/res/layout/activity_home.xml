@@ -184,10 +184,10 @@
                         android:orientation="vertical">
                         <TextView android:id="@+id/tvStatTotal" style="@style/Sigla.Text.StatValue"
                             android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            tools:text="148" />
+                            tools:text="12" />
                         <TextView style="@style/Sigla.Text.StatLabel"
                             android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:gravity="center" android:text="Total translated" />
+                            android:gravity="center" android:text="Translated today" />
                     </LinearLayout>
                     <LinearLayout
                         android:layout_width="0dp"

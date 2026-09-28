@@ -25,9 +25,9 @@ internal fun homeGreeting(hour: Int, name: String?): Greeting {
  * The Home stat banner. SigLa bridges signers and non-signers in the moment,
  * not a learning app, so these three describe capability and lifetime use
  * rather than a streak or a "words learned" score: words available (the word
- * bank's current size, what SigLa can recognize right now), total translated
- * (every successful translation ever, not capped by the 200-entry history —
- * see TranslationHistoryManager.getTotalTranslated), and favorites. Each
+ * bank's current size, what SigLa can recognize right now), translated today
+ * (successful translations since local midnight, unaffected by deleting
+ * history — see TranslationHistoryManager.getTranslatedToday), and favorites. Each
  * value comes from its own on-device source (word bank cache, history
  * manager, favorites manager) at a different point in HomeActivity.refresh(),
  * so there is no single function here to compute it — this struct is just
@@ -41,6 +41,12 @@ internal fun isSameLocalDay(aMillis: Long, bMillis: Long, timeZone: TimeZone): B
     val b = Calendar.getInstance(timeZone).apply { timeInMillis = bMillis }
     return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
         a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
+}
+
+/** Identifies the calendar date of [millis] in [timeZone], e.g. "2026-271". */
+internal fun localDayKey(millis: Long, timeZone: TimeZone): String {
+    val c = Calendar.getInstance(timeZone).apply { timeInMillis = millis }
+    return "${c.get(Calendar.YEAR)}-${c.get(Calendar.DAY_OF_YEAR)}"
 }
 
 data class HomeCategory(val name: String, val wordCount: Int)

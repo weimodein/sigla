@@ -41,6 +41,8 @@ class TranslationHistoryManager private constructor(context: Context) {
     companion object {
         private const val KEY_HISTORY = "translation_history"
         private const val KEY_TOTAL_TRANSLATED = "total_translated"
+        private const val KEY_TODAY_DAY = "translated_today_day"
+        private const val KEY_TODAY_COUNT = "translated_today_count"
         private const val MAX_ENTRIES = 200
 
         @Volatile private var INSTANCE: TranslationHistoryManager? = null
@@ -88,6 +90,10 @@ class TranslationHistoryManager private constructor(context: Context) {
 
     @Synchronized
     fun add(word: String, confidence: Int, gestureType: String) {
+        // Read before the new entry is saved: a first-ever call seeds from today's
+        // history, which must not already include this entry.
+        val todayBefore = getTranslatedToday()
+
         // getAll() is newest-first and the new entry is the newest, so prepending
         // preserves the ordering without a re-sort.
         val current = getAll()
@@ -99,11 +105,33 @@ class TranslationHistoryManager private constructor(context: Context) {
         }
         saveToPrefs(updated)
 
-        // A lifetime counter, separate from the capped/editable list above: it is
-        // never reduced by the 200-entry cap, deleteAt() or clearAll(), so Home's
-        // "Total translated" reflects everything SigLa has ever helped translate,
-        // not just what is still kept in history.
-        prefs.edit().putInt(KEY_TOTAL_TRANSLATED, getTotalTranslated() + 1).apply()
+        // Counters kept separate from the capped/editable list above: neither is
+        // reduced by the 200-entry cap, deleteAt() or clearAll(), so they reflect
+        // what SigLa actually translated, not just what is still kept in history.
+        prefs.edit()
+            .putInt(KEY_TOTAL_TRANSLATED, getTotalTranslated() + 1)
+            .putString(KEY_TODAY_DAY, localDayKey(System.currentTimeMillis(), TimeZone.getDefault()))
+            .putInt(KEY_TODAY_COUNT, todayBefore + 1)
+            .apply()
+    }
+
+    /**
+     * Successful translations since local midnight — Home's "Translated today".
+     * The count is stored with the day it belongs to, so the first read on a new
+     * day returns 0 without any midnight job. A phone that never wrote this
+     * counter (installed before it existed) is seeded from today's history
+     * entries instead of reporting 0.
+     */
+    @Synchronized
+    fun getTranslatedToday(now: Long = System.currentTimeMillis()): Int {
+        val zone = TimeZone.getDefault()
+        val today = localDayKey(now, zone)
+        val storedDay = prefs.getString(KEY_TODAY_DAY, null)
+        if (storedDay == today) return prefs.getInt(KEY_TODAY_COUNT, 0)
+        if (storedDay != null) return 0
+        val seeded = getAll().count { localDayKey(it.timestamp, zone) == today }
+        prefs.edit().putString(KEY_TODAY_DAY, today).putInt(KEY_TODAY_COUNT, seeded).apply()
+        return seeded
     }
 
     /**

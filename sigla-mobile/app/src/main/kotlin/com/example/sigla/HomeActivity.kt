@@ -67,10 +67,10 @@ class HomeActivity : AppCompatActivity() {
 
         val historyManager = TranslationHistoryManager.getInstance(this)
         val entries = historyManager.getAll()
-        // Favorites/total-translated are on-device and instant; wordsAvailable
+        // Favorites/translated-today are on-device and instant; wordsAvailable
         // needs the cached word bank, loaded below with the categories grid, so
         // the stat banner's word count updates in the same pass as the grid.
-        binding.tvStatTotal.text = historyManager.getTotalTranslated().toString()
+        binding.tvStatTotal.text = historyManager.getTranslatedToday().toString()
         binding.tvStatFavorites.text = FavoritesManager.getInstance(this).getAll().size.toString()
 
         renderRecent(recentEntries(entries))

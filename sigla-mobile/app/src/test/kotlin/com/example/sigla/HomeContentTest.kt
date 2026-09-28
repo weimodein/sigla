@@ -58,10 +58,9 @@ class HomeContentTest {
     }
 
     // ── Stats ─────────────────────────────────────────────────────────────────
-    // HomeStats is now just three independently-sourced numbers (word bank
-    // size, TranslationHistoryManager.getTotalTranslated(), favorites count),
-    // so there is no homeStats() logic left to unit-test here — the lifetime-
-    // counter logic lives in, and is tested by, TranslationHistoryManager.
+    // HomeStats is just three independently-sourced numbers (word bank size,
+    // TranslationHistoryManager.getTranslatedToday(), favorites count). The
+    // daily counter resets by comparing localDayKey()s, tested below.
 
     @Test
     fun sameLocalDayUsesTheGivenTimeZone() {
@@ -69,6 +68,15 @@ class HomeContentTest {
         val b = at(2026, 9, 29, 0, 30)
         assertFalse(isSameLocalDay(a, b, manila))
         assertTrue(isSameLocalDay(a, at(2026, 9, 28, 0, 0), manila))
+    }
+
+    @Test
+    fun localDayKeyChangesAtLocalMidnight() {
+        val lateNight = at(2026, 9, 28, 23, 59)
+        assertEquals(localDayKey(at(2026, 9, 28, 0, 0), manila), localDayKey(lateNight, manila))
+        assertFalse(localDayKey(lateNight, manila) == localDayKey(at(2026, 9, 29, 0, 0), manila))
+        // Same day-of-year in different years must not collide.
+        assertFalse(localDayKey(at(2025, 9, 28, 12, 0), manila) == localDayKey(at(2026, 9, 28, 12, 0), manila))
     }
 
     // ── Categories ────────────────────────────────────────────────────────────
