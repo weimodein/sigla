@@ -268,7 +268,7 @@
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:importantForAccessibility="no"
-                android:src="@drawable/ic_onboard_history"
+                android:src="@drawable/ic_history_line"
                 android:tint="@color/sg_text_secondary" />
             <TextView
                 style="@style/Sigla.Text.Caption"
@@ -289,7 +289,7 @@
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:importantForAccessibility="no"
-                android:src="@drawable/ic_onboard_settings"
+                android:src="@drawable/ic_settings_line"
                 android:tint="@color/sg_text_secondary" />
             <TextView
                 style="@style/Sigla.Text.Caption"
