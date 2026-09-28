@@ -41,6 +41,31 @@ data class OnboardingPage(
 internal fun shouldShowNameStep(existingUserName: String?): Boolean =
     existingUserName.isNullOrBlank()
 
+/** The 3 feature pages, in order. A top-level val so it's directly testable. */
+internal val featurePages = listOf(
+    OnboardingPage(
+        R.drawable.ic_hand_line,
+        "Translate",
+        "Sign, and SigLa speaks",
+        "Tap the record button, sign one word, and SigLa translates it instantly. Switch to Live mode for continuous recognition, or flip the camera and turn on Filipino translations.",
+        R.id.mockupTranslate,
+    ),
+    OnboardingPage(
+        R.drawable.ic_onboard_learn,
+        "Learn",
+        "A word bank at your pace",
+        "Browse Filipino Sign Language words by category or search directly. Tap any word to watch a demo video, hear it spoken, and try it yourself in the translator.",
+        R.id.mockupLearn,
+    ),
+    OnboardingPage(
+        R.drawable.ic_onboard_explore,
+        "Explore",
+        "Everything, one tap away",
+        "Home for your stats and shortcuts, Word Bank to browse and learn, History for what you've translated, and Settings to make it yours.",
+        R.id.mockupExplore,
+    )
+)
+
 class OnboardingActivity : AppCompatActivity() {
 
     private lateinit var appSettings: AppSettings
@@ -49,30 +74,6 @@ class OnboardingActivity : AppCompatActivity() {
     private lateinit var btnSkip: MaterialButton
     private lateinit var indicatorLayout: LinearLayout
     private lateinit var tvStepCount: TextView
-
-    private val featurePages = listOf(
-        OnboardingPage(
-            R.drawable.ic_hand_line,
-            "Translate",
-            "Sign, and SigLa speaks",
-            "Tap the record button, sign one word, and SigLa translates it instantly. Switch to Live mode for continuous recognition, or flip the camera and turn on Filipino translations.",
-            R.id.mockupTranslate,
-        ),
-        OnboardingPage(
-            R.drawable.ic_onboard_learn,
-            "Learn",
-            "A word bank at your pace",
-            "Browse Filipino Sign Language words by category or search directly. Tap any word to watch a demo video, hear it spoken, and try it yourself in the translator.",
-            R.id.mockupLearn,
-        ),
-        OnboardingPage(
-            R.drawable.ic_onboard_explore,
-            "Explore",
-            "Everything, one tap away",
-            "Home for your stats and shortcuts, Word Bank to browse and learn, History for what you've translated, and Settings to make it yours.",
-            R.id.mockupExplore,
-        )
-    )
 
     /** Set once in onCreate: featurePages, plus the name step if it should show. */
     private var showNameStep = false
@@ -107,6 +108,10 @@ class OnboardingActivity : AppCompatActivity() {
 
         setupIndicators()
         updateStep(0)
+        // onPageSelected(0) isn't reliably fired for the initial page during
+        // ViewPager2's first layout pass, so the first page's entrance is
+        // triggered explicitly once that layout has actually happened.
+        viewPager.post { animatePageEntrance(0) }
 
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -198,6 +203,10 @@ class OnboardingActivity : AppCompatActivity() {
         val slide = dp(20).toFloat()
 
         listOf(icon to 0L, mockup to 90L).forEach { (view, delay) ->
+            // Cancels any animation still in flight from a fast swipe back onto
+            // this page, so its alpha/translationY reset below doesn't visibly
+            // snap the view backward mid-animation.
+            view.animate().cancel()
             view.alpha = 0f
             view.translationY = slide
             view.animate()

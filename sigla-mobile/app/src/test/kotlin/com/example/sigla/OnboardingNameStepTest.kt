@@ -43,4 +43,16 @@ class OnboardingNameStepTest {
         assertEquals(VIEW_TYPE_FEATURE, adapter.getItemViewType(2))
         assertEquals(VIEW_TYPE_NAME, adapter.getItemViewType(3))
     }
+
+    @Test
+    fun everyRealFeaturePageHasItsOwnDistinctNonZeroMockup() {
+        val mockupIds = featurePages.map { it.mockupViewId }
+        assertTrue("every mockupViewId must be set (non-zero)", mockupIds.all { it != 0 })
+        assertEquals(
+            "two pages must not share the same mockup view — the toggle logic " +
+                "would then show both or neither correctly",
+            mockupIds.size,
+            mockupIds.distinct().size,
+        )
+    }
 }
