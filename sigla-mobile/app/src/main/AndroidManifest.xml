@@ -71,8 +71,7 @@
             android:name=".MainActivity"
             android:exported="false"
             android:launchMode="singleTop"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.Sigla.Immersive" />
+            android:screenOrientation="portrait" />
 
 
         <activity android:name=".TranslationHistoryActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />

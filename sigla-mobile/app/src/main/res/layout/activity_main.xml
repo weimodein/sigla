@@ -1,662 +1,413 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Translator (spec §5, mockup translator-v2.html). Camera fills the screen above
+     a compact bottom sheet; the sheet overlaps the camera by 28dp so its rounded
+     top corners sit on the picture. Controls float over the camera. -->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/sig_page_bg">
+    android:background="@color/sg_bg">
 
-        <!-- Camera preview card occupying the main screen area -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cameraCard"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_marginStart="0dp"
-            android:layout_marginEnd="0dp"
-            android:layout_marginTop="0dp"
-            android:layout_marginBottom="0dp"
-            app:cardCornerRadius="0dp"
-            app:cardElevation="10dp"
-            app:cardBackgroundColor="@color/sig_surface_card"
-            app:strokeColor="@color/sig_border_card"
-            app:strokeWidth="1dp"
-            app:layout_constraintTop_toBottomOf="@id/topBarCard"
-            app:layout_constraintBottom_toTopOf="@id/bottomPanelCard"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+    <!-- Camera: from the top down to 28dp inside the sheet. -->
+    <FrameLayout
+        android:id="@+id/cameraContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/sheetOverlap"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/cameraPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <com.example.sigla.OverlayView
+            android:id="@+id/overlayView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <!-- Top controls over the camera -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnBack"
+        style="@style/Widget.Sigla.IconButton"
+        android:layout_marginStart="@dimen/sg_space_16"
+        android:layout_marginTop="@dimen/sg_space_16"
+        android:contentDescription="Back"
+        app:backgroundTint="@color/sg_bg"
+        app:icon="@drawable/ic_back"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/btnToggleMode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_sg_pill"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/sg_space_4"
+        android:paddingEnd="@dimen/sg_space_4"
+        app:layout_constraintBottom_toBottomOf="@id/btnBack"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/btnBack">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/segModeTap"
+            style="@style/Widget.Sigla.Chip"
+            android:text="Tap" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/segModeLive"
+            style="@style/Widget.Sigla.Chip"
+            android:text="Live" />
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnFlipCamera"
+        style="@style/Widget.Sigla.IconButton"
+        android:layout_marginTop="@dimen/sg_space_16"
+        android:layout_marginEnd="@dimen/sg_space_16"
+        android:contentDescription="Flip camera"
+        app:backgroundTint="@color/sg_bg"
+        app:icon="@drawable/ic_camera_flip"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Result card, floating under the top controls -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardResult"
+        style="@style/Widget.Sigla.Card.Outlined"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/sg_screen_padding"
+        android:layout_marginTop="@dimen/sg_space_16"
+        android:layout_marginEnd="@dimen/sg_screen_padding"
+        android:visibility="invisible"
+        app:cardCornerRadius="@dimen/sg_radius_md"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnBack"
+        tools:visibility="visible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="@dimen/sg_space_12">
 
             <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent">
-
-                <androidx.camera.view.PreviewView
-                    android:id="@+id/cameraPreview"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-
-                <com.example.sigla.OverlayView
-                    android:id="@+id/overlayView"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-
-                <TextView
-                    android:id="@+id/tvReadyOverlay"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Ready"
-                    android:textColor="@color/colorSuccess"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:fontFamily="@font/poppins_medium"
-                    android:background="#CC000000"
-                    android:padding="4dp"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:visibility="gone"
-                    android:layout_gravity="top|end"
-                    android:layout_margin="10dp" />
-
-                <!-- Result card centered over camera preview -->
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/cardResult"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:visibility="invisible"
-                    app:cardCornerRadius="28dp"
-                    app:cardElevation="12dp"
-                    app:cardBackgroundColor="#661A2F3F"
-                    app:strokeColor="#80FFFFFF"
-                    app:strokeWidth="1dp"
+                android:layout_width="@dimen/sg_badge_size"
+                android:layout_height="@dimen/sg_badge_size"
+                android:background="@drawable/bg_sg_circle_tint">
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:layout_margin="32dp">
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:gravity="center"
-                        android:paddingStart="32dp"
-                        android:paddingEnd="32dp"
-                        android:paddingTop="24dp"
-                        android:paddingBottom="24dp">
-
-                        <!-- English result. wrap_content so the box hugs short words
-                             tightly; maxWidth caps how wide it can grow before wrapping
-                             to a second line. textSize is fixed (not autosize — confirmed
-                             via on-device testing to not engage reliably on this device)
-                             but chosen small enough that even the longest realistic single
-                             word (e.g. "UNDERSTAND") fits within maxWidth on one line, so
-                             wrapping only ever happens at word boundaries, never mid-word. -->
-                        <TextView
-                            android:id="@+id/tvResult"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center_horizontal"
-                            android:gravity="center"
-                            android:maxWidth="220dp"
-                            android:maxLines="2"
-                            android:text="HELLO"
-                            android:textColor="#FFFFFF"
-                            android:textSize="26sp"
-                            android:textStyle="bold"
-                            android:letterSpacing="0.05"
-                            android:fontFamily="@font/poppins_bold"
-                            android:includeFontPadding="false" />
-
-                        <!-- Filipino translation — same hug-to-content treatment; these
-                             phrases run longer than the English labels. -->
-                        <TextView
-                            android:id="@+id/tvFilipinoResult"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center_horizontal"
-                            android:gravity="center"
-                            android:maxWidth="220dp"
-                            android:maxLines="2"
-                            android:text=""
-                            android:textColor="@color/sig_accent"
-                            android:textSize="11sp"
-                            android:textStyle="italic"
-                            android:layout_marginTop="4dp"
-                            android:visibility="gone"
-                            android:fontFamily="@font/poppins_medium" />
-
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Tap mode: prompt + record button. GONE in Live mode. -->
-                <LinearLayout
-                    android:id="@+id/tapControls"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|center_horizontal"
-                    android:layout_marginBottom="20dp"
-                    android:gravity="center_horizontal"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:id="@+id/tvTapPrompt"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="10dp"
-                        android:background="#CC000000"
-                        android:fontFamily="@font/poppins_medium"
-                        android:paddingStart="12dp"
-                        android:paddingTop="4dp"
-                        android:paddingEnd="12dp"
-                        android:paddingBottom="4dp"
-                        android:textColor="@android:color/white"
-                        android:textSize="13sp"
-                        android:visibility="gone" />
-
-                    <FrameLayout
-                        android:layout_width="88dp"
-                        android:layout_height="88dp">
-
-                        <com.google.android.material.progressindicator.CircularProgressIndicator
-                            android:id="@+id/tapRecordRing"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:max="100"
-                            android:visibility="invisible"
-                            app:indicatorColor="#E53935"
-                            app:indicatorSize="88dp"
-                            app:trackThickness="5dp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnTapRecord"
-                            android:layout_width="72dp"
-                            android:layout_height="72dp"
-                            android:layout_gravity="center"
-                            android:insetTop="0dp"
-                            android:insetBottom="0dp"
-                            android:padding="0dp"
-                            android:fontFamily="@font/poppins_medium"
-                            android:text="Tap to sign"
-                            android:textAllCaps="false"
-                            android:textSize="11sp"
-                            app:backgroundTint="@color/sig_accent"
-                            app:cornerRadius="36dp" />
-                    </FrameLayout>
-                </LinearLayout>
-
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_chat_line"
+                    android:tint="@color/sg_brand_text" />
             </FrameLayout>
 
-        </com.google.android.material.card.MaterialCardView>
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="@dimen/sg_space_12"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/tvResult"
+                    style="@style/Sigla.Text.CardTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    tools:text="GOOD MORNING" />
+                <TextView
+                    android:id="@+id/tvFilipinoResult"
+                    style="@style/Sigla.Text.Caption"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:visibility="gone"
+                    tools:text="Magandang umaga"
+                    tools:visibility="visible" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
-        <!-- ── TOP BAR (full width, no rounding) ── -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/topBarCard"
-            android:layout_width="0dp"
+    <TextView
+        android:id="@+id/tvHandsWarning"
+        style="@style/Sigla.Text.Caption"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/sg_space_8"
+        android:background="@drawable/bg_sg_pill"
+        android:backgroundTint="@color/sg_danger"
+        android:paddingStart="@dimen/sg_space_12"
+        android:paddingTop="@dimen/sg_space_4"
+        android:paddingEnd="@dimen/sg_space_12"
+        android:paddingBottom="@dimen/sg_space_4"
+        android:text="More than 2 hands detected"
+        android:textColor="@color/sg_on_brand"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cardResult" />
+
+    <!-- Tap mode: prompt + record button, just above the sheet -->
+    <LinearLayout
+        android:id="@+id/tapControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/sg_space_16"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/bottomSheet"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        tools:visibility="visible">
+
+        <TextView
+            android:id="@+id/tvTapPrompt"
+            style="@style/Sigla.Text.Body"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="0dp"
-            android:layout_marginEnd="0dp"
-            android:layout_marginTop="0dp"
-            app:cardCornerRadius="0dp"
-            app:cardElevation="8dp"
-            app:cardBackgroundColor="@color/sig_chrome_navy"
-            app:strokeWidth="0dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            android:layout_marginBottom="@dimen/sg_space_12"
+            android:background="@drawable/bg_sg_pill"
+            android:backgroundTint="#A6000000"
+            android:paddingStart="@dimen/sg_space_16"
+            android:paddingTop="@dimen/sg_space_4"
+            android:paddingEnd="@dimen/sg_space_16"
+            android:paddingBottom="@dimen/sg_space_4"
+            android:textColor="@color/sg_on_brand"
+            android:visibility="gone"
+            tools:text="Recording… 1.8s"
+            tools:visibility="visible" />
 
+        <FrameLayout
+            android:layout_width="100dp"
+            android:layout_height="100dp">
+
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/tapRecordRing"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:max="100"
+                android:visibility="invisible"
+                app:indicatorColor="@color/sg_danger"
+                app:indicatorSize="100dp"
+                app:trackThickness="5dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTapRecord"
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:layout_gravity="center"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:padding="0dp"
+                android:fontFamily="@font/poppins_semibold"
+                android:text="Tap to sign"
+                android:textAllCaps="false"
+                android:textColor="@color/sg_on_brand"
+                android:textSize="@dimen/sg_text_caption"
+                app:backgroundTint="@color/sg_brand"
+                app:cornerRadius="42dp"
+                app:strokeColor="@color/sg_bg"
+                app:strokeWidth="4dp" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- Live mode readout, in the same place as the record button. Its children
+         are shown/hidden individually by renderTapState(); with all three gone the
+         container collapses. -->
+    <LinearLayout
+        android:id="@+id/liveReadout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/sg_screen_padding"
+        android:layout_marginEnd="@dimen/sg_screen_padding"
+        android:layout_marginBottom="@dimen/sg_space_16"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toTopOf="@id/bottomSheet"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:id="@+id/tvDetectionLabel"
+            style="@style/Sigla.Text.Caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/sg_space_4"
+            android:text="Detecting"
+            android:textColor="@color/sg_on_brand" />
+
+        <ProgressBar
+            android:id="@+id/progressBuffer"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:max="100"
+            android:progress="0"
+            android:progressBackgroundTint="@color/sg_tint"
+            android:progressTint="@color/sg_brand" />
+
+        <LinearLayout
+            android:id="@+id/liveStatsRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sg_space_4"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <TextView
+                android:id="@+id/tvFrames"
+                style="@style/Sigla.Text.Caption"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/sg_on_brand"
+                tools:text="24" />
+            <TextView
+                android:id="@+id/tvBufferPercent"
+                style="@style/Sigla.Text.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/sg_space_12"
+                android:textColor="@color/sg_on_brand"
+                android:text="0%" />
+            <TextView
+                android:id="@+id/tvVelocity"
+                style="@style/Sigla.Text.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="@color/sg_on_brand" />
+            <TextView
+                android:id="@+id/tvStreak"
+                style="@style/Sigla.Text.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/sg_space_8"
+                android:textColor="@color/sg_on_brand"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Marks 28dp inside the sheet, where the camera ends. -->
+    <Space
+        android:id="@+id/sheetOverlap"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="28dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/bottomSheet" />
+
+    <!-- Bottom sheet -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/bottomSheet"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:cardBackgroundColor="@color/sg_bg"
+        app:cardElevation="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.Sigla.TopSheet"
+        app:strokeWidth="0dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/sg_screen_padding"
+            android:paddingTop="@dimen/sg_space_12"
+            android:paddingEnd="@dimen/sg_screen_padding"
+            android:paddingBottom="@dimen/sg_space_16">
+
+            <View
+                android:layout_width="40dp"
+                android:layout_height="4dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="@dimen/sg_space_8"
+                android:background="@drawable/bg_sg_pill"
+                android:backgroundTint="@color/sg_divider" />
+
+            <!-- Status + SOS on one row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="10dp"
-                android:gravity="center_vertical">
-
-                <!-- Back button -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnBack"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:padding="0dp"
-                    android:contentDescription="Back"
-                    app:icon="@drawable/ic_back"
-                    app:iconGravity="textStart"
-                    app:iconPadding="0dp"
-                    app:iconSize="20dp"
-                    app:iconTint="@color/sig_icon_accent"
-                    app:backgroundTint="@color/sig_header_button_bg"
-                    app:cornerRadius="10dp" />
-
-                <!-- App name + subtitle -->
-                <LinearLayout
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <View
+                    android:id="@+id/statusDot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/bg_sg_status_dot"
+                    android:backgroundTint="@color/sg_text_secondary" />
+                <TextView
+                    android:id="@+id/tvStatus"
+                    style="@style/Sigla.Text.BodyStrong"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="12dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="SigLa"
-                        android:textColor="#FFFFFF"
-                        android:textSize="18sp"
-                        android:letterSpacing="0.1"
-                        android:fontFamily="@font/poppins_bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Sign Language Interpreter"
-                        android:textColor="#80B0D4FF"
-                        android:textSize="10sp"
-                        android:letterSpacing="0.03"
-                        android:fontFamily="@font/poppins_regular" />
-
-                </LinearLayout>
-
+                    android:layout_marginStart="@dimen/sg_space_8"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Starting…" />
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFlipCamera"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="12dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:padding="0dp"
-                    android:contentDescription="Flip camera"
-                    app:icon="@drawable/ic_camera_flip"
-                    app:iconGravity="textStart"
-                    app:iconPadding="0dp"
-                    app:iconSize="22dp"
-                    app:iconTint="@color/sig_icon_accent"
-                    app:backgroundTint="@color/sig_header_button_bg"
-                    app:cornerRadius="12dp" />
-
+                    android:id="@+id/btnEmergency"
+                    style="@style/Widget.Sigla.Chip"
+                    android:contentDescription="Hold for two seconds to play an emergency alert"
+                    android:text="Hold for SOS"
+                    android:textColor="@color/sg_on_brand"
+                    app:backgroundTint="@color/sg_danger" />
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
-        <!-- Floating SOS button above bottom card -->
-        <!-- Too-many-hands warning -->
-        <TextView
-            android:id="@+id/tvHandsWarning"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="More than 2 hands detected"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:fontFamily="@font/poppins_medium"
-            android:background="#CC000000"
-            android:padding="8dp"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:visibility="gone"
-            app:layout_constraintBottom_toTopOf="@id/bottomPanelCard"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginBottom="8dp" />
-
-        <!-- No hands detected overlay -->
-        <TextView
-            android:id="@+id/tvNoHandsDetected"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="✋ No Hands Detected"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:fontFamily="@font/poppins_bold"
-            android:background="#CCD32F2F"
-            android:padding="8dp"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:visibility="gone"
-            android:layout_marginTop="8dp"
-            app:layout_constraintTop_toBottomOf="@id/topBarCard"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            tools:visibility="gone" />
-
-
-        <!-- ── BOTTOM PANEL ── -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/bottomPanelCard"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="0dp"
-            android:layout_marginEnd="0dp"
-            android:layout_marginBottom="0dp"
-            app:cardCornerRadius="0dp"
-            app:cardElevation="8dp"
-            app:cardBackgroundColor="@color/sig_chrome_navy"
-            app:strokeWidth="0dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
-
+            <!-- Words / Letters (shown when a letters model is loaded) + Filipino -->
             <LinearLayout
-                android:id="@+id/bottomPanel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:paddingStart="18dp"
-                android:paddingTop="16dp"
-                android:paddingEnd="18dp"
-                android:paddingBottom="20dp">
-
-                <!-- Top status row with ready badge -->
-                <FrameLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <LinearLayout
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:layout_marginEnd="8dp"
-                                    android:src="@drawable/ic_check_circle"
-                                    android:tint="#4CAF50" />
-
-                                <TextView
-                                    android:id="@+id/tvStatus"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Detecting…"
-                                    android:textColor="#B0D4FF"
-                                    android:textSize="14sp"
-                                    android:textStyle="bold"
-                                    android:fontFamily="@font/poppins_bold" />
-
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:gravity="center_vertical"
-                                android:orientation="horizontal">
-
-                                <ImageView
-                                    android:layout_width="20dp"
-                                    android:layout_height="20dp"
-                                    android:layout_marginEnd="8dp"
-                                    android:src="@drawable/ic_check_circle"
-                                    android:tint="#4CAF50" />
-
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="Hand tracking is active"
-                                    android:textColor="#B0D4FF"
-                                    android:textSize="11sp"
-                                    android:fontFamily="@font/poppins_regular" />
-
-                            </LinearLayout>
-
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/tvCooldownStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:layout_marginEnd="2dp"
-                            android:background="@drawable/bg_ready_badge"
-                            android:padding="8dp"
-                            android:text="Ready"
-                            android:textColor="#4CAF50"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            android:fontFamily="@font/poppins_bold" />
-
-                    </LinearLayout>
-
-                </FrameLayout>
-
-                <!-- Toggle row. These live here rather than inside cardResult: that
-                     card is invisible except for ~2s after each recognition, which
-                     made the Filipino toggle unreachable most of the time.
-
-                     Side by side rather than stacked — two full-width-feeling
-                     buttons on their own lines pushed the camera view down for
-                     controls that are both short and rarely touched. -->
+                android:orientation="horizontal">
                 <LinearLayout
+                    android:id="@+id/btnToggleVocabulary"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:layout_gravity="start"
-                    android:layout_marginTop="12dp"
-                    android:layout_marginBottom="4dp">
-
+                    android:visibility="gone"
+                    tools:visibility="visible">
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnToggleFilipino"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="30dp"
-                        android:minWidth="0dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:paddingStart="14dp"
-                        android:paddingEnd="14dp"
-                        android:text="Filipino"
-                        android:textColor="@color/sig_accent"
-                        android:textSize="11sp"
-                        android:textAllCaps="false"
-                        android:letterSpacing="0"
-                        android:fontFamily="@font/poppins_medium"
-                        app:strokeColor="@color/sig_accent"
-                        app:strokeWidth="1dp"
-                        app:cornerRadius="15dp" />
-
-                    <!-- Words / letters switch. GONE until an alphabet model is
-                         actually loaded, so a build or a backend without one looks
-                         exactly as it did before. -->
+                        android:id="@+id/chipWords"
+                        style="@style/Widget.Sigla.Chip"
+                        android:layout_marginEnd="@dimen/sg_space_8"
+                        android:text="Words" />
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnToggleVocabulary"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="30dp"
-                        android:layout_marginStart="8dp"
-                        android:minWidth="0dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:paddingStart="14dp"
-                        android:paddingEnd="14dp"
-                        android:text="Letters"
-                        android:textColor="@color/sig_accent"
-                        android:textSize="11sp"
-                        android:textAllCaps="false"
-                        android:letterSpacing="0"
-                        android:visibility="gone"
-                        android:fontFamily="@font/poppins_medium"
-                        app:strokeColor="@color/sig_accent"
-                        app:strokeWidth="1dp"
-                        app:cornerRadius="15dp" />
-
-                    <!-- Live / Tap translation mode. Filled = Tap. -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnToggleMode"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="30dp"
-                        android:layout_marginStart="8dp"
-                        android:minWidth="0dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:paddingStart="14dp"
-                        android:paddingEnd="14dp"
-                        android:text="Tap"
-                        android:textColor="@color/sig_accent"
-                        android:textSize="11sp"
-                        android:textAllCaps="false"
-                        android:letterSpacing="0"
-                        android:fontFamily="@font/poppins_medium"
-                        app:strokeColor="@color/sig_accent"
-                        app:strokeWidth="1dp"
-                        app:cornerRadius="15dp" />
-
+                        android:id="@+id/chipLetters"
+                        style="@style/Widget.Sigla.Chip"
+                        android:layout_marginEnd="@dimen/sg_space_8"
+                        android:text="Letters" />
                 </LinearLayout>
-
-                <!-- Green detection loader -->
-                <TextView
-                    android:id="@+id/tvDetectionLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:layout_marginBottom="6dp"
-                    android:text="Detection loading"
-                    android:textColor="#B0D4FF"
-                    android:textSize="11sp"
-                    android:fontFamily="@font/poppins_regular" />
-
-                <ProgressBar
-                    android:id="@+id/progressBuffer"
-                    style="?android:attr/progressBarStyleHorizontal"
-                    android:layout_width="match_parent"
-                    android:layout_height="6dp"
-                    android:layout_marginBottom="10dp"
-                    android:max="100"
-                    android:progress="0"
-                    android:progressBackgroundTint="#334CAF50"
-                    android:progressTint="#4CAF50" />
-
-                <!-- Bottom stats row: FPS, loading percent, motion -->
-                <LinearLayout
-                    android:id="@+id/liveStatsRow"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tvFrames"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="FPS: 0"
-                        android:textColor="#B0D4FF"
-                        android:textSize="12sp"
-                        android:fontFamily="@font/poppins_regular" />
-
-                    <TextView
-                        android:id="@+id/tvBufferPercent"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="0%"
-                        android:textColor="#B0D4FF"
-                        android:textSize="12sp"
-                        android:fontFamily="@font/poppins_regular" />
-
-                    <TextView
-                        android:id="@+id/tvVelocity"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:text="motion"
-                        android:textColor="#B0D4FF"
-                        android:textSize="12sp"
-                        android:fontFamily="@font/poppins_regular" />
-
-                    <TextView
-                        android:id="@+id/tvStreak"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="end"
-                        android:text=""
-                        android:textColor="#FFB74D"
-                        android:textSize="12sp"
-                        android:fontFamily="@font/poppins_medium"
-                        android:visibility="gone" />
-
-                </LinearLayout>
-
-                <!-- Camera button removed per request; bottom card minimized to content -->
-
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Floating SOS container above bottom card -->
-        <FrameLayout
-            android:id="@+id/floatingEmergencyContainer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:layout_constraintBottom_toTopOf="@id/bottomPanelCard"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="18dp"
-            android:translationZ="16dp"
-            android:elevation="16dp">
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="6dp"
-                android:clipToPadding="false">
-
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnEmergency"
-                    android:layout_width="64dp"
-                    android:layout_height="64dp"
-                    android:text="SOS"
-                    android:textColor="#FFFFFF"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:fontFamily="@font/poppins_bold"
-                    android:includeFontPadding="false"
-                    app:backgroundTint="#D32F2F"
-                    app:cornerRadius="32dp"
-                    app:strokeColor="#FFFFFF"
-                    app:strokeWidth="2dp"
-                    app:iconGravity="textStart"
-                    android:visibility="visible" />
-
-                <TextView
-                    android:id="@+id/tvEmergencyHint"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:maxWidth="120dp"
-                    android:maxLines="2"
-                    android:lines="2"
-                    android:breakStrategy="balanced"
-                    android:text="Hold 2 seconds\nfor emergency"
-                    android:textColor="#FFFFFF"
-                    android:textSize="10sp"
-                    android:fontFamily="@font/poppins_regular"
-                    android:gravity="center"
-                    android:layout_marginTop="2dp"
-                    android:background="#66000000"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp" />
-
+                    android:id="@+id/btnToggleFilipino"
+                    style="@style/Widget.Sigla.Chip"
+                    android:text="Filipino" />
             </LinearLayout>
 
-        </FrameLayout>
+            <TextView
+                android:id="@+id/tvSheetHint"
+                style="@style/Sigla.Text.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Tap, sign one word, then lower your hands." />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

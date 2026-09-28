@@ -235,11 +235,17 @@ class MainActivity : AppCompatActivity() {
     private val tapRingTicker = object : Runnable {
         override fun run() {
             if (tapSession.state != TapSignSession.State.RECORDING) return
-            val pct = (tapSession.recordingElapsedMs() * 100 / TAP_MAX_RECORDING_MS).toInt()
+            val elapsed = tapSession.recordingElapsedMs()
+            val pct = (elapsed * 100 / TAP_MAX_RECORDING_MS).toInt()
             binding.tapRecordRing.setProgressCompat(pct.coerceIn(0, 100), false)
+            binding.tvTapPrompt.text = recordingPromptText(elapsed)
             binding.tapRecordRing.postDelayed(this, 100)
         }
     }
+
+    /** "Recording… 1.8s" — the elapsed time the tap-to-sign spec asked for. */
+    private fun recordingPromptText(elapsedMs: Long): String =
+        String.format(java.util.Locale.US, "Recording… %.1fs", elapsedMs / 1000f)
     private val hideTapPrompt = Runnable { renderTapState() }
 
     // Filipino translations cache
@@ -252,6 +258,15 @@ class MainActivity : AppCompatActivity() {
     // immediately instead of waiting for the next recognition.
     private var lastLabel: String? = null
 
+    // Applied once, when the models first report ready (the predictor is built
+    // asynchronously, so it can't be applied in onCreate).
+    private var pendingStartVocabulary: String? = null
+
+    companion object {
+        /** "words" | "letters": vocabulary to open on, from a word's "Try it yourself". */
+        const val EXTRA_START_VOCABULARY = "extra_start_vocabulary"
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -263,6 +278,7 @@ class MainActivity : AppCompatActivity() {
         appSettings = AppSettings.getInstance(this)
         showFilipino = appSettings.showFilipino
         tapMode = appSettings.translationMode == AppSettings.MODE_TAP
+        pendingStartVocabulary = intent.getStringExtra(EXTRA_START_VOCABULARY)
         // Ignore any saved front-camera preference while the scope is back-only —
         // a device that had it set before the flag landed would otherwise start in
         // the untrained orientation. See FORCE_BACK_CAMERA_ONLY.
@@ -315,13 +331,12 @@ class MainActivity : AppCompatActivity() {
 
         modelInitJob = lifecycleScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
-                binding.tvStatus.text = "Starting camera..."
-                binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_orange_light))
+                setStatus("Starting camera…", StatusKind.LOADING)
             }
 
             try {
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "Loading hand tracking..."
+                    setStatus("Loading hand tracking…", StatusKind.LOADING)
                 }
 
                 // Built first, before any network work. MediaPipe comes from
@@ -400,13 +415,12 @@ class MainActivity : AppCompatActivity() {
                 // a retrained+redeployed model (e.g. after adding a new word) would never
                 // reach a device that already has some model installed.
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "Checking for model updates..."
+                    setStatus("Checking for model updates…", StatusKind.LOADING)
                 }
                 val hasModel = ModelUpdateManager.checkAndUpdate(this@MainActivity)
                 if (!hasModel) {
                     withContext(Dispatchers.Main) {
-                        binding.tvStatus.text = "⚠ Failed to download model"
-                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                        setStatus("Couldn't download the model", StatusKind.ERROR)
                     }
                     return@launch
                 }
@@ -418,7 +432,7 @@ class MainActivity : AppCompatActivity() {
                 // against words belonging to the version just replaced.
                 if (ModelUpdateManager.lastCheckChangedVersion) {
                     withContext(Dispatchers.Main) {
-                        binding.tvStatus.text = "Updating word bank..."
+                        setStatus("Updating word bank…", StatusKind.LOADING)
                     }
                     refreshWordBank()
                 }
@@ -428,27 +442,29 @@ class MainActivity : AppCompatActivity() {
                 // blanket delay(2000) — which stalled every entry to this screen
                 // whether or not it was needed — is gone.
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "Fetching words from database..."
+                    setStatus("Loading words…", StatusKind.LOADING)
                 }
                 service.init()
 
                 withContext(Dispatchers.Main) {
                     if (service.isReady) {
-                        binding.tvStatus.text = "Models loaded"
-                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_green_dark))
+                        setStatus("Ready", StatusKind.READY)
                         Log.d(TAG, "Model ready with ${service.getLabelCount()} classes")
                         // Only now is it known whether an alphabet model loaded,
                         // so this is where the vocabulary switch appears.
                         updateVocabularyToggleLabel()
+                        pendingStartVocabulary?.let { requested ->
+                            pendingStartVocabulary = null
+                            translatorStartVocabulary(requested, service.hasLetters())
+                                ?.let { selectVocabulary(it) }
+                        }
                     } else {
-                        binding.tvStatus.text = "Failed to load words from database"
-                        binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                        setStatus("Couldn't load the words", StatusKind.ERROR)
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    binding.tvStatus.text = "⚠ Error: ${e.message}"
-                    binding.tvStatus.setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_dark))
+                    setStatus("Error: ${e.message}", StatusKind.ERROR)
                     Log.e(TAG, "Model error: ${e.message}", e)
                 }
             }
@@ -610,6 +626,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private enum class StatusKind { LOADING, READY, ERROR }
+
+    /** Sheet status line: text plus a coloured dot (spec §5). Main thread only. */
+    private fun setStatus(text: String, kind: StatusKind) {
+        binding.tvStatus.text = text
+        val colour = when (kind) {
+            StatusKind.LOADING -> R.color.sg_text_secondary
+            StatusKind.READY -> R.color.sg_success
+            StatusKind.ERROR -> R.color.sg_danger
+        }
+        binding.statusDot.backgroundTintList =
+            ColorStateList.valueOf(ContextCompat.getColor(this, colour))
+    }
+
     // ── Predictor callbacks ───────────────────────────────────────────────────
 
     private fun setupCallbacks() {
@@ -735,6 +765,39 @@ class MainActivity : AppCompatActivity() {
         renderTapState()
     }
 
+    /**
+     * Switches Tap/Live. No-op when already in [tap]. Cancels any tap recording and
+     * clears the realtime buffer, so neither mode inherits the other's frames.
+     */
+    private fun selectMode(tap: Boolean) {
+        if (tapMode == tap) return
+        tapMode = tap
+        appSettings.translationMode = if (tapMode) AppSettings.MODE_TAP else AppSettings.MODE_LIVE
+        predictor?.reset()
+        predictor?.onNoHands?.invoke()
+        updateModeToggleLabel()
+        cancelTap()
+        binding.cardResult.visibility = View.INVISIBLE
+    }
+
+    /**
+     * Switches Words/Letters. No-op when already on [target] or no predictor yet.
+     * The two vocabularies are separate models because a letter and the day sign
+     * built from it differ only in motion — M and MONDAY separate at 1.06 — so one
+     * class list carrying both would confuse them. The user says which they sign.
+     */
+    private fun selectVocabulary(target: PredictionService.Vocabulary) {
+        val predictor = this.predictor ?: return
+        if (predictor.currentVocabulary() == target) return
+        predictor.setVocabulary(target)
+        updateVocabularyToggleLabel()
+        // The partially-collected gesture belongs to the old vocabulary and
+        // setVocabulary already dropped it. Clear the on-screen progress the same
+        // way the end of a gesture does.
+        predictor.onNoHands?.invoke()
+        cancelTap()
+    }
+
     /** Draws the tap controls for the current mode and session state. Main thread only. */
     private fun renderTapState() {
         val liveVisibility = if (tapMode) View.GONE else View.VISIBLE
@@ -742,14 +805,15 @@ class MainActivity : AppCompatActivity() {
         binding.progressBuffer.visibility = liveVisibility
         binding.liveStatsRow.visibility = liveVisibility
         binding.tapControls.visibility = if (tapMode) View.VISIBLE else View.GONE
+        binding.tvSheetHint.visibility = if (tapMode) View.VISIBLE else View.GONE
 
         tapPulse?.cancel(); tapPulse = null
         binding.btnTapRecord.alpha = 1f
         binding.tapRecordRing.removeCallbacks(tapRingTicker)
         if (!tapMode) return
 
-        val accent = ContextCompat.getColor(this, R.color.sig_accent)
-        val red = Color.parseColor("#E53935")
+        val accent = ContextCompat.getColor(this, R.color.sg_brand)
+        val red = ContextCompat.getColor(this, R.color.sg_danger)
         binding.tvTapPrompt.removeCallbacks(hideTapPrompt)
         when (tapSession.state) {
             TapSignSession.State.IDLE -> {
@@ -779,7 +843,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(red)
                 binding.tapRecordRing.setProgressCompat(0, false)
                 binding.tapRecordRing.visibility = View.VISIBLE
-                binding.tvTapPrompt.text = "Recording…"
+                binding.tvTapPrompt.text = recordingPromptText(0L)
                 binding.tvTapPrompt.visibility = View.VISIBLE
                 binding.tapRecordRing.post(tapRingTicker)
             }
@@ -794,8 +858,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateModeToggleLabel() {
-        binding.btnToggleMode.text = if (tapMode) "Tap" else "Live"
-        applyToggleStyle(binding.btnToggleMode, tapMode)
+        applySegmentStyle(binding.segModeTap, tapMode)
+        applySegmentStyle(binding.segModeLive, !tapMode)
     }
 
     private fun enqueueOverlayUpdate(result: LandmarkResult) {
@@ -896,45 +960,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Words / letters vocabulary switch.
-        //
-        // The two vocabularies are separate models because a letter and the day
-        // sign built from it differ only in motion — M and MONDAY separate at
-        // 1.06, tighter than any day-to-day pair — so one class list carrying
-        // both would confuse them. The user says which they are signing.
-        binding.btnToggleVocabulary.setOnClickListener {
-            val predictor = this.predictor ?: return@setOnClickListener
-            val next = if (predictor.currentVocabulary() == PredictionService.Vocabulary.LETTERS) {
-                PredictionService.Vocabulary.WORDS
-            } else {
-                PredictionService.Vocabulary.LETTERS
-            }
-            predictor.setVocabulary(next)
-            updateVocabularyToggleLabel()
-            // The partially-collected gesture belongs to the old vocabulary and
-            // setVocabulary already dropped it. Clear the on-screen progress the
-            // same way the end of a gesture does, so the buffer bar does not
-            // appear to carry on across the switch.
-            predictor.onNoHands?.invoke()
-            cancelTap()
-        }
+        // Words / letters vocabulary chips — each selects its own value.
+        binding.chipWords.setOnClickListener { selectVocabulary(PredictionService.Vocabulary.WORDS) }
+        binding.chipLetters.setOnClickListener { selectVocabulary(PredictionService.Vocabulary.LETTERS) }
 
         // Tap-to-sign record button.
         binding.btnTapRecord.setOnClickListener {
             tapSession.tap()?.let { handleTapEvent(it) }
         }
 
-        // Live / Tap mode switch. Cancels any tap recording in progress and
-        // clears the realtime buffer, so neither mode inherits the other's frames.
-        binding.btnToggleMode.setOnClickListener {
-            tapMode = !tapMode
-            appSettings.translationMode = if (tapMode) AppSettings.MODE_TAP else AppSettings.MODE_LIVE
-            predictor?.reset()
-            predictor?.onNoHands?.invoke()
-            updateModeToggleLabel()
-            cancelTap()
-            binding.cardResult.visibility = View.INVISIBLE
-        }
+        // Tap / Live segments — each selects its own mode.
+        binding.segModeTap.setOnClickListener { selectMode(tap = true) }
+        binding.segModeLive.setOnClickListener { selectMode(tap = false) }
 
         // Emergency — hold 2 seconds
         binding.btnEmergency.setOnTouchListener { _, event ->
@@ -981,27 +1018,25 @@ class MainActivity : AppCompatActivity() {
             return
         }
         binding.btnToggleVocabulary.visibility = View.VISIBLE
-        applyToggleStyle(
-            binding.btnToggleVocabulary,
-            predictor.currentVocabulary() == PredictionService.Vocabulary.LETTERS,
-        )
+        val letters = predictor.currentVocabulary() == PredictionService.Vocabulary.LETTERS
+        applyToggleStyle(binding.chipWords, !letters)
+        applyToggleStyle(binding.chipLetters, letters)
     }
 
-    /**
-     * Fills a toggle when its mode is on, outlines it when off.
-     *
-     * The accent-on-transparent outline both states used to share said nothing
-     * about which one you were in — the only clue was reading the verb.
-     */
+    /** Filled brand when on, tint when off (chips in the sheet). */
     private fun applyToggleStyle(button: MaterialButton, on: Boolean) {
-        val accent = ContextCompat.getColor(this, R.color.sig_accent)
-        if (on) {
-            button.setBackgroundColor(accent)
-            button.setTextColor(ContextCompat.getColor(this, android.R.color.white))
-        } else {
-            button.setBackgroundColor(Color.TRANSPARENT)
-            button.setTextColor(accent)
-        }
+        val bg = if (on) R.color.sg_brand else R.color.sg_tint
+        val fg = if (on) R.color.sg_on_brand else R.color.sg_brand_text
+        button.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, bg))
+        button.setTextColor(ContextCompat.getColor(this, fg))
+    }
+
+    /** Filled brand when on, transparent when off (segments inside the white pill). */
+    private fun applySegmentStyle(button: MaterialButton, on: Boolean) {
+        button.backgroundTintList = ColorStateList.valueOf(
+            if (on) ContextCompat.getColor(this, R.color.sg_brand) else Color.TRANSPARENT
+        )
+        button.setTextColor(ContextCompat.getColor(this, if (on) R.color.sg_on_brand else R.color.sg_text_secondary))
     }
 
     // Updated to use cached translations from backend
