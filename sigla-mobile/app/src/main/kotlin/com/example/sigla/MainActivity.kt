@@ -805,7 +805,6 @@ class MainActivity : AppCompatActivity() {
         binding.progressBuffer.visibility = liveVisibility
         binding.liveStatsRow.visibility = liveVisibility
         binding.tapControls.visibility = if (tapMode) View.VISIBLE else View.GONE
-        binding.tvSheetHint.visibility = if (tapMode) View.VISIBLE else View.GONE
 
         tapPulse?.cancel(); tapPulse = null
         binding.btnTapRecord.alpha = 1f

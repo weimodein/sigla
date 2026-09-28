@@ -204,7 +204,8 @@
                 android:max="100"
                 android:visibility="invisible"
                 app:indicatorColor="@color/sg_danger"
-                app:indicatorSize="100dp"
+                app:indicatorSize="92dp"
+                app:trackCornerRadius="0dp"
                 app:trackThickness="5dp" />
 
             <com.google.android.material.button.MaterialButton
@@ -400,13 +401,6 @@
                     style="@style/Widget.Sigla.Chip"
                     android:text="Filipino" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvSheetHint"
-                style="@style/Sigla.Text.Caption"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Tap, sign one word, then lower your hands." />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
