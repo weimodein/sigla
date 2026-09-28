@@ -62,10 +62,13 @@ Easing, as `PathInterpolator`s (Material standard curves):
 
 | Helper | Does |
 |---|---|
-| `reveal(view, dy = 8dp)` | Make visible; fade 0→1 and slide up from `dy`. `STANDARD`, `ENTER`. |
+| `reveal(view, startDelay = 0, dy = 8dp)` | Make visible; fade 0→1 and slide up from `dy`. `STANDARD`, `ENTER`. |
 | `hide(view, endVisibility)` | Fade to 0, then set `INVISIBLE` or `GONE` and restore alpha/translation. `STANDARD`, `EXIT`. |
 | `swapText(textView, text)` | Fade out (`QUICK/2`), set text, fade in (`QUICK/2`). No-op when text is unchanged. |
 | `emphasize(view, startDelay = 0)` | Make visible; scale 0.92→1 and fade 0→1. `EMPHASIS`, `ENTER`. |
+| `setText(textView, text)` | Immediate text change for values that update many times a second (frame counter, recording timer). Cancels only a swap in flight. |
+| `fadeTo(view, alpha, duration, interpolator, endAction)` | Plain alpha fade for views whose visibility is managed elsewhere (the landmark overlay). |
+| `isShowing(view)` | Visible and not on its way out. |
 | `pulse(view)` / `stopPulse(view)` | Repeating alpha 1↔0.45, 600 ms, reverse (the existing Tap Ready look). `stopPulse` restores alpha 1. |
 | `tintTo(view, color)` | Animate `backgroundTintList` from current to `color`. `STANDARD`, `STANDARD_EASE`. |
 
