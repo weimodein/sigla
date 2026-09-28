@@ -19,7 +19,8 @@ import java.util.Calendar
 import java.util.TimeZone
 
 /**
- * Launch screen (spec §3, §5). Reads only data already on the phone — history,
+ * Home (spec §3, §5), the first screen after SplashActivity's intro.
+ * Reads only data already on the phone — history,
  * favorites and the cached word bank — so it works offline and never waits on
  * the network. Recomputed on every onResume so a translation made a moment ago
  * shows up immediately.

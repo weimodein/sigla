@@ -3,6 +3,9 @@
      to these; dark values live in values-night/colors_sigla.xml. -->
 <resources>
     <color name="sg_brand">#13306B</color>
+    <!-- The logo tile's own blue (favicon-256.svg). Splash and intro only, and
+         deliberately the same in dark mode: it is the logo, not a surface. -->
+    <color name="sg_logo_blue">#1A387E</color>
     <color name="sg_brand_text">#13306B</color>
     <color name="sg_bg">#FFFFFF</color>
     <color name="sg_tint">#EEF3FC</color>

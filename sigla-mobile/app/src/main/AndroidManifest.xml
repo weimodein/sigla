@@ -56,16 +56,24 @@
         <!-- launchMode="singleTop" on the sidebar-reachable screens: re-tapping
              the current screen in the drawer reuses the existing instance
              instead of stacking (and rebuilding) a second copy of it. -->
+        <!-- Launcher: continues the system splash into the brand intro, then
+             hands off to Home. -->
         <activity
-            android:name=".HomeActivity"
+            android:name=".SplashActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:screenOrientation="portrait">
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.Sigla.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".HomeActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait" />
 
         <activity
             android:name=".MainActivity"
