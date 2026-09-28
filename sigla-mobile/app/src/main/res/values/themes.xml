@@ -25,4 +25,25 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
     </style>
+
+    <!-- System splash (Android 12+, and core-splashscreen below that). Its icon
+         is the logo with the app name baked in (splash_icon, 288dp, fitted to the
+         splash's 192dp visible circle), so both appear on the very first frame.
+         SplashActivity repeats it at the same size and position, so the handoff
+         is invisible. -->
+    <style name="Theme.Sigla.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/sg_logo_blue</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.Sigla.Intro</item>
+    </style>
+
+    <!-- The intro hold: full-bleed logo blue, drawn behind transparent bars so
+         the logo centres on the whole window exactly as the system splash does. -->
+    <style name="Theme.Sigla.Intro">
+        <item name="android:windowBackground">@color/sg_logo_blue</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+    </style>
 </resources>

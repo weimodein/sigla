@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Intro frame: the same splash_icon (logo + name) the system splash draws,
+     centred on the WHOLE window (the activity is edge-to-edge) at the same
+     288dp, so the handoff from the system splash does not move anything. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/splashRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sg_logo_blue"
+    android:contentDescription="@string/splash_skip_description">
+
+    <ImageView
+        android:id="@+id/ivSplashLogo"
+        android:layout_width="288dp"
+        android:layout_height="288dp"
+        android:layout_gravity="center"
+        android:importantForAccessibility="no"
+        android:src="@drawable/splash_icon" />
+</FrameLayout>

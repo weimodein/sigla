@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SigLa</string>
+    <string name="splash_skip_description">SigLa. Tap to skip the intro.</string>
     <string name="skip">Skip</string>
     <string name="next">Next</string>
     <string name="get_started">Get Started</string>
