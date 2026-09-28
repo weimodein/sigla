@@ -1,8 +1,6 @@
 package com.example.sigla
 
 import android.Manifest
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -238,14 +236,17 @@ class MainActivity : AppCompatActivity() {
     // each frame, hence @Volatile.
     @Volatile private var tapMode = true
     private val tapSession = TapSignSession { SystemClock.elapsedRealtime() }
-    private var tapPulse: ObjectAnimator? = null
+    // The Tap state last drawn by renderTapState, so a re-render without a real
+    // transition does not vibrate again. null = nothing drawn yet / Live mode.
+    private var lastRenderedTapState: TapSignSession.State? = null
     private val tapRingTicker = object : Runnable {
         override fun run() {
             if (tapSession.state != TapSignSession.State.RECORDING) return
             val elapsed = tapSession.recordingElapsedMs()
             val pct = (elapsed * 100 / TAP_MAX_RECORDING_MS).toInt()
             binding.tapRecordRing.setProgressCompat(pct.coerceIn(0, 100), false)
-            binding.tvTapPrompt.text = recordingPromptText(elapsed)
+            // Updates 10×/s — set directly; a fading swap would flicker.
+            Motion.setText(binding.tvTapPrompt, recordingPromptText(elapsed))
             binding.tapRecordRing.postDelayed(this, 100)
         }
     }
@@ -808,10 +809,19 @@ class MainActivity : AppCompatActivity() {
     /** Shows a one-line message above the record button for 3 s, then the normal prompt. */
     private fun showTapMessage(message: String) {
         renderTapState()
-        binding.tvTapPrompt.text = message
-        binding.tvTapPrompt.visibility = View.VISIBLE
+        showTapPrompt(message)
         binding.tvTapPrompt.removeCallbacks(hideTapPrompt)
         binding.tvTapPrompt.postDelayed(hideTapPrompt, 3000)
+    }
+
+    /** Shows [text] in the Tap prompt: fades in if hidden, swaps if already up. */
+    private fun showTapPrompt(text: CharSequence) {
+        if (Motion.isShowing(binding.tvTapPrompt)) {
+            Motion.swapText(binding.tvTapPrompt, text)
+        } else {
+            binding.tvTapPrompt.text = text
+            Motion.reveal(binding.tvTapPrompt)
+        }
     }
 
     private fun cancelTap() {
@@ -860,54 +870,63 @@ class MainActivity : AppCompatActivity() {
         binding.liveStatsRow.visibility = liveVisibility
         binding.tapControls.visibility = if (tapMode) View.VISIBLE else View.GONE
 
-        tapPulse?.cancel(); tapPulse = null
-        binding.btnTapRecord.alpha = 1f
+        Motion.stopPulse(binding.btnTapRecord)
         binding.tapRecordRing.removeCallbacks(tapRingTicker)
-        if (!tapMode) return
+        if (!tapMode) {
+            lastRenderedTapState = null
+            return
+        }
+
+        val state = tapSession.state
+        val feedback = tapFeedback(lastRenderedTapState, state)
+        lastRenderedTapState = state
+        if (feedback.tick) Haptics.tick(binding.btnTapRecord)
 
         val accent = ContextCompat.getColor(this, R.color.sg_brand)
         val red = ContextCompat.getColor(this, R.color.sg_danger)
         binding.tvTapPrompt.removeCallbacks(hideTapPrompt)
-        when (tapSession.state) {
+
+        // The button's text is set directly: its alpha belongs to the Ready
+        // pulse, and a fading text swap would fight it. Tint, ring and haptics
+        // carry the state change.
+        when (state) {
             TapSignSession.State.IDLE -> {
                 binding.btnTapRecord.text = "Tap to sign"
                 binding.btnTapRecord.isEnabled = true
-                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(accent)
-                binding.tapRecordRing.visibility = View.INVISIBLE
-                binding.tvTapPrompt.visibility = View.GONE
+                Motion.tintTo(binding.btnTapRecord, accent, Motion.QUICK)
+                Motion.hide(binding.tvTapPrompt, View.GONE)
             }
             TapSignSession.State.READY -> {
                 binding.btnTapRecord.text = "Cancel"
                 binding.btnTapRecord.isEnabled = true
-                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(accent)
-                binding.tapRecordRing.visibility = View.INVISIBLE
-                binding.tvTapPrompt.text = "Ready — start signing"
-                binding.tvTapPrompt.visibility = View.VISIBLE
-                tapPulse = ObjectAnimator.ofFloat(binding.btnTapRecord, View.ALPHA, 1f, 0.45f).apply {
-                    duration = 600
-                    repeatMode = ValueAnimator.REVERSE
-                    repeatCount = ValueAnimator.INFINITE
-                    start()
-                }
+                Motion.tintTo(binding.btnTapRecord, accent, Motion.QUICK)
+                showTapPrompt("Ready — start signing")
             }
             TapSignSession.State.RECORDING -> {
                 binding.btnTapRecord.text = "Stop"
                 binding.btnTapRecord.isEnabled = true
-                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(red)
-                binding.tapRecordRing.setProgressCompat(0, false)
-                binding.tapRecordRing.visibility = View.VISIBLE
-                binding.tvTapPrompt.text = recordingPromptText(0L)
-                binding.tvTapPrompt.visibility = View.VISIBLE
-                binding.tapRecordRing.post(tapRingTicker)
+                Motion.tintTo(binding.btnTapRecord, red, Motion.QUICK)
+                // feedback.tick is true exactly when RECORDING was just entered,
+                // so a same-state re-render keeps the ring's progress.
+                if (feedback.tick) binding.tapRecordRing.setProgressCompat(0, false)
+                showTapPrompt(recordingPromptText(0L))
+                // First tick after the prompt's swap has finished, so the
+                // 10×/s timer updates do not cut the swap short.
+                binding.tapRecordRing.postDelayed(tapRingTicker, Motion.QUICK)
             }
             TapSignSession.State.PROCESSING -> {
                 binding.btnTapRecord.text = "…"
                 binding.btnTapRecord.isEnabled = false
-                binding.tapRecordRing.visibility = View.INVISIBLE
-                binding.tvTapPrompt.text = "Recognizing…"
-                binding.tvTapPrompt.visibility = View.VISIBLE
+                showTapPrompt("Recognizing…")
             }
         }
+
+        if (feedback.ring) {
+            if (!Motion.isShowing(binding.tapRecordRing)) Motion.reveal(binding.tapRecordRing, dyDp = 0f)
+        } else {
+            Motion.hide(binding.tapRecordRing, View.INVISIBLE)
+        }
+        if (feedback.pulse) Motion.pulse(binding.btnTapRecord)
     }
 
     private fun updateModeToggleLabel() {
