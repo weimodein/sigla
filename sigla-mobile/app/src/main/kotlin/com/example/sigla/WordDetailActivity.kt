@@ -1,6 +1,7 @@
 package com.example.sigla
 
 import android.animation.ValueAnimator
+import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.media.MediaPlayer
 import android.os.Bundle
@@ -18,7 +19,6 @@ import android.widget.Toast
 import android.widget.VideoView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
@@ -61,6 +61,7 @@ class WordDetailActivity : AppCompatActivity() {
     private lateinit var btnBack: MaterialButton
     private lateinit var tvDetailCategoryTitle: TextView
     private lateinit var tvDetailWord: TextView
+    private lateinit var tvDetailFilipino: TextView
     private lateinit var btnSpeak: MaterialButton
     private lateinit var tvCategoryChip: TextView
     private lateinit var tvOfflineBadge: TextView
@@ -84,6 +85,7 @@ class WordDetailActivity : AppCompatActivity() {
     private lateinit var btnFullscreen: MaterialButton
     private lateinit var btnDownload: MaterialButton
     private lateinit var btnAddToFavorites: MaterialButton
+    private lateinit var cardTryIt: View
     private lateinit var favoritesManager: FavoritesManager
 
     private var word: WordBankWord? = null
@@ -142,9 +144,6 @@ class WordDetailActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_word_detail)
 
-        window.statusBarColor = android.graphics.Color.parseColor("#0A0E21")
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
-
         favoritesManager = FavoritesManager.getInstance(this)
         speed = prefs.getFloat(KEY_SPEED, 1f)
 
@@ -173,6 +172,7 @@ class WordDetailActivity : AppCompatActivity() {
         btnBack = findViewById(R.id.btnBack)
         tvDetailCategoryTitle = findViewById(R.id.tvDetailCategoryTitle)
         tvDetailWord = findViewById(R.id.tvDetailWord)
+        tvDetailFilipino = findViewById(R.id.tvDetailFilipino)
         btnSpeak = findViewById(R.id.btnSpeak)
         tvCategoryChip = findViewById(R.id.tvCategoryChip)
         tvOfflineBadge = findViewById(R.id.tvOfflineBadge)
@@ -196,6 +196,7 @@ class WordDetailActivity : AppCompatActivity() {
         btnFullscreen = findViewById(R.id.btnFullscreen)
         btnDownload = findViewById(R.id.btnDownload)
         btnAddToFavorites = findViewById(R.id.btnAddToFavorites)
+        cardTryIt = findViewById(R.id.cardTryIt)
     }
 
     private fun loadWord(wordId: Int) {
@@ -234,9 +235,23 @@ class WordDetailActivity : AppCompatActivity() {
         tvDetailWord.text = w.label.capitalizeFirst()
         btnSpeak.contentDescription = "Say \"${w.label}\" again"
 
-        speakWord(w.label)
         setupFavoriteButton(w)
         setupMedia(w)
+
+        val filipino = w.filipino_translation?.trim().orEmpty()
+        tvDetailFilipino.text = filipino
+        tvDetailFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
+
+        // Opens the translator on the word's own vocabulary (letters for a letter),
+        // falling back to Words when the letters model isn't loaded (see MainActivity).
+        cardTryIt.setOnClickListener {
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .putExtra(MainActivity.EXTRA_START_VOCABULARY, effectiveVocabulary(w))
+            )
+        }
+
+        speakWord(w.label)
     }
 
     // ── Favorites ─────────────────────────────────────────────────────────────
@@ -253,9 +268,7 @@ class WordDetailActivity : AppCompatActivity() {
 
     private fun refreshFavoriteButton(isFavorite: Boolean) {
         btnAddToFavorites.text = if (isFavorite) "Added to Favorites" else "Add to Favorites"
-        btnAddToFavorites.setIconResource(
-            if (isFavorite) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
-        )
+        btnAddToFavorites.setIconResource(if (isFavorite) R.drawable.ic_star_fill else R.drawable.ic_star_line)
     }
 
     // ── Media (video / image / none) ─────────────────────────────────────────
@@ -339,14 +352,14 @@ class WordDetailActivity : AppCompatActivity() {
         tvOfflineBadge.visibility = if (saved) View.VISIBLE else View.GONE
         btnDownload.visibility = if (saved) View.GONE else View.VISIBLE
         btnDownload.isEnabled = true
-        btnDownload.text = "Download for offline"
+        btnDownload.contentDescription = "Download for offline"
         btnDownload.setOnClickListener { downloadForOffline(w) }
     }
 
     private fun downloadForOffline(w: WordBankWord) {
         val url = remoteVideoUrl ?: return
         btnDownload.isEnabled = false
-        btnDownload.text = "Downloading…"
+        btnDownload.contentDescription = "Downloading"
         lifecycleScope.launch {
             val file = ModelUpdateManager.downloadWordVideo(this@WordDetailActivity, w.id, url)
             if (file == null) {
