@@ -185,3 +185,18 @@ plays list entrance, `shouldPlayListEntrance` gains an
 | `WordDetailActivity.kt` | Favourite pop + tick. |
 | `res/layout/item_*.xml`, `view_bottom_nav.xml` | Pressable style on tappable roots. |
 | Tests | `ListEntranceTest.kt`, `MotionTokensTest.kt`. |
+
+## 9. Plan-time decisions
+
+- **Capped stagger is code, not XML.** `layout_list_enter.xml` is replaced by a
+  small `LayoutAnimationController` subclass in `ListMotion.kt` that takes each
+  item's delay from `staggerDelayMs`, because XML cannot express the 8-item cap.
+- **Favourite pop is 1.06×, not 1.25×.** The favourite control is a full-width
+  `MaterialButton` with a star icon, not a standalone star; 1.25× on the whole
+  button would be jarring.
+- **History rows get no press feedback.** `item_history_entry` is not tappable
+  (only its delete button is), and §4.3 excludes non-tappable views.
+- **`item_manage_category` is skipped.** No code inflates it any more (removed
+  with the custom-category feature).
+- **List items rise by 20% of their height, not 12dp.** View animations'
+  `translate` does not accept `dp`; 20% of a word row is about 14dp.

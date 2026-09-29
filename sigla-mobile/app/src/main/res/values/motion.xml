@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Motion timings for XML animations. motion_quick and motion_standard MIRROR
+     Motion.QUICK / Motion.STANDARD in Motion.kt; MotionTokensTest fails if they drift. -->
+<resources>
+    <integer name="motion_quick">120</integer>        <!-- Motion.QUICK -->
+    <integer name="motion_standard">220</integer>     <!-- Motion.STANDARD -->
+    <integer name="motion_screen_exit">180</integer>  <!-- closing is quicker than opening -->
+    <integer name="motion_tab">150</integer>          <!-- tab crossfade -->
+    <integer name="motion_list_stagger">40</integer>  <!-- delay between list items -->
+</resources>
