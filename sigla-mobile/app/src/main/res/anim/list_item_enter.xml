@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One list item arriving; ListEntrance staggers these (app-motion spec §4.2). -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@interpolator/motion_enter"
+    android:shareInterpolator="true">
+    <!-- 20% of the item's own height (~14dp on a word row); translate takes no dp. -->
+    <translate android:fromYDelta="20%" android:toYDelta="0%"
+        android:duration="@integer/motion_standard" />
+    <alpha android:fromAlpha="0" android:toAlpha="1"
+        android:duration="@integer/motion_standard" />
+</set>

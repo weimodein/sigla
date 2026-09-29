@@ -22,6 +22,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
     private lateinit var tvEntryCount: TextView
     private lateinit var adapter: HistoryAdapter
     private lateinit var historyManager: TranslationHistoryManager
+    private lateinit var historyEntrance: ListEntrance
 
     companion object {
         const val MAX_ENTRIES = 200
@@ -61,6 +62,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
         rvHistory.layoutManager = LinearLayoutManager(this)
         rvHistory.setHasFixedSize(true)
         rvHistory.adapter       = adapter
+        historyEntrance = ListEntrance(rvHistory)
     }
 
     private fun setupSwipeToDelete() {
@@ -110,6 +112,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
         }
 
         adapter.setItems(items)
+        historyEntrance.onData(items.size)
         updateUI()
     }
 
@@ -146,7 +149,7 @@ class TranslationHistoryActivity : AppCompatActivity() {
     private fun updateUI() {
         val count = adapter.entryCount()
         tvEntryCount.text     = "$count / $MAX_ENTRIES entries kept"
-        emptyState.visibility = if (count == 0) View.VISIBLE else View.GONE
+        emptyState.showEmptyState(count == 0)
         rvHistory.visibility  = if (count == 0) View.GONE   else View.VISIBLE
         btnClearAll.isEnabled = count > 0
     }

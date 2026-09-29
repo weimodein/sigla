@@ -39,6 +39,7 @@ class CategoryWordListActivity : AppCompatActivity() {
     private lateinit var progressLoading: ProgressBar
     private lateinit var adapter: SimpleWordAdapter
     private lateinit var favoritesManager: FavoritesManager
+    private lateinit var wordsEntrance: ListEntrance
 
     private var categoryName = "All Categories"
     private var isFavorites = false
@@ -80,6 +81,7 @@ class CategoryWordListActivity : AppCompatActivity() {
         rvCategoryWords.layoutManager = LinearLayoutManager(this)
         rvCategoryWords.setHasFixedSize(true)
         rvCategoryWords.adapter = adapter
+        wordsEntrance = ListEntrance(rvCategoryWords)
 
         loadWords()
     }
@@ -161,9 +163,10 @@ class CategoryWordListActivity : AppCompatActivity() {
                     (word.description?.contains(searchQuery, ignoreCase = true) == true)
         }
         adapter.setWords(filtered)
+        wordsEntrance.onData(filtered.size)
 
         val showEmpty = filtered.isEmpty() && progressLoading.visibility != View.VISIBLE
-        emptyState.visibility = if (showEmpty) View.VISIBLE else View.GONE
+        emptyState.showEmptyState(showEmpty)
         rvCategoryWords.visibility = if (showEmpty) View.GONE else View.VISIBLE
     }
 }

@@ -47,6 +47,8 @@ class WordBankActivity : AppCompatActivity() {
     private lateinit var pillWords: MaterialButton
     private lateinit var pillLetters: MaterialButton
     private lateinit var listContainer: View
+    private lateinit var gridEntrance: ListEntrance
+    private lateinit var wordsEntrance: ListEntrance
     private var gridFilter = VocabularyFilter.ALL
     private var isGridMode = true
 
@@ -142,6 +144,7 @@ class WordBankActivity : AppCompatActivity() {
         rvCategoryGrid.layoutManager = GridLayoutManager(this, 2)
         rvCategoryGrid.setHasFixedSize(true)
         rvCategoryGrid.adapter = gridAdapter
+        gridEntrance = ListEntrance(rvCategoryGrid)
     }
 
     private fun refreshCategoryGrid() {
@@ -150,7 +153,7 @@ class WordBankActivity : AppCompatActivity() {
         if (allWords.isEmpty()) {
             gridAdapter.setItems(emptyList())
             if (isGridMode) {
-                emptyState.visibility = if (isLoading) View.GONE else View.VISIBLE
+                emptyState.showEmptyState(!isLoading)
                 listContainer.visibility = View.VISIBLE
             }
             return
@@ -185,6 +188,7 @@ class WordBankActivity : AppCompatActivity() {
             items.add(CategoryGridItem(displayName = cat.name, wordCount = cat.wordCount))
         }
         gridAdapter.setItems(items)
+        gridEntrance.onData(items.size)
     }
 
     private fun onCategoryCardClicked(item: CategoryGridItem) {
@@ -273,7 +277,7 @@ class WordBankActivity : AppCompatActivity() {
                     // the empty-state message when there are genuinely no words.
                     refreshCategoryGrid()
                 } else if (allWords.isEmpty()) {
-                    emptyState.visibility = View.VISIBLE
+                    emptyState.showEmptyState(true)
                     rvWords.visibility = View.GONE
                 }
             }
@@ -376,11 +380,12 @@ class WordBankActivity : AppCompatActivity() {
         }
 
         adapter.setWords(filtered.toMutableList())
+        wordsEntrance.onData(filtered.size)
         val count = filtered.size
         tvEntryCount.text = "Showing $count word${if (count != 1) "s" else ""}"
 
         if (!isGridMode) {
-            emptyState.visibility = if (count == 0 && !isLoading) View.VISIBLE else View.GONE
+            emptyState.showEmptyState(count == 0 && !isLoading)
             rvWords.visibility = if (count == 0 && !isLoading) View.GONE else View.VISIBLE
         }
     }
@@ -397,6 +402,7 @@ class WordBankActivity : AppCompatActivity() {
         // layout pass whenever the data set changes.
         rvWords.setHasFixedSize(true)
         rvWords.adapter = adapter
+        wordsEntrance = ListEntrance(rvWords)
     }
 
     private fun openWordDetail(word: WordBankWord) {

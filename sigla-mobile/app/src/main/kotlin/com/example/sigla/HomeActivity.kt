@@ -3,6 +3,7 @@ package com.example.sigla
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Bundle
+import android.view.View
 import android.widget.GridLayout
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -29,6 +30,11 @@ class HomeActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHomeBinding
     private lateinit var appSettings: AppSettings
+
+    // Home rebuilds its rows on every onResume; they stagger in only the first
+    // time this screen instance renders them (app-motion spec §4.2).
+    private var categoriesEntrancePlayed = false
+    private var recentEntrancePlayed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,7 +109,10 @@ class HomeActivity : AppCompatActivity() {
         val grid = binding.gridCategories
         grid.removeAllViews()
         grid.isVisible = categories.isNotEmpty()
-        binding.tvCategoriesEmpty.isVisible = categories.isEmpty()
+        binding.tvCategoriesEmpty.showEmptyState(categories.isEmpty())
+        val animate = shouldPlayListEntrance(categoriesEntrancePlayed, categories.size)
+        if (animate) categoriesEntrancePlayed = true
+        val stepMs = resources.getInteger(R.integer.motion_list_stagger).toLong()
 
         val brand = ContextCompat.getColor(this, R.color.sg_brand)
         val onBrand = ContextCompat.getColor(this, R.color.sg_on_brand)
@@ -136,23 +145,30 @@ class HomeActivity : AppCompatActivity() {
                 width = 0
                 setMargins(gap, gap, gap, gap)
             }
+            if (animate) item.root.visibility = View.INVISIBLE
             grid.addView(item.root, params)
+            if (animate) Motion.reveal(item.root, startDelay = staggerDelayMs(index, stepMs))
         }
     }
 
     private fun renderRecent(entries: List<TranslationEntry>) {
         binding.listRecent.removeAllViews()
-        binding.recentEmpty.isVisible = entries.isEmpty()
+        binding.recentEmpty.showEmptyState(entries.isEmpty())
+        val animate = shouldPlayListEntrance(recentEntrancePlayed, entries.size)
+        if (animate) recentEntrancePlayed = true
+        val stepMs = resources.getInteger(R.integer.motion_list_stagger).toLong()
         val now = System.currentTimeMillis()
         val zone = TimeZone.getDefault()
-        for (entry in entries) {
+        for ((index, entry) in entries.withIndex()) {
             val row = ItemHomeRecentBinding.inflate(layoutInflater, binding.listRecent, false)
             row.tvRecentWord.text = entry.word.toTitleCase()
             val day = if (isSameLocalDay(entry.timestamp, now, zone)) "Today"
                       else TranslationHistoryManager.formatDate(entry.timestamp)
             row.tvRecentMeta.text = "$day · ${TranslationHistoryManager.formatTime(entry.timestamp)}"
             row.root.setOnClickListener { BottomNavHelper.open(this, Tab.HISTORY) }
+            if (animate) row.root.visibility = View.INVISIBLE
             binding.listRecent.addView(row.root)
+            if (animate) Motion.reveal(row.root, startDelay = staggerDelayMs(index, stepMs))
         }
     }
 }
