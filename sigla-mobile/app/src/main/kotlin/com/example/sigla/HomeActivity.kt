@@ -110,8 +110,10 @@ class HomeActivity : AppCompatActivity() {
         grid.removeAllViews()
         grid.isVisible = categories.isNotEmpty()
         binding.tvCategoriesEmpty.showEmptyState(categories.isEmpty())
-        val animate = shouldPlayListEntrance(categoriesEntrancePlayed, categories.size)
-        if (animate) categoriesEntrancePlayed = true
+        val animate = shouldPlayListEntrance(
+            categoriesEntrancePlayed, categories.size, systemAnimationsEnabled(this)
+        )
+        if (animate || categories.isNotEmpty()) categoriesEntrancePlayed = true
         val stepMs = resources.getInteger(R.integer.motion_list_stagger).toLong()
 
         val brand = ContextCompat.getColor(this, R.color.sg_brand)
@@ -154,8 +156,10 @@ class HomeActivity : AppCompatActivity() {
     private fun renderRecent(entries: List<TranslationEntry>) {
         binding.listRecent.removeAllViews()
         binding.recentEmpty.showEmptyState(entries.isEmpty())
-        val animate = shouldPlayListEntrance(recentEntrancePlayed, entries.size)
-        if (animate) recentEntrancePlayed = true
+        val animate = shouldPlayListEntrance(
+            recentEntrancePlayed, entries.size, systemAnimationsEnabled(this)
+        )
+        if (animate || entries.isNotEmpty()) recentEntrancePlayed = true
         val stepMs = resources.getInteger(R.integer.motion_list_stagger).toLong()
         val now = System.currentTimeMillis()
         val zone = TimeZone.getDefault()

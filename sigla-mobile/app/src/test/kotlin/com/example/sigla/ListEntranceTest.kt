@@ -25,6 +25,21 @@ class ListEntranceTest {
     }
 
     @Test
+    fun reducedMotionSkipsTheEntranceButStillMarksItPlayed() {
+        // "Remove animations" on: the caller must still record played = true so a
+        // later normal-motion refresh (e.g. after the setting is turned back on)
+        // does not retroactively animate stale rows.
+        assertFalse(
+            shouldPlayListEntrance(alreadyPlayed = false, itemCount = 3, animationsEnabled = false)
+        )
+    }
+
+    @Test
+    fun animationsEnabledDefaultsToTrueForExistingCallers() {
+        assertTrue(shouldPlayListEntrance(alreadyPlayed = false, itemCount = 3))
+    }
+
+    @Test
     fun staggerGrowsByOneStepPerItem() {
         assertEquals(0L, staggerDelayMs(0, 40))
         assertEquals(40L, staggerDelayMs(1, 40))

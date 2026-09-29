@@ -200,3 +200,8 @@ plays list entrance, `shouldPlayListEntrance` gains an
   with the custom-category feature).
 - **List items rise by 20% of their height, not 12dp.** View animations'
   `translate` does not accept `dp`; 20% of a word row is about 14dp.
+- **No `Widget.Sigla.Pressable` style.** §3.3 named a shared style, but each
+  tappable root already had its own `style=` attribute (card styles, the tab
+  style), so `android:stateListAnimator="@animator/press_scale"` was added
+  directly to each root/style instead of introducing a style that would have
+  had to be layered on top of an existing one.

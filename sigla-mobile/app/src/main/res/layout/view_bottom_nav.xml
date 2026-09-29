@@ -60,6 +60,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:stateListAnimator="@animator/press_scale"
+        android:elevation="6dp"
         android:contentDescription="Translate"
         app:srcCompat="@drawable/ic_hand_line"
         app:tint="@color/sg_on_brand"
