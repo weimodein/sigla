@@ -103,9 +103,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/sg_space_16"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="Start translating. Tap, sign one word, and SigLa reads it for you. Open camera.">
+                android:clickable="false"
+                android:focusable="false">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -134,9 +133,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="@dimen/sg_space_12"
-                            android:text="Open camera"
-                            android:focusable="false"
-                            android:importantForAccessibility="no" />
+                            android:text="Open camera" />
                     </LinearLayout>
                     <FrameLayout
                         android:layout_width="88dp"
