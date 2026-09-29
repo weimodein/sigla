@@ -9,6 +9,7 @@
     android:layout_height="wrap_content"
     android:layout_margin="6dp"
     android:clickable="true"
+    android:stateListAnimator="@animator/press_scale"
     android:focusable="true">
 
     <LinearLayout

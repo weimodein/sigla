@@ -204,6 +204,21 @@ object Motion {
         view.alpha = 1f
     }
 
+    /**
+     * A quick scale-up and back, for a toggle that just changed (favourite).
+     * Starts from the current scale, so a second tap mid-pop re-pops cleanly.
+     * Not for views with a press_scale animator: both would drive scale.
+     */
+    fun pop(view: View, peak: Float = 1.06f) {
+        view.animate().cancel()
+        view.animate().scaleX(peak).scaleY(peak)
+            .setStartDelay(0).setDuration(STANDARD / 2).setInterpolator(STANDARD_EASE)
+            .withEndAction {
+                view.animate().scaleX(1f).scaleY(1f)
+                    .setStartDelay(0).setDuration(STANDARD / 2).setInterpolator(STANDARD_EASE)
+            }
+    }
+
     /** Ease the background tint to [color] from wherever it is now. */
     fun tintTo(view: View, color: Int, duration: Long = STANDARD) {
         (view.getTag(R.id.motion_tint) as? ValueAnimator)?.cancel()

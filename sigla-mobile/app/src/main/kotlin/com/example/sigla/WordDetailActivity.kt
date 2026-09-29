@@ -287,6 +287,8 @@ class WordDetailActivity : AppCompatActivity() {
         btnAddToFavorites.setOnClickListener {
             val isFavoriteNow = favoritesManager.toggle(w.id)
             refreshFavoriteButton(isFavoriteNow)
+            Motion.pop(btnAddToFavorites)
+            Haptics.tick(btnAddToFavorites)
             val message = if (isFavoriteNow) "Added to Favorites" else "Removed from Favorites"
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }

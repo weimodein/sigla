@@ -105,6 +105,7 @@
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
         <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+        <item name="android:stateListAnimator">@animator/press_scale</item>
     </style>
     <style name="Widget.Sigla.TabIcon" parent="">
         <item name="android:layout_width">24dp</item>

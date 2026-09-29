@@ -59,6 +59,7 @@
         android:id="@+id/fabTranslate"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:stateListAnimator="@animator/press_scale"
         android:contentDescription="Translate"
         app:srcCompat="@drawable/ic_hand_line"
         app:tint="@color/sg_on_brand"
