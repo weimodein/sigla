@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- View-tag keys Motion.kt uses to track in-flight state per view. -->
+<resources>
+    <item name="motion_hiding" type="id" />
+    <item name="motion_pending_text" type="id" />
+    <item name="motion_pulse" type="id" />
+    <item name="motion_tint" type="id" />
+</resources>

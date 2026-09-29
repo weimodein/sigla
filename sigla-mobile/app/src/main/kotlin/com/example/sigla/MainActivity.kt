@@ -1,8 +1,6 @@
 package com.example.sigla
 
 import android.Manifest
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -45,6 +43,10 @@ import kotlinx.coroutines.delay
 
 private const val TAG               = "MainActivity"
 private const val CAMERA_PERMISSION = 100
+// Live mode: a result stays up this long after the LATEST recognition.
+private const val LIVE_RESULT_VISIBLE_MS = 2000L
+// The Filipino line follows the word slightly, so the eye reads the word first.
+private const val RESULT_FILIPINO_DELAY_MS = 80L
 
 // Steady-state text for the gesture indicator. CollectingState.isMotion was always
 // true, so the "○ static" branch it used to select between was unreachable.
@@ -195,6 +197,25 @@ class MainActivity : AppCompatActivity() {
     // Keep at most one overlay render queued. A newer MediaPipe result replaces
     // the staged result instead of building a visible backlog of stale frames.
     @Volatile private var pendingOverlayResult: LandmarkResult? = null
+
+    // Whether the landmark overlay is faded in. Changes only on the hands
+    // appear / lost edge — never per frame.
+    private var overlayShown = true
+
+    private fun showOverlay() {
+        if (overlayShown) return
+        overlayShown = true
+        Motion.fadeTo(binding.overlayView, 1f, Motion.QUICK, Motion.ENTER)
+    }
+
+    private fun hideOverlay() {
+        if (!overlayShown) return
+        overlayShown = false
+        Motion.fadeTo(binding.overlayView, 0f, Motion.STANDARD, Motion.EXIT) {
+            // Hands may have come back during the fade.
+            if (!overlayShown) binding.overlayView.clear()
+        }
+    }
     private val overlayPostPending = AtomicBoolean(false)
 
     // Last values actually written to the status views. progress is frames/30 capped,
@@ -234,14 +255,17 @@ class MainActivity : AppCompatActivity() {
     // each frame, hence @Volatile.
     @Volatile private var tapMode = true
     private val tapSession = TapSignSession { SystemClock.elapsedRealtime() }
-    private var tapPulse: ObjectAnimator? = null
+    // The Tap state last drawn by renderTapState, so a re-render without a real
+    // transition does not vibrate again. null = nothing drawn yet / Live mode.
+    private var lastRenderedTapState: TapSignSession.State? = null
     private val tapRingTicker = object : Runnable {
         override fun run() {
             if (tapSession.state != TapSignSession.State.RECORDING) return
             val elapsed = tapSession.recordingElapsedMs()
             val pct = (elapsed * 100 / TAP_MAX_RECORDING_MS).toInt()
             binding.tapRecordRing.setProgressCompat(pct.coerceIn(0, 100), false)
-            binding.tvTapPrompt.text = recordingPromptText(elapsed)
+            // Updates 10×/s — set directly; a fading swap would flicker.
+            Motion.setText(binding.tvTapPrompt, recordingPromptText(elapsed))
             binding.tapRecordRing.postDelayed(this, 100)
         }
     }
@@ -250,6 +274,20 @@ class MainActivity : AppCompatActivity() {
     private fun recordingPromptText(elapsedMs: Long): String =
         String.format(java.util.Locale.US, "Recording… %.1fs", elapsedMs / 1000f)
     private val hideTapPrompt = Runnable { renderTapState() }
+
+    // One tracked hide for the Live result card. Each result re-posts it, so an
+    // earlier result's timer can no longer hide a newer result early.
+    private val hideResult = Runnable { Motion.hide(binding.cardResult, View.INVISIBLE) }
+
+    private fun scheduleResultHide() {
+        binding.cardResult.removeCallbacks(hideResult)
+        binding.cardResult.postDelayed(hideResult, LIVE_RESULT_VISIBLE_MS)
+    }
+
+    private fun clearResult() {
+        binding.cardResult.removeCallbacks(hideResult)
+        Motion.hide(binding.cardResult, View.INVISIBLE)
+    }
 
     // Filipino translations cache
     private var filipinoMap = mutableMapOf<String, String>()
@@ -489,6 +527,8 @@ class MainActivity : AppCompatActivity() {
      */
     private fun stopVision() {
         cancelTap()
+        binding.cardResult.removeCallbacks(hideResult)
+        if (clearResultOnStop(tapMode)) Motion.hideNow(binding.cardResult, View.INVISIBLE)
         if (!visionActive) return
         visionActive = false
         pendingOverlayResult = null
@@ -644,14 +684,13 @@ class MainActivity : AppCompatActivity() {
 
     /** Sheet status line: text plus a coloured dot (spec §5). Main thread only. */
     private fun setStatus(text: String, kind: StatusKind) {
-        binding.tvStatus.text = text
+        Motion.swapText(binding.tvStatus, text)
         val colour = when (kind) {
             StatusKind.LOADING -> R.color.sg_text_secondary
             StatusKind.READY -> R.color.sg_success
             StatusKind.ERROR -> R.color.sg_danger
         }
-        binding.statusDot.backgroundTintList =
-            ColorStateList.valueOf(ContextCompat.getColor(this, colour))
+        Motion.tintTo(binding.statusDot, ContextCompat.getColor(this, colour))
     }
 
     // ── Predictor callbacks ───────────────────────────────────────────────────
@@ -681,12 +720,12 @@ class MainActivity : AppCompatActivity() {
                 lastShownPct         = -1
                 lastShownFrames      = -1
 
-                binding.tvFrames.text             = "No hands"
+                Motion.swapText(binding.tvFrames, "No hands")
                 binding.tvVelocity.text           = "—"
                 binding.tvStreak.visibility       = View.GONE
-                binding.progressBuffer.progress   = 0
+                binding.progressBuffer.setProgress(0, true)
                 binding.tvBufferPercent.text = "0%"
-                binding.overlayView.clear()
+                hideOverlay()
                 binding.tvHandsWarning.visibility = View.GONE
             }
         }
@@ -699,9 +738,41 @@ class MainActivity : AppCompatActivity() {
         val pct = (result.confidence * 100).toInt()
 
         lastLabel = result.label
-        binding.tvResult.text         = result.label.uppercase()
-        binding.cardResult.visibility = View.VISIBLE
-        binding.progressBuffer.progress = 0
+        val word = result.label.uppercase()
+        val filipino = getFilipinoTranslation(result.label)
+        val showFilipinoLine = filipino != null && showFilipino
+
+        when (resultMotion(Motion.isShowing(binding.cardResult))) {
+            ResultMotion.EMPHASIZE -> {
+                binding.tvResult.text = word
+                if (showFilipinoLine) {
+                    binding.tvFilipinoResult.text = filipino
+                    // INVISIBLE, not GONE: the line keeps its space, so the card
+                    // does not change height when it fades in a moment later.
+                    binding.tvFilipinoResult.visibility = View.INVISIBLE
+                    Motion.reveal(binding.tvFilipinoResult, startDelay = RESULT_FILIPINO_DELAY_MS)
+                } else {
+                    binding.tvFilipinoResult.visibility = View.GONE
+                }
+                Motion.emphasize(binding.cardResult)
+            }
+            ResultMotion.SWAP -> {
+                Motion.swapText(binding.tvResult, word)
+                if (showFilipinoLine) {
+                    if (binding.tvFilipinoResult.visibility == View.VISIBLE) {
+                        Motion.swapText(binding.tvFilipinoResult, filipino!!)
+                    } else {
+                        binding.tvFilipinoResult.text = filipino
+                        Motion.reveal(binding.tvFilipinoResult)
+                    }
+                } else {
+                    Motion.hide(binding.tvFilipinoResult, View.GONE)
+                }
+            }
+        }
+        Haptics.confirm(binding.root)
+
+        binding.progressBuffer.setProgress(0, true)
         binding.tvBufferPercent.text = "0%"
 
         // Text-to-speech
@@ -716,25 +787,14 @@ class MainActivity : AppCompatActivity() {
             historyManager.add(label, pct, gestureType)
         }
 
-        // Filipino translation
-        val filipino = getFilipinoTranslation(result.label)
-        if (filipino != null && showFilipino) {
-            binding.tvFilipinoResult.text = filipino
-            binding.tvFilipinoResult.visibility = View.VISIBLE
-        } else {
-            binding.tvFilipinoResult.visibility = View.GONE
-            // Distinguishes "no translation for this label" from "toggle is off" —
-            // the missing-entry case used to fail silently.
-            if (filipino == null) {
-                Log.d(TAG, "No Filipino translation for '${result.label}' " +
-                    "(${filipinoMap.size} translation(s) loaded)")
-            }
+        // Distinguishes "no translation for this label" from "toggle is off" —
+        // the missing-entry case used to fail silently.
+        if (filipino == null) {
+            Log.d(TAG, "No Filipino translation for '${result.label}' " +
+                "(${filipinoMap.size} translation(s) loaded)")
         }
 
-        if (!tapMode) {
-            binding.cardResult.postDelayed(
-                { binding.cardResult.visibility = View.INVISIBLE }, 2000)
-        }
+        if (!tapMode) scheduleResultHide()
     }
 
     /** Called on MediaPipe's callback thread (onFrame) or the UI thread (tap). */
@@ -768,10 +828,14 @@ class MainActivity : AppCompatActivity() {
     /** Shows a one-line message above the record button for 3 s, then the normal prompt. */
     private fun showTapMessage(message: String) {
         renderTapState()
-        binding.tvTapPrompt.text = message
-        binding.tvTapPrompt.visibility = View.VISIBLE
+        showTapPrompt(message)
         binding.tvTapPrompt.removeCallbacks(hideTapPrompt)
         binding.tvTapPrompt.postDelayed(hideTapPrompt, 3000)
+    }
+
+    /** Shows [text] in the Tap prompt: fades in if hidden, swaps if on screen. */
+    private fun showTapPrompt(text: CharSequence) {
+        Motion.showText(binding.tvTapPrompt, text)
     }
 
     private fun cancelTap() {
@@ -791,7 +855,7 @@ class MainActivity : AppCompatActivity() {
         predictor?.onNoHands?.invoke()
         updateModeToggleLabel()
         cancelTap()
-        binding.cardResult.visibility = View.INVISIBLE
+        clearResult()
     }
 
     /**
@@ -820,54 +884,64 @@ class MainActivity : AppCompatActivity() {
         binding.liveStatsRow.visibility = liveVisibility
         binding.tapControls.visibility = if (tapMode) View.VISIBLE else View.GONE
 
-        tapPulse?.cancel(); tapPulse = null
-        binding.btnTapRecord.alpha = 1f
+        Motion.stopPulse(binding.btnTapRecord)
         binding.tapRecordRing.removeCallbacks(tapRingTicker)
-        if (!tapMode) return
+        if (!tapMode) {
+            lastRenderedTapState = null
+            return
+        }
+
+        val state = tapSession.state
+        val feedback = tapFeedback(lastRenderedTapState, state)
+        lastRenderedTapState = state
+        if (feedback.tick) Haptics.tick(binding.btnTapRecord)
+        if (feedback.clearResult) clearResult()
 
         val accent = ContextCompat.getColor(this, R.color.sg_brand)
         val red = ContextCompat.getColor(this, R.color.sg_danger)
         binding.tvTapPrompt.removeCallbacks(hideTapPrompt)
-        when (tapSession.state) {
+
+        // The button's text is set directly: its alpha belongs to the Ready
+        // pulse, and a fading text swap would fight it. Tint, ring and haptics
+        // carry the state change.
+        when (state) {
             TapSignSession.State.IDLE -> {
                 binding.btnTapRecord.text = "Tap to sign"
                 binding.btnTapRecord.isEnabled = true
-                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(accent)
-                binding.tapRecordRing.visibility = View.INVISIBLE
-                binding.tvTapPrompt.visibility = View.GONE
+                Motion.tintTo(binding.btnTapRecord, accent, Motion.QUICK)
+                Motion.hide(binding.tvTapPrompt, View.GONE)
             }
             TapSignSession.State.READY -> {
                 binding.btnTapRecord.text = "Cancel"
                 binding.btnTapRecord.isEnabled = true
-                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(accent)
-                binding.tapRecordRing.visibility = View.INVISIBLE
-                binding.tvTapPrompt.text = "Ready — start signing"
-                binding.tvTapPrompt.visibility = View.VISIBLE
-                tapPulse = ObjectAnimator.ofFloat(binding.btnTapRecord, View.ALPHA, 1f, 0.45f).apply {
-                    duration = 600
-                    repeatMode = ValueAnimator.REVERSE
-                    repeatCount = ValueAnimator.INFINITE
-                    start()
-                }
+                Motion.tintTo(binding.btnTapRecord, accent, Motion.QUICK)
+                showTapPrompt("Ready — start signing")
             }
             TapSignSession.State.RECORDING -> {
                 binding.btnTapRecord.text = "Stop"
                 binding.btnTapRecord.isEnabled = true
-                binding.btnTapRecord.backgroundTintList = ColorStateList.valueOf(red)
-                binding.tapRecordRing.setProgressCompat(0, false)
-                binding.tapRecordRing.visibility = View.VISIBLE
-                binding.tvTapPrompt.text = recordingPromptText(0L)
-                binding.tvTapPrompt.visibility = View.VISIBLE
-                binding.tapRecordRing.post(tapRingTicker)
+                Motion.tintTo(binding.btnTapRecord, red, Motion.QUICK)
+                // feedback.tick is true exactly when RECORDING was just entered,
+                // so a same-state re-render keeps the ring's progress.
+                if (feedback.tick) binding.tapRecordRing.setProgressCompat(0, false)
+                showTapPrompt(recordingPromptText(0L))
+                // First tick after the prompt's swap has finished, so the
+                // 10×/s timer updates do not cut the swap short.
+                binding.tapRecordRing.postDelayed(tapRingTicker, Motion.QUICK)
             }
             TapSignSession.State.PROCESSING -> {
                 binding.btnTapRecord.text = "…"
                 binding.btnTapRecord.isEnabled = false
-                binding.tapRecordRing.visibility = View.INVISIBLE
-                binding.tvTapPrompt.text = "Recognizing…"
-                binding.tvTapPrompt.visibility = View.VISIBLE
+                showTapPrompt("Recognizing…")
             }
         }
+
+        if (feedback.ring) {
+            if (!Motion.isShowing(binding.tapRecordRing)) Motion.reveal(binding.tapRecordRing, dyDp = 0f)
+        } else {
+            Motion.hide(binding.tapRecordRing, View.INVISIBLE)
+        }
+        if (feedback.pulse) Motion.pulse(binding.btnTapRecord)
     }
 
     private fun updateModeToggleLabel() {
@@ -887,12 +961,20 @@ class MainActivity : AppCompatActivity() {
         val displayed = pendingOverlayResult
         try {
             if (visionActive && displayed != null) {
-                binding.overlayView.setLandmarks(
-                    displayed.landmarks,
-                    displayed.sourceWidth.toFloat(),
-                    displayed.sourceHeight.toFloat(),
-                    isFrontCamera,
-                )
+                val action = overlayAction(overlayShown, displayed.landmarks.isNotEmpty())
+                if (action == OverlayAction.DRAW || action == OverlayAction.DRAW_AND_SHOW) {
+                    binding.overlayView.setLandmarks(
+                        displayed.landmarks,
+                        displayed.sourceWidth.toFloat(),
+                        displayed.sourceHeight.toFloat(),
+                        isFrontCamera,
+                    )
+                }
+                when (action) {
+                    OverlayAction.DRAW_AND_SHOW -> showOverlay()
+                    OverlayAction.HIDE -> hideOverlay()
+                    OverlayAction.DRAW, OverlayAction.SKIP -> Unit
+                }
                 flushCollectingState()
             }
         } finally {
@@ -919,14 +1001,16 @@ class MainActivity : AppCompatActivity() {
         val pct = pendingCollectPct
         if (pct >= 0 && pct != lastShownPct) {
             lastShownPct = pct
-            binding.progressBuffer.progress = pct
+            binding.progressBuffer.setProgress(pct, true)
             binding.tvBufferPercent.text    = "$pct%"
         }
 
         val frames = pendingCollectFrames
         if (frames >= 0 && frames != lastShownFrames) {
             lastShownFrames = frames
-            binding.tvFrames.text = "$frames"
+            // Changes almost every frame: immediate, and it cancels a "No hands"
+            // swap still in flight so that text cannot land on top of a count.
+            Motion.setText(binding.tvFrames, "$frames")
 
             // tvVelocity/tvStreak are NOT updated per frame any more. CollectingState's
             // isMotion and streak were always true/0 (the producer never overrode their
@@ -967,9 +1051,9 @@ class MainActivity : AppCompatActivity() {
             val translation = if (showFilipino) lastLabel?.let { getFilipinoTranslation(it) } else null
             if (translation != null) {
                 binding.tvFilipinoResult.text = translation
-                binding.tvFilipinoResult.visibility = View.VISIBLE
+                Motion.reveal(binding.tvFilipinoResult)
             } else {
-                binding.tvFilipinoResult.visibility = View.GONE
+                Motion.hide(binding.tvFilipinoResult, View.GONE)
             }
         }
 
@@ -1040,14 +1124,16 @@ class MainActivity : AppCompatActivity() {
     private fun applyToggleStyle(button: MaterialButton, on: Boolean) {
         val bg = if (on) R.color.sg_brand else R.color.sg_tint
         val fg = if (on) R.color.sg_on_brand else R.color.sg_brand_text
-        button.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, bg))
+        Motion.tintTo(button, ContextCompat.getColor(this, bg), Motion.QUICK)
         button.setTextColor(ContextCompat.getColor(this, fg))
     }
 
     /** Filled brand when on, transparent when off (segments inside the white pill). */
     private fun applySegmentStyle(button: MaterialButton, on: Boolean) {
-        button.backgroundTintList = ColorStateList.valueOf(
-            if (on) ContextCompat.getColor(this, R.color.sg_brand) else Color.TRANSPARENT
+        Motion.tintTo(
+            button,
+            if (on) ContextCompat.getColor(this, R.color.sg_brand) else Color.TRANSPARENT,
+            Motion.QUICK,
         )
         button.setTextColor(ContextCompat.getColor(this, if (on) R.color.sg_on_brand else R.color.sg_text_secondary))
     }
