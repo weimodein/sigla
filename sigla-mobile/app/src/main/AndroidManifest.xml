@@ -83,7 +83,13 @@
 
 
         <activity android:name=".TranslationHistoryActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
-        <activity android:name=".WordBankActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
+        <!-- adjustNothing: the window must NOT resize when the keyboard opens.
+             The CoordinatorLayout root fills the window, and the bottom nav is
+             pinned to ITS bottom edge (not the screen's) — if the window
+             shrinks, the nav shrinks with it and ends up above the keyboard
+             instead of at the true bottom. WordBankActivity insets only its
+             content column edge-to-edge instead (see setupKeyboardInsets). -->
+        <activity android:name=".WordBankActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" android:windowSoftInputMode="adjustNothing" />
         <activity android:name=".CategoryWordListActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity android:name=".WordDetailActivity" android:exported="false" android:screenOrientation="portrait" />
         <!-- No fixed orientation: it turns landscape for a landscape demo clip.

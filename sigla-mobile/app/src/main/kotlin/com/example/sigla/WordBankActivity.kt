@@ -13,6 +13,8 @@ import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -77,6 +79,7 @@ class WordBankActivity : AppCompatActivity() {
         favoritesManager = FavoritesManager.getInstance(this)
 
         bindViews()
+        setupKeyboardInsets()
         BottomNavHelper.setup(this, Tab.WORD_BANK)
         setupRecyclerView()
         setupCategoryGrid()
@@ -134,6 +137,27 @@ class WordBankActivity : AppCompatActivity() {
         pillWords = findViewById(R.id.pillWords)
         pillLetters = findViewById(R.id.pillLetters)
         listContainer = findViewById(R.id.listContainer)
+    }
+
+    /**
+     * The bottom nav is pinned to the CoordinatorLayout's own bottom edge, not
+     * the screen's, so letting the window resize for the keyboard (adjustResize)
+     * drags the nav bar and translate FAB up over the search results — see
+     * AndroidManifest's adjustNothing on this activity. The window stays full
+     * size; only the content column pads itself by the keyboard's height while
+     * it's up, so the last search result is never hidden behind it. System-bar
+     * insets are untouched — decorFitsSystemWindows stays at its default, so
+     * Android keeps positioning content between the status and nav bars as it
+     * already does everywhere else in the app.
+     */
+    private fun setupKeyboardInsets() {
+        val content = findViewById<LinearLayout>(R.id.wordBankContent)
+        val basePadding = content.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+            val imeHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, basePadding + imeHeight)
+            insets
+        }
     }
 
     // ── Category Grid ───────────────────────────────────────────────────────────────

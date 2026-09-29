@@ -11,6 +11,7 @@
     android:background="@color/sg_bg">
 
     <LinearLayout
+        android:id="@+id/wordBankContent"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
