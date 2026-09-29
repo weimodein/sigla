@@ -47,7 +47,6 @@ class HomeActivity : AppCompatActivity() {
 
         BottomNavHelper.setup(this, Tab.HOME)
         binding.homeSearch.setOnClickListener { BottomNavHelper.openWordBankSearch(this) }
-        binding.cardHero.setOnClickListener { BottomNavHelper.openTranslator(this) }
         binding.btnHeroStart.setOnClickListener { BottomNavHelper.openTranslator(this) }
         binding.btnRecentStart.setOnClickListener { BottomNavHelper.openTranslator(this) }
         binding.tvCategoriesViewAll.setOnClickListener { BottomNavHelper.open(this, Tab.WORD_BANK) }

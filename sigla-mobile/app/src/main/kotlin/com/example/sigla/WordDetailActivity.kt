@@ -18,6 +18,7 @@ import android.widget.TextView
 import android.widget.Toast
 import android.widget.VideoView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
@@ -32,6 +33,28 @@ import com.google.android.material.card.MaterialCardView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.Locale
+
+/** Copy for the single-video download confirmation. */
+internal data class WordDownloadPrompt(val title: String, val message: String, val action: String)
+
+/**
+ * Wording for confirming one word's demo-video download. Matches Word Bank's
+ * "Download all" dialog: same data warning on mobile data, and no size, because
+ * the backend has no size metadata for video_url.
+ */
+internal fun wordDownloadPrompt(wordName: String, metered: Boolean): WordDownloadPrompt {
+    val base = "The demo video for \"$wordName\" will be saved for offline use."
+    return WordDownloadPrompt(
+        title = "Download this video?",
+        message = if (metered) {
+            "$base\n\nYou're on mobile data. This may use a significant amount of data — " +
+                "Wi-Fi is recommended."
+        } else {
+            base
+        },
+        action = if (metered) "Download anyway" else "Download",
+    )
+}
 
 /**
  * Full-screen word detail: the word, its demo video/image, controls for
@@ -356,7 +379,27 @@ class WordDetailActivity : AppCompatActivity() {
         btnDownload.visibility = if (saved) View.GONE else View.VISIBLE
         btnDownload.isEnabled = true
         btnDownload.contentDescription = "Download for offline"
-        btnDownload.setOnClickListener { downloadForOffline(w) }
+        btnDownload.setOnClickListener { confirmDownload(w) }
+    }
+
+    // Asks only when Download is pressed. Watching never waits on this: the old
+    // dialog that asked on every first play was removed for exactly that reason.
+    private fun confirmDownload(w: WordBankWord) {
+        val prompt = wordDownloadPrompt(w.label.capitalizeFirst(), NetworkUtils.isMetered(this))
+
+        val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
+        val dialog = AlertDialog.Builder(this).setView(view).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        view.findViewById<TextView>(R.id.tvConfirmTitle).text = prompt.title
+        view.findViewById<TextView>(R.id.tvConfirmMessage).text = prompt.message
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).text = prompt.action
+        view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
+        view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
+            dialog.dismiss()
+            downloadForOffline(w)
+        }
+        dialog.show()
     }
 
     private fun downloadForOffline(w: WordBankWord) {
