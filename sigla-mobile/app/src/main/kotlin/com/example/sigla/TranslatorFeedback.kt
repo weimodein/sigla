@@ -6,7 +6,14 @@ import com.example.sigla.TapSignSession.State
  * What a Tap state change should look and feel like — spec §5.1. Pure, so the
  * rules are tested without a device; MainActivity applies the result to views.
  */
-internal data class TapFeedback(val tick: Boolean, val pulse: Boolean, val ring: Boolean)
+internal data class TapFeedback(
+    val tick: Boolean,
+    val pulse: Boolean,
+    val ring: Boolean,
+    // Arming the next sign clears the previous word, so it cannot be mistaken
+    // for the new result. Idle keeps it up for the partner to read.
+    val clearResult: Boolean,
+)
 
 internal fun tapFeedback(from: State?, to: State): TapFeedback {
     val changed = from != to
@@ -18,6 +25,7 @@ internal fun tapFeedback(from: State?, to: State): TapFeedback {
         tick = startedRecording || stoppedForRecognition,
         pulse = to == State.READY,
         ring = to == State.RECORDING,
+        clearResult = changed && to == State.READY,
     )
 }
 
@@ -43,7 +51,9 @@ internal fun overlayAction(shown: Boolean, hasHands: Boolean): OverlayAction = w
 }
 
 /**
- * Leaving the translator drops the Live result's hide timer, so a Live card must
- * go with it or it would still be up on return. A Tap result is meant to stay.
+ * Leaving the translator clears the result in both modes: Live drops its hide
+ * timer on stop, and in Tap a word still up on return would read as fresh.
+ * Kept as a function (with the mode) so the rule stays pinned by a test.
  */
-internal fun clearResultOnStop(tapMode: Boolean): Boolean = !tapMode
+@Suppress("UNUSED_PARAMETER")
+internal fun clearResultOnStop(tapMode: Boolean): Boolean = true

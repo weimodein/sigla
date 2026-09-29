@@ -895,6 +895,7 @@ class MainActivity : AppCompatActivity() {
         val feedback = tapFeedback(lastRenderedTapState, state)
         lastRenderedTapState = state
         if (feedback.tick) Haptics.tick(binding.btnTapRecord)
+        if (feedback.clearResult) clearResult()
 
         val accent = ContextCompat.getColor(this, R.color.sg_brand)
         val red = ContextCompat.getColor(this, R.color.sg_danger)

@@ -106,6 +106,8 @@ All changes are in `MainActivity.kt`, using the helpers above.
 |---|---|---|
 | Word recognized (`showResult`) | `cardResult` set `VISIBLE` | Card hidden → `emphasize(cardResult)`, then `tvFilipinoResult` `reveal` with an 80 ms delay. Card already showing a word → `swapText(tvResult)` (and `swapText` on the Filipino line) without replaying `emphasize`. Either way, `Haptics.confirm`. |
 | Live result expiry | `postDelayed(… INVISIBLE, 2000)`, never cancelled | One tracked `hideResult` runnable: removed and re-posted on every result, then `hide(cardResult, INVISIBLE)`. **Fixes** an earlier result's timer hiding a newer result early. |
+| Tap result lifetime | Stayed until replaced or mode switch | Stays while idle (the partner reads it); `hide` when the next sign is armed (IDLE → READY). Decided by user in Task 6. |
+| Leaving the translator (`stopVision`) | Live timer kept running off screen | Result cleared at once (no animation, off screen) in **both** modes. |
 | Mode switch clears result (`selectMode`) | `INVISIBLE` | Cancel `hideResult`; `hide(cardResult, INVISIBLE)`. |
 | Hands lost (`onNoHands`) | `overlayView.clear()`; texts set | Overlay fades to 0 (`STANDARD`, `EXIT`), then `clear()` and alpha restored. `tvFrames` → `swapText("No hands")`. `tvHandsWarning` → `hide(GONE)`. |
 | Hands appear | Overlay draws instantly | When landmarks arrive while the overlay is hidden/cleared, fade overlay alpha 0→1 (`QUICK`). Tracked by a boolean; **no per-frame animation**. |
@@ -124,11 +126,11 @@ The *decision* of what feedback a Tap state change produces is a pure function,
 separate from views:
 
 ```kotlin
-internal data class TapFeedback(val tick: Boolean, val pulse: Boolean, val ring: Boolean)
+internal data class TapFeedback(val tick: Boolean, val pulse: Boolean, val ring: Boolean, val clearResult: Boolean)
 internal fun tapFeedback(from: TapSignSession.State?, to: TapSignSession.State): TapFeedback
 ```
 
-- `→ READY`: pulse, no tick, no ring.
+- `→ READY`: pulse, no tick, no ring; clears the previous result (not on a same-state re-render).
 - `READY → RECORDING`: tick, ring, no pulse.
 - `RECORDING → PROCESSING`: tick, no ring, no pulse.
 - `→ IDLE` (cancel from any state, or done after PROCESSING): nothing. A

@@ -11,35 +11,36 @@ class TranslatorFeedbackTest {
 
     @Test
     fun armingPulsesWithoutATick() {
-        assertEquals(TapFeedback(tick = false, pulse = true, ring = false), tapFeedback(IDLE, READY))
+        assertEquals(TapFeedback(tick = false, pulse = true, ring = false, clearResult = true), tapFeedback(IDLE, READY))
     }
 
     @Test
     fun startingToRecordTicksAndShowsTheRing() {
-        assertEquals(TapFeedback(tick = true, pulse = false, ring = true), tapFeedback(READY, RECORDING))
+        assertEquals(TapFeedback(tick = true, pulse = false, ring = true, clearResult = false), tapFeedback(READY, RECORDING))
     }
 
     @Test
     fun stoppingForRecognitionTicks() {
-        assertEquals(TapFeedback(tick = true, pulse = false, ring = false), tapFeedback(RECORDING, PROCESSING))
+        assertEquals(TapFeedback(tick = true, pulse = false, ring = false, clearResult = false), tapFeedback(RECORDING, PROCESSING))
     }
 
     @Test
     fun cancellingDoesNotTick() {
         for (from in listOf(READY, RECORDING, PROCESSING)) {
-            assertEquals("from $from", TapFeedback(tick = false, pulse = false, ring = false), tapFeedback(from, IDLE))
+            assertEquals("from $from", TapFeedback(tick = false, pulse = false, ring = false, clearResult = false), tapFeedback(from, IDLE))
         }
     }
 
     @Test
     fun sameStateReRenderDoesNotTick() {
-        assertEquals(TapFeedback(tick = false, pulse = false, ring = true), tapFeedback(RECORDING, RECORDING))
-        assertEquals(TapFeedback(tick = false, pulse = true, ring = false), tapFeedback(READY, READY))
+        assertEquals(TapFeedback(tick = false, pulse = false, ring = true, clearResult = false), tapFeedback(RECORDING, RECORDING))
+        // Re-rendering Ready must not clear a result that arrived meanwhile.
+        assertEquals(TapFeedback(tick = false, pulse = true, ring = false, clearResult = false), tapFeedback(READY, READY))
     }
 
     @Test
     fun firstRenderHasNoPreviousState() {
-        assertEquals(TapFeedback(tick = false, pulse = false, ring = false), tapFeedback(null, IDLE))
+        assertEquals(TapFeedback(tick = false, pulse = false, ring = false, clearResult = false), tapFeedback(null, IDLE))
     }
 
     @Test
@@ -62,9 +63,10 @@ class TranslatorFeedbackTest {
     }
 
     @Test
-    fun aLiveResultIsClearedWhenTheScreenStopsButATapResultStays() {
-        // The Live hide timer is dropped on stop, so the card must go with it.
+    fun leavingTheTranslatorClearsTheResultInBothModes() {
+        // Live: the hide timer is dropped on stop, so the card must go with it.
+        // Tap: a word still up on return would read as a fresh result.
         assertEquals(true, clearResultOnStop(tapMode = false))
-        assertEquals(false, clearResultOnStop(tapMode = true))
+        assertEquals(true, clearResultOnStop(tapMode = true))
     }
 }
