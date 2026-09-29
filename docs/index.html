@@ -58,13 +58,17 @@
      .badge-float past their container's edge (see .phone-stage below) to get
      the overlapping-cards look. That's contained per-breakpoint, but this
      stops any single miscalculated offset from ever widening the whole page
-     and shrinking every other section's viewport-relative sizing with it. */
+     and shrinking every other section's viewport-relative sizing with it.
+     clip, not hidden: hidden turns html/body into scroll containers, which
+     silently breaks the sticky nav. */
   html {
     overflow-x: hidden;
+    overflow-x: clip;
   }
   body {
     margin: 0;
     overflow-x: hidden;
+    overflow-x: clip;
     background: var(--paper);
     color: var(--ink);
     font-family:
@@ -100,48 +104,137 @@
   }
 
   /* ---------- Nav ---------- */
+  /* A floating rounded bar over the hero, after minimalistphone.com: the
+     brand and section links on the left, a dark badge and the download
+     button on the right. The nav takes no height of its own (the negative
+     margin), so the hero's colour wash runs up behind it. */
   .nav {
+    --nav-h: 96px;
     position: sticky;
     top: env(safe-area-inset-top, 0px);
     z-index: 20;
-    background: color-mix(in srgb, var(--paper) 86%, transparent);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--line);
+    height: var(--nav-h);
+    margin-bottom: calc(var(--nav-h) * -1);
+    padding-top: 16px;
+    pointer-events: none;
   }
   .nav-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding-block: 16px;
+    gap: 36px;
+    padding: 10px 10px 10px 20px;
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--card) 82%, transparent);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    pointer-events: auto;
+    transition: box-shadow 0.25s ease, background-color 0.25s ease;
   }
   .brand {
     display: flex;
     align-items: center;
-    gap: 9px;
-    font-weight: 800;
-    font-size: 17px;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    text-decoration: none;
   }
   .brand img {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
   }
-  .nav-cta {
-    font-size: 14px;
-    font-weight: 700;
+  .nav-links {
+    display: flex;
+    gap: 30px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .nav-links a {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
     text-decoration: none;
-    padding: 9px 18px;
-    border-radius: 999px;
+  }
+  .nav-links a:hover {
+    color: var(--blue);
+  }
+  .nav-end {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
+  .nav-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 18px 8px 10px;
+    border-radius: 12px;
     background: var(--navy);
     color: #fff;
-    box-shadow: var(--shadow-sm);
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+  .nav-badge svg {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    color: var(--teal);
+  }
+  .nav-badge small {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #aeb9de;
+  }
+  .nav-badge strong {
+    display: block;
+    font-size: 14px;
+  }
+  /* On the dark theme the navy badge and button would sink into the bar. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .nav-cta {
+      background: #ffffff;
+      color: var(--navy);
+    }
+    :root:not([data-theme="light"]) .nav-badge {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+  }
+  :root[data-theme="dark"] .nav-cta {
+    background: #ffffff;
+    color: var(--navy);
+  }
+  :root[data-theme="dark"] .nav-badge {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  .nav-cta {
+    font-size: 16px;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 13px 20px;
+    border-radius: 12px;
+    background: var(--navy);
+    color: #fff;
     white-space: nowrap;
   }
 
   /* ---------- Hero ---------- */
+  /* The hero fills exactly one screen: its type, spacing and phones are sized
+     off the window's height (svh) as well as its width, so the whole thing,
+     Download button included, fits a short laptop window as well as a tall
+     monitor. 96px at the top clears the floating nav, which overlaps it. */
   .hero {
     position: relative;
-    padding-block: 72px 56px;
+    display: flex;
+    align-items: center;
+    min-height: 100svh;
+    padding-block: calc(96px + 1svh) clamp(20px, 4svh, 48px);
     overflow: hidden;
     background:
       radial-gradient(
@@ -156,6 +249,7 @@
       );
   }
   .hero-grid {
+    width: 100%;
     display: grid;
     grid-template-columns: 1.25fr 0.75fr;
     gap: 56px;
@@ -164,20 +258,19 @@
   /* Start the copy near the phone mockup's top instead of leaving a large
      gap above it while the taller phone stage determines the row height. */
   .hero-copy {
-    align-self: start;
-    margin-top: 32px;
+    align-self: center;
   }
   .eyebrow {
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.3px;
     color: var(--ink-faint);
-    margin-bottom: 22px;
+    margin-bottom: clamp(10px, 2.4svh, 22px);
   }
   /* Three fixed lines. The size tracks the text column's width so the longest
      line, "Point your camera.", always fits on one row instead of wrapping. */
   .hero h1 {
-    font-size: clamp(30px, 5vw, 54px);
+    font-size: clamp(30px, min(5vw, 8.4svh), 64px);
     line-height: 1.08;
     letter-spacing: -0.025em;
     font-weight: 700;
@@ -190,8 +283,8 @@
     color: var(--blue);
   }
   .hero-sub {
-    margin-top: 24px;
-    font-size: 18px;
+    margin-top: clamp(12px, 2.8svh, 26px);
+    font-size: clamp(15px, 2.4svh, 19px);
     line-height: 1.6;
     color: var(--ink-soft);
     max-width: 48ch;
@@ -201,7 +294,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 20px;
-    margin-top: 34px;
+    margin-top: clamp(16px, 3.8svh, 36px);
   }
   .btn {
     display: inline-flex;
@@ -227,20 +320,25 @@
     text-decoration-color: var(--line);
   }
   .hero-fine {
-    margin-top: 18px;
+    margin-top: clamp(10px, 2svh, 18px);
     font-size: 13.5px;
     color: var(--ink-faint);
   }
 
   /* Phone stage — main screenshot with a second one floating over its
      corner, and a plain text/number badge (no icon) tucked opposite it. */
+  /* --pw is the main phone's width: tall enough to fill the hero, short
+     enough that it and the floating phone's overhang stay on screen (1114 /
+     540 is the screenshots' aspect ratio). */
   .phone-stage {
+    --pw: clamp(180px, calc((100svh - 210px) * 540 / 1114), 320px);
     position: relative;
     display: flex;
     justify-content: center;
+    padding-bottom: 5svh;
   }
   .phone {
-    width: min(272px, 66vw);
+    width: var(--pw);
     border-radius: 32px;
     overflow: hidden;
     border: 8px solid var(--navy);
@@ -250,10 +348,12 @@
   }
   .phone-float {
     position: absolute;
-    width: min(168px, 42vw);
+    width: calc(var(--pw) * 0.62);
     border-radius: 22px;
     overflow: hidden;
-    border: 6px solid var(--card);
+    /* Navy like the main phone: a white frame vanished against the light
+       Word Bank screenshot. */
+    border: 6px solid var(--navy);
     box-shadow: var(--shadow);
     bottom: -8%;
     left: -6%;
@@ -714,11 +814,9 @@
   .showcase-item:hover img {
     transform: translateY(-6px) rotate(-1.5deg);
   }
-  .nav {
-    transition: box-shadow 0.25s ease;
-  }
-  .nav.scrolled {
-    box-shadow: 0 8px 24px -16px rgba(10, 14, 33, 0.35);
+  .nav.scrolled .nav-row {
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    box-shadow: 0 14px 34px -18px rgba(10, 14, 33, 0.4);
   }
 
   a:focus-visible {
@@ -747,14 +845,24 @@
   }
 
   /* ---------- Responsive ---------- */
+  /* The badge goes first, then the links, as the bar runs out of room. */
+  @media (max-width: 1100px) {
+    .nav-badge {
+      display: none;
+    }
+  }
   @media (max-width: 860px) {
+    .nav-links {
+      display: none;
+    }
     .hero-grid {
       grid-template-columns: 1fr;
       gap: 40px;
     }
-    .hero-copy {
-      align-self: center;
-      margin-top: 0;
+    /* Single column: the page scrolls from here, so the hero is as tall as
+       its content, with the Download button still on the first screen. */
+    .hero {
+      min-height: 0;
     }
     /* Single column: the text gets the full width, so size off the viewport. */
     .hero h1 {
@@ -763,7 +871,17 @@
     /* Copy (and the Download button) stays first: on a phone it has to be on
        the first screen, and the screenshots follow as proof. */
     .phone-stage {
+      --pw: min(272px, 66vw);
       padding-bottom: 6%;
+    }
+    /* The stage is full-width here, so hang the floating phone and badge
+       off the centred main phone rather than the stage's edges (which put
+       them off-screen on tablets). Phones below 480px override these. */
+    .phone-float {
+      left: calc(50% - var(--pw) / 2 - 70px);
+    }
+    .badge-float {
+      right: calc(50% - var(--pw) / 2 - 90px);
     }
     .feature-grid {
       grid-template-columns: 1fr 1fr;
@@ -771,7 +889,7 @@
   }
   @media (max-width: 760px) {
     .hero {
-      padding-block: 36px 40px;
+      padding-block: calc(36px + 96px) 40px;
     }
     section {
       padding-block: 56px;
@@ -811,8 +929,20 @@
     .nav-cta span.long {
       display: none;
     }
+    .nav {
+      --nav-h: 84px;
+      padding-top: 12px;
+    }
+    .nav-row {
+      padding: 8px 8px 8px 14px;
+      border-radius: 18px;
+    }
+    .nav-cta {
+      padding: 11px 16px;
+      font-size: 15px;
+    }
     .hero {
-      padding-block: 28px 32px;
+      padding-block: calc(28px + 84px) 32px;
     }
     .hero-grid {
       gap: 28px;
@@ -862,7 +992,9 @@
     .phone-float {
       width: min(116px, 35vw);
       left: 2%;
-      bottom: -14%;
+      /* Inside the stage's bottom padding: any lower and the hero's
+         overflow clips it (its drift animation dips it a little further). */
+      bottom: 2%;
       border-width: 4px;
       border-radius: 16px;
     }
@@ -952,20 +1084,33 @@
 </style>
 
 <div class="nav">
-  <div class="wrap nav-row">
-    <div class="brand">
-      <img src="assets/sigla-logo.png" alt="SigLa logo" />SigLa
-    </div>
-    <a
-      class="nav-cta"
-      href="https://github.com/weimodein/sigla/releases/latest/download/SigLa.apk"
-    >
-      Download<span class="long"> for Android</span>
+  <div class="wrap">
+  <nav class="nav-row" aria-label="Main">
+    <a class="brand" href="#top">
+      <img src="assets/sigla-mark.png" alt="SigLa logo" />SigLa
     </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#install">Install</a></li>
+    </ul>
+    <div class="nav-end">
+      <div class="nav-badge">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.48 19.44 6.3a.38.38 0 0 0-.66-.38l-1.87 3.23a11.4 11.4 0 0 0-9.82 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52ZM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg>
+        <span><small>FREE FOR ANDROID</small><strong>No account needed</strong></span>
+      </div>
+      <a
+        class="nav-cta"
+        href="https://github.com/weimodein/sigla/releases/latest/download/SigLa.apk"
+      >
+        Download<span class="long"> for Android</span>
+      </a>
+    </div>
+  </nav>
   </div>
 </div>
 
-<header class="hero">
+<header class="hero" id="top">
   <div class="wrap hero-grid">
     <div class="hero-copy">
       <p class="eyebrow">
@@ -999,13 +1144,13 @@
       </div>
       <div class="phone">
         <img
-          src="assets/screenshot-wordbank-dark.jpg"
-          alt="SigLa's Word Bank in dark mode, showing sign categories like Alphabet, Color, Days and Drink"
+          src="assets/shot-home.jpg"
+          alt="SigLa's Home screen, with an Open camera button to start translating and counts of words available and translated today"
         />
       </div>
       <div class="phone-float">
         <img
-          src="assets/screenshot-wordbank-light.jpg"
+          src="assets/shot-wordbank.jpg"
           alt="SigLa's Word Bank, showing sign categories like Alphabet, Color, Days and Family"
         />
       </div>
@@ -1095,15 +1240,15 @@
       <span class="kicker">Inside the app</span>
       <h2>Built around one camera screen</h2>
       <p>
-        Taken straight from SigLa's own onboarding &mdash; what you'll see in
-        your first minute.
+        Screens straight from the app &mdash; what you'll see in your first
+        minute.
       </p>
     </div>
     <div class="showcase">
       <div class="showcase-item">
         <img
-          src="assets/screenshot-onboarding-translate.jpg"
-          alt="Onboarding screen introducing the Translate main interface"
+          src="assets/shot-translator.jpg"
+          alt="SigLa's translator: the camera tracks a raised hand and shows the word HELLO, with the Filipino KAMUSTA, at the top"
         />
         <div class="step-label">Translate</div>
         <h3>Position &amp; translate</h3>
@@ -1114,8 +1259,8 @@
       </div>
       <div class="showcase-item">
         <img
-          src="assets/screenshot-onboarding-wordbank.jpg"
-          alt="Onboarding screen introducing the Word Bank"
+          src="assets/shot-word-detail.jpg"
+          alt="A word in the Word Bank: a demo video of the sign BLACK with playback speed controls"
         />
         <div class="step-label">Learn</div>
         <h3>Browse the Word Bank</h3>
@@ -1191,7 +1336,7 @@
 </main>
 
 <footer class="wrap">
-  <div class="fbrand"><img src="assets/sigla-logo.png" alt="" />SigLa</div>
+  <div class="fbrand"><img src="assets/sigla-mark.png" alt="" />SigLa</div>
   <div>Filipino Sign Language, translated in real time.</div>
 </footer>
 
