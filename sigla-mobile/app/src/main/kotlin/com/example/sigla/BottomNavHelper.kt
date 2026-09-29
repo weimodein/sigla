@@ -62,7 +62,8 @@ object BottomNavHelper {
         if (activity.javaClass == target) return
         activity.startActivity(Intent(activity, target).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         @Suppress("DEPRECATION")
-        activity.overridePendingTransition(0, 0)
+        // Tabs crossfade instead of opening like a new screen (app-motion spec §4.1).
+        activity.overridePendingTransition(R.anim.tab_fade_in, R.anim.tab_fade_out)
     }
 
     fun openWordBankSearch(activity: Activity) {
@@ -72,7 +73,8 @@ object BottomNavHelper {
                 .putExtra(WordBankActivity.EXTRA_FOCUS_SEARCH, true)
         )
         @Suppress("DEPRECATION")
-        activity.overridePendingTransition(0, 0)
+        // Tabs crossfade instead of opening like a new screen (app-motion spec §4.1).
+        activity.overridePendingTransition(R.anim.tab_fade_in, R.anim.tab_fade_out)
     }
 
     fun openTranslator(activity: Activity) {

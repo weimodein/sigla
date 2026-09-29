@@ -14,6 +14,7 @@
         <item name="android:navigationBarColor">@color/sg_nav_bar</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/sg_light_system_bars</item>
+        <item name="android:windowAnimationStyle">@style/Animation.Sigla.Screen</item>
     </style>
 
     <!-- Translator and fullscreen video: always dark, like a camera or video app.

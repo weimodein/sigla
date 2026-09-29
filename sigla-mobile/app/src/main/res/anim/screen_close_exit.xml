@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A screen being closed: sinks slightly and fades out. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@interpolator/motion_exit"
+    android:shareInterpolator="true">
+    <translate android:fromYDelta="0%" android:toYDelta="6%"
+        android:duration="@integer/motion_screen_exit" />
+    <alpha android:fromAlpha="1" android:toAlpha="0"
+        android:duration="@integer/motion_screen_exit" />
+</set>

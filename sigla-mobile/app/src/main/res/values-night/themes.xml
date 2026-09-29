@@ -12,5 +12,6 @@
         <item name="android:navigationBarColor">@color/sg_nav_bar</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/sg_light_system_bars</item>
+        <item name="android:windowAnimationStyle">@style/Animation.Sigla.Screen</item>
     </style>
 </resources>
