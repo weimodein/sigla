@@ -41,23 +41,3 @@ def download_file(bucket: str, path: str) -> bytes:
     return response
 
 
-def list_files(bucket: str, folder: str = "") -> list:
-    """
-    List all files in a bucket folder.
-    """
-    response = supabase.storage.from_(bucket).list(folder)
-    return response
-
-
-def delete_file(bucket: str, path: str) -> None:
-    """
-    Delete a file from Supabase Storage.
-    """
-    supabase.storage.from_(bucket).remove([path])
-
-
-def get_public_url(bucket: str, path: str) -> str:
-    """
-    Get the public URL of a file without downloading it.
-    """
-    return supabase.storage.from_(bucket).get_public_url(path)
