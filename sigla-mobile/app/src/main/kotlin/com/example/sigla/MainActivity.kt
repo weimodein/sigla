@@ -9,7 +9,6 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.os.Bundle
 import android.os.SystemClock
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
@@ -36,7 +35,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.delay
@@ -162,8 +160,7 @@ class MainActivity : AppCompatActivity() {
     // Device-local state
     private lateinit var historyManager: TranslationHistoryManager
     private lateinit var appSettings: AppSettings
-    private var tts: TextToSpeech? = null
-    private var isTtsReady = false
+    private var speech: SpeechPlayer? = null
 
     private val executor      = Executors.newSingleThreadExecutor()
     private var isFrontCamera = false
@@ -571,34 +568,11 @@ class MainActivity : AppCompatActivity() {
     // ── Backend Initialization ────────────────────────────────────────────────
 
     private fun initTts() {
-        // applicationContext: onDestroy shuts this down off the main thread, so
-        // the unbind can land after the Activity is gone. Bound through the
-        // Activity, that would leak its ServiceConnection.
-        tts = TextToSpeech(applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.ENGLISH
-                // This callback lands on the main thread, and resolving the
-                // voice blocks on a binder call into the TTS engine process.
-                // Do it off-thread; TtsVoiceHelper caches the result so it
-                // only ever costs this once per preference.
-                lifecycleScope.launch(Dispatchers.IO) {
-                    TtsVoiceHelper.applyPreferredVoice(tts, appSettings)
-                }
-                isTtsReady = true
-            }
-        }
+        speech = SpeechPlayer(this, appSettings, lifecycleScope)
     }
 
     private fun speak(text: String) {
-        if (!isTtsReady) return
-        // The voice is already set on the engine at init and whenever the
-        // preference changes — re-resolving it here cost a blocking engine
-        // query on every single recognition.
-        val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
-        val params = Bundle().apply {
-            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
-        }
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, null)
+        speech?.speak(text)
     }
 
     /**
@@ -636,19 +610,15 @@ class MainActivity : AppCompatActivity() {
         // translation edited in the admin panel never reached this screen: once
         // word_bank_cache.json existed the elvis chain short-circuited and the API
         // was never called again.
-        val words: List<WordBankWord> = try {
-            val fresh = ApiClient.get().getWordBank().body()?.words
-            if (!fresh.isNullOrEmpty()) {
-                ModelUpdateManager.cacheWordBank(this@MainActivity, fresh)
-                fresh
-            } else {
-                ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
+        val words: List<WordBankWord> =
+            when (val refresh = refreshWordBank(this@MainActivity, emptyList())) {
+                is WordBankRefresh.Updated -> refresh.words
+                else -> {
+                    // Offline, server down or empty: whatever was cached is still better than nothing.
+                    if (refresh == WordBankRefresh.NetworkError) Log.w(TAG, "Word bank fetch failed, using cache")
+                    ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
+                }
             }
-        } catch (e: Exception) {
-            // Offline or server down — whatever was cached is still better than nothing.
-            Log.w(TAG, "Word bank fetch failed, using cache: ${e.message}")
-            ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
-        }
 
         val map = mutableMapOf<String, String>()
         for (word in words) {
@@ -1571,15 +1541,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         executor.shutdown()
         stopVision()          // defensive: onStop normally got here first
-        // shutdown() blocks until the engine connection that TextToSpeech's
-        // constructor started has finished binding. Leaving soon after entering
-        // (the usual case) stalled the main thread 0.6-1.25 s here.
-        val doomedTts = tts
-        tts = null
-        isTtsReady = false
-        if (doomedTts != null) {
-            teardownExecutor.execute { doomedTts.shutdown() }
-        }
+        speech?.release()
+        speech = null
         super.onDestroy()
     }
 }

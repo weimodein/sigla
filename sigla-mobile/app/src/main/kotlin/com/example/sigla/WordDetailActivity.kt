@@ -1,13 +1,13 @@
 package com.example.sigla
 
 import android.animation.ValueAnimator
+import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.tts.TextToSpeech
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -30,9 +30,7 @@ import com.bumptech.glide.request.target.Target
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.card.MaterialCardView
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /** Copy for the single-video download confirmation. */
 internal data class WordDownloadPrompt(val title: String, val message: String, val action: String)
@@ -71,6 +69,12 @@ class WordDetailActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_WORD_ID = "extra_word_id"
+
+        fun start(context: Context, wordId: Int) {
+            context.startActivity(
+                Intent(context, WordDetailActivity::class.java).putExtra(EXTRA_WORD_ID, wordId)
+            )
+        }
 
         private const val PREFS = "word_detail"
         private const val KEY_SPEED = "demo_speed"
@@ -113,11 +117,7 @@ class WordDetailActivity : AppCompatActivity() {
 
     private var word: WordBankWord? = null
 
-    private var tts: TextToSpeech? = null
-    private var isTtsReady = false
-    // Set when the word arrives before the TTS engine is ready, so the
-    // automatic first pronunciation isn't silently dropped.
-    private var pendingSpeech: String? = null
+    private var speech: SpeechPlayer? = null
     private val appSettings by lazy { AppSettings.getInstance(this) }
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
 
@@ -179,17 +179,7 @@ class WordDetailActivity : AppCompatActivity() {
         btnSpeak.setOnClickListener { word?.let { speakWord(it.label) } }
         setupPlayerControls()
 
-        // applicationContext: onDestroy shuts this down off the main thread, so
-        // the unbind can land after the Activity is gone. Bound through the
-        // Activity, that would leak its ServiceConnection.
-        tts = TextToSpeech(applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.ENGLISH
-                isTtsReady = true
-                pendingSpeech?.let { speakWord(it) }
-                pendingSpeech = null
-            }
-        }
+        speech = SpeechPlayer(this, appSettings, lifecycleScope)
 
         // Give the stage its default shape as soon as the column has a width.
         contentColumn.post { fitStageTo(DEFAULT_ASPECT, animate = false) }
@@ -671,20 +661,7 @@ class WordDetailActivity : AppCompatActivity() {
     // ── Speech ───────────────────────────────────────────────────────────────
 
     private fun speakWord(label: String) {
-        if (!isTtsReady) {
-            pendingSpeech = label
-            return
-        }
-        val volumeMultiplier = (appSettings.volume / 100f).coerceIn(0f, 1f)
-        val params = Bundle().apply {
-            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volumeMultiplier)
-        }
-        // Resolving the voice can block on a query into the TTS engine process
-        // (cached after the first time), so it must not run on the main thread.
-        lifecycleScope.launch(Dispatchers.IO) {
-            TtsVoiceHelper.applyPreferredVoice(tts, appSettings)
-            tts?.speak(label, TextToSpeech.QUEUE_FLUSH, params, null)
-        }
+        speech?.speak(label, queueUntilReady = true)
     }
 
     private fun formatTime(ms: Int): String {
@@ -716,15 +693,8 @@ class WordDetailActivity : AppCompatActivity() {
     override fun onDestroy() {
         stageAnimator?.cancel()
         videoDemo.stopPlayback()
-        // shutdown() blocks until the engine connection started in onCreate has
-        // finished binding, so leaving right after entering stalled the main
-        // thread. Same fix as MainActivity.onDestroy.
-        val doomedTts = tts
-        tts = null
-        isTtsReady = false
-        if (doomedTts != null) {
-            teardownExecutor.execute { doomedTts.shutdown() }
-        }
+        speech?.release()
+        speech = null
         super.onDestroy()
     }
 }
