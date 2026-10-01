@@ -15,7 +15,10 @@
     android:layout_height="match_parent"
     android:background="@color/sg_bg">
 
+    <!-- The id is what lets Android restore the scroll position when toggling
+         dark mode recreates this screen; a view without one is not saved. -->
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/settingsScroll"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true">
