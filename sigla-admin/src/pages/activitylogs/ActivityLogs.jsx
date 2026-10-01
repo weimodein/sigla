@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getActivityLogs } from "../../api/activityLogApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { usePageViewState } from "../../utils/pageViewState.js";

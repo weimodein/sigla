@@ -12,10 +12,6 @@ import Login from "./pages/auth/Login.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import ManageAdministrators from "./pages/administrators/ManageAdministrators.jsx";
-// ManageWordBank is intentionally not imported — /word_bank now redirects to
-// /dataset. The file is kept on disk for reference until its sample-gallery
-// logic is confirmed unnecessary, but importing it would bundle 1400 unused
-// lines and keep the divergent upload rules alive.
 import ManageWord from "./pages/words/ManageWord.jsx";
 import ManageCategories from "./pages/categories/ManageCategories.jsx";
 import ManageModel from "./pages/model/ManageModel.jsx";

@@ -13,7 +13,6 @@ import {
   revertModel,
   deleteModel,
 } from "../../api/modelApi.js";
-import { getWordStats } from "../../api/wordApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useTrainingJob } from "../../context/TrainingJobContext.jsx";
 import { useUploadJobs } from "../../context/UploadJobsContext.jsx";
@@ -45,10 +44,6 @@ const C = {
   red: "#ef4444",
   orange: "#f97316",
 };
-
-// ── Stat Card ─────────────────────────────────────────────────
-
-// ── Skeleton Components ───────────────────────────────────────
 
 // ── Badge ─────────────────────────────────────────────────────
 const Badge = ({ value }) => {
@@ -119,7 +114,6 @@ const ManageModel = () => {
   const toast = useToast();
   const cachedModelsAtMount = getCached(CACHE_KEYS.models);
   const [stats, setStats] = useState(() => getCached(CACHE_KEYS.modelStats) || null);
-  const [wordStats, setWordStats] = useState(() => getCached(CACHE_KEYS.wordStats) || null);
   const [models, setModels] = useState(() => cachedModelsAtMount?.models || []);
   const [loading, setLoading] = useState(() =>
     !cachedModelsAtMount || cachedModelsAtMount.models?.some((model) => model.status === "training"),
@@ -141,7 +135,6 @@ const ManageModel = () => {
     setLoading(false);
   });
   useCacheSubscription(CACHE_KEYS.modelStats, setStats);
-  useCacheSubscription(CACHE_KEYS.wordStats, setWordStats);
 
   // Modal state
   const [trainModal, setTrainModal] = useState(false);
@@ -181,21 +174,14 @@ const ManageModel = () => {
   const fetchData = async () => {
     const cachedModels = getCached(CACHE_KEYS.models);
     const cachedStats = getCached(CACHE_KEYS.modelStats);
-    const cachedWordStats = getCached(CACHE_KEYS.wordStats);
     if (cachedModels) setModels(cachedModels.models || []);
     if (cachedStats) setStats(cachedStats);
-    if (cachedWordStats) setWordStats(cachedWordStats);
     setLoading(!hasCached(CACHE_KEYS.models));
     try {
-      const [statsData, modelsData, wordStatsData] = await Promise.all([
-        getModelStats(),
-        getAllModels(),
-        getWordStats(),
-      ]);
+      const [statsData, modelsData] = await Promise.all([getModelStats(), getAllModels()]);
       setStats(statsData);
       setModels(modelsData.models || []);
-      setWordStats(wordStatsData);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load model data");
     } finally {
       setLoading(false);

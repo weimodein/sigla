@@ -73,7 +73,6 @@ const TrainingJobBanner = () => {
   // model trains, 2/2 once it has and the alphabet is running.
   const wordsDone = job?.wordsStatus === "trained" || job?.wordsStatus === "failed";
   const step = wordsDone ? 2 : 1;
-  const stepLabel = wordsDone ? "Alphabet model" : "Words model";
   const activeProgress = wordsDone ? job?.lettersProgress ?? 0 : job?.wordsProgress ?? 0;
   const activeStageLabel = wordsDone ? job?.lettersStageLabel : job?.wordsStageLabel;
   const activeStage = wordsDone ? job?.lettersStage : job?.wordsStage;
