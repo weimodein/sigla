@@ -2,6 +2,8 @@ package com.example.sigla
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -28,6 +30,7 @@ class CategoryWordListActivity : AppCompatActivity() {
         const val EXTRA_CATEGORY_NAME = "extra_category_name"
         const val EXTRA_IS_FAVORITES = "extra_is_favorites"
         const val EXTRA_IS_ALL_WORDS = "extra_is_all_words"
+        private const val SPINNER_DELAY_MS = 300L
     }
 
     private lateinit var btnBack: MaterialButton
@@ -47,6 +50,13 @@ class CategoryWordListActivity : AppCompatActivity() {
     private var searchQuery = ""
     private var allWords = listOf<WordBankWord>()
     private var categoryWords = listOf<WordBankWord>()
+    // True until the network fetch settles. The spinner is shown only while
+    // this is set AND nothing is on screen yet — see showSpinnerIfStillEmpty.
+    private var isLoading = false
+    private val spinnerHandler = Handler(Looper.getMainLooper())
+    private val showSpinnerIfStillEmpty = Runnable {
+        if (isLoading && allWords.isEmpty()) progressLoading.visibility = View.VISIBLE
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,6 +96,11 @@ class CategoryWordListActivity : AppCompatActivity() {
         loadWords()
     }
 
+    override fun onDestroy() {
+        spinnerHandler.removeCallbacks(showSpinnerIfStillEmpty)
+        super.onDestroy()
+    }
+
     override fun onResume() {
         super.onResume()
         // Favorites may have changed on the word detail screen.
@@ -111,14 +126,21 @@ class CategoryWordListActivity : AppCompatActivity() {
     // ── Load words ────────────────────────────────────────────────────────────
 
     private fun loadWords() {
-        progressLoading.visibility = View.VISIBLE
+        isLoading = true
+        progressLoading.visibility = View.GONE
         rvCategoryWords.visibility = View.GONE
         emptyState.visibility = View.GONE
+        // The cached list is usually on screen within a frame or two; showing
+        // the spinner straight away just flashed it (and, left up until the
+        // network replied, drew it over the list). Only show it if nothing has
+        // arrived after a beat.
+        spinnerHandler.postDelayed(showSpinnerIfStillEmpty, SPINNER_DELAY_MS)
 
         lifecycleScope.launch {
             val cached = ModelUpdateManager.loadCachedWordBank(this@CategoryWordListActivity)
             if (cached != null && cached.isNotEmpty()) {
                 allWords = cached
+                hideSpinner()
                 onWordsUpdated()
             }
 
@@ -128,6 +150,7 @@ class CategoryWordListActivity : AppCompatActivity() {
                     val fresh = response.body()?.words ?: emptyList()
                     if (fresh.isNotEmpty() && fresh != allWords) {
                         allWords = fresh
+                        hideSpinner()
                         onWordsUpdated()
                         ModelUpdateManager.cacheWordBank(this@CategoryWordListActivity, fresh)
                     }
@@ -139,9 +162,17 @@ class CategoryWordListActivity : AppCompatActivity() {
                     Toast.makeText(this@CategoryWordListActivity, "Network error. Using cached data if available.", Toast.LENGTH_LONG).show()
                 }
             } finally {
-                progressLoading.visibility = View.GONE
+                isLoading = false
+                hideSpinner()
+                // Settles the empty state now that "still loading" no longer holds it back.
+                applyFilters()
             }
         }
+    }
+
+    private fun hideSpinner() {
+        spinnerHandler.removeCallbacks(showSpinnerIfStillEmpty)
+        progressLoading.visibility = View.GONE
     }
 
     private fun onWordsUpdated() {
@@ -165,7 +196,7 @@ class CategoryWordListActivity : AppCompatActivity() {
         adapter.setWords(filtered)
         wordsEntrance.onData(filtered.size)
 
-        val showEmpty = filtered.isEmpty() && progressLoading.visibility != View.VISIBLE
+        val showEmpty = filtered.isEmpty() && !(isLoading && allWords.isEmpty())
         emptyState.showEmptyState(showEmpty)
         rvCategoryWords.visibility = if (showEmpty) View.GONE else View.VISIBLE
     }

@@ -27,12 +27,22 @@ import kotlinx.coroutines.launch
 import androidx.recyclerview.widget.GridLayoutManager
 
 private const val SEARCH_DEBOUNCE_MS = 250L
+// Cached words usually render within a frame or two; the spinner only appears
+// if nothing has arrived after this long, so fast loads never flash it.
+private const val SPINNER_DELAY_MS = 300L
 
 class WordBankActivity : AppCompatActivity() {
 
     // Search debounce — see setupSearch()
     private val searchHandler = Handler(Looper.getMainLooper())
     private var searchRunnable: Runnable? = null
+    private val showSpinnerIfStillEmpty = Runnable {
+        if (isLoading && allWords.isEmpty()) {
+            progressLoading.visibility = View.VISIBLE
+            // In grid mode the spinner's container is otherwise hidden.
+            listContainer.visibility = View.VISIBLE
+        }
+    }
 
     private lateinit var etSearch: TextInputEditText
     private lateinit var rvWords: RecyclerView
@@ -252,7 +262,8 @@ class WordBankActivity : AppCompatActivity() {
     private fun loadWords() {
         if (isLoading) return
         isLoading = true
-        progressLoading.visibility = View.VISIBLE
+        progressLoading.visibility = View.GONE
+        searchHandler.postDelayed(showSpinnerIfStillEmpty, SPINNER_DELAY_MS)
         rvWords.visibility = View.GONE
         emptyState.visibility = View.GONE
 
@@ -261,10 +272,10 @@ class WordBankActivity : AppCompatActivity() {
             val cached = ModelUpdateManager.loadCachedWordBank(this@WordBankActivity)
             if (cached != null && cached.isNotEmpty()) {
                 allWords = cached
+                hideSpinner()
                 applyFilters()
                 refreshCategoryGrid()
                 refreshDownloadAllEnabled()
-                progressLoading.visibility = View.GONE
                 isLoading = false
                 // Download missing images in background
                 launch { ModelUpdateManager.downloadWordBankImages(this@WordBankActivity, cached) }
@@ -277,6 +288,7 @@ class WordBankActivity : AppCompatActivity() {
                     val fresh = response.body()?.words ?: emptyList()
                     if (fresh.isNotEmpty() && fresh != allWords) {
                         allWords = fresh
+                        hideSpinner()
                         applyFilters()
                         refreshCategoryGrid()
                         refreshDownloadAllEnabled()
@@ -293,7 +305,7 @@ class WordBankActivity : AppCompatActivity() {
                     Toast.makeText(this@WordBankActivity, "Network error. Using cached data if available.", Toast.LENGTH_LONG).show()
                 }
             } finally {
-                progressLoading.visibility = View.GONE
+                hideSpinner()
                 isLoading = false
                 refreshDownloadAllEnabled()
                 if (isGridMode) {
@@ -306,6 +318,11 @@ class WordBankActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun hideSpinner() {
+        searchHandler.removeCallbacks(showSpinnerIfStillEmpty)
+        progressLoading.visibility = View.GONE
     }
 
     private fun loadCategories() {
@@ -636,6 +653,7 @@ class WordBankActivity : AppCompatActivity() {
         dismissDownloadDialog()
         // A pending debounced search would otherwise retain this activity.
         searchRunnable?.let { searchHandler.removeCallbacks(it) }
+        searchHandler.removeCallbacks(showSpinnerIfStillEmpty)
         super.onDestroy()
     }
 

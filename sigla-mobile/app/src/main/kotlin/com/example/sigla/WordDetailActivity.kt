@@ -156,13 +156,14 @@ class WordDetailActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val data = result.data ?: return@registerForActivityResult
             resumePosition = data.getIntExtra(FullscreenVideoActivity.RESULT_POSITION, resumePosition)
-            // Back from fullscreen it waits, paused at the same spot: the demo
-            // never starts without a tap. The VideoView rebuilds its player
-            // when this screen is visible again and onPrepared seeks there.
-            shouldPlay = false
+            // Back from fullscreen it carries on as it was there: still playing
+            // if it was playing, paused at the same spot if it was paused. The
+            // VideoView rebuilds its player when this screen is visible again
+            // and onPrepared seeks there and honours shouldPlay.
+            shouldPlay = data.getBooleanExtra(FullscreenVideoActivity.RESULT_PLAYING, false)
             if (player != null) {
                 videoDemo.seekTo(resumePosition)
-                pause()
+                if (shouldPlay) play() else pause()
             }
         }
 
@@ -364,10 +365,11 @@ class WordDetailActivity : AppCompatActivity() {
     }
 
     // ── Video ────────────────────────────────────────────────────────────────
-    // Demo videos play only from the offline copy, never streamed. Until a
-    // word's video is downloaded the stage shows a download placeholder, and
-    // tapping it, Play, or Download asks to download first. A download started
-    // from the placeholder or Play starts playing once the file is saved.
+    // Demo videos play only from the offline copy, never streamed. A saved
+    // video starts playing as soon as the screen opens. Until a word's video
+    // is downloaded the stage shows a download placeholder, and tapping it,
+    // Play, or Download asks to download first. A download started from the
+    // placeholder or Play starts playing once the file is saved.
 
     private fun setupVideo(w: WordBankWord, resolvedVideo: String) {
         remoteVideoUrl = resolvedVideo
@@ -379,6 +381,9 @@ class WordDetailActivity : AppCompatActivity() {
         noMediaPlaceholder.setOnClickListener { play() }
         btnRetry.setOnClickListener { loadedSource = null; play() }
         refreshOfflineState(w)
+        // Autoplay the saved copy. Not-downloaded videos are left on the
+        // download placeholder — opening a word never prompts a download.
+        if (currentSource() != null) play()
     }
 
     private fun refreshOfflineState(w: WordBankWord) {
@@ -491,7 +496,7 @@ class WordDetailActivity : AppCompatActivity() {
 
         videoDemo.setOnPreparedListener { mp ->
             player = mp
-            // No looping: the demo plays once per tap, then waits at the end.
+            // No looping: the demo plays once, then waits at the end for Replay.
             mp.isLooping = false
             progressVideo.visibility = View.GONE
             ivThumbnail.visibility = View.GONE
@@ -607,7 +612,7 @@ class WordDetailActivity : AppCompatActivity() {
         val position = if (player != null) videoDemo.currentPosition else resumePosition
         val landscape = (videoAspect ?: DEFAULT_ASPECT) > 1f
         // Fullscreen carries on only if it was already playing; a paused video
-        // opens paused, since the demo never starts without a tap.
+        // opens paused, since the user paused it on purpose.
         val wasPlaying = player != null && videoDemo.isPlaying
         if (player != null) videoDemo.pause()
         fullscreenLauncher.launch(
@@ -697,7 +702,7 @@ class WordDetailActivity : AppCompatActivity() {
     override fun onPause() {
         // Remember where it was: VideoView releases its player with the surface,
         // and onPrepared rebuilds it at resumePosition when the screen returns —
-        // paused, since the demo never starts without a tap.
+        // paused, so coming back from another app doesn't start it unasked.
         if (player != null) {
             resumePosition = videoDemo.currentPosition
             videoDemo.pause()
