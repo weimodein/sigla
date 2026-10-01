@@ -4,6 +4,8 @@ import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { TableSkeletonRows } from "../../components/Skeleton.jsx";
 import PageNav from "../../components/PageNav.jsx";
+import Pagination from "../../components/Pagination.jsx";
+import SortableHeader from "../../components/SortableHeader.jsx";
 import { listStagger } from "../../utils/motion.js";
 import {
   getAllAdministrators,
@@ -36,32 +38,10 @@ import {
   Trash2,
   Check,
   Search,
-  ChevronUp,
-  ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
-  ChevronLeft,
-  ChevronRight,
   UserPlus,
   KeyRound,
 } from "lucide-react";
-
-// ── Color Palette ────────────────────────────────────────────
-const C = {
-  text: "#1f2937",
-  background: "#f3f4f6",
-  primary: "#1e3a8a",
-  secondary: "#1d4ed8",
-  accent: "#3f8efc",
-  yellow: "#f59e0b",
-  red: "#ef4444",
-  orange: "#f97316",
-  green: "#22c55e",
-  muted: "#9ca3af",
-  border: "#e5e7eb",
-  borderLight: "#f0f0f0",
-  surface: "#ffffff",
-};
+import { C } from "../../utils/colors.js";
 
 // This page used to inject its own `.mv-stat-card` at runtime — a near-duplicate
 // of `.dash-stat-card` in index.css with a different duration and hover lift, so
@@ -90,125 +70,6 @@ const ADMIN_SKELETON_COLUMNS = [
   { width: "w-24" },
   { type: "actions", count: 2 },
 ];
-
-// ── Sortable Header ──────────────────────────────────────────
-const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
-  const active = sortField === sortKey;
-  return (
-    <th
-      className="px-5 py-3.5 select-none"
-      style={{
-        cursor: sortKey ? "pointer" : "default",
-        transition: "background-color var(--dur-fast) var(--ease-standard)",
-      }}
-      onClick={() => sortKey && onSort(sortKey)}
-      onMouseEnter={(e) =>
-        sortKey && (e.currentTarget.style.background = "#f9fafb")
-      }
-      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
-    >
-      <div className="flex items-center gap-1.5">
-        <span
-          className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: C.muted }}
-        >
-          {label}
-        </span>
-        {sortKey &&
-          (active ? (
-            sortDir === "asc" ? (
-              <ChevronUp size={14} style={{ color: C.primary }} />
-            ) : (
-              <ChevronDown size={14} style={{ color: C.primary }} />
-            )
-          ) : (
-            <ChevronUp size={14} style={{ color: C.border }} />
-          ))}
-      </div>
-    </th>
-  );
-};
-
-// ── Pagination ───────────────────────────────────────────────
-const Pagination = ({
-  page,
-  totalPages,
-  onPage,
-  pageSize,
-  onPageSize,
-  total,
-}) => (
-  <div
-    className="data-pagination meta-text flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 text-gray-500"
-    style={{ borderTop: `1px solid ${C.border}` }}
-  >
-    <div className="flex items-center gap-3">
-      <span>
-        {total} result{total !== 1 ? "s" : ""}
-      </span>
-      <select
-        value={pageSize}
-        onChange={(e) => onPageSize(+e.target.value)}
-        className="rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
-        style={{ border: `1px solid ${C.border}` }}
-      >
-        <option value={10}>10 / page</option>
-        <option value={25}>25 / page</option>
-        <option value={50}>50 / page</option>
-        <option value={100}>100 / page</option>
-      </select>
-    </div>
-    <div className="flex items-center gap-1">
-      {[
-        {
-          icon: <ChevronsLeft size={16} />,
-          action: () => onPage(1),
-          disabled: page === 1,
-        },
-        {
-          icon: <ChevronLeft size={16} />,
-          action: () => onPage(page - 1),
-          disabled: page === 1,
-        },
-      ].map((b, i) => (
-        <button
-          key={i}
-          onClick={b.action}
-          disabled={b.disabled}
-          className="p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition hover:bg-gray-100"
-          aria-label={b.disabled ? "" : "pagination"}
-        >
-          {b.icon}
-        </button>
-      ))}
-      <span className="px-3 font-medium" style={{ color: C.text }}>
-        Page {page} of {totalPages || 1}
-      </span>
-      {[
-        {
-          icon: <ChevronRight size={16} />,
-          action: () => onPage(page + 1),
-          disabled: page >= totalPages,
-        },
-        {
-          icon: <ChevronsRight size={16} />,
-          action: () => onPage(totalPages),
-          disabled: page >= totalPages,
-        },
-      ].map((b, i) => (
-        <button
-          key={i}
-          onClick={b.action}
-          disabled={b.disabled}
-          className="p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition hover:bg-gray-100"
-          aria-label={b.disabled ? "" : "pagination"}
-        >
-          {b.icon}
-        </button>
-      ))}
-    </div>
-  </div>
-);
 
 // ── Status Badge ─────────────────────────────────────────────
 const StatusBadge = ({ status }) => {

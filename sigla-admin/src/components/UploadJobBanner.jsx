@@ -6,29 +6,16 @@ import { useAuth } from "../context/AuthContext.jsx";
 import AppModal from "./AppModal.jsx";
 import Button from "./Button.jsx";
 import ClipResultsList from "./ClipResultsList.jsx";
-
-const C = {
-  primary: "#1e3a8a",
-  border: "#e5e7eb",
-  muted: "#9ca3af",
-  red: "#ef4444",
-};
-
-// Fixed to the viewport, not the page flow — appearing or disappearing here
-// must never shift page content up or down. Bottom-right, clear of the toast
-// stack (top-right, z-index 2100) and under modals (1100) and the mobile
-// drawer (1040+), but above the mobile topbar (900).
-const STACK_Z_INDEX = 1000;
+import { C } from "../utils/colors.js";
+import { DOCK_CARD_WIDTH, DOCK_CARD_HEIGHT, DOCK_PILL_HEIGHT, DOCK_Z_INDEX } from "./jobDock.js";
 
 // Fixed footprint, the same on every page. Each card is exactly one height —
 // every line is single-line and truncates instead of wrapping — so the stack
 // never resizes as the admin navigates, as a word's label gets longer, or as
 // the "click to view" link appears/disappears between pages. Width matches
-// CARD_WIDTH on desktop; on phones the card is pinned to even side margins
+// DOCK_CARD_WIDTH on desktop; on phones the card is pinned to even side margins
 // instead of being sized off the viewport, which used to leave 8px on one
 // side and 24px on the other.
-const CARD_WIDTH = 360;
-const CARD_HEIGHT = 92;
 const MAX_VISIBLE_CARDS = 3;
 // Above MAX_VISIBLE_CARDS, individual cards give way to one scrollable panel —
 // a "+N more" row that could never be opened (its click just re-opened the
@@ -45,12 +32,6 @@ const PANEL_VISIBLE_ROWS = 5;
 // away and back). Elsewhere only the current admin's own batches show —
 // another admin's upload on a word this admin has never opened would
 // otherwise be a mystery card with no context.
-// Fixed heights of TrainingJobBanner's own card, so this stack can reserve
-// the same space and sit above it rather than the two overlapping — both are
-// position: fixed to the same bottom-right corner. Kept in sync with
-// CARD_HEIGHT/STACK_Z_INDEX-adjacent constants over in TrainingJobBanner.jsx.
-const TRAINING_CARD_HEIGHT = 92;
-const TRAINING_PILL_HEIGHT = 40;
 const DOCK_GAP = 10;
 
 const UploadJobBanner = () => {
@@ -64,7 +45,7 @@ const UploadJobBanner = () => {
   // so the two never overlap. Both providers are siblings mounted once in
   // App.jsx, so reading the other's state here carries no circular dependency.
   const bottomOffset = trainingJob
-    ? (trainingMinimized ? TRAINING_PILL_HEIGHT : TRAINING_CARD_HEIGHT) + DOCK_GAP + 16
+    ? (trainingMinimized ? DOCK_PILL_HEIGHT : DOCK_CARD_HEIGHT) + DOCK_GAP + 16
     : 16;
 
   const onDatasetPage = location.pathname === "/dataset";
@@ -114,13 +95,13 @@ const UploadJobBanner = () => {
             right: "16px",
             bottom: `${bottomOffset}px`,
             left: "16px",
-            zIndex: STACK_Z_INDEX,
+            zIndex: DOCK_Z_INDEX,
             // Pinned to the same left/right offset as the container above, then
-            // pulled to the container's right edge and clamped to CARD_WIDTH —
+            // pulled to the container's right edge and clamped to DOCK_CARD_WIDTH —
             // this is what keeps the margins even on a phone instead of the
             // card being sized directly off 100vw.
             marginLeft: "auto",
-            width: `min(${CARD_WIDTH}px, 100%)`,
+            width: `min(${DOCK_CARD_WIDTH}px, 100%)`,
             display: "flex",
             flexDirection: "column",
             gap: "10px",
@@ -165,7 +146,7 @@ const UploadJobBanner = () => {
                     style={{
                       cursor: onDatasetPage ? "default" : "pointer",
                       boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                      height: `${CARD_HEIGHT}px`,
+                      height: `${DOCK_CARD_HEIGHT}px`,
                       padding: "12px 14px",
                       display: "flex",
                       flexDirection: "column",

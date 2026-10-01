@@ -5,23 +5,13 @@ import { useTrainingJob } from "../context/TrainingJobContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import AppModal from "./AppModal.jsx";
 import Button from "./Button.jsx";
+import { C as PALETTE } from "../utils/colors.js";
+import { formatPercent } from "../utils/format.js";
+import { DOCK_CARD_WIDTH, DOCK_CARD_HEIGHT, DOCK_PILL_HEIGHT, DOCK_Z_INDEX } from "./jobDock.js";
 
-const C = {
-  primary: "#1e3a8a",
-  border: "#e5e7eb",
-  muted: "#9ca3af",
-  red: "#ef4444",
-  green: "#16a34a",
-};
-
-// Same footprint as UploadJobBanner's cards (see CARD_WIDTH/CARD_HEIGHT there)
-// so the two stack cleanly in one dock without the admin seeing two different
-// card sizes fighting for the same corner.
-const CARD_WIDTH = 360;
-const CARD_HEIGHT = 92;
-const STACK_Z_INDEX = 1000;
-
-const fmt = (val) => (val != null ? `${(val * 100).toFixed(1)}%` : "—");
+// The success state here has always used the darker green-600, not the
+// palette's green-500; kept so the banner looks exactly as before.
+const C = { ...PALETTE, green: "#16a34a" };
 
 // "12m elapsed" / "48s elapsed" — training has no per-clip progress to report
 // (see fetch_approved_samples in train.py, which reads the dataset once at the
@@ -116,9 +106,9 @@ const TrainingJobBanner = () => {
             // can both be visible without overlapping.
             bottom: "16px",
             left: "16px",
-            zIndex: STACK_Z_INDEX,
+            zIndex: DOCK_Z_INDEX,
             marginLeft: "auto",
-            width: `min(${CARD_WIDTH}px, 100%)`,
+            width: `min(${DOCK_CARD_WIDTH}px, 100%)`,
             display: "flex",
             flexDirection: "column",
             gap: "10px",
@@ -132,7 +122,7 @@ const TrainingJobBanner = () => {
                 display: "flex", alignItems: "center", gap: "8px",
                 alignSelf: "flex-end",
                 background: "white", border: `1px solid ${C.border}`, borderRadius: "999px",
-                height: "40px", padding: "0 14px",
+                height: `${DOCK_PILL_HEIGHT}px`, padding: "0 14px",
                 boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
                 cursor: "pointer", fontSize: "var(--type-meta)", fontWeight: 600, color: "#1e40af",
                 overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", maxWidth: "100%",
@@ -149,7 +139,7 @@ const TrainingJobBanner = () => {
               style={{
                 cursor: onModelPage ? "default" : "pointer",
                 boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                height: `${CARD_HEIGHT}px`,
+                height: `${DOCK_CARD_HEIGHT}px`,
                 padding: "12px 14px",
                 display: "flex",
                 flexDirection: "column",
@@ -261,7 +251,7 @@ const TrainingJobBanner = () => {
               <p className="text-gray-700 leading-relaxed">
                 Version <strong className="font-mono">{trainingResult.versionNumber}</strong> finished training.
                 {trainingResult.letters?.kind === "letters-ok" && (
-                  <> Alphabet model: {fmt(trainingResult.letters.accuracy)} over {trainingResult.letters.totalClasses ?? "?"} letters.</>
+                  <> Alphabet model: {formatPercent(trainingResult.letters.accuracy)} over {trainingResult.letters.totalClasses ?? "?"} letters.</>
                 )}
                 {trainingResult.letters?.kind === "letters-failed" && (
                   <> The alphabet model FAILED ({trainingResult.letters.error}); this version cannot be deployed.</>
@@ -275,7 +265,7 @@ const TrainingJobBanner = () => {
                   {trainingResult.accuracy != null && (
                     <div className="bg-gray-50 rounded-lg p-3">
                       <p className="text-xs text-gray-500">Accuracy</p>
-                      <p className="font-bold text-lg text-blue-900">{fmt(trainingResult.accuracy)}</p>
+                      <p className="font-bold text-lg text-blue-900">{formatPercent(trainingResult.accuracy)}</p>
                     </div>
                   )}
                   {trainingResult.totalClasses != null && (
