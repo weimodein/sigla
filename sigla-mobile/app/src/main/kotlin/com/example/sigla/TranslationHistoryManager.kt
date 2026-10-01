@@ -181,8 +181,6 @@ class TranslationHistoryManager private constructor(context: Context) {
         prefs.edit().putString(KEY_HISTORY, json).apply()
     }
 
-    fun getCount(): Int = getAll().size
-
     fun setTranslation(word: String, translation: String) {
         translationPrefs.edit().putString(word.lowercase(), translation).apply()
     }

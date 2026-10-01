@@ -72,8 +72,6 @@ object ModelUpdateManager {
     private fun hasLocalLabels(context: Context): Boolean =
         getInstalledModelFile(context, "labels_motion.json").exists()
 
-    fun hasLocalMotionModel(context: Context): Boolean = hasLocalModel(context)
-
     private fun hasCompleteLocalPair(context: Context): Boolean =
         hasLocalModel(context) &&
             hasLocalLabels(context) &&
@@ -114,15 +112,6 @@ object ModelUpdateManager {
      * still happens often enough to pick one up within a session.
      */
     private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L
-
-    /**
-     * Drops the throttle so the next [checkAndUpdate] talks to the backend.
-     *
-     * Used when a caller explicitly asks to check for updates.
-     */
-    fun invalidateCheckThrottle() {
-        lastCheckAt = 0L
-    }
 
     /**
      * @param force skip the throttle and always reach the backend.
@@ -389,11 +378,6 @@ object ModelUpdateManager {
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    fun getLocalFile(context: Context, filename: String): File? {
-        val file = File(context.filesDir, filename)
-        return if (file.exists()) file else null
     }
 
     fun getLocalThumb(context: Context, wordId: Int): File? {
