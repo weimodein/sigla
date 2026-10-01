@@ -122,7 +122,10 @@ class WordDetailActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
 
     // ── Player state ──────────────────────────────────────────────────────────
+    // Download source only — demo videos are never streamed from it.
     private var remoteVideoUrl: String? = null
+    private var hasPoster = false
+    private var isDownloading = false
     // What the VideoView is currently loaded with (local path or URL).
     private var loadedSource: String? = null
     // Valid only between onPrepared and the surface being released (onPause).
@@ -311,7 +314,10 @@ class WordDetailActivity : AppCompatActivity() {
         if (thumbSource != null) loadThumbnail(thumbSource)
 
         when {
-            !resolvedVideo.isNullOrBlank() -> setupVideo(w, resolvedVideo, hasPoster = thumbSource != null)
+            !resolvedVideo.isNullOrBlank() -> {
+                hasPoster = thumbSource != null
+                setupVideo(w, resolvedVideo)
+            }
 
             thumbSource != null -> {
                 tvMediaCaption.text = "Sample image of this gesture"
@@ -358,19 +364,19 @@ class WordDetailActivity : AppCompatActivity() {
     }
 
     // ── Video ────────────────────────────────────────────────────────────────
-    // Play starts immediately, from the offline copy if one exists, otherwise
-    // streamed. Saving for offline is a separate button, so watching never
-    // waits on a download decision (the old Yes/No dialog on every first play).
+    // Demo videos play only from the offline copy, never streamed. Until a
+    // word's video is downloaded the stage shows a download placeholder, and
+    // tapping it, Play, or Download asks to download first. A download started
+    // from the placeholder or Play starts playing once the file is saved.
 
-    private fun setupVideo(w: WordBankWord, resolvedVideo: String, hasPoster: Boolean) {
+    private fun setupVideo(w: WordBankWord, resolvedVideo: String) {
         remoteVideoUrl = resolvedVideo
         controlsPanel.visibility = View.VISIBLE
-        playOverlay.visibility = View.VISIBLE
-        if (!hasPoster) showPlaceholder("🤟", "Tap play to watch the sign")
         tvMediaCaption.text = "Demo Video"
         setControlsEnabled(false)
 
         playOverlay.setOnClickListener { play() }
+        noMediaPlaceholder.setOnClickListener { play() }
         btnRetry.setOnClickListener { loadedSource = null; play() }
         refreshOfflineState(w)
     }
@@ -379,14 +385,38 @@ class WordDetailActivity : AppCompatActivity() {
         val saved = ModelUpdateManager.getLocalVideo(this, w.id) != null
         tvOfflineBadge.visibility = if (saved) View.VISIBLE else View.GONE
         btnDownload.visibility = if (saved) View.GONE else View.VISIBLE
-        btnDownload.isEnabled = true
-        btnDownload.contentDescription = "Download for offline"
-        btnDownload.setOnClickListener { confirmDownload(w) }
+        btnDownload.isEnabled = !isDownloading
+        btnDownload.contentDescription = if (isDownloading) "Downloading" else "Download for offline"
+        btnDownload.setOnClickListener { confirmDownload(w, playWhenDone = false) }
+        renderIdleStage(saved)
     }
 
-    // Asks only when Download is pressed. Watching never waits on this: the old
-    // dialog that asked on every first play was removed for exactly that reason.
-    private fun confirmDownload(w: WordBankWord) {
+    /** The stage before a video is loaded: a play overlay if saved, otherwise a download placeholder. */
+    private fun renderIdleStage(saved: Boolean) {
+        if (loadedSource != null) return  // a video is loaded; leave the player alone
+        noMediaPlaceholder.isClickable = !saved && !isDownloading
+        tvMediaCaption.text = if (saved) "Demo Video" else "Demo Video · not downloaded"
+        if (saved) {
+            ivThumbnail.visibility = if (hasPoster) View.VISIBLE else View.GONE
+            playOverlay.visibility = View.VISIBLE
+            if (hasPoster) noMediaPlaceholder.visibility = View.GONE
+            else showPlaceholder("🤟", "Tap play to watch the sign")
+        } else {
+            ivThumbnail.visibility = View.GONE
+            playOverlay.visibility = View.GONE
+            showPlaceholder(
+                "⬇",
+                if (isDownloading) "Downloading…" else "Tap to download the demo video",
+            )
+        }
+    }
+
+    private fun confirmDownload(w: WordBankWord, playWhenDone: Boolean) {
+        if (isDownloading) return
+        if (!NetworkUtils.isOnline(this)) {
+            Toast.makeText(this, "Connect to the internet to download this video.", Toast.LENGTH_SHORT).show()
+            return
+        }
         val prompt = wordDownloadPrompt(w.label.capitalizeFirst(), NetworkUtils.isMetered(this))
 
         val view = layoutInflater.inflate(R.layout.dialog_confirm_action, null)
@@ -399,37 +429,42 @@ class WordDetailActivity : AppCompatActivity() {
         view.findViewById<MaterialButton>(R.id.btnConfirmCancel).setOnClickListener { dialog.dismiss() }
         view.findViewById<MaterialButton>(R.id.btnConfirmAction).setOnClickListener {
             dialog.dismiss()
-            downloadForOffline(w)
+            downloadForOffline(w, playWhenDone)
         }
         dialog.show()
     }
 
-    private fun downloadForOffline(w: WordBankWord) {
+    private fun downloadForOffline(w: WordBankWord, playWhenDone: Boolean) {
         val url = remoteVideoUrl ?: return
-        btnDownload.isEnabled = false
-        btnDownload.contentDescription = "Downloading"
+        isDownloading = true
+        refreshOfflineState(w)
         lifecycleScope.launch {
             val file = ModelUpdateManager.downloadWordVideo(this@WordDetailActivity, w.id, url)
+            isDownloading = false
             if (file == null) {
                 Toast.makeText(this@WordDetailActivity, "Couldn't download the video. Try again.", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this@WordDetailActivity, "Saved for offline", Toast.LENGTH_SHORT).show()
             }
-            // A video already streaming keeps playing; the saved copy is used
-            // from the next time it's loaded.
             refreshOfflineState(w)
+            if (file != null && playWhenDone) play()
         }
     }
 
-    /** The offline copy when there is one, otherwise the stream URL. */
+    /** The downloaded copy, or null when the video has not been downloaded yet. */
     private fun currentSource(): String? {
         val w = word ?: return null
-        return ModelUpdateManager.getLocalVideo(this, w.id)?.absolutePath ?: remoteVideoUrl
+        return ModelUpdateManager.getLocalVideo(this, w.id)?.absolutePath
     }
 
     private fun play() {
+        val w = word ?: return
+        // Not downloaded: ask to download instead of streaming.
+        val source = currentSource() ?: run {
+            confirmDownload(w, playWhenDone = true)
+            return
+        }
         shouldPlay = true
-        val source = currentSource() ?: return
         if (source != loadedSource || player == null && videoDemo.visibility != View.VISIBLE) {
             loadVideo(source)
             return  // onPrepared starts it
@@ -452,7 +487,7 @@ class WordDetailActivity : AppCompatActivity() {
         playOverlay.visibility = View.GONE
         videoDemo.visibility = View.VISIBLE
         progressVideo.visibility = View.VISIBLE
-        tvMediaCaption.text = if (source.startsWith("http")) "Demo Video · streaming" else "Demo Video"
+        tvMediaCaption.text = "Demo Video"
 
         videoDemo.setOnPreparedListener { mp ->
             player = mp
@@ -496,12 +531,7 @@ class WordDetailActivity : AppCompatActivity() {
             playOverlay.visibility = View.GONE
             ivThumbnail.visibility = View.GONE
             setControlsEnabled(false)
-            val offlineCopy = word?.let { ModelUpdateManager.getLocalVideo(this, it.id) } != null
-            showPlaceholder(
-                "⚠",
-                if (offlineCopy) "Video unavailable" else "Video unavailable · check your connection",
-                retry = true,
-            )
+            showPlaceholder("⚠", "Video unavailable", retry = true)
             tvMediaCaption.text = ""
             true
         }
