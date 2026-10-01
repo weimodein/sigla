@@ -42,6 +42,17 @@ class TranslationHistoryActivity : AppCompatActivity() {
         wireListeners()
     }
 
+    // The bottom tabs bring an already-open History back to the front instead of
+    // recreating it, so onCreate's load goes stale after a translation is saved
+    // elsewhere. Home reloads in onResume for the same reason. The first resume
+    // is skipped: onCreate has only just loaded the list.
+    private var firstResume = true
+
+    override fun onResume() {
+        super.onResume()
+        if (firstResume) firstResume = false else refreshList()
+    }
+
     // ── Views ─────────────────────────────────────────────────────────────────
 
     private fun bindViews() {
