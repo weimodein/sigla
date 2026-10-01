@@ -56,7 +56,7 @@ const seedSuperAdmin = async () => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await Administrator.create({
+    await Administrator.create({
       username,
       email: null, // linked during first-login setup
       password: hashedPassword,
