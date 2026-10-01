@@ -1,5 +1,4 @@
-const { Op } = require("sequelize");
-const { Administrator, EmailVerification } = require("../models/index.js");
+const { Administrator } = require("../models/index.js");
 const {
   sendVerificationCode,
   sendAccountChangeNotice,
@@ -7,26 +6,13 @@ const {
 const { logActivity } = require("../utils/activityLogger.js");
 const { validateEmail, normalizeEmail } = require("../utils/validators.js");
 
+const {
+  getLatestVerification,
+  issueVerificationCode,
+  recordWrongAttempt,
+} = require("../utils/verificationCodes.js");
+
 const TYPE = "email_change";
-const CODE_TTL_MS = 5 * 60 * 1000;   // 5 minutes
-const RESEND_COOLDOWN_MS = 60 * 1000; // 1 minute
-const MAX_ATTEMPTS = 5;
-
-const generateCode = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
-
-const getLatestVerification = async (email) =>
-  EmailVerification.findOne({
-    where: {
-      email,
-      type: TYPE,
-      is_used: false,
-      session_invalidated: false,
-      expires_at: { [Op.gt]: new Date() },
-    },
-    order: [["created_at", "DESC"]],
-  });
-
 // ── POST /api/administrators/email/request-code ────────────────────────
 // Authenticated. Sends a 6-digit code to the NEW email the caller wants to
 // add/link, proving they control that address before it's saved.
@@ -53,38 +39,17 @@ const requestEmailCode = async (req, res) => {
         .json({ message: "This email is already linked to your account" });
     }
 
-    // 1-minute resend cooldown
-    const recent = await EmailVerification.findOne({
-      where: {
-        email: normalizedEmail,
-        type: TYPE,
-        last_sent_at: { [Op.gt]: new Date(Date.now() - RESEND_COOLDOWN_MS) },
-      },
-      order: [["created_at", "DESC"]],
-    });
-    if (recent) {
-      return res
-        .status(429)
-        .json({ message: "Please wait 1 minute before requesting a new code" });
-    }
-
-    // Invalidate previous unused codes for this email
-    await EmailVerification.update(
-      { session_invalidated: true },
-      { where: { email: normalizedEmail, type: TYPE, is_used: false } },
-    );
-
-    const code = generateCode();
-    await EmailVerification.create({
-      administrator_id: req.user.id,
+    const issued = await issueVerificationCode({
       email: normalizedEmail,
-      code,
       type: TYPE,
-      expires_at: new Date(Date.now() + CODE_TTL_MS),
-      attempt_count: 0,
-      session_invalidated: false,
-      last_sent_at: new Date(),
+      administratorId: req.user.id,
     });
+    if (issued.cooldown) {
+      return res.status(429).json({
+        message: "Please wait 1 minute before requesting a new code",
+      });
+    }
+    const { code } = issued;
 
     res.status(200).json({
       message: "Verification code sent to email",
@@ -115,7 +80,7 @@ const verifyEmailCode = async (req, res) => {
     }
     const normalizedEmail = normalizeEmail(email);
 
-    const record = await getLatestVerification(normalizedEmail);
+    const record = await getLatestVerification(normalizedEmail, TYPE);
     if (!record) {
       return res
         .status(400)
@@ -127,23 +92,7 @@ const verifyEmailCode = async (req, res) => {
     }
 
     if (record.code !== code) {
-      const newAttemptCount = record.attempt_count + 1;
-      if (newAttemptCount >= MAX_ATTEMPTS) {
-        await record.update({
-          attempt_count: newAttemptCount,
-          session_invalidated: true,
-        });
-        return res.status(400).json({
-          message:
-            "Maximum attempts exceeded. Please request a new verification code.",
-          session_invalidated: true,
-        });
-      }
-      await record.update({ attempt_count: newAttemptCount });
-      return res.status(400).json({
-        message: `Incorrect code. ${MAX_ATTEMPTS - newAttemptCount} attempt(s) remaining.`,
-        attempts_remaining: MAX_ATTEMPTS - newAttemptCount,
-      });
+      return res.status(400).json(await recordWrongAttempt(record));
     }
 
     // Correct — re-check uniqueness at commit time, then link the email.

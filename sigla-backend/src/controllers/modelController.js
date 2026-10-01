@@ -13,7 +13,7 @@ const { logActivity } = require("../utils/activityLogger.js");
 const { failStaleUploadJobs } = require("./wordController.js");
 require("dotenv").config();
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
+const { ML_SERVICE_URL } = require("../config/mlService.js");
 
 // ── Supabase helper: upload buffer to storage ─────────────────
 // ── Which words feed a training run ──────────────────────────

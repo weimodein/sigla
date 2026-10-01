@@ -18,11 +18,12 @@ const {
   isPasswordWithinBcryptLimit,
   normalizeEmail,
 } = require("../utils/validators.js");
+const {
+  getLatestVerification,
+  issueVerificationCode,
+  recordWrongAttempt,
+} = require("../utils/verificationCodes.js");
 require("dotenv").config();
-
-// ── Helper: generate 6-digit code ────────────────────────────
-const generateCode = () =>
-  Math.floor(100000 + Math.random() * 900000).toString();
 
 // 0 = super administrator, 1 = administrator. These are the only valid roles;
 // the administrators table is exclusive to admin accounts. Shared by login()
@@ -88,20 +89,6 @@ const generateToken = ({ id, role_name, status }) =>
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
   );
 
-// ── Helper: get latest valid verification record ──────────────
-const getLatestVerification = async (email, type) => {
-  return await EmailVerification.findOne({
-    where: {
-      email,
-      type,
-      is_used: false,
-      session_invalidated: false,
-      expires_at: { [Op.gt]: new Date() },
-    },
-    order: [["created_at", "DESC"]],
-  });
-};
-
 // ── POST /api/auth/resend-code ────────────────────────────────
 const resendCode = async (req, res) => {
   try {
@@ -121,41 +108,17 @@ const resendCode = async (req, res) => {
       return res.status(200).json({ message: "If that email exists, a code has been sent" });
     }
 
-    // Check 1-minute cooldown
-    const recent = await EmailVerification.findOne({
-      where: {
-        email: normalizedEmail,
-        type,
-        last_sent_at: { [Op.gt]: new Date(Date.now() - 60 * 1000) },
-      },
-      order: [["created_at", "DESC"]],
+    const issued = await issueVerificationCode({
+      email: normalizedEmail,
+      type: type,
+      administratorId: user.id,
     });
-    if (recent) {
+    if (issued.cooldown) {
       return res.status(429).json({
         message: "Please wait 1 minute before requesting a new code",
       });
     }
-
-    // Invalidate previous codes
-    await EmailVerification.update(
-      { session_invalidated: true },
-      { where: { email: normalizedEmail, type, is_used: false } },
-    );
-
-    // Send fresh code — valid for 5 minutes
-    const code = generateCode();
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
-
-    await EmailVerification.create({
-      administrator_id: user.id,
-      email: normalizedEmail,
-      code,
-      type,
-      expires_at: expires,
-      attempt_count: 0,
-      session_invalidated: false,
-      last_sent_at: new Date(),
-    });
+    const { code } = issued;
 
     res.status(200).json({ message: "New verification code sent" });
 
@@ -334,41 +297,17 @@ const forgotPassword = async (req, res) => {
         .json({ message: "If that email exists, a code has been sent" });
     }
 
-    // Check 1-minute resend cooldown
-    const recent = await EmailVerification.findOne({
-      where: {
-        email: normalizedEmail,
-        type: "password_reset",
-        last_sent_at: { [Op.gt]: new Date(Date.now() - 60 * 1000) },
-      },
-      order: [["created_at", "DESC"]],
+    const issued = await issueVerificationCode({
+      email: normalizedEmail,
+      type: "password_reset",
+      administratorId: user.id,
     });
-    if (recent) {
+    if (issued.cooldown) {
       return res.status(429).json({
         message: "Please wait 1 minute before requesting a new code",
       });
     }
-
-    // Invalidate previous reset codes
-    await EmailVerification.update(
-      { session_invalidated: true },
-      { where: { email: normalizedEmail, type: "password_reset", is_used: false } },
-    );
-
-    // Send fresh code — valid for 5 minutes
-    const code = generateCode();
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
-
-    await EmailVerification.create({
-      administrator_id: user.id,
-      email: normalizedEmail,
-      code,
-      type: "password_reset",
-      expires_at: expires,
-      attempt_count: 0,
-      session_invalidated: false,
-      last_sent_at: new Date(),
-    });
+    const { code } = issued;
 
     res.status(200).json({ message: "If that email exists, a code has been sent" });
 
@@ -404,25 +343,7 @@ const verifyResetCode = async (req, res) => {
     }
 
     if (record.code !== code) {
-      const newAttemptCount = record.attempt_count + 1;
-
-      if (newAttemptCount >= 5) {
-        await record.update({
-          attempt_count: newAttemptCount,
-          session_invalidated: true,
-        });
-        return res.status(400).json({
-          message:
-            "Maximum attempts exceeded. Please request a new verification code.",
-          session_invalidated: true,
-        });
-      }
-
-      await record.update({ attempt_count: newAttemptCount });
-      return res.status(400).json({
-        message: `Incorrect code. ${5 - newAttemptCount} attempt(s) remaining.`,
-        attempts_remaining: 5 - newAttemptCount,
-      });
+      return res.status(400).json(await recordWrongAttempt(record));
     }
 
     // Verifying the code opens a fresh, short window in which the new password

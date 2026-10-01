@@ -12,6 +12,7 @@ const {
 const { logActivity } = require("../utils/activityLogger.js");
 const { validateWordLabel } = require("../utils/validators.js");
 const { sequelize } = require("../config/db.js");
+const { ML_SERVICE_URL } = require("../config/mlService.js");
 
 // Resolve a category *name* (what the form and mobile send) to its id, or null
 // when the name is blank or matches no category. Case-insensitive, mirroring the
@@ -265,7 +266,6 @@ const extractAndStoreSample = async (
     return { file: filename, status: "skipped", type: "unknown", reason: "Only video files are supported" };
   }
 
-  const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
   const FormData = require("form-data");
 
   try {
