@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Playback-speed toggle in activity_word_detail.xml: the selected speed is filled. -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/sig_accent" android:state_checked="true" />
-    <item android:color="@color/sig_surface_card" />
-</selector>

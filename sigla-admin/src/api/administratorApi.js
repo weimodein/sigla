@@ -28,11 +28,6 @@ export const getDeletedAdministrators = (opts) =>
     opts,
   );
 
-export const getAdministratorById = async (id) => {
-  const response = await api.get(`/administrators/${id}`);
-  return response.data;
-};
-
 export const deactivateAdministrator = withInvalidation(async (id, data) => {
   const response = await api.patch(`/administrators/${id}/deactivate`, data);
   return response.data;

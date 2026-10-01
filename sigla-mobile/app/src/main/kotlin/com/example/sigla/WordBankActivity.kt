@@ -283,26 +283,21 @@ class WordBankActivity : AppCompatActivity() {
 
             // Fetch fresh data from API
             try {
-                val response = ApiClient.get().getWordBank()
-                if (response.isSuccessful) {
-                    val fresh = response.body()?.words ?: emptyList()
-                    if (fresh.isNotEmpty() && fresh != allWords) {
-                        allWords = fresh
+                when (val refresh = refreshWordBank(this@WordBankActivity, allWords)) {
+                    is WordBankRefresh.Updated -> {
+                        allWords = refresh.words
                         hideSpinner()
                         applyFilters()
                         refreshCategoryGrid()
                         refreshDownloadAllEnabled()
-                        // Cache the fresh data
-                        ModelUpdateManager.cacheWordBank(this@WordBankActivity, fresh)
-                        // Download images in background
-                        launch { ModelUpdateManager.downloadWordBankImages(this@WordBankActivity, fresh) }
+                        launch { ModelUpdateManager.downloadWordBankImages(this@WordBankActivity, refresh.words) }
                     }
-                } else {
-                    Toast.makeText(this@WordBankActivity, "Failed to load words", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                if (allWords.isEmpty()) {
-                    Toast.makeText(this@WordBankActivity, "Network error. Using cached data if available.", Toast.LENGTH_LONG).show()
+                    WordBankRefresh.ServerError ->
+                        Toast.makeText(this@WordBankActivity, "Failed to load words", Toast.LENGTH_SHORT).show()
+                    WordBankRefresh.NetworkError -> if (allWords.isEmpty()) {
+                        Toast.makeText(this@WordBankActivity, "Network error. Using cached data if available.", Toast.LENGTH_LONG).show()
+                    }
+                    WordBankRefresh.Unchanged -> Unit
                 }
             } finally {
                 hideSpinner()
@@ -413,10 +408,7 @@ class WordBankActivity : AppCompatActivity() {
                 selectedCategory == "Favorites" -> favoritesManager.isFavorite(word.id)
                 else -> word.category.equals(selectedCategory, ignoreCase = true)
             }
-            val matchesSearch = searchQuery.isEmpty() ||
-                    word.label.contains(searchQuery, ignoreCase = true) ||
-                    (word.filipino_translation?.contains(searchQuery, ignoreCase = true) == true) ||
-                    (word.description?.contains(searchQuery, ignoreCase = true) == true)
+            val matchesSearch = word.matchesSearch(searchQuery)
             matchesCategory && matchesSearch
         }
 
@@ -447,9 +439,7 @@ class WordBankActivity : AppCompatActivity() {
     }
 
     private fun openWordDetail(word: WordBankWord) {
-        startActivity(Intent(this, WordDetailActivity::class.java).apply {
-            putExtra(WordDetailActivity.EXTRA_WORD_ID, word.id)
-        })
+        WordDetailActivity.start(this, word.id)
     }
 
     // ── Bulk demo-video download ──────────────────────────────────────────────

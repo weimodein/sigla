@@ -5,14 +5,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { setAuthMessage, takeAuthMessage } from "../../utils/authMessage.js";
 import { hasOuterWhitespace } from "../../utils/credentialValidation.js";
 import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
-
-const C = {
-  text: "#1f2937",
-  background: "#f3f4f6",
-  primary: "#1e3a8a",
-  secondary: "#1d4ed8",
-  accent: "#3f8efc",
-};
+import { C } from "../../utils/colors.js";
 
 const FloatingInput = ({
   id, type, value, onChange, label, autoComplete, icon, delay, error, maxLength,

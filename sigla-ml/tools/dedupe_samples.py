@@ -53,15 +53,14 @@ The ML API is read-only, so this talks to Postgres directly.
 """
 
 import argparse
-import hashlib
 import json
 import os
 import sys
 from collections import defaultdict
 
-import numpy as np
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from tools._sample_keys import class_key, sequence_hash  # noqa: E402
 
 # Cross-label collisions this script is allowed to resolve, and which side is
 # wrong. `delete_from` names the label whose copies get removed; the sequences
@@ -89,21 +88,11 @@ RESOLUTIONS = {
 }
 
 
-def normalize_label(label: str) -> str:
-    return label.replace("’", "'").strip().upper()
-
-
-def sequence_hash(sequence) -> str:
-    return hashlib.sha1(
-        np.asarray(sequence, dtype=np.float32).tobytes()
-    ).hexdigest()
-
-
 def plan(dataset: dict) -> tuple[list, list, list]:
     """Return (cross_deletions, within_deletions, unresolved)."""
     index = defaultdict(list)
     for label, samples in dataset.items():
-        norm = normalize_label(label)
+        norm = class_key(label)
         for s in samples:
             index[sequence_hash(s["sequence"])].append((norm, s["sample_id"]))
 
@@ -194,13 +183,13 @@ def guard(dataset, cross, within) -> None:
         ids = {s["sample_id"] for s in samples}
         if ids and ids <= doomed:
             raise SystemExit(
-                f"REFUSING: the plan deletes every row of '{normalize_label(label)}'. "
+                f"REFUSING: the plan deletes every row of '{class_key(label)}'. "
                 f"A resolution rule is wrong."
             )
         remaining = len(ids - doomed)
         if ids and remaining < 5:
             raise SystemExit(
-                f"REFUSING: '{normalize_label(label)}' would be left with {remaining} "
+                f"REFUSING: '{class_key(label)}' would be left with {remaining} "
                 f"rows. Too few to train on; check RESOLUTIONS."
             )
 

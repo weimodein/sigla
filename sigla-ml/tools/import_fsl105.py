@@ -103,7 +103,7 @@ SCAN_FRAMES = 60
 TRIM_PAD_FRAMES = 4
 
 
-def normalize_label(label: str) -> str:
+def backend_label_key(label: str) -> str:
     """Mirror the backend's normalizeLabel so lookups agree."""
     out = []
     for ch in label.lower():
@@ -306,7 +306,7 @@ def fetch_word_index(backend: str, token: str) -> dict:
         label = row.get("label")
         wid = row.get("id")
         if label and wid is not None:
-            index[normalize_label(label)] = wid
+            index[backend_label_key(label)] = wid
     return index
 
 
@@ -655,7 +655,7 @@ def main() -> int:
             for cls, label in sorted(labels.items(), key=lambda kv: int(kv[0])):
                 if wanted_now is not None and cls not in wanted_now:
                     continue
-                if normalize_label(label) not in word_index:
+                if backend_label_key(label) not in word_index:
                     missing.append((cls, label))
             if missing:
                 print(f"[import] creating {len(missing)} missing word(s) ...")
@@ -665,7 +665,7 @@ def main() -> int:
                         args.backend, args.token, label, categories.get(cls)
                     )
                     if wid is not None:
-                        word_index[normalize_label(label)] = wid
+                        word_index[backend_label_key(label)] = wid
                         created += 1
                     else:
                         failed += 1
@@ -710,7 +710,7 @@ def main() -> int:
         st["total"] += 1
 
         if word_index:
-            wid = word_index.get(normalize_label(st["label"]))
+            wid = word_index.get(backend_label_key(st["label"]))
             st["word_id"] = wid
             if args.only_existing_words and wid is None:
                 st["reasons"]["no matching SIGLA word"] += 1

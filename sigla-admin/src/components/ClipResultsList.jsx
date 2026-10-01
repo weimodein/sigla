@@ -1,9 +1,4 @@
-const C = {
-  border: "#e5e7eb",
-  muted: "#9ca3af",
-  green: "#22c55e",
-  red: "#ef4444",
-};
+import { C } from "../utils/colors.js";
 
 // Per-clip outcomes from a finished upload batch. Shared by the upload modal
 // (previews results the admin can still see before closing it) and the

@@ -1,6 +1,5 @@
 package com.example.sigla
 
-import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -108,9 +107,7 @@ class CategoryWordListActivity : AppCompatActivity() {
     }
 
     private fun openWordDetail(word: WordBankWord) {
-        startActivity(Intent(this, WordDetailActivity::class.java).apply {
-            putExtra(WordDetailActivity.EXTRA_WORD_ID, word.id)
-        })
+        WordDetailActivity.start(this, word.id)
     }
 
     private fun bindViews() {
@@ -145,21 +142,19 @@ class CategoryWordListActivity : AppCompatActivity() {
             }
 
             try {
-                val response = ApiClient.get().getWordBank()
-                if (response.isSuccessful) {
-                    val fresh = response.body()?.words ?: emptyList()
-                    if (fresh.isNotEmpty() && fresh != allWords) {
-                        allWords = fresh
+                when (val refresh = refreshWordBank(this@CategoryWordListActivity, allWords)) {
+                    is WordBankRefresh.Updated -> {
+                        allWords = refresh.words
                         hideSpinner()
                         onWordsUpdated()
-                        ModelUpdateManager.cacheWordBank(this@CategoryWordListActivity, fresh)
                     }
-                } else if (allWords.isEmpty()) {
-                    Toast.makeText(this@CategoryWordListActivity, "Failed to load words", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                if (allWords.isEmpty()) {
-                    Toast.makeText(this@CategoryWordListActivity, "Network error. Using cached data if available.", Toast.LENGTH_LONG).show()
+                    WordBankRefresh.ServerError -> if (allWords.isEmpty()) {
+                        Toast.makeText(this@CategoryWordListActivity, "Failed to load words", Toast.LENGTH_SHORT).show()
+                    }
+                    WordBankRefresh.NetworkError -> if (allWords.isEmpty()) {
+                        Toast.makeText(this@CategoryWordListActivity, "Network error. Using cached data if available.", Toast.LENGTH_LONG).show()
+                    }
+                    WordBankRefresh.Unchanged -> Unit
                 }
             } finally {
                 isLoading = false
@@ -187,12 +182,7 @@ class CategoryWordListActivity : AppCompatActivity() {
     }
 
     private fun applyFilters() {
-        val filtered = categoryWords.filter { word ->
-            searchQuery.isEmpty() ||
-                    word.label.contains(searchQuery, ignoreCase = true) ||
-                    (word.filipino_translation?.contains(searchQuery, ignoreCase = true) == true) ||
-                    (word.description?.contains(searchQuery, ignoreCase = true) == true)
-        }
+        val filtered = categoryWords.filter { it.matchesSearch(searchQuery) }
         adapter.setWords(filtered)
         wordsEntrance.onData(filtered.size)
 

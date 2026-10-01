@@ -10,16 +10,14 @@ const {
   deleteCategory,
 } = require("../controllers/categoryController.js");
 
-// Public — anyone, including guests, can read the category list
+// Public — anyone, including guests and the mobile app, can read the list.
 router.get("/", getAllCategories);
+
+// Everything below requires a logged-in admin who has finished setup.
 router.use(authMiddleware);
 router.use(requireSetupComplete);
-
-// Everything below still requires a logged-in admin
-router.use(authMiddleware);
 router.post("/", roleMiddleware("admin"), createCategory);
 router.put("/:id", roleMiddleware("admin"), updateCategory);
 router.delete("/:id", roleMiddleware("admin"), deleteCategory);
-router.get("/public", getAllCategories);
 
 module.exports = router;

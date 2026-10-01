@@ -14,16 +14,6 @@ export const getModelVersions = getAllModels;
 export const getModelStats = (opts) =>
   cachedFetch(CACHE_KEYS.modelStats, async () => (await api.get("/models/stats")).data, opts);
 
-export const getModelById = async (id) => {
-  const response = await api.get(`/models/${id}`);
-  return response.data;
-};
-
-export const getLatestModel = async () => {
-  const response = await api.get("/models/latest");
-  return response.data;
-};
-
 // One call trains BOTH models for this version: the words model and the
 // fingerspelling alphabet. They are separate models because a letter and the day
 // sign built from it differ only in motion — M and MONDAY separate at 1.06,
@@ -36,11 +26,6 @@ export const getModelStatus = async (id) => {
   const response = await api.get(`/models/${id}/status`);
   return response.data;
 };
-
-// No longer called from the UI — the Test button was removed, since a trained
-// model goes straight to Deploy. The endpoint still exists and works, so this
-// stays for a direct call or a future page rather than being deleted.
-export const testModel = withInvalidation(async (model_id) => (await api.post("/models/test", { model_id })).data, "model");
 
 export const deployModel = withInvalidation(async (version_number) => (await api.post("/models/deploy", { version_number })).data, "model");
 

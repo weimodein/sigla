@@ -24,14 +24,7 @@ import {
   Check,
   AlertCircle,
 } from "lucide-react";
-
-const C = {
-  primary: "#1e3a8a",
-  border: "#e5e7eb",
-  muted: "#9ca3af",
-  green: "#22c55e",
-  red: "#ef4444",
-};
+import { C } from "../../utils/colors.js";
 
 // ── Stat Card ─────────────────────────────────────────────────
 

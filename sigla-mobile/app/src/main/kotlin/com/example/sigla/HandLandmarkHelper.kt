@@ -100,9 +100,6 @@ class HandLandmarkHelper(
     @Volatile private var lastSourceWidth = 1
     @Volatile private var lastSourceHeight = 1
 
-    // LIVE_STREAM mode: async, non-blocking — fastest for real-time camera feeds
-    val isLiveStream: Boolean get() = onResult != null
-
     // ── LIVE_STREAM hand↔pose merge ───────────────────────────────────────────
     // The hand callback emits immediately, merged with the newest pose result seen
     // so far (snapshot, not same-timestamp pairing). Waiting for the same-frame
@@ -418,22 +415,6 @@ class HandLandmarkHelper(
             val current = instance ?: return
             if (sink == null || current.resultSink === sink) {
                 current.resultSink = null
-            }
-        }
-
-        /**
-         * Actually frees the native resources. Nothing calls this in normal use:
-         * the helper is meant to live as long as the process, and Android
-         * reclaims it when the process dies. Here for tests and for a deliberate
-         * process-wide teardown if one is ever wanted.
-         */
-        fun destroy() {
-            synchronized(buildLock) {
-                synchronized(this) {
-                    instance?.resultSink = null
-                    instance?.close()
-                    instance = null
-                }
             }
         }
     }

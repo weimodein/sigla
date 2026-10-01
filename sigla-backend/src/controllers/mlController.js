@@ -84,20 +84,5 @@ const getApprovedDataset = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-const getWordSamplesForVideo = async (req, res) => {
-  try {
-    const { wordId } = req.params;
-    const samples = await GestureSample.findAll({
-      where: { word_id: wordId, status: "approved" },
-      attributes: ["file_url"],
-      limit: 30,
-      order: [["created_at", "ASC"]],
-    });
-    res.json(samples);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
 
-module.exports = { getApprovedDataset, getWordSamplesForVideo };
+module.exports = { getApprovedDataset };

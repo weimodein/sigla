@@ -21,4 +21,6 @@
     <color name="sg_on_brand_secondary">#CCFFFFFF</color>
     <!-- Light-mode fallback for API 24-26, which cannot draw dark nav icons. -->
     <color name="sg_nav_bar">#0D1127</color>
+    <!-- Onboarding pager dot, inactive state (bg_indicator_dot.xml). -->
+    <color name="colorIndicatorInactive">#D7DBE4</color>
 </resources>

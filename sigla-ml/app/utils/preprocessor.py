@@ -839,7 +839,7 @@ def mirror_sequence(seq: np.ndarray) -> np.ndarray:
     """
     Horizontally mirror an already-normalized motion sequence: negate x for every
     present hand block, and negate+swap the pose block's L/R paired points (same
-    convention as MainActivity.kt's mirrorHandX/mirrorPoseBlock — operates on
+    convention as MainActivity.kt's per-slot hand mirror and mirrorPoseBlock — operates on
     wrist/shoulder-relative coordinates post-normalize_frame, so the mirror is
     `-x`, not `1-x`). Absent (all-zero) hand/pose blocks are left untouched.
     """

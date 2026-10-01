@@ -4,6 +4,8 @@ import Button from "../../components/Button.jsx";
 import { StatCard, SkeletonCard } from "../../components/StatCard.jsx";
 import { SkeletonBlock, TableSkeletonRows } from "../../components/Skeleton.jsx";
 import PageNav from "../../components/PageNav.jsx";
+import SortableHeader from "../../components/SortableHeader.jsx";
+import { formatPercent } from "../../utils/format.js";
 import { listStagger } from "../../utils/motion.js";
 import {
   getAllModels,
@@ -13,7 +15,6 @@ import {
   revertModel,
   deleteModel,
 } from "../../api/modelApi.js";
-import { getWordStats } from "../../api/wordApi.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useTrainingJob } from "../../context/TrainingJobContext.jsx";
 import { useUploadJobs } from "../../context/UploadJobsContext.jsx";
@@ -27,28 +28,9 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   ChevronDown,
 } from "lucide-react";
-
-// ── Color Palette ──
-const C = {
-  text: "#1f2937",
-  background: "#f3f4f6",
-  primary: "#1e3a8a",
-  secondary: "#1d4ed8",
-  accent: "#3f8efc",
-  muted: "#9ca3af",
-  border: "#e5e7eb",
-  green: "#22c55e",
-  yellow: "#f59e0b",
-  red: "#ef4444",
-  orange: "#f97316",
-};
-
-// ── Stat Card ─────────────────────────────────────────────────
-
-// ── Skeleton Components ───────────────────────────────────────
+import { C } from "../../utils/colors.js";
 
 // ── Badge ─────────────────────────────────────────────────────
 const Badge = ({ value }) => {
@@ -89,37 +71,12 @@ const ModelMetric = ({ label, value, color = C.text }) => (
   </div>
 );
 
-// ── SortableHeader ────────────────────────────────────────────
-const SortableHeader = ({ label, sortKey, sortField, sortDir, onSort }) => {
-  const active = sortField === sortKey;
-  return (
-    <th
-      className="interactive px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 cursor-pointer select-none hover:bg-gray-100"
-      onClick={() => onSort && onSort(sortKey)}
-    >
-      <div className="flex items-center gap-1">
-        <span>{label}</span>
-        {active ? (
-          sortDir === "asc" ? (
-            <ChevronUp size={14} className="text-blue-900" />
-          ) : (
-            <ChevronDown size={14} className="text-blue-900" />
-          )
-        ) : (
-          <ChevronUp size={14} className="opacity-20" />
-        )}
-      </div>
-    </th>
-  );
-};
-
 
 // ── Main Component ────────────────────────────────────────────
 const ManageModel = () => {
   const toast = useToast();
   const cachedModelsAtMount = getCached(CACHE_KEYS.models);
   const [stats, setStats] = useState(() => getCached(CACHE_KEYS.modelStats) || null);
-  const [wordStats, setWordStats] = useState(() => getCached(CACHE_KEYS.wordStats) || null);
   const [models, setModels] = useState(() => cachedModelsAtMount?.models || []);
   const [loading, setLoading] = useState(() =>
     !cachedModelsAtMount || cachedModelsAtMount.models?.some((model) => model.status === "training"),
@@ -141,7 +98,6 @@ const ManageModel = () => {
     setLoading(false);
   });
   useCacheSubscription(CACHE_KEYS.modelStats, setStats);
-  useCacheSubscription(CACHE_KEYS.wordStats, setWordStats);
 
   // Modal state
   const [trainModal, setTrainModal] = useState(false);
@@ -181,21 +137,14 @@ const ManageModel = () => {
   const fetchData = async () => {
     const cachedModels = getCached(CACHE_KEYS.models);
     const cachedStats = getCached(CACHE_KEYS.modelStats);
-    const cachedWordStats = getCached(CACHE_KEYS.wordStats);
     if (cachedModels) setModels(cachedModels.models || []);
     if (cachedStats) setStats(cachedStats);
-    if (cachedWordStats) setWordStats(cachedWordStats);
     setLoading(!hasCached(CACHE_KEYS.models));
     try {
-      const [statsData, modelsData, wordStatsData] = await Promise.all([
-        getModelStats(),
-        getAllModels(),
-        getWordStats(),
-      ]);
+      const [statsData, modelsData] = await Promise.all([getModelStats(), getAllModels()]);
       setStats(statsData);
       setModels(modelsData.models || []);
-      setWordStats(wordStatsData);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load model data");
     } finally {
       setLoading(false);
@@ -434,9 +383,6 @@ const ManageModel = () => {
     }
   };
 
-  // ── Format metric ─────────────────────────────────────────
-  const fmt = (val) => (val != null ? `${(val * 100).toFixed(1)}%` : "—");
-
   // ── Format metric (for inline use) ──────────────────────────
   const getMetricColor = (val) => {
     if (val == null) return "#9ca3af";
@@ -560,7 +506,7 @@ const ManageModel = () => {
                 Accuracy
               </p>
               <p className="font-semibold">
-                {fmt(stats.current_model.accuracy)}
+                {formatPercent(stats.current_model.accuracy)}
               </p>
             </div>
             <div>
@@ -788,7 +734,7 @@ const ManageModel = () => {
                         </td>
                         <td className="px-5 py-3">
                           <p className="font-semibold" style={{ color: getMetricColor(model.accuracy) }}>
-                            {fmt(model.accuracy)}
+                            {formatPercent(model.accuracy)}
                           </p>
                           {model.total_classes == null && (
                             <p className="mt-0.5 text-xs text-gray-400">Not trained</p>
@@ -803,7 +749,7 @@ const ManageModel = () => {
                                 : getMetricColor(model.letters.accuracy),
                             }}
                           >
-                            {fmt(model.letters?.accuracy)}
+                            {formatPercent(model.letters?.accuracy)}
                           </p>
                           {model.letters?.total_classes == null && (
                             <p className="mt-0.5 text-xs text-gray-400">Not trained</p>
@@ -963,7 +909,7 @@ const ManageModel = () => {
                                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                     <ModelMetric
                                       label="Accuracy"
-                                      value={fmt(model.accuracy)}
+                                      value={formatPercent(model.accuracy)}
                                       color={model.accuracy == null ? C.muted : getMetricColor(model.accuracy)}
                                     />
                                     <ModelMetric label="Classes" value={model.total_classes ?? "—"} />
@@ -994,7 +940,7 @@ const ManageModel = () => {
                                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                     <ModelMetric
                                       label="Accuracy"
-                                      value={fmt(model.letters?.accuracy)}
+                                      value={formatPercent(model.letters?.accuracy)}
                                       color={
                                         model.letters?.accuracy == null
                                           ? C.muted

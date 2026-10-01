@@ -1,8 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
-const C = {
-  border: "#e5e7eb",
-};
+import { C } from "../utils/colors.js";
 
 // Compact Prev/Next + "page X of Y", meant to sit in a table's header row so
 // paging doesn't require scrolling all the way to the bottom bar first. Every
