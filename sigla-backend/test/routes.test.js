@@ -53,3 +53,12 @@ test("model routes keep the manual test and lookup endpoints", () => {
     "POST /train",
   ]);
 });
+
+test("category routes have no duplicate list endpoint", () => {
+  assert.deepEqual(routesOf("categoryRoutes.js"), [
+    "DELETE /:id",
+    "GET /",
+    "POST /",
+    "PUT /:id",
+  ]);
+});
