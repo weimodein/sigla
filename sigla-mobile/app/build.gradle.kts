@@ -21,8 +21,8 @@ android {
         applicationId = "com.example.sigla"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.4"
+        versionCode = 5
+        versionName = "1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
