@@ -40,7 +40,6 @@ import argparse
 import json
 import os
 import sys
-import time
 
 import httpx
 
@@ -53,22 +52,17 @@ DATASET_DIR = os.path.join(
     "datasets", "ALPHABETS",
 )
 
-# The server caps a batch here; keep the client honest rather than discovering it
-# as a 400 halfway through a run.
-MAX_FILES_PER_BATCH = 50
-
 # A batch is ~10 clips and each takes roughly 10s of MediaPipe, so a couple of
 # minutes is normal and a stall is the abnormal case worth surfacing.
-JOB_POLL_SECONDS = 5
 JOB_TIMEOUT_SECONDS = int(os.getenv("IMPORT_JOB_TIMEOUT", 1200))
 
 CATEGORY = os.getenv("ALPHABET_CATEGORY", "ALPHABET")
 
+from _backend_import import BackendImporter  # noqa: E402  (scripts/ is on sys.path when run directly)
 
-def _headers() -> dict:
-    if not ADMIN_TOKEN:
-        sys.exit("ADMIN_TOKEN is not set — needs a JWT for an admin user.")
-    return {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+IMPORTER = BackendImporter(BACKEND_URL, ADMIN_TOKEN,
+                           job_timeout_seconds=JOB_TIMEOUT_SECONDS,
+                           upload_timeout_seconds=300.0)
 
 
 def discover(letters: list[str] | None) -> dict[str, dict[str, list[str]]]:
@@ -98,164 +92,6 @@ def discover(letters: list[str] | None) -> dict[str, dict[str, list[str]]]:
         if signers:
             out[letter] = signers
     return out
-
-
-def find_or_create_word(client: httpx.Client, label: str) -> int:
-    """Word id for `label`, creating it if the backend does not have one.
-
-    adminAddWord answers 409 with the existing word_id when the label is already
-    taken, so a re-run of this script is safe and reuses the same word rather
-    than erroring or duplicating.
-    """
-    r = client.post(
-        f"{BACKEND_URL}/words/admin-add",
-        headers=_headers(),
-        json={
-            "label": label,
-            "sign_type": "FSL",
-            "category": CATEGORY,
-            "description": f"FSL fingerspelling letter {label}",
-            # Marks the word as belonging to the alphabet model rather than the
-            # main vocabulary. Stated explicitly rather than left to the backend
-            # to infer from the label: FSL's NG is a single letter spelled with
-            # two characters, so no spelling rule can classify the alphabet
-            # correctly on its own.
-            "vocabulary": "letters",
-        },
-        timeout=30.0,
-    )
-    if r.status_code in (200, 201):
-        body = r.json()
-        wid = body.get("word", {}).get("id") or body.get("id") or body.get("word_id")
-        if wid is None:
-            sys.exit(f"created {label} but could not find its id in {body}")
-        return int(wid)
-    if r.status_code == 409:
-        wid = r.json().get("word_id")
-        if wid is None:
-            sys.exit(f"{label} exists but the 409 body carried no word_id: {r.text}")
-        return int(wid)
-    sys.exit(f"creating word {label} failed: {r.status_code} {r.text}")
-
-
-def wait_for_job(client: httpx.Client, job_id: int, label: str, signer: str) -> dict:
-    """Block until a job leaves 'processing'.
-
-    Returns the final job row. Waiting is not optional: starting the next batch
-    for the same word while this one is live earns a 409 and drops the clips.
-    """
-    deadline = time.time() + JOB_TIMEOUT_SECONDS
-    while time.time() < deadline:
-        time.sleep(JOB_POLL_SECONDS)
-        # A dropped connection here is not a failed import. The job runs on the
-        # SERVER, detached from this request, so losing the socket only costs us
-        # the status update — the extraction carries on regardless. Letting the
-        # transport error propagate killed a 16-batch run on its first batch
-        # while the backend happily finished that batch alone, so treat it the
-        # same as a non-200: say so, and poll again.
-        try:
-            r = client.get(
-                f"{BACKEND_URL}/words/upload-jobs/{job_id}",
-                headers=_headers(), timeout=30.0,
-            )
-        except httpx.HTTPError as e:
-            print(f"    poll dropped ({type(e).__name__}); retrying")
-            continue
-        if r.status_code != 200:
-            print(f"    poll failed ({r.status_code}); retrying")
-            continue
-        job = r.json().get("job", r.json())
-        status = job.get("status")
-        if status and status != "processing":
-            return job
-        done = job.get("processed_count") or job.get("success_count") or 0
-        total = job.get("total_count") or "?"
-        print(f"    {label}/{signer}: {done}/{total} …", end="\r", flush=True)
-    return {"status": "timeout", "job_id": job_id}
-
-
-def stored_per_signer(client: httpx.Client, word_id: int) -> dict[str, int]:
-    """How many samples each session_id already has stored for this word.
-
-    Makes a re-run resumable: a batch already stored is skipped rather than
-    uploaded twice, and duplicate rows are exactly the damage that is tedious to
-    find afterwards.
-
-    Counts rather than presence, because a crashed run leaves PARTIAL batches —
-    the first attempt died with 5 of 10 clips stored. Treating "signer appears
-    at all" as done would silently abandon the other half.
-    """
-    r = client.get(f"{BACKEND_URL}/words/{word_id}/samples",
-                   headers=_headers(), timeout=60.0)
-    if r.status_code != 200:
-        return {}
-    body = r.json()
-    rows = body.get("samples", body if isinstance(body, list) else [])
-    counts: dict[str, int] = {}
-    for s in rows:
-        if isinstance(s, dict):
-            sid = s.get("session_id")
-            counts[sid] = counts.get(sid, 0) + 1
-    return counts
-
-
-def upload_batch(client: httpx.Client, word_id: int, label: str,
-                 signer: str, clips: list[str]) -> dict:
-    """One (letter, signer) batch, then wait for its job to finish.
-
-    Waits out any job already live for this word first. The endpoint answers 409
-    while one is processing, so a crashed earlier run leaves a job that must
-    finish before this word accepts anything more.
-    """
-    live = client.get(f"{BACKEND_URL}/words/{word_id}/upload-jobs/active",
-                      headers=_headers(), timeout=30.0)
-    if live.status_code == 200:
-        job = (live.json() or {}).get("job")
-        if job and job.get("status") == "processing":
-            print(f"    a job is already live for {label}; waiting for it")
-            wait_for_job(client, job["id"], label, job.get("session_id", "?"))
-
-    if len(clips) > MAX_FILES_PER_BATCH:
-        sys.exit(f"{label}/{signer} has {len(clips)} clips; the server caps a "
-                 f"batch at {MAX_FILES_PER_BATCH}")
-
-    files = []
-    handles = []
-    try:
-        for p in clips:
-            fh = open(p, "rb")
-            handles.append(fh)
-            files.append(("videos", (os.path.basename(p), fh, "video/quicktime")))
-        try:
-            r = client.post(
-                f"{BACKEND_URL}/words/{word_id}/upload-videos",
-                headers=_headers(),
-                data={"session_id": signer},
-                files=files,
-                timeout=300.0,
-            )
-        except httpx.HTTPError as e:
-            # Deliberately NOT retried. The server may already have accepted the
-            # batch and started extracting, so re-POSTing risks a second job for
-            # the same clips. Report it and let the caller re-run, which picks up
-            # from the live job rather than duplicating it.
-            return {"status": "transport-error", "detail": f"{type(e).__name__}: {e}"}
-    finally:
-        for fh in handles:
-            fh.close()
-
-    if r.status_code == 409:
-        # Someone else's batch is live for this word — not recoverable here, and
-        # continuing would interleave two jobs on the same counters.
-        return {"status": "conflict", "detail": r.json()}
-    if r.status_code != 202:
-        return {"status": "error", "code": r.status_code, "detail": r.text[:300]}
-
-    job = r.json().get("job", {})
-    job_id = job.get("id")
-    if job_id is None:
-        return {"status": "error", "detail": f"202 without a job id: {r.text[:200]}"}
-    return wait_for_job(client, job_id, label, signer)
 
 
 def main() -> int:
@@ -295,10 +131,19 @@ def main() -> int:
     report: dict[str, dict] = {}
     with httpx.Client() as client:
         for letter, signers in found.items():
-            word_id = find_or_create_word(client, letter)
+            # vocabulary "letters" is stated explicitly rather than inferred from
+            # the label: FSL's NG is one letter spelled with two characters, so no
+            # spelling rule can classify the alphabet correctly on its own.
+            word_id = IMPORTER.find_or_create_word(client, {
+                "label": letter,
+                "sign_type": "FSL",
+                "category": CATEGORY,
+                "description": f"FSL fingerspelling letter {letter}",
+                "vocabulary": "letters",
+            })
             print(f"\n{letter} (word_id {word_id})")
             report[letter] = {"word_id": word_id, "batches": {}}
-            already = stored_per_signer(client, word_id)
+            already = IMPORTER.stored_per_signer(client, word_id)
             for signer, clips in signers.items():
                 # Some clips are legitimately rejected by the quality gates, so a
                 # complete batch is not always len(clips) rows. Anything within a
@@ -320,7 +165,7 @@ def main() -> int:
                     }
                     continue
                 print(f"  {signer}: {len(clips)} clips …")
-                result = upload_batch(client, word_id, letter, signer, clips)
+                result = IMPORTER.upload_batch(client, word_id, letter, signer, clips)
                 report[letter]["batches"][signer] = result
                 status = result.get("status", "?")
                 ok = result.get("success_count", result.get("processed_count", "?"))

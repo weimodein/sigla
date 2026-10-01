@@ -34,42 +34,22 @@ USAGE
 """
 
 import argparse
-import hashlib
 import json
 import os
 import sys
 from collections import defaultdict
 
-import numpy as np
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from tools._sample_keys import class_key, sequence_hash  # noqa: E402
 from app.utils.preprocessor import fetch_approved_samples  # noqa: E402
-
-
-def normalize_label(label: str) -> str:
-    """Curly and straight apostrophes both occur in the word list."""
-    return label.replace("’", "'").strip().upper()
-
-
-def sequence_hash(sequence) -> str:
-    """
-    Stable content hash of one 30x147 sequence.
-
-    float32 because that is the dtype training uses -- hashing the raw JSON text
-    would make formatting differences (trailing zeros, exponent form) look like
-    different data.
-    """
-    return hashlib.sha1(
-        np.asarray(sequence, dtype=np.float32).tobytes()
-    ).hexdigest()
 
 
 def build_index(dataset: dict) -> dict:
     """hash -> [(label, sample_id, file_url), ...] for every stored sample."""
     index = defaultdict(list)
     for label, samples in dataset.items():
-        norm = normalize_label(label)
+        norm = class_key(label)
         for sample in samples:
             index[sequence_hash(sample["sequence"])].append(
                 (norm, sample["sample_id"], sample.get("file_url"))
@@ -105,7 +85,7 @@ def analyze(dataset: dict) -> dict:
         foreign = sum(
             1 for h in hashes if len({lb for lb, _, _ in index[h]}) > 1
         )
-        per_class[normalize_label(label)] = {
+        per_class[class_key(label)] = {
             "samples": len(samples),
             "unique": len(set(hashes)),
             "duplicated": len(samples) - len(set(hashes)),
