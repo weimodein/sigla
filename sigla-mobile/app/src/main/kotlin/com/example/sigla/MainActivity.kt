@@ -454,14 +454,38 @@ class MainActivity : AppCompatActivity() {
                 }
                 if (!published) return@launch
 
-                // Check for a newer deployed model on every launch — not just when no
-                // local model exists. checkAndUpdate() compares version_number/tflite_url
-                // against what's cached, only downloads+verifies when different, and keeps
-                // the existing model in place if the check or download fails. Without this,
-                // a retrained+redeployed model (e.g. after adding a new word) would never
-                // reach a device that already has some model installed.
+                // Recognition needs only the model files already on the phone, so
+                // when a complete pair is installed it loads first and the screen
+                // says Ready straight away; the update check then runs behind it.
+                // The check used to come first, and on a slow or unreachable server
+                // the status sat on "Checking for model updates…" for up to a
+                // minute while the hand was already being tracked.
+                if (ModelUpdateManager.hasCompleteLocalPair(this@MainActivity)) {
+                    withContext(Dispatchers.Main) {
+                        setStatus("Loading words…", StatusKind.LOADING)
+                    }
+                    service.init()
+                    withContext(Dispatchers.Main) { onPredictorLoaded(service) }
+                    if (!service.isReady) return@launch
+
+                    // Still check every launch, so a retrained and redeployed model
+                    // reaches a phone that already has one. checkAndUpdate() keeps
+                    // the installed model when the check or download fails, so a
+                    // failure here changes nothing the user sees.
+                    if (ModelUpdateManager.checkAndUpdate(this@MainActivity) &&
+                        ModelUpdateManager.lastCheckChangedVersion
+                    ) {
+                        // The word bank follows the deployed model (see below).
+                        refreshWordBank()
+                        swapInUpdatedModel()
+                    }
+                    return@launch
+                }
+
+                // First run: nothing is installed yet, so recognition has to wait
+                // for the download.
                 withContext(Dispatchers.Main) {
-                    setStatus("Checking for model updates…", StatusKind.LOADING)
+                    setStatus("Downloading the model…", StatusKind.LOADING)
                 }
                 val hasModel = ModelUpdateManager.checkAndUpdate(this@MainActivity)
                 if (!hasModel) {
@@ -492,22 +516,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 service.init()
 
-                withContext(Dispatchers.Main) {
-                    if (service.isReady) {
-                        setStatus("Ready", StatusKind.READY)
-                        Log.d(TAG, "Model ready with ${service.getLabelCount()} classes")
-                        // Only now is it known whether an alphabet model loaded,
-                        // so this is where the vocabulary switch appears.
-                        updateVocabularyToggleLabel()
-                        pendingStartVocabulary?.let { requested ->
-                            pendingStartVocabulary = null
-                            translatorStartVocabulary(requested, service.hasLetters())
-                                ?.let { selectVocabulary(it) }
-                        }
-                    } else {
-                        setStatus("Couldn't load the words", StatusKind.ERROR)
-                    }
-                }
+                withContext(Dispatchers.Main) { onPredictorLoaded(service) }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     setStatus("Error: ${e.message}", StatusKind.ERROR)
@@ -701,6 +710,55 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Reports the loaded predictor on the status line. Main thread only. */
+    private fun onPredictorLoaded(service: PredictionService) {
+        if (service.isReady) {
+            setStatus("Ready", StatusKind.READY)
+            Log.d(TAG, "Model ready with ${service.getLabelCount()} classes")
+            // Only now is it known whether an alphabet model loaded,
+            // so this is where the vocabulary switch appears.
+            updateVocabularyToggleLabel()
+            pendingStartVocabulary?.let { requested ->
+                pendingStartVocabulary = null
+                translatorStartVocabulary(requested, service.hasLetters())
+                    ?.let { selectVocabulary(it) }
+            }
+        } else {
+            setStatus("Couldn't load the words", StatusKind.ERROR)
+        }
+    }
+
+    /**
+     * Replaces the running predictor with one built from the model the background
+     * check just installed, keeping the user's Words/Letters choice. Called off the
+     * main thread. The old predictor is handed to teardownExecutor exactly as
+     * stopVision does: once the field points at the new one, no new frame reaches
+     * the old, and close() waits out any inference already in flight.
+     */
+    private suspend fun swapInUpdatedModel() {
+        val fresh = PredictionService(applicationContext)
+        fresh.init()
+        withContext(Dispatchers.Main) {
+            val old = predictor
+            if (!visionActive || old == null || !fresh.isReady) {
+                teardownExecutor.execute { fresh.close() }
+                return@withContext
+            }
+            val vocabulary = old.currentVocabulary()
+            predictor = fresh
+            setupCallbacks()
+            if (vocabulary == PredictionService.Vocabulary.LETTERS && fresh.hasLetters()) {
+                fresh.setVocabulary(vocabulary)
+            }
+            updateVocabularyToggleLabel()
+            // A gesture half-collected by the old model cannot finish on the new one.
+            cancelTap()
+            fresh.onNoHands?.invoke()
+            teardownExecutor.execute { old.close() }
+            Log.i(TAG, "Swapped in updated model with ${fresh.getLabelCount()} classes")
+        }
+    }
+
     /** Renders a recognition result. Called on the UI thread. */
     private fun showResult(result: PredictionResult) {
         // Confidence is no longer shown to the user, but it is still recorded
@@ -708,7 +766,13 @@ class MainActivity : AppCompatActivity() {
         val pct = (result.confidence * 100).toInt()
 
         lastLabel = result.label
-        val word = result.label.uppercase()
+        // Title case for words ("Blue"); a letter keeps its stored case, including
+        // two-character letters such as NG when the alphabet is the active vocabulary.
+        val word = if (predictor?.currentVocabulary() == PredictionService.Vocabulary.LETTERS) {
+            result.label
+        } else {
+            labelDisplay(result.label)
+        }
         val filipino = getFilipinoTranslation(result.label)
         val showFilipinoLine = filipino != null && showFilipino
 
@@ -1109,8 +1173,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Updated to use cached translations from backend
+    /** The display form: translations stored in capitals show in sentence case. */
     private fun getFilipinoTranslation(label: String): String? {
-        return filipinoMap[label.lowercase()]
+        return filipinoMap[label.lowercase()]?.let { sentenceCaseIfShouting(it) }
     }
 
     // ── Camera ────────────────────────────────────────────────────────────────

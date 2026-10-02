@@ -238,10 +238,10 @@ class HistoryAdapter(
                 (holder as EntryViewHolder).apply {
                     val e = item.entry
 
-                    tvWord.text = e.word
+                    tvWord.text = labelDisplay(e.word)
                     tvTime.text = TranslationHistoryManager.formatTime(e.timestamp)
 
-                    val filipino = historyManager.getTranslation(e.word)?.trim().orEmpty()
+                    val filipino = sentenceCaseIfShouting(historyManager.getTranslation(e.word)?.trim().orEmpty())
                     tvFilipino.text = filipino
                     tvFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
 

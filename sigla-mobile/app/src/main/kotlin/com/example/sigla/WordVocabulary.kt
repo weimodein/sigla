@@ -30,6 +30,15 @@ internal fun wordDisplayLabel(word: WordBankWord): String =
     if (effectiveVocabulary(word) == VOCAB_LETTERS) word.label else word.label.toTitleCase()
 
 /**
+ * The display form of a label when only the label is known (History entries and
+ * the translator's result). Same fallback rule as [effectiveVocabulary]: a single
+ * capital A–Z is a letter and stays as it is; anything else is a word, in title
+ * case ("BLUE" -> "Blue").
+ */
+internal fun labelDisplay(label: String): String =
+    if (SINGLE_CAPITAL_LETTER.matches(label)) label else label.toTitleCase()
+
+/**
  * Sentence case for text typed entirely in capitals ("MAGANDANG TANGHALI" ->
  * "Magandang tanghali"); anything already in mixed or lower case is left as typed.
  */

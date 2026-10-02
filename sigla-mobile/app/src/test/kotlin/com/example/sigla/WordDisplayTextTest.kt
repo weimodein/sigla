@@ -23,6 +23,21 @@ class WordDisplayTextTest {
         assertEquals("G", wordDisplayLabel(word("G")))
     }
 
+    // ── labelDisplay (History and the translator, which know only the label) ──
+
+    @Test
+    fun recognisedWordsBecomeTitleCase() {
+        assertEquals("Blue", labelDisplay("BLUE"))
+        assertEquals("No", labelDisplay("NO"))
+        assertEquals("Good Afternoon", labelDisplay("GOOD AFTERNOON"))
+    }
+
+    @Test
+    fun singleLettersStayCapital() {
+        assertEquals("N", labelDisplay("N"))
+        assertEquals("B", labelDisplay("B"))
+    }
+
     // ── sentenceCaseIfShouting ────────────────────────────────────────────────
 
     @Test

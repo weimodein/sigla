@@ -72,7 +72,7 @@ object ModelUpdateManager {
     private fun hasLocalLabels(context: Context): Boolean =
         getInstalledModelFile(context, "labels_motion.json").exists()
 
-    private fun hasCompleteLocalPair(context: Context): Boolean =
+    fun hasCompleteLocalPair(context: Context): Boolean =
         hasLocalModel(context) &&
             hasLocalLabels(context) &&
             getInstalledModelFile(context, "sign_model_letters.tflite").exists() &&
