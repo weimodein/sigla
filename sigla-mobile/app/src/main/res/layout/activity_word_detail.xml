@@ -93,6 +93,7 @@
                         android:visibility="gone">
                         <TextView
                             android:id="@+id/tvPlaceholderIcon"
+                            android:textColor="@color/sg_on_brand"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:textSize="@dimen/sg_text_title"
