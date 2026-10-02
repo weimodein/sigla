@@ -157,6 +157,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
+                android:layout_marginBottom="@dimen/sg_bottom_bar_clearance"
                 android:indeterminateTint="@color/sg_brand"
                 android:visibility="gone" />
             <LinearLayout
@@ -164,6 +165,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
+                android:paddingBottom="@dimen/sg_bottom_bar_clearance"
                 android:orientation="vertical"
                 android:visibility="gone">
                 <TextView

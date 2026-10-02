@@ -187,6 +187,7 @@ class WordBankActivity : AppCompatActivity() {
         if (allWords.isEmpty()) {
             gridAdapter.setItems(emptyList())
             if (isGridMode) {
+                setGridFillsSpace(false)
                 emptyState.showEmptyState(!isLoading)
                 listContainer.visibility = View.VISIBLE
             }
@@ -194,6 +195,7 @@ class WordBankActivity : AppCompatActivity() {
         }
 
         if (isGridMode) {
+            setGridFillsSpace(true)
             emptyState.visibility = View.GONE
             listContainer.visibility = View.GONE
         }
@@ -252,8 +254,28 @@ class WordBankActivity : AppCompatActivity() {
         // Spinner reflects whether words are still loading — never gate it on the
         // categories API, which may legitimately return empty.
         val stillLoadingInitial = isLoading && allWords.isEmpty()
+        setGridFillsSpace(allWords.isNotEmpty())
         progressLoading.visibility = if (stillLoadingInitial) View.VISIBLE else View.GONE
         listContainer.visibility = if (stillLoadingInitial) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * The category grid and the loading/empty area below it are both weight-1
+     * siblings, so while the grid had nothing to show it still kept half the
+     * screen and the spinner sat centred in the bottom half. With no categories
+     * the grid collapses to its "Categories" heading and the loading area gets
+     * all the space; once categories arrive the grid takes it back.
+     */
+    private fun setGridFillsSpace(fill: Boolean) {
+        rvCategoryGrid.visibility = if (fill) View.VISIBLE else View.GONE
+        val params = categoryGridContainer.layoutParams as LinearLayout.LayoutParams
+        val height = if (fill) 0 else LinearLayout.LayoutParams.WRAP_CONTENT
+        val weight = if (fill) 1f else 0f
+        if (params.height != height || params.weight != weight) {
+            params.height = height
+            params.weight = weight
+            categoryGridContainer.layoutParams = params
+        }
     }
 
 
