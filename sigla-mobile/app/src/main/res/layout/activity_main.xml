@@ -156,7 +156,7 @@
         android:paddingEnd="@dimen/sg_space_12"
         android:paddingBottom="@dimen/sg_space_4"
         android:text="More than 2 hands detected"
-        android:textColor="@color/sg_on_brand"
+        android:textColor="@color/sg_on_dark"
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -188,7 +188,7 @@
             android:paddingTop="@dimen/sg_space_4"
             android:paddingEnd="@dimen/sg_space_16"
             android:paddingBottom="@dimen/sg_space_4"
-            android:textColor="@color/sg_on_brand"
+            android:textColor="@color/sg_on_dark"
             android:visibility="gone"
             tools:text="Recording… 1.8s"
             tools:visibility="visible" />
@@ -250,7 +250,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/sg_space_4"
             android:text="Detecting"
-            android:textColor="@color/sg_on_brand" />
+            android:textColor="@color/sg_on_dark" />
 
         <ProgressBar
             android:id="@+id/progressBuffer"
@@ -275,7 +275,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textColor="@color/sg_on_brand"
+                android:textColor="@color/sg_on_dark"
                 tools:text="24" />
             <TextView
                 android:id="@+id/tvBufferPercent"
@@ -283,7 +283,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="@dimen/sg_space_12"
-                android:textColor="@color/sg_on_brand"
+                android:textColor="@color/sg_on_dark"
                 android:text="0%" />
             <TextView
                 android:id="@+id/tvVelocity"
@@ -291,14 +291,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="—"
-                android:textColor="@color/sg_on_brand" />
+                android:textColor="@color/sg_on_dark" />
             <TextView
                 android:id="@+id/tvStreak"
                 style="@style/Sigla.Text.Caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/sg_space_8"
-                android:textColor="@color/sg_on_brand"
+                android:textColor="@color/sg_on_dark"
                 android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
@@ -369,7 +369,7 @@
                     style="@style/Widget.Sigla.Chip"
                     android:contentDescription="Hold for two seconds to play an emergency alert"
                     android:text="Hold for SOS"
-                    android:textColor="@color/sg_on_brand"
+                    android:textColor="@color/sg_on_dark"
                     app:backgroundTint="@color/sg_danger" />
             </LinearLayout>
 

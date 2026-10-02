@@ -19,6 +19,12 @@
     <color name="sg_success">#2E7D32</color>
     <color name="sg_on_brand">#FFFFFF</color>
     <color name="sg_on_brand_secondary">#CCFFFFFF</color>
+    <!-- Icon badge disc on a brand surface (bg_sg_circle_tint_on_brand): 15% white. -->
+    <color name="sg_on_brand_disc">#26FFFFFF</color>
+    <!-- White in BOTH themes: text and icons over the camera feed, the red warning
+         pill and the dark video stage. Not sg_on_brand, which is navy in dark mode. -->
+    <color name="sg_on_dark">#FFFFFF</color>
+    <color name="sg_on_dark_secondary">#CCFFFFFF</color>
     <!-- Light-mode fallback for API 24-26, which cannot draw dark nav icons. -->
     <color name="sg_nav_bar">#0D1127</color>
     <!-- Onboarding pager dot, inactive state (bg_indicator_dot.xml). -->

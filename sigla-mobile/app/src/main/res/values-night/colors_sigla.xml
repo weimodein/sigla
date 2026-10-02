@@ -1,28 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Revised dark palette (2026-09-28): the original values put sg_bg and sg_tint
-     too close in lightness (#0B1530 vs #15244B), so every card, pill and category
-     tile blended into the background instead of reading as a distinct surface, and
-     sg_text_secondary was dim enough to be hard to read. sg_bg is now a deeper,
-     near-black navy so sg_tint (unchanged step size, now off a darker base) reads
-     as a clearly lighter surface; sg_bar_bg sits between the two as originally
-     intended. sg_brand is unchanged — it was never too bright on its own, it just
-     had no contrast partner; with the surfaces around it separated, the three
-     brand-filled hero cards (Home stats, Settings profile, History summary) read
-     as intentional accents again instead of a wash. sg_text_secondary is brighter
-     for legibility. -->
+<!-- "Tonal Ink" dark palette (2026-10-02): light mode inverted. Light mode is a
+     white page with navy brand surfaces carrying white text; here the page is deep
+     navy and the brand surfaces (Home stats, Settings profile, History summary,
+     the translate button, primary buttons, selected chips) turn pale blue carrying
+     navy text. sg_on_brand is therefore NAVY in this file, not white, so anything
+     that must stay white regardless of theme (text over the camera, on the red
+     warning pill, inside the dark video stage) uses sg_on_dark instead.
+
+     Contrast (WCAG): sg_text on sg_bg 16.3:1, sg_text_secondary on sg_bg 8.9:1 and
+     on sg_tint 7.4:1, sg_brand_text on sg_bg 11.2:1, sg_on_brand on sg_brand 8.8:1,
+     sg_on_brand_secondary on sg_brand 5.4:1. -->
 <resources>
-    <color name="sg_brand">#2A55B8</color>
-    <color name="sg_brand_text">#9DB8F2</color>
-    <color name="sg_bg">#070D1F</color>
-    <color name="sg_tint">#1B2C57</color>
-    <color name="sg_bar_bg">#111C3B</color>
-    <color name="sg_text">#F0F3FA</color>
-    <color name="sg_text_secondary">#B8C2DB</color>
-    <!-- 10% white: divider needs to stay visible against the darker sg_bg. -->
-    <color name="sg_divider">#1AFFFFFF</color>
+    <color name="sg_brand">#C9D8FA</color>
+    <color name="sg_brand_text">#B8CCF8</color>
+    <color name="sg_bg">#0C1430</color>
+    <color name="sg_tint">#172350</color>
+    <color name="sg_bar_bg">#111B3E</color>
+    <color name="sg_text">#EEF3FC</color>
+    <color name="sg_text_secondary">#A9B6D6</color>
+    <!-- 8% white, matching light mode's 8% brand divider. -->
+    <color name="sg_divider">#14FFFFFF</color>
     <color name="sg_danger">#EF5350</color>
     <color name="sg_success">#4CAF50</color>
-    <color name="sg_on_brand">#FFFFFF</color>
-    <color name="sg_on_brand_secondary">#CCFFFFFF</color>
+    <color name="sg_on_brand">#13306B</color>
+    <color name="sg_on_brand_secondary">#CC13306B</color>
+    <!-- 12% navy disc on the pale brand surface (light mode: 15% white on navy). -->
+    <color name="sg_on_brand_disc">#1F13306B</color>
     <color name="sg_nav_bar">@color/sg_bar_bg</color>
 </resources>
