@@ -152,7 +152,7 @@
                 style="@style/Sigla.Text.Caption"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/sg_space_8"
+                android:layout_marginTop="@dimen/sg_space_12"
                 tools:text="Demo Video · 0:05" />
 
             <!-- Player controls, under the video so they never cover the hands -->
@@ -160,7 +160,7 @@
                 android:id="@+id/controlsPanel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/sg_space_8"
+                android:layout_marginTop="@dimen/sg_space_12"
                 android:orientation="vertical"
                 android:visibility="gone"
                 tools:visibility="visible">
@@ -195,6 +195,7 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:layout_marginTop="@dimen/sg_space_12"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
@@ -204,13 +205,11 @@
                         style="@style/Widget.Sigla.IconButton"
                         android:contentDescription="Replay"
                         app:icon="@drawable/ic_replay" />
-                    <View
-                        android:layout_width="0dp"
-                        android:layout_height="1dp"
-                        android:layout_weight="1" />
                     <com.google.android.material.button.MaterialButtonToggleGroup
                         android:id="@+id/speedGroup"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/sg_space_12"
                         android:layout_height="wrap_content"
                         app:checkedButton="@id/btnSpeed100"
                         app:selectionRequired="true"
@@ -218,7 +217,8 @@
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnSpeed50"
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
                             android:layout_height="@dimen/sg_touch_min"
                             android:minWidth="0dp"
                             android:text="0.5×"
@@ -229,7 +229,8 @@
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnSpeed75"
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
                             android:layout_height="@dimen/sg_touch_min"
                             android:minWidth="0dp"
                             android:text="0.75×"
@@ -240,7 +241,8 @@
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnSpeed100"
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
                             android:layout_height="@dimen/sg_touch_min"
                             android:minWidth="0dp"
                             android:text="1×"
@@ -252,7 +254,7 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnFullscreen"
                         style="@style/Widget.Sigla.IconButton"
-                        android:layout_marginStart="@dimen/sg_space_8"
+                        android:layout_marginStart="@dimen/sg_space_12"
                         android:contentDescription="Full screen"
                         app:icon="@drawable/ic_fullscreen" />
                 </LinearLayout>
@@ -262,7 +264,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/sg_space_16"
+                android:layout_marginTop="@dimen/sg_space_24"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
                 <LinearLayout

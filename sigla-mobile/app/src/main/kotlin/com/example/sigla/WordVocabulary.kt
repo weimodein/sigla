@@ -21,6 +21,22 @@ internal fun effectiveVocabulary(word: WordBankWord): String =
     }
 
 /**
+ * How a word's name is shown on its page. Labels are stored in whatever case the
+ * admin typed, usually ALL CAPS ("GOOD AFTERNOON"), which read as shouting at
+ * display size, so words get title case. Letters keep their stored case: NG is
+ * one FSL letter written with two characters, and "Ng" would misname it.
+ */
+internal fun wordDisplayLabel(word: WordBankWord): String =
+    if (effectiveVocabulary(word) == VOCAB_LETTERS) word.label else word.label.toTitleCase()
+
+/**
+ * Sentence case for text typed entirely in capitals ("MAGANDANG TANGHALI" ->
+ * "Magandang tanghali"); anything already in mixed or lower case is left as typed.
+ */
+internal fun sentenceCaseIfShouting(text: String): String =
+    if (text.any { it.isLetter() } && text == text.uppercase()) text.lowercase().capitalizeFirst() else text
+
+/**
  * The vocabulary "Try it yourself" should switch the translator to, or null to
  * leave it as it opens (Words). Letters only when a letters model is loaded.
  */
