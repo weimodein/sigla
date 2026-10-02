@@ -13,7 +13,8 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Brand mark + step counter, drawn over each page's navy hero panel -->
+    <!-- Brand mark + step counter, drawn over each page: the pale illustration
+         panel on the feature pages, plain background on the name step. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -29,14 +30,20 @@
             android:fontFamily="@font/poppins_semibold"
             android:textSize="@dimen/sg_text_body"
             android:letterSpacing="0.05"
-            android:textColor="@color/sg_on_brand" />
+            android:textColor="@color/sg_brand_text" />
 
         <TextView
             android:id="@+id/tvStepCount"
             style="@style/Sigla.Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/sg_on_brand_secondary"
+            android:background="@drawable/bg_sg_pill"
+            android:backgroundTint="@color/sg_bg"
+            android:paddingStart="@dimen/sg_space_12"
+            android:paddingTop="@dimen/sg_space_4"
+            android:paddingEnd="@dimen/sg_space_12"
+            android:paddingBottom="@dimen/sg_space_4"
+            android:textColor="@color/sg_brand_text"
             tools:text="1 of 4" />
     </LinearLayout>
 

@@ -98,11 +98,11 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:theme="@style/Theme.Sigla.Immersive" />
         <activity android:name=".SettingsActivity" android:exported="false" android:launchMode="singleTop" android:screenOrientation="portrait" />
-        <!-- adjustNothing, like Word Bank: resizing the window squashed the hero (sized as a
-             percentage of the height) and lifted Skip / Get Started up with the keyboard.
-             The name field sits mid-screen, above the keyboard, and its Done key finishes
-             the step, so nothing the user needs ends up hidden behind it. -->
-        <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustNothing" />
+        <!-- adjustPan: never resizes the window (resizing squashed the old hero panel and
+             lifted Skip / Get Started with the keyboard). The name field sits in the
+             top half, so on most phones the keyboard leaves it in view and nothing
+             moves; on a short screen the system shifts the window just enough. -->
+        <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustPan" />
         
 
     </application>

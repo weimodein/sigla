@@ -1,22 +1,17 @@
 package com.example.sigla
 
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.DrawableRes
-import androidx.annotation.IdRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
@@ -24,16 +19,16 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 
 /**
- * One onboarding feature page (Translate / Learn / Explore). [mockupViewId] is
- * the id, within item_onboarding_page.xml, of that page's small preview of the
- * real screen (e.g. mockupTranslate) — every other mockup view is hidden.
+ * One onboarding feature page (Translate / Learn / Explore): its illustration
+ * (an illus_onboard_* vector drawn in sg_* colours, so it follows dark mode),
+ * what that illustration shows for screen readers, and the page copy.
  */
 data class OnboardingPage(
-    @DrawableRes val iconRes: Int,
+    @DrawableRes val illustrationRes: Int,
+    val illustrationDescription: String,
     val eyebrow: String,
     val title: String,
     val description: String,
-    @IdRes val mockupViewId: Int,
 )
 
 /**
@@ -45,37 +40,29 @@ data class OnboardingPage(
 internal fun shouldShowNameStep(existingUserName: String?): Boolean =
     existingUserName.isNullOrBlank()
 
-/**
- * How far (px) the page must move up so a field ending at [fieldBottom] sits
- * [gap] above a keyboard [imeHeight] tall, in a window [windowHeight] tall.
- * 0 when there is no keyboard or the field is already clear of it.
- */
-internal fun keyboardLift(fieldBottom: Int, windowHeight: Int, imeHeight: Int, gap: Int): Int =
-    if (imeHeight <= 0) 0 else maxOf(0, fieldBottom + gap - (windowHeight - imeHeight))
-
 /** The 3 feature pages, in order. A top-level val so it's directly testable. */
 internal val featurePages = listOf(
     OnboardingPage(
-        R.drawable.ic_hand_line,
+        R.drawable.illus_onboard_translate,
+        "A phone tracking an open hand and answering with a speech bubble",
         "Translate",
         "Sign, and SigLa speaks",
-        "Tap the record button, sign one word, and SigLa translates it instantly. Switch to Live mode for continuous recognition, or flip the camera and turn on Filipino translations.",
-        R.id.mockupTranslate,
+        "Point your camera at someone signing. SigLa reads the sign and says the word out loud, in English or Filipino.",
     ),
     OnboardingPage(
-        R.drawable.ic_onboard_learn,
+        R.drawable.illus_onboard_learn,
+        "A word card with a demo video, a letter and a favourite star",
         "Learn",
         "A word bank at your pace",
-        "Browse Filipino Sign Language words by category or search directly. Tap any word to watch a demo video, hear it spoken, and try it yourself in the translator.",
-        R.id.mockupLearn,
+        "Browse Filipino Sign Language words by category, watch each sign, and hear it spoken. Save videos to learn offline.",
     ),
     OnboardingPage(
-        R.drawable.ic_onboard_explore,
+        R.drawable.illus_onboard_explore,
+        "Tiles for Home, Word Bank, History and Settings",
         "Explore",
         "Everything, one tap away",
-        "Home for your stats and shortcuts, Word Bank to browse and learn, History for what you've translated, and Settings to make it yours.",
-        R.id.mockupExplore,
-    )
+        "Home for your shortcuts, Word Bank to learn, History for what you've translated, and Settings to make it yours.",
+    ),
 )
 
 class OnboardingActivity : AppCompatActivity() {
@@ -119,7 +106,6 @@ class OnboardingActivity : AppCompatActivity() {
         )
 
         setupIndicators()
-        keepFocusedFieldAboveKeyboard()
         updateStep(0)
         // onPageSelected(0) isn't reliably fired for the initial page during
         // ViewPager2's first layout pass, so the first page's entrance is
@@ -161,45 +147,6 @@ class OnboardingActivity : AppCompatActivity() {
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
-    /**
-     * The window does not resize for the keyboard (adjustNothing in the manifest:
-     * resizing squashed the hero and dragged Skip / Get Started up with it), so
-     * the name field can end up behind the keyboard. While the keyboard is open
-     * the pages slide up by exactly as much as the focused field needs to clear
-     * it, and slide back when it closes. The brand header stays put over the
-     * navy hero, which is tall enough to stay behind it.
-     *
-     * Below Android 11 a window that doesn't resize is not told the keyboard's
-     * height, so there the system pans the window to the field instead.
-     */
-    private fun keepFocusedFieldAboveKeyboard() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-            return
-        }
-        val gap = dp(24)
-        ViewCompat.setOnApplyWindowInsetsListener(viewPager) { _, insets ->
-            val imeHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            val field = currentFocus
-            val lift = if (field == null || imeHeight == 0) 0 else {
-                val location = IntArray(2)
-                field.getLocationInWindow(location)
-                // Measured where the field would be with the pages at rest.
-                val fieldBottom = location[1] - viewPager.translationY.toInt() + field.height
-                keyboardLift(fieldBottom, window.decorView.height, imeHeight, gap)
-            }
-            val target = -lift.toFloat()
-            if (viewPager.translationY != target) {
-                viewPager.animate()
-                    .translationY(target)
-                    .setDuration(Motion.STANDARD)
-                    .setInterpolator(Motion.STANDARD_EASE)
-                    .start()
-            }
-            insets
-        }
-    }
-
     private fun setupIndicators() {
         for (i in 0 until pageCount) {
             val dot = View(this).apply {
@@ -237,37 +184,29 @@ class OnboardingActivity : AppCompatActivity() {
     }
 
     /**
-     * Fades and slides the newly-shown feature page's icon badge and mockup
-     * preview in, staggered slightly so the mockup follows the icon. A no-op
-     * for the name page (it has no icon/mockup pair to animate — its own text
-     * field is the interactive element) and if the page's view isn't attached
-     * yet (a page that hasn't been laid out has nothing to animate).
+     * Fades and slides the newly-shown feature page's illustration in. A no-op
+     * for the name page (no illustration) and when the page's view isn't
+     * attached yet (a page that hasn't been laid out has nothing to animate).
      */
     private fun animatePageEntrance(position: Int) {
-        val page = featurePages.getOrNull(position) ?: return
+        if (position >= featurePages.size) return
         // ViewPager2 hosts its own RecyclerView as its one child; that's how
         // its pages' views are reached from the outside.
         val innerRecycler = viewPager.getChildAt(0) as? RecyclerView ?: return
         val pageView = innerRecycler.findViewHolderForAdapterPosition(position)?.itemView ?: return
+        val illustration = pageView.findViewById<View>(R.id.ivIllustration)
 
-        val icon = pageView.findViewById<View>(R.id.iconBadge)
-        val mockup = pageView.findViewById<View>(page.mockupViewId)
-        val slide = dp(20).toFloat()
-
-        listOf(icon to 0L, mockup to 90L).forEach { (view, delay) ->
-            // Cancels any animation still in flight from a fast swipe back onto
-            // this page, so its alpha/translationY reset below doesn't visibly
-            // snap the view backward mid-animation.
-            view.animate().cancel()
-            view.alpha = 0f
-            view.translationY = slide
-            view.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setStartDelay(delay)
-                .setDuration(320)
-                .start()
-        }
+        // Cancels any animation still in flight from a fast swipe back onto this
+        // page, so the reset below doesn't visibly snap it backward mid-animation.
+        illustration.animate().cancel()
+        illustration.alpha = 0f
+        illustration.translationY = dp(20).toFloat()
+        illustration.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(Motion.EMPHASIS)
+            .setInterpolator(Motion.STANDARD_EASE)
+            .start()
     }
 
     private companion object {
@@ -287,17 +226,10 @@ class OnboardingAdapter(
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     class FeatureVH(view: View) : RecyclerView.ViewHolder(view) {
-        val icon: ImageView = view.findViewById(R.id.ivIcon)
+        val illustration: ImageView = view.findViewById(R.id.ivIllustration)
         val eyebrow: TextView = view.findViewById(R.id.tvPageEyebrow)
         val title: TextView = view.findViewById(R.id.tvPageTitle)
         val description: TextView = view.findViewById(R.id.tvPageDescription)
-        // Every page's possible mockup preview, so onBindViewHolder can hide
-        // all but the one this page actually uses.
-        val allMockups: List<View> = listOf(
-            view.findViewById(R.id.mockupTranslate),
-            view.findViewById(R.id.mockupLearn),
-            view.findViewById(R.id.mockupExplore),
-        )
     }
 
     class NameVH(view: View) : RecyclerView.ViewHolder(view) {
@@ -325,11 +257,11 @@ class OnboardingAdapter(
         when (holder) {
             is FeatureVH -> {
                 val page = pages[position]
-                holder.icon.setImageResource(page.iconRes)
+                holder.illustration.setImageResource(page.illustrationRes)
+                holder.illustration.contentDescription = page.illustrationDescription
                 holder.eyebrow.text = page.eyebrow
                 holder.title.text = page.title
                 holder.description.text = page.description
-                holder.allMockups.forEach { it.visibility = if (it.id == page.mockupViewId) View.VISIBLE else View.GONE }
             }
             is NameVH -> {
                 // setText before wiring the listener so restoring a saved name

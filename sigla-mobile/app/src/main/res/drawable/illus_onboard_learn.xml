@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Onboarding page 2, Learn: a word card with its demo video.
+     Generated to match the approved onboarding mockup; colours are sg_* tokens so
+     the drawing follows light and dark (Tonal Ink) mode. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="300dp"
+    android:viewportWidth="320"
+    android:viewportHeight="300">
+    <path android:pathData="M32,150 a128,128 0 1 0 256,0 a128,128 0 1 0 -256,0 z" android:fillColor="@color/sg_bg" />
+    <group android:rotation="-9" android:pivotX="164" android:pivotY="163">
+    <path android:pathData="M104,56 h120 a20,20 0 0 1 20,20 v174 a20,20 0 0 1 -20,20 h-120 a20,20 0 0 1 -20,-20 v-174 a20,20 0 0 1 20,-20 z" android:fillColor="@color/sg_illus_soft" />
+    </group>
+    <path android:pathData="M108,48 h120 a20,20 0 0 1 20,20 v174 a20,20 0 0 1 -20,20 h-120 a20,20 0 0 1 -20,-20 v-174 a20,20 0 0 1 20,-20 z" android:fillColor="@color/sg_bg" />
+    <path android:pathData="M108,48 h120 a20,20 0 0 1 20,20 v174 a20,20 0 0 1 -20,20 h-120 a20,20 0 0 1 -20,-20 v-174 a20,20 0 0 1 20,-20 z" android:strokeColor="@color/sg_divider" android:strokeWidth="2" />
+    <path android:pathData="M114,62 h108 a12,12 0 0 1 12,12 v74 a12,12 0 0 1 -12,12 h-108 a12,12 0 0 1 -12,-12 v-74 a12,12 0 0 1 12,-12 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M148,111 a20,20 0 1 0 40,0 a20,20 0 1 0 -40,0 z" android:fillColor="@color/sg_bg" />
+    <path android:pathData="M162,100 L162,122 L180,111 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M111,178 h78 a7,7 0 0 1 7,7 v0 a7,7 0 0 1 -7,7 h-78 a7,7 0 0 1 -7,-7 v-0 a7,7 0 0 1 7,-7 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M109,202 h54 a5,5 0 0 1 5,5 v0 a5,5 0 0 1 -5,5 h-54 a5,5 0 0 1 -5,-5 v-0 a5,5 0 0 1 5,-5 z" android:fillColor="@color/sg_illus_mid" />
+    <path android:pathData="M198,236 a16,16 0 1 0 32,0 a16,16 0 1 0 -32,0 z" android:fillColor="@color/sg_tint" />
+    <path android:pathData="M208,231 h4 l5,-4 v18 l-5,-4 h-4 z M221,232 a5,5 0 0 1 0,8" android:strokeColor="@color/sg_brand" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M38,94 a24,24 0 1 0 48,0 a24,24 0 1 0 -48,0 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M53,105 L62,82 L71,105 M56.5,97 H67.5" android:strokeColor="@color/sg_on_brand" android:strokeWidth="3"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M246,226 a22,22 0 1 0 44,0 a22,22 0 1 0 -44,0 z" android:fillColor="@color/sg_illus_mid" />
+    <path android:pathData="M268,213 l3.6,7.3 l8,1.2 l-5.8,5.6 l1.4,8 l-7.2,-3.8 l-7.2,3.8 l1.4,-8 l-5.8,-5.6 l8,-1.2 z" android:fillColor="@color/sg_brand" />
+</vector>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Onboarding page 1, Translate: a phone tracking an open hand (not a real sign).
+     Generated to match the approved onboarding mockup; colours are sg_* tokens so
+     the drawing follows light and dark (Tonal Ink) mode. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="300dp"
+    android:viewportWidth="320"
+    android:viewportHeight="300">
+    <path android:pathData="M32,150 a128,128 0 1 0 256,0 a128,128 0 1 0 -256,0 z" android:fillColor="@color/sg_bg" />
+    <path android:pathData="M119,20 h82 a24,24 0 0 1 24,24 v208 a24,24 0 0 1 -24,24 h-82 a24,24 0 0 1 -24,-24 v-208 a24,24 0 0 1 24,-24 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M119,34 h82 a15,15 0 0 1 15,15 v198 a15,15 0 0 1 -15,15 h-82 a15,15 0 0 1 -15,-15 v-198 a15,15 0 0 1 15,-15 z" android:fillColor="@color/sg_bg" />
+    <path android:pathData="M160,222 L138,205 L125,188 L117,172 L111,158 M160,222 L145,170 L143,146 L142,129 L141,113 M160,222 L160,166 L160,139 L160,121 L160,103 M160,222 L175,170 L177,146 L178,129 L179,115 M160,222 L188,178 L193,161 L196,148 L199,136 M145,170 L160,166 L175,170 L188,178" android:strokeColor="@color/sg_illus_mid" android:strokeWidth="3"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M155,222 a5,5 0 1 0 10,0 a5,5 0 1 0 -10,0 z M134,205 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M121,188 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M113,172 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M107,158 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M141,170 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M139,146 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M138,129 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M137,113 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M156,166 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M156,139 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M156,121 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M156,103 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M171,170 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M173,146 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M174,129 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M175,115 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M184,178 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M189,161 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M192,148 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M195,136 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M152,248 a8,8 0 1 0 16,0 a8,8 0 1 0 -16,0 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M214,36 h80 a16,16 0 0 1 16,16 v20 a16,16 0 0 1 -16,16 h-58 l-14,14 v-14 h-8 a16,16 0 0 1 -16,-16 v-20 a16,16 0 0 1 16,-16 z" android:fillColor="@color/sg_brand" />
+    <path android:pathData="M236,62 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M250,62 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z M264,62 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 z" android:fillColor="@color/sg_on_brand" />
+</vector>

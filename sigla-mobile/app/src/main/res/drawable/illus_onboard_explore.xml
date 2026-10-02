@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Onboarding page 3, Explore: tiles for the four tabs.
+     Generated to match the approved onboarding mockup; colours are sg_* tokens so
+     the drawing follows light and dark (Tonal Ink) mode. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="300dp"
+    android:viewportWidth="320"
+    android:viewportHeight="300">
+    <path android:pathData="M32,150 a128,128 0 1 0 256,0 a128,128 0 1 0 -256,0 z" android:fillColor="@color/sg_bg" />
+    <group android:rotation="-6" android:pivotX="108" android:pivotY="98">
+    <path android:pathData="M86,52 h44 a24,24 0 0 1 24,24 v44 a24,24 0 0 1 -24,24 h-44 a24,24 0 0 1 -24,-24 v-44 a24,24 0 0 1 24,-24 z" android:fillColor="@color/sg_brand" />
+    </group>
+    <group android:rotation="5" android:pivotX="212" android:pivotY="90">
+    <path android:pathData="M190,44 h44 a24,24 0 0 1 24,24 v44 a24,24 0 0 1 -24,24 h-44 a24,24 0 0 1 -24,-24 v-44 a24,24 0 0 1 24,-24 z" android:fillColor="@color/sg_bg" />
+    <path android:pathData="M190,44 h44 a24,24 0 0 1 24,24 v44 a24,24 0 0 1 -24,24 h-44 a24,24 0 0 1 -24,-24 v-44 a24,24 0 0 1 24,-24 z" android:strokeColor="@color/sg_divider" android:strokeWidth="2" />
+    </group>
+    <group android:rotation="4" android:pivotX="116" android:pivotY="204">
+    <path android:pathData="M94,158 h44 a24,24 0 0 1 24,24 v44 a24,24 0 0 1 -24,24 h-44 a24,24 0 0 1 -24,-24 v-44 a24,24 0 0 1 24,-24 z" android:fillColor="@color/sg_bg" />
+    <path android:pathData="M94,158 h44 a24,24 0 0 1 24,24 v44 a24,24 0 0 1 -24,24 h-44 a24,24 0 0 1 -24,-24 v-44 a24,24 0 0 1 24,-24 z" android:strokeColor="@color/sg_divider" android:strokeWidth="2" />
+    </group>
+    <group android:rotation="-5" android:pivotX="218" android:pivotY="198">
+    <path android:pathData="M196,152 h44 a24,24 0 0 1 24,24 v44 a24,24 0 0 1 -24,24 h-44 a24,24 0 0 1 -24,-24 v-44 a24,24 0 0 1 24,-24 z" android:fillColor="@color/sg_illus_mid" />
+    </group>
+    <path android:pathData="M90,102 L108,86 L126,102 V118 H114 V106 H102 V118 H90 z" android:strokeColor="@color/sg_on_brand" android:strokeWidth="3.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M190,78 h14 a6,6 0 0 1 6,6 v26 a5,5 0 0 0 -5,-5 h-15 z M234,78 h-14 a6,6 0 0 0 -6,6 v26 a5,5 0 0 1 5,-5 h15 z" android:strokeColor="@color/sg_brand" android:strokeWidth="3.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M96,204 a20,20 0 1 0 40,0 a20,20 0 1 0 -40,0 z M116,192 V204 L124,210" android:strokeColor="@color/sg_brand" android:strokeWidth="3.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M209,198 a9,9 0 1 0 18,0 a9,9 0 1 0 -18,0 z M218,176 v6 M218,214 v6 M196,198 h6 M234,198 h6 M202,182 l4,4 M230,210 l4,4 M234,182 l-4,4 M206,210 l-4,4" android:strokeColor="@color/sg_brand" android:strokeWidth="3.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

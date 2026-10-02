@@ -27,4 +27,7 @@
     <!-- 12% navy disc on the pale brand surface (light mode: 15% white on navy). -->
     <color name="sg_on_brand_disc">#1F13306B</color>
     <color name="sg_nav_bar">@color/sg_bar_bg</color>
+    <!-- Onboarding illustrations (illus_onboard_*): a muted navy and a mid blue that read on the dark page. -->
+    <color name="sg_illus_soft">#233A73</color>
+    <color name="sg_illus_mid">#6F8FD6</color>
 </resources>
