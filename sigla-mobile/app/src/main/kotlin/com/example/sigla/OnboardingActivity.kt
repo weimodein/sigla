@@ -1,10 +1,12 @@
 package com.example.sigla
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -13,6 +15,8 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.IdRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
@@ -40,6 +44,14 @@ data class OnboardingPage(
  */
 internal fun shouldShowNameStep(existingUserName: String?): Boolean =
     existingUserName.isNullOrBlank()
+
+/**
+ * How far (px) the page must move up so a field ending at [fieldBottom] sits
+ * [gap] above a keyboard [imeHeight] tall, in a window [windowHeight] tall.
+ * 0 when there is no keyboard or the field is already clear of it.
+ */
+internal fun keyboardLift(fieldBottom: Int, windowHeight: Int, imeHeight: Int, gap: Int): Int =
+    if (imeHeight <= 0) 0 else maxOf(0, fieldBottom + gap - (windowHeight - imeHeight))
 
 /** The 3 feature pages, in order. A top-level val so it's directly testable. */
 internal val featurePages = listOf(
@@ -107,6 +119,7 @@ class OnboardingActivity : AppCompatActivity() {
         )
 
         setupIndicators()
+        keepFocusedFieldAboveKeyboard()
         updateStep(0)
         // onPageSelected(0) isn't reliably fired for the initial page during
         // ViewPager2's first layout pass, so the first page's entrance is
@@ -147,6 +160,45 @@ class OnboardingActivity : AppCompatActivity() {
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    /**
+     * The window does not resize for the keyboard (adjustNothing in the manifest:
+     * resizing squashed the hero and dragged Skip / Get Started up with it), so
+     * the name field can end up behind the keyboard. While the keyboard is open
+     * the pages slide up by exactly as much as the focused field needs to clear
+     * it, and slide back when it closes. The brand header stays put over the
+     * navy hero, which is tall enough to stay behind it.
+     *
+     * Below Android 11 a window that doesn't resize is not told the keyboard's
+     * height, so there the system pans the window to the field instead.
+     */
+    private fun keepFocusedFieldAboveKeyboard() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+            return
+        }
+        val gap = dp(24)
+        ViewCompat.setOnApplyWindowInsetsListener(viewPager) { _, insets ->
+            val imeHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val field = currentFocus
+            val lift = if (field == null || imeHeight == 0) 0 else {
+                val location = IntArray(2)
+                field.getLocationInWindow(location)
+                // Measured where the field would be with the pages at rest.
+                val fieldBottom = location[1] - viewPager.translationY.toInt() + field.height
+                keyboardLift(fieldBottom, window.decorView.height, imeHeight, gap)
+            }
+            val target = -lift.toFloat()
+            if (viewPager.translationY != target) {
+                viewPager.animate()
+                    .translationY(target)
+                    .setDuration(Motion.STANDARD)
+                    .setInterpolator(Motion.STANDARD_EASE)
+                    .start()
+            }
+            insets
+        }
+    }
 
     private fun setupIndicators() {
         for (i in 0 until pageCount) {
