@@ -93,7 +93,7 @@
                         android:visibility="gone">
                         <TextView
                             android:id="@+id/tvPlaceholderIcon"
-                            android:textColor="@color/sg_on_brand"
+                            android:textColor="@color/sg_on_dark"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:textSize="@dimen/sg_text_title"
@@ -104,7 +104,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="@dimen/sg_space_8"
-                            android:textColor="@color/sg_on_brand_secondary"
+                            android:textColor="@color/sg_on_dark_secondary"
                             tools:text="No demo available yet" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnRetry"
@@ -142,7 +142,7 @@
                         android:layout_width="40dp"
                         android:layout_height="40dp"
                         android:layout_gravity="center"
-                        android:indeterminateTint="@color/sg_on_brand"
+                        android:indeterminateTint="@color/sg_on_dark"
                         android:visibility="gone" />
                 </FrameLayout>
             </com.google.android.material.card.MaterialCardView>

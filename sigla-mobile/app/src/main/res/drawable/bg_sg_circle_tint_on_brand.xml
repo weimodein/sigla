@@ -2,5 +2,5 @@
 <!-- Icon badge circle for use on a navy (sg_brand) background — a translucent
      white disc, the on-brand equivalent of bg_sg_circle_tint. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="#26FFFFFF" />
+    <solid android:color="@color/sg_on_brand_disc" />
 </shape>
