@@ -18,26 +18,28 @@ TABLES = {
     "email_verifications": [
         ("PK", "id int4(11)"), ("FK1", "administrator_id int4(11)"), ("", "email varchar(100)"),
         ("", "code varchar(6)"), ("", "type varchar(20)"), ("", "is_used boolean"),
-        ("", "expires_at timestamptz"), ("", "attempt_count int4(11)"), ("", "session_invalidated boolean"),
-        ("", "last_sent_at timestamptz"), ("", "created_at timestamptz")],
+        ("", "expires_at timestamp"), ("", "attempt_count int4(11)"), ("", "session_invalidated boolean"),
+        ("", "last_sent_at timestamp"), ("", "created_at timestamp")],
     "revoked_auth_tokens": [
         ("PK", "id int8(20)"), ("", "token_hash varchar(64)"), ("FK1", "administrator_id int4(11)"),
         ("", "expires_at timestamptz"), ("", "created_at timestamptz")],
     "model_versions": [
-        ("PK", "id int4(11)"), ("", "version_number varchar(20)"), ("", "model_kind varchar(16)"),
+        ("PK", "id int4(11)"), ("", "version_number varchar(20)"), ("", "model_kind text"),
         ("", "tflite_url text"), ("", "h5_url text"), ("", "accuracy float8"), ("", "total_classes int4(11)"),
-        ("", "trained_word_ids jsonb"), ("FK1", "trained_by int4(11)"), ("", "trained_at timestamptz"),
-        ("", "deployed_at timestamptz"), ("", "status varchar(20)"), ("", "training_error text"),
-        ("", "checksum varchar(64)"), ("", "notes text"), ("", "created_at timestamptz")],
+        ("", "trained_word_ids jsonb"), ("FK1", "trained_by int4(11)"), ("", "trained_at timestamp"),
+        ("", "deployed_at timestamp"), ("", "status varchar(20)"), ("", "training_error text"),
+        ("", "checksum varchar(64)"), ("", "labels_checksum varchar(64)"),
+        ("", "manifest_checksum varchar(64)"), ("", "preprocessing_contract jsonb"), ("", "notes text"),
+        ("", "created_at timestamp")],
     "gesture_samples": [
         ("PK", "id int4(11)"), ("FK1", "word_id int4(11)"), ("FK2", "submitted_by int4(11)"),
         ("", "file_url text"), ("", "session_id text"), ("", "status varchar(20)"), ("", "sequence json"),
-        ("", "created_at timestamptz")],
+        ("", "sequence_hash text"), ("", "created_at timestamp")],
     "administrators": [
         ("PK", "id int4(11)"), ("", "role_id int4(11)"), ("", "username varchar(50)"), ("", "email varchar(100)"),
-        ("", "password varchar(255)"), ("", "status varchar(20)"), ("", "deactivated_at timestamptz"),
+        ("", "password varchar(255)"), ("", "status varchar(20)"), ("", "deactivated_at timestamp"),
         ("", "failed_login_attempts int4(11)"), ("", "lockout_until timestamptz"), ("", "lockout_count int4(11)"),
-        ("", "must_complete_setup boolean"), ("", "created_at timestamptz"), ("", "updated_at timestamptz")],
+        ("", "must_complete_setup boolean"), ("", "created_at timestamp"), ("", "updated_at timestamp")],
     "activity_logs": [
         ("PK", "id int4(11)"), ("FK1", "administrator_id int4(11)"), ("", "action varchar(50)"),
         ("", "target_type varchar(30)"), ("", "target_id int4(11)"), ("", "details text"),
@@ -45,10 +47,10 @@ TABLES = {
     "words": [
         ("PK", "id int4(11)"), ("FK1", "submitted_by int4(11)"), ("FK2", "reviewed_by int4(11)"),
         ("", "label varchar(100)"), ("", "normalized_label varchar(100)"), ("", "description text"),
-        ("", "sign_type varchar(10)"), ("", "vocabulary varchar(16)"), ("", "status varchar(20)"),
-        ("", "approved_sample_count int4(11)"), ("", "reviewed_at timestamptz"), ("", "is_active boolean"),
-        ("", "filipino_translation varchar(200)"), ("", "thumbnail_url text"), ("", "video_url text"),
-        ("FK3", "category_id int4(11)"), ("", "created_at timestamptz"), ("", "updated_at timestamptz")],
+        ("", "sign_type varchar(10)"), ("", "vocabulary text"), ("", "status varchar(20)"),
+        ("", "approved_sample_count int4(11)"), ("", "reviewed_at timestamp"), ("", "is_active boolean"),
+        ("", "filipino_translation text"), ("", "thumbnail_url text"), ("", "video_url text"),
+        ("FK3", "category_id int4(11)"), ("", "created_at timestamp"), ("", "updated_at timestamp")],
     "categories": [
         ("PK", "id int4(11)"), ("", "name varchar(50)"), ("", "description text"),
         ("", "created_at timestamptz"), ("", "updated_at timestamptz")],
