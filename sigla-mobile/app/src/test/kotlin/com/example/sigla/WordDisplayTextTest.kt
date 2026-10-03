@@ -38,22 +38,28 @@ class WordDisplayTextTest {
         assertEquals("B", labelDisplay("B"))
     }
 
-    // ── sentenceCaseIfShouting ────────────────────────────────────────────────
+    // ── filipinoDisplay ───────────────────────────────────────────────────────
 
     @Test
-    fun allCapsTextBecomesSentenceCase() {
-        assertEquals("Magandang tanghali", sentenceCaseIfShouting("MAGANDANG TANGHALI"))
+    fun allCapsFilipinoBecomesTitleCase() {
+        assertEquals("Magandang Tanghali", filipinoDisplay("MAGANDANG TANGHALI"))
+        assertEquals("Okay Lang Ako", filipinoDisplay("OKAY LANG AKO"))
     }
 
     @Test
-    fun mixedCaseTextIsLeftAlone() {
-        assertEquals("Magandang umaga", sentenceCaseIfShouting("Magandang umaga"))
-        assertEquals("salamat po", sentenceCaseIfShouting("salamat po"))
+    fun anyCasingMatchesTheWordStyle() {
+        assertEquals("Magandang Umaga", filipinoDisplay("Magandang umaga"))
+        assertEquals("Salamat Po", filipinoDisplay("salamat po"))
     }
 
     @Test
-    fun textWithoutLettersIsLeftAlone() {
-        assertEquals("", sentenceCaseIfShouting(""))
-        assertEquals("123", sentenceCaseIfShouting("123"))
+    fun surroundingSpacesAreTrimmed() {
+        assertEquals("Kamusta", filipinoDisplay("  KAMUSTA "))
+    }
+
+    @Test
+    fun emptyOrNumericTextIsUnchanged() {
+        assertEquals("", filipinoDisplay(""))
+        assertEquals("123", filipinoDisplay("123"))
     }
 }

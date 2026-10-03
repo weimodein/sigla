@@ -241,7 +241,7 @@ class HistoryAdapter(
                     tvWord.text = labelDisplay(e.word)
                     tvTime.text = TranslationHistoryManager.formatTime(e.timestamp)
 
-                    val filipino = sentenceCaseIfShouting(historyManager.getTranslation(e.word)?.trim().orEmpty())
+                    val filipino = filipinoDisplay(historyManager.getTranslation(e.word).orEmpty())
                     tvFilipino.text = filipino
                     tvFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
 
