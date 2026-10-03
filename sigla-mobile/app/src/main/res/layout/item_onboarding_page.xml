@@ -1,14 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One onboarding feature page (Translate / Learn / Explore). Restyled to the
-     sg_* design system: a navy hero panel with rounded bottom corners (matching
-     the translator's bottom sheet / Word Bank's cards elsewhere in the app)
-     instead of the old CurvedHeaderView, plus Sigla.Text.* typography.
-
-     Below the description sits one of three small mockup previews (mockupTranslate/
-     mockupLearn/mockupExplore) — only one is made visible per page, chosen by the
-     adapter, giving each page its own miniature look at the real screen instead of
-     icon + text alone. OnboardingActivity fades/slides these and ivIcon in when the
-     page becomes visible. -->
+<!-- One onboarding feature page (Translate / Learn / Explore): a pale panel with
+     the page's illustration (illus_onboard_*), then the eyebrow, title and copy.
+     The brand mark, step count, dots and buttons come from activity_onboarding. -->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -17,55 +10,59 @@
     android:layout_height="match_parent"
     android:background="@color/sg_bg">
 
+    <!-- 48% leaves room below for up to four lines of copy above the dots and
+         buttons, even on a ~640dp-tall screen. -->
     <androidx.constraintlayout.widget.Guideline
-        android:id="@+id/headerGuideline"
+        android:id="@+id/heroBottom"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintGuide_percent="0.32" />
+        app:layout_constraintGuide_percent="0.48" />
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/heroPanel"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:cardBackgroundColor="@color/sg_brand"
+        app:cardBackgroundColor="@color/sg_tint"
         app:cardElevation="0dp"
         app:cardCornerRadius="0dp"
         app:shapeAppearanceOverlay="@style/ShapeAppearance.Sigla.OnboardHero"
         app:strokeWidth="0dp"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/headerGuideline"
+        app:layout_constraintBottom_toTopOf="@id/heroBottom"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent" />
 
-        <FrameLayout
-            android:id="@+id/iconBadge"
-            android:layout_width="88dp"
-            android:layout_height="88dp"
-            android:layout_gravity="center"
-            android:background="@drawable/bg_sg_circle_tint_on_brand">
-
-            <ImageView
-                android:id="@+id/ivIcon"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_gravity="center"
-                android:importantForAccessibility="no"
-                android:tint="@color/sg_on_brand"
-                tools:src="@drawable/ic_hand_line" />
-        </FrameLayout>
-    </com.google.android.material.card.MaterialCardView>
+    <!-- 72dp top margin clears the brand header drawn over the panel. -->
+    <ImageView
+        android:id="@+id/ivIllustration"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="@dimen/sg_space_24"
+        android:layout_marginTop="72dp"
+        android:layout_marginEnd="@dimen/sg_space_24"
+        android:layout_marginBottom="@dimen/sg_space_16"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/heroBottom"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:src="@drawable/illus_onboard_translate" />
 
     <TextView
         android:id="@+id/tvPageEyebrow"
         style="@style/Sigla.Text.Caption"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/sg_space_20"
-        android:letterSpacing="0.1"
+        android:layout_marginStart="28dp"
+        android:layout_marginTop="@dimen/sg_space_32"
+        android:layout_marginEnd="28dp"
+        android:fontFamily="@font/poppins_semibold"
+        android:letterSpacing="0.12"
         android:textAllCaps="true"
         android:textColor="@color/sg_brand_text"
-        app:layout_constraintTop_toBottomOf="@id/headerGuideline"
+        app:layout_constraintTop_toBottomOf="@id/heroBottom"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         tools:text="Translate" />
@@ -73,10 +70,11 @@
     <TextView
         android:id="@+id/tvPageTitle"
         style="@style/Sigla.Text.Display"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="28dp"
         android:layout_marginTop="@dimen/sg_space_8"
-        android:gravity="center"
+        android:layout_marginEnd="28dp"
         app:layout_constraintTop_toBottomOf="@id/tvPageEyebrow"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -87,218 +85,14 @@
         style="@style/Sigla.Text.Body"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="28dp"
         android:layout_marginTop="@dimen/sg_space_12"
-        android:gravity="center"
+        android:layout_marginEnd="28dp"
         android:lineSpacingMultiplier="1.35"
-        android:paddingHorizontal="@dimen/sg_space_32"
         android:textColor="@color/sg_text_secondary"
         app:layout_constraintTop_toBottomOf="@id/tvPageTitle"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        tools:text="Tap the record button, sign one word, and SigLa translates it instantly." />
-
-    <!-- ── Mockup previews: exactly one made visible per page ─────────────── -->
-
-    <!-- Translate: a small result card, like the translator's own cardResult -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/mockupTranslate"
-        style="@style/Widget.Sigla.Card.Outlined"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/sg_space_20"
-        android:layout_marginHorizontal="@dimen/sg_space_32"
-        android:importantForAccessibility="noHideDescendants"
-        android:visibility="gone"
-        app:cardCornerRadius="@dimen/sg_radius_md"
-        app:layout_constraintTop_toBottomOf="@id/tvPageDescription"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:padding="@dimen/sg_space_12">
-
-            <FrameLayout
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="@drawable/bg_sg_circle_tint">
-                <View
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/bg_onboard_record_dot" />
-            </FrameLayout>
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="@dimen/sg_space_12"
-                android:orientation="vertical">
-                <TextView
-                    style="@style/Sigla.Text.CardTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="HELLO" />
-                <TextView
-                    style="@style/Sigla.Text.Caption"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Kumusta" />
-            </LinearLayout>
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- Learn: a small row of word chips, like Word Bank's rows -->
-    <LinearLayout
-        android:id="@+id/mockupLearn"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/sg_space_20"
-        android:layout_marginHorizontal="@dimen/sg_space_20"
-        android:gravity="center"
-        android:importantForAccessibility="noHideDescendants"
-        android:orientation="horizontal"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/tvPageDescription"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <TextView
-            style="@style/Sigla.Text.Caption"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="@dimen/sg_space_8"
-            android:background="@drawable/bg_sg_search"
-            android:paddingHorizontal="@dimen/sg_space_12"
-            android:paddingVertical="@dimen/sg_space_8"
-            android:text="Good Morning"
-            android:textColor="@color/sg_brand_text" />
-
-        <TextView
-            style="@style/Sigla.Text.Caption"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="@dimen/sg_space_8"
-            android:background="@drawable/bg_sg_search"
-            android:paddingHorizontal="@dimen/sg_space_12"
-            android:paddingVertical="@dimen/sg_space_8"
-            android:text="Thank You"
-            android:textColor="@color/sg_brand_text" />
-
-        <TextView
-            style="@style/Sigla.Text.Caption"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_sg_search"
-            android:paddingHorizontal="@dimen/sg_space_12"
-            android:paddingVertical="@dimen/sg_space_8"
-            android:text="Sorry"
-            android:textColor="@color/sg_brand_text" />
-    </LinearLayout>
-
-    <!-- Explore: a small preview of the bottom bar, Home highlighted -->
-    <LinearLayout
-        android:id="@+id/mockupExplore"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/sg_space_20"
-        android:layout_marginHorizontal="@dimen/sg_space_32"
-        android:background="@drawable/bg_sg_search"
-        android:importantForAccessibility="noHideDescendants"
-        android:orientation="horizontal"
-        android:paddingVertical="@dimen/sg_space_12"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/tvPageDescription"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_house_line"
-                android:tint="@color/sg_brand" />
-            <TextView
-                style="@style/Sigla.Text.Caption"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/sg_space_4"
-                android:text="Home"
-                android:textColor="@color/sg_brand" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_onboard_learn"
-                android:tint="@color/sg_text_secondary" />
-            <TextView
-                style="@style/Sigla.Text.Caption"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/sg_space_4"
-                android:text="Word Bank"
-                android:textColor="@color/sg_text_secondary" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_history_line"
-                android:tint="@color/sg_text_secondary" />
-            <TextView
-                style="@style/Sigla.Text.Caption"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/sg_space_4"
-                android:text="History"
-                android:textColor="@color/sg_text_secondary" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_settings_line"
-                android:tint="@color/sg_text_secondary" />
-            <TextView
-                style="@style/Sigla.Text.Caption"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/sg_space_4"
-                android:text="Settings"
-                android:textColor="@color/sg_text_secondary" />
-        </LinearLayout>
-    </LinearLayout>
+        tools:text="Point your camera at someone signing. SigLa reads the sign and says the word out loud, in English or Filipino." />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

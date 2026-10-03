@@ -21,9 +21,9 @@ class OnboardingNameStepTest {
     }
 
     private val threePages = listOf(
-        OnboardingPage(0, "A", "A", "A", 0),
-        OnboardingPage(0, "B", "B", "B", 0),
-        OnboardingPage(0, "C", "C", "C", 0),
+        OnboardingPage(0, "a", "A", "A", "A"),
+        OnboardingPage(0, "b", "B", "B", "B"),
+        OnboardingPage(0, "c", "C", "C", "C"),
     )
 
     @Test
@@ -45,14 +45,13 @@ class OnboardingNameStepTest {
     }
 
     @Test
-    fun everyRealFeaturePageHasItsOwnDistinctNonZeroMockup() {
-        val mockupIds = featurePages.map { it.mockupViewId }
-        assertTrue("every mockupViewId must be set (non-zero)", mockupIds.all { it != 0 })
-        assertEquals(
-            "two pages must not share the same mockup view — the toggle logic " +
-                "would then show both or neither correctly",
-            mockupIds.size,
-            mockupIds.distinct().size,
+    fun everyRealFeaturePageHasItsOwnIllustrationAndDescription() {
+        val illustrations = featurePages.map { it.illustrationRes }
+        assertTrue("every illustrationRes must be set (non-zero)", illustrations.all { it != 0 })
+        assertEquals("two pages must not share an illustration", illustrations.size, illustrations.distinct().size)
+        assertTrue(
+            "every illustration needs a description for screen readers",
+            featurePages.all { it.illustrationDescription.isNotBlank() },
         )
     }
 }

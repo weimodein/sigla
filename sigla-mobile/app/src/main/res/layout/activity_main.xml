@@ -361,8 +361,9 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="@dimen/sg_space_8"
+                    android:layout_marginEnd="@dimen/sg_space_12"
                     android:ellipsize="end"
-                    android:maxLines="1"
+                    android:maxLines="2"
                     android:text="Starting…" />
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnEmergency"

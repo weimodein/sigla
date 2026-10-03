@@ -252,13 +252,13 @@ class WordDetailActivity : AppCompatActivity() {
         val category = w.category.toTitleCase()
         tvDetailCategoryTitle.text = category
         tvCategoryChip.text = category
-        tvDetailWord.text = w.label.capitalizeFirst()
+        tvDetailWord.text = wordDisplayLabel(w)
         btnSpeak.contentDescription = "Say \"${w.label}\" again"
 
         setupFavoriteButton(w)
         setupMedia(w)
 
-        val filipino = w.filipino_translation?.trim().orEmpty()
+        val filipino = sentenceCaseIfShouting(w.filipino_translation?.trim().orEmpty())
         tvDetailFilipino.text = filipino
         tvDetailFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
 

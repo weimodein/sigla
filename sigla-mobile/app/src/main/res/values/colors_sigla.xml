@@ -29,4 +29,7 @@
     <color name="sg_nav_bar">#0D1127</color>
     <!-- Onboarding pager dot, inactive state (bg_indicator_dot.xml). -->
     <color name="colorIndicatorInactive">#D7DBE4</color>
+    <!-- Onboarding illustrations (illus_onboard_*): pale and mid blues between sg_tint and sg_brand. -->
+    <color name="sg_illus_soft">#C9D8FA</color>
+    <color name="sg_illus_mid">#9DB8F2</color>
 </resources>
