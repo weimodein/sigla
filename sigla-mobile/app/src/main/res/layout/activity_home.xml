@@ -149,9 +149,9 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Stats -->
+            <!-- Stats: one tint strip, three columns split by thin dividers -->
             <com.google.android.material.card.MaterialCardView
-                style="@style/Widget.Sigla.Card.Brand"
+                style="@style/Widget.Sigla.Card.Tint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/sg_space_16">
@@ -159,7 +159,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
+                    android:paddingStart="@dimen/sg_space_8"
                     android:paddingTop="@dimen/sg_space_16"
+                    android:paddingEnd="@dimen/sg_space_8"
                     android:paddingBottom="@dimen/sg_space_16">
                     <LinearLayout
                         android:layout_width="0dp"
@@ -172,8 +174,12 @@
                             tools:text="89" />
                         <TextView style="@style/Sigla.Text.StatLabel"
                             android:layout_width="match_parent" android:layout_height="wrap_content"
-                            android:gravity="center" android:text="Words available" />
+                            android:gravity="center" android:text="Words" />
                     </LinearLayout>
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="match_parent"
+                        android:background="@color/sg_divider" />
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -187,6 +193,10 @@
                             android:layout_width="match_parent" android:layout_height="wrap_content"
                             android:gravity="center" android:text="Translated today" />
                     </LinearLayout>
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="match_parent"
+                        android:background="@color/sg_divider" />
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
