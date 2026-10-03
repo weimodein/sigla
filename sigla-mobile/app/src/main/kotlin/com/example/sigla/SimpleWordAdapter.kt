@@ -42,7 +42,7 @@ class SimpleWordAdapter(
         val context = holder.itemView.context
 
         holder.tvWord.text = word.label.toTitleCase()
-        val filipino = word.filipino_translation?.trim().orEmpty()
+        val filipino = filipinoDisplay(word.filipino_translation.orEmpty())
         holder.tvFilipino.text = filipino
         holder.tvFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
 

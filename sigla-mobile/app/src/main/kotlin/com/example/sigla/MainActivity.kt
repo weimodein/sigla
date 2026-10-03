@@ -1175,7 +1175,7 @@ class MainActivity : AppCompatActivity() {
     // Updated to use cached translations from backend
     /** The display form: translations stored in capitals show in sentence case. */
     private fun getFilipinoTranslation(label: String): String? {
-        return filipinoMap[label.lowercase()]?.let { sentenceCaseIfShouting(it) }
+        return filipinoMap[label.lowercase()]?.let { filipinoDisplay(it) }
     }
 
     // ── Camera ────────────────────────────────────────────────────────────────

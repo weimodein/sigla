@@ -39,11 +39,10 @@ internal fun labelDisplay(label: String): String =
     if (SINGLE_CAPITAL_LETTER.matches(label)) label else label.toTitleCase()
 
 /**
- * Sentence case for text typed entirely in capitals ("MAGANDANG TANGHALI" ->
- * "Magandang tanghali"); anything already in mixed or lower case is left as typed.
+ * A Filipino translation in the same title case as the word it translates
+ * ("MAGANDANG TANGHALI" -> "Magandang Tanghali"), however the admin typed it.
  */
-internal fun sentenceCaseIfShouting(text: String): String =
-    if (text.any { it.isLetter() } && text == text.uppercase()) text.lowercase().capitalizeFirst() else text
+internal fun filipinoDisplay(text: String): String = text.trim().toTitleCase()
 
 /**
  * The vocabulary "Try it yourself" should switch the translator to, or null to

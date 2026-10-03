@@ -258,7 +258,7 @@ class WordDetailActivity : AppCompatActivity() {
         setupFavoriteButton(w)
         setupMedia(w)
 
-        val filipino = sentenceCaseIfShouting(w.filipino_translation?.trim().orEmpty())
+        val filipino = filipinoDisplay(w.filipino_translation.orEmpty())
         tvDetailFilipino.text = filipino
         tvDetailFilipino.visibility = if (filipino.isEmpty()) View.GONE else View.VISIBLE
 
