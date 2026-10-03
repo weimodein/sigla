@@ -35,6 +35,7 @@ sigla-ml/cv_run.log
 # personal AI-tooling preferences, not app source
 .agents/
 skills-lock.json
+.skills.json
 
 # Superpowers brainstorm mockups and execution ledgers — local scratch
 .superpowers/

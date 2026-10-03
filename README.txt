@@ -15,4 +15,4 @@ Terminal 2 — ML Service:
 
 Terminal 3 — Admin Panel:
   cd sigla-admin
-  npm run dev
+  npm run dev 
