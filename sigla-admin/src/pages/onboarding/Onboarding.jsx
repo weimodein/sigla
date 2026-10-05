@@ -316,7 +316,7 @@ const Onboarding = () => {
             ? "Create your sign-in details"
             : "Create a new password",
           description: emailStepNeeded
-            ? "Choose the username and password you’ll use to access SIGLA."
+            ? "Choose the username and password you’ll use to access SigLa."
             : "Choose a secure password to regain access to your account.",
         };
 

@@ -196,7 +196,7 @@ const Login = () => {
         <div className="sigla-left-panel" style={S.leftPanel}>
           {/* Sized in index.css: bleeds past the panel on desktop, fits whole
               inside a compact band once the panels stack. */}
-          <img src="/logo.png" alt="SIGLA Logo" />
+          <img src="/logo.png" alt="SigLa logo" />
           {/* The mobile heading. CSS cannot move an element between parents, so
               the heading exists twice — here and in the form — and index.css
               shows exactly one per breakpoint via display:none, which also keeps

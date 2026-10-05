@@ -607,7 +607,7 @@ const ReportsAnalytics = () => {
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
-      doc.text("SIGLA ADMINISTRATOR PLATFORM", margin, 11);
+      doc.text("SigLa Administrator Platform", margin, 11);
       doc.setFontSize(20);
       doc.text("Reports & Analytics", margin, 24);
       doc.setFontSize(9);

@@ -131,7 +131,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
                 it is scaled up and cropped by the tile to fill the square. */}
             <img
               src="/logo_without_text_official.png"
-              alt="SIGLA logo"
+              alt="SigLa logo"
               style={{
                 width: "48px",
                 height: "48px",
@@ -162,7 +162,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
           </button>
         </div>
       ) : (
-        /* ── Expanded: [logo tile] [SIGLA] on the left, toggle on the right ── */
+        /* ── Expanded: [logo tile] [SigLa] on the left, toggle on the right ── */
         <div
           style={{
             padding: "16px 20px",
@@ -191,7 +191,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
                 it is scaled up and cropped by the tile to fill the square. */}
             <img
               src="/logo_without_text_official.png"
-              alt="SIGLA logo"
+              alt="SigLa logo"
               style={{
                 width: "52px",
                 height: "52px",
@@ -210,7 +210,7 @@ const Sidebar = ({ onToggle, onLogout, isMobile = false, drawerOpen = false, onC
               letterSpacing: "0.02em",
             }}
           >
-            SIGLA
+            SigLa
           </span>
           {/* Mobile closes the drawer; desktop collapses to the icon rail. */}
           <button
