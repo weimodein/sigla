@@ -393,7 +393,7 @@ const AdministratorAccount = () => {
       <div className="administrator-account-page space-y-6">
       <div className="page-header page-header-spaced">
         <div>
-          <h1 className="page-title">Administrator Account</h1>
+          <h1 className="page-title">Account Settings</h1>
           <p className="page-subtitle">Profile, contact information, and account security</p>
         </div>
         <button

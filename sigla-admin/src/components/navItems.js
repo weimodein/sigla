@@ -19,5 +19,5 @@ export const navItems = [
   { label: "Manage Model", path: "/model", icon: Cpu },
   { label: "Activity Logs", path: "/activity-logs", icon: ScrollText },
   { label: "Reports", path: "/reports", icon: BarChart2 },
-  { label: "Administrator Account", path: "/admin_account", icon: Settings },
+  { label: "Account Settings", path: "/admin_account", icon: Settings },
 ];
