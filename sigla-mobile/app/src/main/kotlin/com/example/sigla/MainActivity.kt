@@ -421,7 +421,9 @@ class MainActivity : AppCompatActivity() {
 
                 // Shared across screens: building this parses ~14 MB of MediaPipe
                 // assets and uploads them to the GPU, which is the "Loading hand
-                // tracking..." wait. Only the FIRST entry pays it.
+                // tracking..." wait. Only the FIRST entry pays it, and usually
+                // not even that: HomeActivity pre-warms the cache at launch, so
+                // this returns at once or waits only for the rest of that build.
                 val helper = HandLandmarkHelper.Cache.acquire(applicationContext, sink)
 
                 // Navigated away during the build: the job is cancelled, so the

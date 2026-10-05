@@ -51,6 +51,11 @@ class HomeActivity : AppCompatActivity() {
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Build hand tracking now, in the background, so the translator opens
+        // ready instead of on "Loading hand tracking…" — on slower phones that
+        // first build takes seconds. No-op once built (see HandLandmarkHelper.Cache).
+        HandLandmarkHelper.Cache.prewarm(this)
+
         BottomNavHelper.setup(this, Tab.HOME)
         binding.homeSearch.setOnClickListener { BottomNavHelper.openWordBankSearch(this) }
         binding.btnHeroStart.setOnClickListener { BottomNavHelper.openTranslator(this) }

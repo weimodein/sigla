@@ -2,6 +2,7 @@ package com.example.sigla
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.SystemClock
 import android.util.Log
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.framework.image.MPImage
@@ -12,6 +13,7 @@ import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import java.io.File
 
 private const val TAG = "HandLandmarkHelper"
 
@@ -38,6 +40,9 @@ internal const val POSE_RSHOULDER = 2
 // on-device accuracy check.
 private const val POSE_DETECT_INTERVAL = 2
 
+// Under context.cacheDir. See HandLandmarkHelper.baseOptions.
+private const val GPU_CACHE_ROOT = "mediapipe_gpu"
+
 data class LandmarkResult(
     val handsDetected: Int,
     val features: FloatArray,
@@ -63,12 +68,15 @@ data class LandmarkResult(
 /**
  * Wraps the MediaPipe hand + pose landmarkers.
  *
- * **Construct this off the main thread.** The init block below builds both
- * graphs eagerly, which parses ~14 MB of bundled assets
- * (`hand_landmarker.task` 7.8 MB + `pose_landmarker_lite.task` 5.8 MB) and
- * uploads them to the GPU delegate — and retries on CPU if the GPU delegate
+ * **Construct this off the main thread.** The init block below builds the
+ * hand graph eagerly, which parses the 7.8 MB `hand_landmarker.task` asset and
+ * uploads it to the GPU delegate — and retries on CPU if the GPU delegate
  * throws. On the UI thread that is a visible freeze; MainActivity builds it on
- * Dispatchers.IO for exactly this reason.
+ * Dispatchers.IO for exactly this reason. In live mode the 5.8 MB
+ * `pose_landmarker_lite.task` graph is then built on its own thread, so the
+ * constructor does not wait for it.
+ *
+ * Live screens get it through [Cache], which HomeActivity pre-warms at launch.
  */
 class HandLandmarkHelper(
     private val context: Context,
@@ -92,7 +100,17 @@ class HandLandmarkHelper(
     var resultSink: ((LandmarkResult) -> Unit)? = onResult
 
     private var landmarker: HandLandmarker? = null
-    private var poseLandmarker: PoseLandmarker? = null
+
+    // In LIVE_STREAM mode this is built on a background thread AFTER the hand
+    // graph (see init), so it is null for the first moments of tracking — the
+    // same zero-pose sentinel as a failed pose build. Volatile: published by the
+    // init thread, read by the camera thread.
+    @Volatile private var poseLandmarker: PoseLandmarker? = null
+
+    // Guards publishing the background-built pose graph against close(): a pose
+    // build that finishes after close() must close itself instead of leaking.
+    private val poseLock = Any()
+    private var closed = false
 
     // nanoTime of the most recent detectAsync submission, for graph-latency
     // profiling only. Volatile: written on the camera thread, read on MediaPipe's.
@@ -110,15 +128,62 @@ class HandLandmarkHelper(
     @Volatile private var lastPoseResult: PoseLandmarkerResult? = null
     private var poseFrameCounter = 0
 
+    /**
+     * BaseOptions for one bundled .task asset. On GPU it also points MediaPipe
+     * at an on-disk cache so launches after the first skip part of the GPU setup.
+     *
+     * Building a GPU graph compiles its OpenCL kernels from scratch, and nothing
+     * is kept between launches by default. Measured on a Xiaomi (MediaTek/Mali,
+     * Android 15), cold launches 2026-10-05:
+     *
+     *                 no cache   kernels only   kernels + serialized model
+     *   hand          6.4-7.5 s  5.0 s          9.7 s (worse)
+     *   pose          7.8-8.3 s  6.8 s          4.9 s
+     *
+     * Why hand and pose differ: each .task bundles TWO models (detector +
+     * landmarker), but MediaPipe names the cache files after the model token
+     * alone (inference_on_disk_cache_helper.cc), so both sub-models share one
+     * file and each overwrites the other's. For hand that means a mismatched
+     * serialized model is loaded and thrown away on every launch, which costs
+     * more than it saves, so hand caches kernels only. For pose the second
+     * sub-model's serialized model does stick and loads in ~60 ms, a net win.
+     * Re-measure both (logcat "ready ... in N ms") before changing this or
+     * upgrading MediaPipe.
+     *
+     * Each task gets its own directory for the same naming reason. The directory
+     * name carries the versionCode so an app update, which may ship new .task
+     * assets, never reads a cache built for the old ones. A missing, stale or
+     * corrupt cache is not an error: MediaPipe compiles from scratch. It lives in
+     * cacheDir, so the OS may clear it under storage pressure, costing one slow
+     * launch.
+     */
+    private fun baseOptions(
+        asset: String,
+        cacheName: String,
+        delegate: Delegate,
+        serializeModel: Boolean,
+    ): BaseOptions {
+        val builder = BaseOptions.builder()
+            .setModelAssetPath(asset)
+            .setDelegate(delegate)
+        if (delegate == Delegate.GPU) {
+            val dir = File(context.cacheDir, "$GPU_CACHE_ROOT/$cacheName-v${BuildConfig.VERSION_CODE}")
+            if (dir.isDirectory || dir.mkdirs()) {
+                val gpu = BaseOptions.DelegateOptions.GpuOptions.builder()
+                    // A directory PREFIX: MediaPipe writes "<token>.ker" under it.
+                    .setCachedKernelPath(dir.absolutePath + File.separator)
+                    .setModelToken(cacheName)
+                if (serializeModel) gpu.setSerializedModelDir(dir.absolutePath)
+                builder.setDelegateOptions(gpu.build())
+            }
+        }
+        return builder.build()
+    }
+
     private fun buildLandmarker(delegate: Delegate): HandLandmarker {
         val mode = if (onResult != null) RunningMode.LIVE_STREAM else RunningMode.IMAGE
         val builder = HandLandmarker.HandLandmarkerOptions.builder()
-            .setBaseOptions(
-                BaseOptions.builder()
-                    .setModelAssetPath("hand_landmarker.task")
-                    .setDelegate(delegate)
-                    .build()
-            )
+            .setBaseOptions(baseOptions("hand_landmarker.task", "hand", delegate, serializeModel = false))
             .setRunningMode(mode)
             .setNumHands(2)
             // Match the training extraction settings (sigla-ml/app/services/extract.py):
@@ -141,12 +206,7 @@ class HandLandmarkHelper(
     private fun buildPoseLandmarker(delegate: Delegate): PoseLandmarker {
         val mode = if (onResult != null) RunningMode.LIVE_STREAM else RunningMode.IMAGE
         val builder = PoseLandmarker.PoseLandmarkerOptions.builder()
-            .setBaseOptions(
-                BaseOptions.builder()
-                    .setModelAssetPath("pose_landmarker_lite.task")
-                    .setDelegate(delegate)
-                    .build()
-            )
+            .setBaseOptions(baseOptions("pose_landmarker_lite.task", "pose", delegate, serializeModel = true))
             .setRunningMode(mode)
             // Match extract.py _make_pose_landmarker: 1 pose, all confidences 0.5.
             .setNumPoses(1)
@@ -170,9 +230,10 @@ class HandLandmarkHelper(
         //
         // So: if the pipeline is slow, check logcat for that tflite line before
         // trusting this one. PipelineProfiler reports the real per-stage cost.
+        val handStart = SystemClock.elapsedRealtime()
         landmarker = try {
             val lm = buildLandmarker(Delegate.GPU)
-            Log.i(TAG, "HandLandmarker ready [GPU requested]")
+            Log.i(TAG, "HandLandmarker ready [GPU requested] in ${SystemClock.elapsedRealtime() - handStart} ms")
             lm
         } catch (e: Throwable) {
             Log.w(TAG, "GPU delegate failed (${e.message}) — falling back to CPU")
@@ -186,10 +247,30 @@ class HandLandmarkHelper(
             }
         }
         // Pose is non-fatal: without it the pose block stays zeros (the trained-in
-        // "absent pose" sentinel) and hand-only recognition keeps working.
-        poseLandmarker = try {
+        // "absent pose" sentinel) and hand-only recognition keeps working. That is
+        // what lets live mode return as soon as the HAND graph is up and build pose
+        // behind it — pose was ~40% of the "Loading hand tracking…" wait, and the
+        // frames before it lands carry the same zero block a failed build would.
+        //
+        // IMAGE mode (the detect() parity path) stays synchronous so its first
+        // call pairs pose with the same frame, exactly like extract.py.
+        if (onResult != null) {
+            Thread({
+                val pl = buildPoseWithFallback()
+                synchronized(poseLock) {
+                    if (closed) pl?.close() else poseLandmarker = pl
+                }
+            }, "pose-landmarker-init").start()
+        } else {
+            poseLandmarker = buildPoseWithFallback()
+        }
+    }
+
+    private fun buildPoseWithFallback(): PoseLandmarker? {
+        val poseStart = SystemClock.elapsedRealtime()
+        return try {
             val pl = buildPoseLandmarker(Delegate.GPU)
-            Log.i(TAG, "PoseLandmarker ready [GPU requested]")
+            Log.i(TAG, "PoseLandmarker ready [GPU requested] in ${SystemClock.elapsedRealtime() - poseStart} ms")
             pl
         } catch (e: Throwable) {
             Log.w(TAG, "Pose GPU delegate failed (${e.message}) — falling back to CPU")
@@ -341,8 +422,11 @@ class HandLandmarkHelper(
     fun close() {
         landmarker?.close()
         landmarker = null
-        poseLandmarker?.close()
-        poseLandmarker = null
+        synchronized(poseLock) {
+            closed = true
+            poseLandmarker?.close()
+            poseLandmarker = null
+        }
         lastPoseResult = null
     }
 
@@ -372,6 +456,36 @@ class HandLandmarkHelper(
         // the build held it, leaving the screen during "Loading hand tracking…"
         // blocked the UI thread for the whole asset parse + GPU upload — an ANR.
         private val buildLock = Any()
+
+        private val prewarmStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        /**
+         * Starts building the shared helper in the background, so the translator
+         * screen finds it ready instead of showing "Loading hand tracking…".
+         * Called from HomeActivity; safe to call from the main thread and more
+         * than once.
+         *
+         * A screen that acquires while this is still building simply waits on
+         * buildLock for the rest of it, which is never longer than building
+         * from scratch. The helper is built in live mode with no sink installed,
+         * so frames are dropped until a screen installs one through acquire().
+         */
+        fun prewarm(context: Context) {
+            if (instance != null || !prewarmStarted.compareAndSet(false, true)) return
+            val app = context.applicationContext
+            Thread({
+                synchronized(buildLock) {
+                    if (instance == null) {
+                        // A non-null onResult is what selects LIVE_STREAM mode;
+                        // the sink is cleared BEFORE publishing so a screen that
+                        // acquires afterwards always owns it.
+                        val created = HandLandmarkHelper(app) {}
+                        created.resultSink = null
+                        instance = created
+                    }
+                }
+            }, "hand-landmarker-prewarm").start()
+        }
 
         /**
          * The shared helper, built on first use. Must be called off the main
