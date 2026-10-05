@@ -7,9 +7,14 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.security.MessageDigest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.OkHttpClient
@@ -79,19 +84,39 @@ object ModelUpdateManager {
             getInstalledModelFile(context, "labels_letters.json").exists()
 
     /**
-     * Set by [checkAndUpdate] when the deployed version differs from what this
-     * device last cached — including a REVERT to an older version, which changes
-     * the word bank just as much as an upgrade does.
+     * Serializes [checkAndUpdate]. Home prefetches while the translator may be
+     * checking too, and two overlapping runs would each install a bundle and
+     * then delete "every other" bundle — including, possibly, the one the other
+     * caller just loaded. Under the lock the second caller waits, then usually
+     * returns at once through the [CHECK_INTERVAL_MS] throttle.
      *
-     * The word bank is derived server-side from the deployed model, so a version
-     * change invalidates the cached word list. Callers read this immediately
-     * after checkAndUpdate() to force a refetch in the same pass, instead of
-     * showing words the newly-installed model cannot predict until some later
-     * screen visit happens to refresh them.
+     * Because the download may have been done by ANOTHER caller, callers detect
+     * a model change by comparing [getCachedVersion] before and after, never by
+     * whether their own call downloaded something.
      */
-    @Volatile
-    var lastCheckChangedVersion: Boolean = false
-        private set
+    private val checkMutex = Mutex()
+
+    /** Outlives any screen, so leaving Home does not abort a prefetch mid-download. */
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Checks for, and downloads, the model pair in the background, so a first-time
+     * user's models are usually installed before they open the translator instead
+     * of after ("Downloading the model…"). Called from Home; safe to call often —
+     * [checkAndUpdate]'s throttle makes repeat calls within a few minutes free.
+     *
+     * On a version change it also refetches the word bank, because the change
+     * invalidated the cached one and the Word Bank screens read that cache.
+     */
+    fun prefetch(context: Context) {
+        val app = context.applicationContext
+        backgroundScope.launch {
+            val before = getCachedVersion(app)
+            if (checkAndUpdate(app) && getCachedVersion(app) != before) {
+                refreshWordBank(app, emptyList())
+            }
+        }
+    }
 
     /**
      * elapsedRealtime of the last check that actually reached the backend, or 0
@@ -119,8 +144,7 @@ object ModelUpdateManager {
     suspend fun checkAndUpdate(
         context: Context,
         force: Boolean = false,
-    ): Boolean = withContext(Dispatchers.IO) {
-        lastCheckChangedVersion = false
+    ): Boolean = withContext(Dispatchers.IO) { checkMutex.withLock {
         val sinceLast = android.os.SystemClock.elapsedRealtime() - lastCheckAt
         if (!force && lastCheckAt > 0L && sinceLast < CHECK_INTERVAL_MS && hasCompleteLocalPair(context)) {
             return@withContext true
@@ -225,8 +249,7 @@ object ModelUpdateManager {
             root.listFiles()?.forEach { candidate ->
                 if (candidate != installed) candidate.deleteRecursively()
             }
-            lastCheckChangedVersion = current != deploymentVersion
-            if (lastCheckChangedVersion) invalidateWordBankCache(context)
+            if (current != deploymentVersion) invalidateWordBankCache(context)
             lastCheckAt = android.os.SystemClock.elapsedRealtime()
             Log.i(TAG, "Activated complete model pair $deploymentVersion")
             true
@@ -234,7 +257,7 @@ object ModelUpdateManager {
             Log.e(TAG, "Model pair update failed: ${e.message}", e)
             hasCompleteLocalPair(context)
         }
-    }
+    } }
 
     private fun labelsFileIsValid(file: File, expectedCount: Int?): Boolean {
         return try {

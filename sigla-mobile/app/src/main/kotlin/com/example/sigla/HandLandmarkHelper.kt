@@ -2,6 +2,7 @@ package com.example.sigla
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import com.google.mediapipe.framework.image.BitmapImageBuilder
@@ -256,6 +257,9 @@ class HandLandmarkHelper(
         // call pairs pose with the same frame, exactly like extract.py.
         if (onResult != null) {
             Thread({
+                // Pose is never on the critical path (tracking starts without
+                // it), so it yields the CPU to the UI and the camera pipeline.
+                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
                 val pl = buildPoseWithFallback()
                 synchronized(poseLock) {
                     if (closed) pl?.close() else poseLandmarker = pl
@@ -474,17 +478,53 @@ class HandLandmarkHelper(
             if (instance != null || !prewarmStarted.compareAndSet(false, true)) return
             val app = context.applicationContext
             Thread({
-                synchronized(buildLock) {
-                    if (instance == null) {
-                        // A non-null onResult is what selects LIVE_STREAM mode;
-                        // the sink is cleared BEFORE publishing so a screen that
-                        // acquires afterwards always owns it.
-                        val created = HandLandmarkHelper(app) {}
-                        created.resultSink = null
-                        instance = created
+                // Background priority: the GPU build is mostly CPU work inside the
+                // graphics driver (kernel compilation), and at normal priority it
+                // stretched the app's launch stutters by ~150-200 ms each. Lowered
+                // BEFORE publishing the tid and re-checked AFTER, so a boost from
+                // acquire() can never be overwritten whichever runs first.
+                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                prewarmTid = Process.myTid()
+                if (boostRequested) boost(prewarmTid)
+                try {
+                    synchronized(buildLock) {
+                        if (instance == null) {
+                            // A non-null onResult is what selects LIVE_STREAM mode;
+                            // the sink is cleared BEFORE publishing so a screen that
+                            // acquires afterwards always owns it.
+                            val created = HandLandmarkHelper(app) {}
+                            created.resultSink = null
+                            instance = created
+                        }
                     }
+                } finally {
+                    prewarmTid = 0
                 }
             }, "hand-landmarker-prewarm").start()
+        }
+
+        // Thread id of a prewarm build still running, or 0.
+        @Volatile private var prewarmTid = 0
+        // Set once a screen is waiting for the helper; see prewarm().
+        @Volatile private var boostRequested = false
+
+        /**
+         * A screen now needs the helper, so a background-priority prewarm must
+         * stop yielding: without this, opening the translator mid-prewarm would
+         * wait LONGER than building from scratch.
+         */
+        private fun boostPrewarm() {
+            boostRequested = true
+            val tid = prewarmTid
+            if (tid != 0) boost(tid)
+        }
+
+        private fun boost(tid: Int) {
+            try {
+                Process.setThreadPriority(tid, Process.THREAD_PRIORITY_DEFAULT)
+            } catch (e: Exception) {
+                // The thread finished between the read and this call — nothing to boost.
+            }
         }
 
         /**
@@ -496,6 +536,7 @@ class HandLandmarkHelper(
             onResult: (LandmarkResult) -> Unit,
         ): HandLandmarkHelper {
             instance?.let { return install(it, onResult) }
+            boostPrewarm()
             synchronized(buildLock) {
                 instance?.let { return install(it, onResult) }
                 // The constructor installs onResult as the sink BEFORE the helper

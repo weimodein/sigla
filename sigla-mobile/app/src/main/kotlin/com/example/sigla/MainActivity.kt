@@ -286,8 +286,9 @@ class MainActivity : AppCompatActivity() {
         Motion.hide(binding.cardResult, View.INVISIBLE)
     }
 
-    // Filipino translations cache
-    private var filipinoMap = mutableMapOf<String, String>()
+    // Filipino translations cache. Replaced whole on the main thread, never
+    // mutated; volatile because refreshWordBank() compares against it on IO.
+    @Volatile private var filipinoMap: Map<String, String> = emptyMap()
 
     // elapsedRealtime of the last word-bank refresh, throttling onResume. 0 = never.
     private var lastWordBankRefresh = 0L
@@ -466,6 +467,9 @@ class MainActivity : AppCompatActivity() {
                     withContext(Dispatchers.Main) {
                         setStatus("Loading words…", StatusKind.LOADING)
                     }
+                    // Read before init(), so a bundle activated after this point
+                    // (by Home's prefetch, or by the check below) reads as a change.
+                    val loadedVersion = ModelUpdateManager.getCachedVersion(this@MainActivity)
                     service.init()
                     withContext(Dispatchers.Main) { onPredictorLoaded(service) }
                     if (!service.isReady) return@launch
@@ -474,8 +478,12 @@ class MainActivity : AppCompatActivity() {
                     // reaches a phone that already has one. checkAndUpdate() keeps
                     // the installed model when the check or download fails, so a
                     // failure here changes nothing the user sees.
+                    //
+                    // Compared by version rather than by whether THIS call
+                    // downloaded: Home's prefetch may have installed the new pair
+                    // while this call waited on checkAndUpdate's lock.
                     if (ModelUpdateManager.checkAndUpdate(this@MainActivity) &&
-                        ModelUpdateManager.lastCheckChangedVersion
+                        ModelUpdateManager.getCachedVersion(this@MainActivity) != loadedVersion
                     ) {
                         // The word bank follows the deployed model (see below).
                         refreshWordBank()
@@ -485,7 +493,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // First run: nothing is installed yet, so recognition has to wait
-                // for the download.
+                // for the download. Home normally prefetches it, so this is reached
+                // only when the translator is opened before that finished; the
+                // call below then waits for Home's download instead of starting
+                // a second one.
                 withContext(Dispatchers.Main) {
                     setStatus("Downloading the model…", StatusKind.LOADING)
                 }
@@ -497,17 +508,15 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                // The server derives the word bank from the deployed model, so a
-                // version change — including a revert to an older version — means
-                // the word list changed too. Refetch BEFORE the model reports
+                // The server derives the word bank from the deployed model, and
+                // nothing was installed when this screen started, so the word list
+                // may belong to no model at all. Refetch BEFORE the model reports
                 // ready, otherwise the first recognitions of the session resolve
-                // against words belonging to the version just replaced.
-                if (ModelUpdateManager.lastCheckChangedVersion) {
-                    withContext(Dispatchers.Main) {
-                        setStatus("Updating word bank…", StatusKind.LOADING)
-                    }
-                    refreshWordBank()
+                // against the wrong words.
+                withContext(Dispatchers.Main) {
+                    setStatus("Updating word bank…", StatusKind.LOADING)
                 }
+                refreshWordBank()
 
                 // Initialize predictor (it will fetch labels from backend).
                 // init() now suspends until labels actually arrive, so the old
@@ -621,13 +630,18 @@ class MainActivity : AppCompatActivity() {
         // translation edited in the admin panel never reached this screen: once
         // word_bank_cache.json existed the elvis chain short-circuited and the API
         // was never called again.
+        //
+        // Compared against the cache, so an unchanged list (the usual case on a
+        // resume) is not rewritten to disk.
+        val cached = ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
         val words: List<WordBankWord> =
-            when (val refresh = refreshWordBank(this@MainActivity, emptyList())) {
+            when (val refresh = refreshWordBank(this@MainActivity, cached)) {
                 is WordBankRefresh.Updated -> refresh.words
                 else -> {
-                    // Offline, server down or empty: whatever was cached is still better than nothing.
+                    // Unchanged, offline, server down or empty: the cache is current,
+                    // or at least better than nothing.
                     if (refresh == WordBankRefresh.NetworkError) Log.w(TAG, "Word bank fetch failed, using cache")
-                    ModelUpdateManager.loadCachedWordBank(this@MainActivity) ?: emptyList()
+                    cached
                 }
             }
 
@@ -645,6 +659,9 @@ class MainActivity : AppCompatActivity() {
             Log.w(TAG, "Word bank returned no translations; keeping ${filipinoMap.size} existing")
             return
         }
+        // Same translations this screen already holds: the per-word writes
+        // below would only rewrite identical values, on every resume.
+        if (map == filipinoMap) return
 
         // Persisted here, still on the IO dispatcher. This loop used to sit inside the
         // withContext(Main) block below, so it ran one SharedPreferences write per word
