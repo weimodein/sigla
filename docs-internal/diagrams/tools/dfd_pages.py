@@ -7,19 +7,21 @@ from xml.sax.saxutils import escape
 OUT = sys.argv[1]
 FONT = "fontFamily=Times New Roman;"
 
-F = 32                                     # text size for every label, process, entity and table
+F = 47                                     # text size for labels, processes and entities
+TF = 40                                    # text size inside tables (fits their fixed height)
 ENT_X, ENT_W, ENT_H = 10, 420, 150
 ENT_SH = 6                                 # shadow offset (up and left)
 ENT_EDGE = 24                              # side flows stay this far from the rounded corners
 ENT_X2 = ENT_X + ENT_W + 24               # second entity column (beside one process)
 SLOT, NSLOT = 25, 11                       # port slots inside every process
 HEAD = 48
-SLOT0 = HEAD + 32
-PROC_H = SLOT0 + (NSLOT - 1) * SLOT + 25
+SLOT0 = HEAD + 22
+PROC_H = SLOT0 + (NSLOT - 1) * SLOT + 16
 PROC_W = round(PROC_H * 1.08)              # slightly wider than tall, like the school sample
-SID_W, SNAME_W, STORE_H = 71, 302, 2 * SLOT - 4
-CH_STEP = 10
-GAP = 74
+SID_W, SNAME_W, STORE_H = 82, 385, 2 * SLOT - 4
+CH_STEP = 13
+GAP = 64                                   # between stacked processes
+FLOW_GAP = 150                             # when a flow runs between them: line, label, line + arrowhead
 TOP = 150
 # set per page by layout_x()
 PROC_X = STORE_X = NAME_X = STORE_R = CH_X0 = LBL_RIGHT_X = 0
@@ -30,9 +32,41 @@ _TIMES_BOLD = ImageFont.truetype("C:/Windows/Fonts/timesbd.ttf", F)
 def text_w(t):
     return _TIMES_BOLD.getlength(t) + 6    # measured Times New Roman Bold, plus label padding
 
-LABEL_H = 1.25 * F                         # rows closer than this get staggered labels
+LABEL_H = F + 3                            # rows closer than this get staggered labels
 LABEL_GAP = 18
 LBLX = {}                                  # (process id, side, y) -> label centre x
+WRAPPED = {}                               # (process id, side, y) -> label text with a line break
+WRAP_W = 440                               # widest a wrapped label line may be
+WRAP_CLEAR = 2 * F                         # a label may wrap when no other label row is this close
+
+def _wrap(label):
+    """Greedy word wrap to WRAP_W; returns (html, width of the widest line)."""
+    if text_w(label) <= WRAP_W:
+        return label, text_w(label)
+    lines, cur = [], ""
+    for w in label.split():
+        trial = (cur + " " + w).strip()
+        if cur and text_w(trial) > WRAP_W:
+            lines.append(cur); cur = w
+        else:
+            cur = trial
+    lines.append(cur)
+    return "<br>".join(lines), max(map(text_w, lines))
+
+def _items(pid, side, rows):
+    """(y, width) per label row; isolated rows wrap onto two lines to keep the gaps narrow."""
+    ys = sorted(y for y, _ in rows)
+    out = []
+    for y, label in rows:
+        near = min([abs(y - o) for o in ys if o != y] or [1e9])
+        if near >= WRAP_CLEAR:
+            html_, w = _wrap(label)
+            if html_ != label:
+                WRAPPED[(pid, side, y)] = html_
+            out.append((y, w))
+        else:
+            out.append((y, text_w(label)))
+    return out
 
 def _runs(items):
     """Split (y, width) items into runs of rows close enough that their labels would touch."""
@@ -66,7 +100,7 @@ def _place(key_side, pid, runs, x0, x1):
                 x = x1 - LABEL_GAP - w / 2          # near the end of the line
             LBLX[(pid, key_side, y)] = x
 
-JOG_W = 90                                 # bend lanes in front of freely placed tables
+JOG_W = 64                                 # bend lanes in front of freely placed tables
 STORE_GAP = 14                             # minimum space between freely placed tables
 
 def layout_x(procs, pin, jog=0):
@@ -74,10 +108,11 @@ def layout_x(procs, pin, jog=0):
     staggering labels on neighbouring rows so the rows can sit closer than a text line."""
     global PROC_X, STORE_X, NAME_X, STORE_R, CH_X0, LBL_RIGHT_X
     LBLX.clear()
+    WRAPPED.clear()
     regions = {}                                    # region x0 -> {pid: runs}
     for p in procs:
         for pinned in (False, True):
-            items = [(py, text_w(l)) for (e, dd, l, py) in p["lports"] if (e in pin) == pinned]
+            items = _items(p["id"], "L", [(py, l) for (e, dd, l, py) in p["lports"] if (e in pin) == pinned])
             if items:
                 x0 = (ENT_X2 if pinned else ENT_X) + ENT_W
                 regions.setdefault(x0, {})[p["id"]] = _runs(items)
@@ -85,7 +120,8 @@ def layout_x(procs, pin, jog=0):
     for x0, per in regions.items():
         for pid, runs in per.items():
             _place("L", pid, runs, x0, PROC_X)
-    right = {p["id"]: _runs([(py, text_w(sl[3])) for sl, py in p["rports"] if sl and sl[0] in "cd"]) for p in procs}
+    right = {p["id"]: _runs(_items(p["id"], "R", [(py, sl[3]) for sl, py in p["rports"] if sl and sl[0] in "cd"]))
+             for p in procs}
     x0 = PROC_X + PROC_W
     STORE_X = int(x0 + max([_need(r) for r in right.values()] or [80]) + jog)
     for pid, runs in right.items():
@@ -111,34 +147,37 @@ LEVEL1 = [
       [(U, i, "Sign Gesture"), (U, i, "Translation Mode"), (U, i, "SOS Request"),
        (U, o, "Translation Result"), (U, o, "Emergency Alert")],
       [d("installed_models", i, "Model Weights"), s("installed_models"), None,
-       c("translation_history", o, "Translation Entry"), c("user_settings", i, "Speech Settings")]),
+       c("translation_history", o, "Translation Entry"), c("user_settings", i, "Speech Settings"),
+       c("word_bank_cache", i, "Word Translations")]),
     P("2.0", "Browse Word Bank",
-      [(U, i, "Search Keyword"), (U, i, "Favorite Word"), (U, i, "Download Request"),
+      [(U, i, "Keyword"), (U, i, "Favorite Word"), (U, i, "Download Request"),
        (U, o, "Word Details"), (U, o, "Demo Video")],
       [c("words", i, "Word Records"), c("categories", i, "Category List"),
-       c("model_versions", i, "Trained Words"), c("sign_videos", i, "Video File"), None,
-       d("favorites", o, "Favorite Words"), d("favorites", i, "Saved Favorites"), None,
-       d("downloaded_videos", o, "Downloaded Video"), d("downloaded_videos", i, "Saved Video")]),
+       c("model_versions", i, "Model Vocabulary"), c("sign_videos", i, "Video File"), None,
+       d("word_bank_cache", o, "Word Cache"), d("word_bank_cache", i, "Offline Words"),
+       d("favorites", o, "Favorite Words"), d("favorites", i, "Favorite Records"),
+       d("downloaded_videos", o, "Video Download"), d("downloaded_videos", i, "Offline Video")]),
     P("3.0", "Update Model",
-      [(U, o, "Update Status")],
+      [(U, o, "Model Update Status")],
       [c("model_versions", i, "Model Version"), c("model_files", i, "Model File"),
-       c("installed_models", o, "Verified Model"), None,
-       d("model_cache", o, "Installed Version"), d("model_cache", i, "Current Version")]),
+       c("installed_models", o, "Model Installation"), c("word_bank_cache", o, "Cache Invalidation"), None,
+       d("model_cache", o, "Version Record"), d("model_cache", i, "Current Version")]),
     P("4.0", "Manage History",
-      [(U, i, "Delete Selection"), (U, o, "History List")],
-      [None, None, d("translation_history", i, "History Records"), d("translation_history", o, "Deleted Entries")]),
+      [(U, i, "Entry Selection"), (U, o, "History List")],
+      [None, None, d("translation_history", i, "History Records"), d("translation_history", o, "Entry Removal")]),
     P("5.0", "Manage Settings",
       [(U, i, "User Name"), (U, i, "Setting Changes"), (U, o, "Current Settings"), (U, o, "Onboarding Tutorial"),
        None],
-      [None, None, d("user_settings", o, "Updated Settings"), d("user_settings", i, "Saved Settings")]),
+      [None, None, d("user_settings", o, "Settings Update"), d("user_settings", i, "Setting Records")]),
     P("6.0", "Manage Accounts",
-      [(A, i, "Login Credentials"), (A, i, "Account Details"), (A, i, "Verification Code"),
+      [(A, i, "Login Credentials"), (A, i, "Email Address"), (A, i, "Verification Code"),
+       (A, i, "Account Details"), (A, i, "Logout Request"),
        (A, o, "Session Token"), (A, o, "Verification Email"), (A, o, "Account Notice"),
        (SA, i, "Administrator Details"), (SA, i, "Status Selection"), (SA, o, "Administrator List")],
       [d("administrators", i, "Account Records"), d("administrators", o, "Account Information"),
        c("activity_logs", o, "Account Activity"),
        d("email_verifications", o, "Verification Code"), d("email_verifications", i, "Code Status"), None,
-       d("revoked_auth_tokens", o, "Revoked Token"), s("revoked_auth_tokens")]),
+       d("revoked_auth_tokens", o, "Token Revocation"), s("revoked_auth_tokens")]),
     P("7.0", "Manage Word Bank",
       [(A, i, "Word Details"), (A, i, "Category Details"), (A, i, "Sign Videos"), (A, i, "Demo Video"),
        (A, o, "Upload Status"), (A, o, "Word Records"), (A, o, "Category List")],
@@ -149,7 +188,7 @@ LEVEL1 = [
        d("gesture_samples", o, "Gesture Samples"), s("gesture_samples"),
        c("activity_logs", o, "Word Activity")]),
     P("8.0", "Manage Model",
-      [(A, i, "Training Request"), (A, i, "Selected Version"), (A, o, "Training Progress"),
+      [(A, i, "Training Request"), (A, i, "Version Selection"), (A, o, "Training Progress"),
        (A, o, "Accuracy Metrics"), (A, o, "Deployment Status")],
       [c("gesture_samples", i, "Training Samples"), c("words", o, "Active Words"), None,
        d("model_versions", o, "Model Version"), d("model_versions", i, "Model Status"),
@@ -158,7 +197,8 @@ LEVEL1 = [
     P("9.0", "Generate Reports",
       [(A, i, "Report Request"), (A, i, "Log Filter"), (A, o, "Dashboard Statistics"),
        (A, o, "System Report"), (A, o, "Activity Logs")],
-      [c("words", i, "Word Records"), c("gesture_samples", i, "Sample Records"),
+      [c("words", i, "Word Records"), c("categories", i, "Category Records"),
+       c("gesture_samples", i, "Sample Records"),
        c("model_versions", i, "Model Records"), c("administrators", i, "Administrator Records"), None,
        d("activity_logs", i, "Activity Records"), s("activity_logs")]),
 ]
@@ -168,10 +208,11 @@ CHILDREN = {
         P("1.1", "Capture Video", [(U, i, "Sign Gesture"), (U, i, "Translation Mode")], down=(o, "Camera Frames")),
         P("1.2", "Extract Landmarks", down=(o, "Landmark Sequence")),
         P("1.3", "Classify Sign", right=[None, None, None, d("installed_models", i, "Model Weights"),
-                                         s("installed_models")], down=(o, "Predicted Label")),
+                                         s("installed_models")], down=(o, "Sign Prediction")),
         P("1.4", "Display Result",
-          [(U, o, "Translated Text"), (U, o, "Speech Output")],
-          [c("user_settings", i, "Speech Settings"), None, None,
+          [(U, o, "Translation Text"), (U, o, "Speech Output")],
+          [c("user_settings", i, "Speech Settings"), None,
+           d("word_bank_cache", i, "Word Translations"), s("word_bank_cache"), None,
            d("translation_history", o, "Translation Entry"), s("translation_history")]),
         P("1.5", "Play SOS Alert",
           [(U, i, "SOS Request"), (U, o, "Emergency Alert")],
@@ -179,58 +220,60 @@ CHILDREN = {
     ],
     "2.0": [
         P("2.1", "Load Word Bank",
-          right=[d("model_versions", i, "Trained Words"), s("model_versions"), None,
-                 d("words", i, "Word Records"), s("words"), None,
-                 d("categories", i, "Category List"), s("categories")],
+          right=[d("model_versions", i, "Model Vocabulary"), s("model_versions"),
+                 d("words", i, "Word Records"), s("words"),
+                 d("categories", i, "Category List"), s("categories"), None,
+                 d("word_bank_cache", o, "Word Cache"), d("word_bank_cache", i, "Offline Words")],
           down=(o, "Word List")),
         P("2.2", "Search Words",
-          [(U, i, "Search Keyword"), (U, i, "Selected Category"), (U, o, "Matching Words")],
-          down=(o, "Selected Word")),
+          [(U, i, "Keyword"), (U, i, "Category Choice"), (U, o, "Word Matches")],
+          down=(o, "Word Selection")),
         P("2.3", "View Word",
           [(U, o, "Word Details"), (U, o, "Demo Video")],
-          [c("downloaded_videos", i, "Saved Video")]),
+          [c("downloaded_videos", i, "Offline Video")]),
         P("2.4", "Download Video",
           [(U, i, "Download Request"), (U, o, "Download Status")],
           [None, d("sign_videos", i, "Video File"), s("sign_videos"), None,
-           d("downloaded_videos", o, "Downloaded Video"), s("downloaded_videos")]),
+           d("downloaded_videos", o, "Video Download"), s("downloaded_videos")]),
         P("2.5", "Save Favorites",
           [(U, i, "Favorite Word"), (U, o, "Favorite List")],
-          [None, None, None, d("favorites", o, "Favorite Words"), d("favorites", i, "Saved Favorites")]),
+          [None, None, None, d("favorites", o, "Favorite Words"), d("favorites", i, "Favorite Records")]),
     ],
     "3.0": [
         P("3.1", "Check Version",
           right=[c("model_cache", i, "Current Version"), None, None,
-                 d("model_versions", i, "Deployed Versions"), s("model_versions")],
+                 d("model_versions", i, "Deployment Records"), s("model_versions")],
           down=(o, "Update Information")),
         P("3.2", "Download File",
           right=[None, None, None, d("model_files", i, "Model File"), s("model_files")],
-          down=(o, "Downloaded File")),
-        P("3.3", "Verify Checksum", down=(o, "Verified File")),
+          down=(o, "File Download")),
+        P("3.3", "Verify Checksum", down=(o, "Valid File")),
         P("3.4", "Install Model",
-          [(U, o, "Update Status")],
+          [(U, o, "Model Update Status")],
           [None, d("installed_models", o, "Model File"), s("installed_models"), None,
-           d("model_cache", o, "Installed Version"), s("model_cache")]),
+           d("model_cache", o, "Version Record"), s("model_cache"), None,
+           d("word_bank_cache", o, "Cache Invalidation"), s("word_bank_cache")]),
     ],
     "4.0": [
         P("4.1", "View History",
           [(U, o, "History List")],
           [None, None, None, d("translation_history", i, "History Records"), s("translation_history")]),
         P("4.2", "Delete Entry",
-          [(U, i, "Delete Selection"), (U, o, "Delete Confirmation")],
-          [c("translation_history", o, "Deleted Entry")]),
+          [(U, i, "Entry Selection"), (U, o, "Deletion Confirmation")],
+          [c("translation_history", o, "Entry Deletion")]),
         P("4.3", "Clear History",
-          [(U, i, "Clear Request"), (U, o, "Clear Confirmation")],
-          [c("translation_history", o, "Cleared Entries")]),
+          [(U, i, "Clearance Request"), (U, o, "Clearance Confirmation")],
+          [c("translation_history", o, "History Removal")]),
     ],
     "5.0": [
         P("5.1", "Set User Name",
-          [(U, i, "User Name"), (U, o, "Saved Name")],
+          [(U, i, "User Name"), (U, o, "Profile Name")],
           [None, None, None, d("user_settings", o, "User Name"), s("user_settings")]),
         P("5.2", "Adjust Settings",
           [(U, i, "Setting Changes"), (U, o, "Current Settings")],
-          [c("user_settings", o, "Updated Settings"), None, c("user_settings", i, "Saved Settings")]),
+          [c("user_settings", o, "Settings Update"), None, c("user_settings", i, "Setting Records")]),
         P("5.3", "Reset Settings",
-          [(U, i, "Reset Selection"), (U, o, "Default Settings")],
+          [(U, i, "Reset Request"), (U, o, "Default Settings")],
           [c("user_settings", o, "Default Values")]),
         P("5.4", "Play Tutorial",
           [(U, i, "Tutorial Request"), (U, o, "Onboarding Tutorial")]),
@@ -241,25 +284,28 @@ CHILDREN = {
           [None, d("administrators", i, "Account Details"), d("administrators", o, "Login Status"), None,
            c("activity_logs", o, "Login Activity")]),
         P("6.2", "Request Reset",
-          [(A, i, "Email Address"), (A, o, "Reset Code")],
-          [None, None, None, d("email_verifications", o, "Reset Code"), s("email_verifications")],
-          down=(o, "Reset Session")),
+          [(A, i, "Email Address"), (A, o, "Verification Email")],
+          [c("administrators", i, "Account Email"), None, None,
+           d("email_verifications", o, "Reset Code"), s("email_verifications")],
+          down=(o, "Reset Details")),
         P("6.3", "Reset Password",
-          [(A, i, "Entered Code"), (A, i, "New Password"), (A, o, "Reset Confirmation")],
-          [c("email_verifications", i, "Code Status"), None, c("administrators", o, "New Password")]),
+          [(A, i, "Verification Code"), (A, i, "New Password"), (A, o, "Reset Confirmation")],
+          [c("email_verifications", i, "Code Status"), None, c("administrators", o, "New Password"), None,
+           c("activity_logs", o, "Reset Activity")]),
         P("6.4", "Verify Email",
           [(A, i, "Verification Code"), (A, o, "Verification Email")],
-          [c("email_verifications", o, "Verification Code"), None, c("email_verifications", i, "Code Status")],
-          down=(o, "Verified Email")),
+          [c("email_verifications", o, "Verification Code"), None, c("email_verifications", i, "Code Status"),
+           None, c("activity_logs", o, "Email Activity")],
+          down=(o, "Email Verification")),
         P("6.5", "Complete Setup",
           [(A, i, "Setup Details"), (A, o, "Setup Confirmation")],
           [c("administrators", o, "Setup Status"), None, c("activity_logs", o, "Setup Activity")]),
         P("6.6", "Update Account",
           [(A, i, "Account Details"), (A, o, "Update Confirmation")],
-          [c("administrators", o, "Updated Information"), None, c("activity_logs", o, "Account Activity")]),
+          [c("administrators", o, "Account Update"), None, c("activity_logs", o, "Account Activity")]),
         P("6.7", "Log Out",
           [(A, i, "Logout Request"), (A, o, "Logout Confirmation")],
-          [None, d("revoked_auth_tokens", o, "Revoked Token"), s("revoked_auth_tokens"), None,
+          [None, d("revoked_auth_tokens", o, "Token Revocation"), s("revoked_auth_tokens"), None,
            c("activity_logs", o, "Logout Activity")]),
         P("6.8", "Manage Administrators",
           [(SA, i, "Administrator Details"), (SA, i, "Status Selection"), (SA, o, "Administrator List"),
@@ -274,28 +320,31 @@ CHILDREN = {
            c("activity_logs", o, "Word Activity")]),
         P("7.2", "Edit Word",
           [(A, i, "Word Changes"), (A, o, "Update Confirmation")],
-          [c("words", o, "Updated Word"), None, c("activity_logs", o, "Word Activity")]),
+          [c("words", o, "Word Update"), None, c("activity_logs", o, "Word Activity")]),
         P("7.3", "Delete Word",
-          [(A, i, "Selected Word"), (A, o, "Delete Confirmation")],
-          [c("words", o, "Deleted Word"), None, c("activity_logs", o, "Word Activity")]),
+          [(A, i, "Word Selection"), (A, o, "Deletion Confirmation")],
+          [c("words", o, "Word Deletion"), None, c("gesture_samples", o, "Sample Deletion"), None,
+           c("upload_jobs", o, "Job Deletion"), None, c("activity_logs", o, "Word Activity")]),
         P("7.4", "Manage Categories",
           [(A, i, "Category Details"), (A, o, "Category List")],
           [None, d("categories", o, "Category Information"), d("categories", i, "Category Records"), None,
            c("activity_logs", o, "Category Activity")]),
         P("7.5", "Upload Samples",
           [(A, i, "Sign Videos"), (A, i, "Signer ID"), (A, o, "Upload Status")],
-          [None, d("upload_jobs", o, "Upload Progress"), d("upload_jobs", i, "Job Status")],
+          [None, d("upload_jobs", o, "Upload Progress"), d("upload_jobs", i, "Job Status"), None,
+           c("activity_logs", o, "Upload Activity")],
           down=(o, "Video Clip")),
         P("7.6", "Extract Landmarks", down=(o, "Landmark Sequence")),
         P("7.7", "Save Samples",
           right=[c("words", o, "Sample Count"), None, None,
                  d("gesture_samples", o, "Gesture Sample"), s("gesture_samples")]),
         P("7.8", "Clear Samples",
-          [(A, i, "Clear Request"), (A, o, "Clear Confirmation")],
-          [c("gesture_samples", o, "Cleared Samples"), None, c("activity_logs", o, "Sample Activity")]),
+          [(A, i, "Clearance Request"), (A, o, "Clearance Confirmation")],
+          [c("gesture_samples", o, "Sample Removal"), None, c("activity_logs", o, "Sample Activity")]),
         P("7.9", "Set Demo Video",
           [(A, i, "Demo Video"), (A, o, "Video Confirmation")],
           [None, d("sign_videos", o, "Demo Video"), s("sign_videos"), None,
+           c("words", o, "Video Link"), None,
            c("activity_logs", o, "Video Activity"), None, s("activity_logs"), s("activity_logs")]),
     ],
     "8.0": [
@@ -305,17 +354,17 @@ CHILDREN = {
            d("model_files", o, "Model File"), s("model_files"), None,
            c("gesture_samples", i, "Training Samples"), c("activity_logs", o, "Training Activity")]),
         P("8.2", "Deploy Model",
-          [(A, i, "Selected Version"), (A, o, "Deployment Status")],
+          [(A, i, "Version Selection"), (A, o, "Deployment Status")],
           [c("model_versions", o, "Deployment Status"), None,
            d("words", o, "Active Words"), s("words"), None,
            c("activity_logs", o, "Deployment Activity")]),
         P("8.3", "Revert Model",
-          [(A, i, "Previous Version"), (A, o, "Revert Status")],
+          [(A, i, "Previous Version"), (A, o, "Rollback Status")],
           [c("model_versions", o, "Version Status"), None, c("words", o, "Active Words"), None,
-           c("activity_logs", o, "Revert Activity")]),
+           c("activity_logs", o, "Rollback Activity")]),
         P("8.4", "Delete Model",
-          [(A, i, "Selected Model"), (A, o, "Delete Confirmation")],
-          [c("model_versions", o, "Deleted Version"), None, c("model_files", o, "Deleted File"), None,
+          [(A, i, "Model Selection"), (A, o, "Deletion Confirmation")],
+          [c("model_versions", o, "Version Deletion"), None, c("model_files", o, "File Deletion"), None,
            c("activity_logs", o, "Model Activity")]),
         P("8.5", "View Models",
           [(A, o, "Model List")],
@@ -326,9 +375,11 @@ CHILDREN = {
     "9.0": [
         P("9.1", "Show Dashboard",
           [(A, o, "Dashboard Statistics")],
-          [d("words", i, "Word Records"), s("words"), None,
-           d("model_versions", i, "Model Records"), s("model_versions"), None,
-           d("administrators", i, "Administrator Records"), s("administrators")]),
+          [d("words", i, "Word Records"), s("words"),
+           d("categories", i, "Category Records"), s("categories"),
+           d("model_versions", i, "Model Records"), s("model_versions"),
+           d("administrators", i, "Administrator Records"), s("administrators"), None,
+           c("gesture_samples", i, "Sample Records"), c("activity_logs", i, "Recent Activities")]),
         P("9.2", "Generate Report",
           [(A, i, "Report Request"), (A, o, "System Report")],
           [c("words", i, "Word Statistics"), None, None,
@@ -344,6 +395,25 @@ STORE_ORDER = []  # filled from Level 1 so T-numbers are global
 
 # ════════════════════════════════════════════════════════════════
 def words(t): return len(t.split())
+
+def spaced_right(right):
+    """Compact layout: every flow gets its own row with an empty row between, so no two labels
+    share a line; tables are then placed freely beside their rows and the arrows bend in.
+    Padding rows (s(...)) drop out. Falls back to the hand layout when it does not fit."""
+    flows = [sl for sl in right if sl and sl[0] in "cd"]
+    if not flows or 2 * len(flows) - 1 > NSLOT:
+        return right
+    out = [None] * NSLOT
+    start = (NSLOT - (2 * len(flows) - 1)) // 2 if all(sl[0] == "c" for sl in flows) else 0
+    for k, sl in enumerate(flows):
+        out[start + 2 * k] = sl
+    # a table that only had a padding home here still needs one: give it the next free row
+    homes = [sl[1] for sl in right if sl and sl[0] == "s"]
+    direct = {sl[1] for sl in flows if sl[0] == "d"}
+    for st in reversed(list(dict.fromkeys(h for h in homes if h not in direct))):   # last-listed lowest
+        free = [j for j in range(NSLOT) if out[j] is None and (j == 0 or out[j - 1] is None or out[j - 1][0] != "s")]
+        out[free[-1]] = ("s", st)
+    return out
 
 def spread_right(right):
     """A right side made only of bus flows (no adjacent stores) gets every other row, so its
@@ -397,7 +467,7 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
     for k, p in enumerate(spec):
         assert 1 <= words(p["name"]) <= 3, f"process name too long: {p['name']}"
         assert len(p["right"]) <= NSLOT and len(p["left"]) <= NSLOT, f"{p['num']} has too many flows"
-        y = TOP + k * (PROC_H + GAP)
+        y = TOP + k * (PROC_H + GAP) + (FLOW_GAP - GAP) * sum(1 for q in spec[:k] if q["down"])
         slot_y = [y + SLOT0 + j * SLOT for j in range(NSLOT)]
         nl = len(p["left"])
         if None not in p["left"] and 2 * nl - 1 > NSLOT:
@@ -411,7 +481,8 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
             lpos = [(NSLOT - nl) // 2 + j for j in range(nl)]
         procs.append(dict(p, id="p" + p["num"].replace(".", "_"), y=y,
                           lports=[(f[0], f[1], f[2], slot_y[lpos[j]]) for j, f in enumerate(p["left"]) if f],
-                          rports=[(sl, slot_y[j]) for j, sl in enumerate(spread_right(p["right"]))]))
+                          rports=[(sl, slot_y[j]) for j, sl in
+                                  enumerate(spaced_right(p["right"]) if free_stores else spread_right(p["right"]))]))
     bottom = procs[-1]["y"] + PROC_H
     layout_x(procs, pin, JOG_W if free_stores else 0)
 
@@ -424,13 +495,14 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
                 assert st["proc"] == p["id"], f"{page_name}: {sl[1]} placed beside two processes"
                 st["slots"].append(sy)
     for k, st in stores.items():
-        assert len(st["slots"]) == 2 and st["slots"][1] - st["slots"][0] == SLOT, f"{page_name}: {k} must span 2 slots"
+        if not free_stores:
+            assert len(st["slots"]) == 2 and st["slots"][1] - st["slots"][0] == SLOT, f"{page_name}: {k} must span 2 slots"
         st["y"] = st["slots"][0] - 10
     if free_stores:
         bus_rows = [sy for p in procs for sl, sy in p["rports"] if sl and sl[0] == "c"]
         targets = []
         for k, st in stores.items():
-            rows = [py for p in procs for sl, py in p["rports"] if sl and sl[0] == "d" and sl[1] == k]
+            rows = [py for p in procs for sl, py in p["rports"] if sl and sl[0] == "d" and sl[1] == k]                 or st["slots"]
             targets.append((sum(rows) / len(rows) - STORE_H / 2, k))     # centred on its own arrows
         prev_bottom = -1e9
         for target, k in sorted(targets):
@@ -453,9 +525,9 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
                     assert not (st["y"] - 8 < sy < st["y"] + STORE_H + 8), f"{page_name} {p['num']} {sl[3]} hits {k}"
 
     # shapes
-    vertex("title", title, "text;html=1;align=left;verticalAlign=middle;fontSize=40;fontStyle=1;" + FONT, 10, 10, 2000, 60)
+    vertex("title", title, "text;html=1;align=left;verticalAlign=middle;fontSize=60;fontStyle=1;" + FONT, 10, 4, 3000, 80)
     if note:
-        vertex("note", f"<i>{note}</i>", "text;html=1;align=left;verticalAlign=middle;fontSize=" + str(F) + ";" + FONT, 10, 78, 2000, 44)
+        vertex("note", f"<i>{note}</i>", "text;html=1;align=left;verticalAlign=middle;fontSize=" + str(F) + ";" + FONT, 10, 84, 3000, 56)
     for p in procs:
         vertex(p["id"], f"<b>{p['num']}</b>",
                f"swimlane;rounded=1;arcSize=14;startSize={HEAD};html=1;fillColor=#ffffff;swimlaneFillColor=#ffffff;"
@@ -465,11 +537,11 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
                0, HEAD, PROC_W, PROC_H - HEAD, parent=p["id"])
     for k, st in stores.items():
         vertex("s_" + k, f"<b>T{STORE_ORDER.index(k) + 1}</b>",
-               "rounded=0;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=" + str(F) + ";" + FONT,
+               "rounded=0;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=" + str(TF) + ";" + FONT,
                STORE_X, st["y"], SID_W, STORE_H)
         vertex("s_" + k + "_n", f"<b>{k}</b>",
                "shape=partialRectangle;html=1;whiteSpace=wrap;top=1;bottom=1;left=0;right=0;fillColor=#ffffff;"
-               "strokeColor=#000000;align=left;spacingLeft=6;fontSize=" + str(F) + ";" + FONT, NAME_X, st["y"], SNAME_W, STORE_H)
+               "strokeColor=#000000;align=left;spacingLeft=6;fontSize=" + str(TF) + ";" + FONT, NAME_X, st["y"], SNAME_W, STORE_H)
 
     # entities: centred on the median of their ports, kept apart
     ents = {}
@@ -510,9 +582,9 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
         for grp, side in ((up, 0), (down, 1)):
             for k, (p, dd, l, py) in enumerate(grp):
                 if e in above:
-                    lx = ent["x"] + 20 + (len(grp) - 1 - k) * 12
+                    lx = ent["x"] + 20 + (len(grp) - 1 - k) * 16
                 else:
-                    lx = ent["x"] + ENT_W - 20 - k * 12
+                    lx = ent["x"] + ENT_W - 20 - k * 16
                 assert lx > ent["x"] + 8, f"{page_name}: too many lanes on {e}"
                 if side == 0:
                     sh_x = ent["x"] - ENT_SH
@@ -522,13 +594,13 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
                     pts = [(PROC_X, py), (lx, py), (lx, bot)]
                     tgt, tc = ent["id"], ((lx - ent["x"]) / ENT_W, 1)
                 a, b, pp, ac, bc = orient(dd, p["id"], tgt, pts, (0, (py - p["y"]) / PROC_H), tc)
-                edge(a, b, pp, l, (LBLX[(p["id"], "L", py)], py), ac, bc)
+                edge(a, b, pp, WRAPPED.get((p["id"], "L", py), l), (LBLX[(p["id"], "L", py)], py), ac, bc)
         for p, dd, l, py in flows:
             if top + ENT_EDGE <= py <= bot - ENT_EDGE:
                 pts = [(PROC_X, py), (ex, py)]
                 a, b, pp, ac, bc = orient(dd, p["id"], ent["id"], pts, (0, (py - p["y"]) / PROC_H),
                                           (1, (py - top) / ENT_H))
-                edge(a, b, pp, l, (LBLX[(p["id"], "L", py)], py), ac, bc)
+                edge(a, b, pp, WRAPPED.get((p["id"], "L", py), l), (LBLX[(p["id"], "L", py)], py), ac, bc)
 
     # process <-> store
     chans = []
@@ -547,7 +619,7 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
         up = sorted([d_ for d_ in directs if entry[(d_[0][1], d_[1])] < d_[1] - 0.5], key=lambda d_: -d_[1])
         bend_x = {}
         for rank, d_ in enumerate(down + up):        # outermost bend for the row that travels first
-            bend_x[d_[1]] = STORE_X - 14 - rank * 12
+            bend_x[d_[1]] = STORE_X - 14 - rank * 11
         for sl, py in p["rports"]:
             if not sl or sl[0] == "s":
                 continue
@@ -562,7 +634,7 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
                     pts = [(PROC_X + PROC_W, py), (STORE_X, ey)]
                 a, b, pp, ac, bc = orient(dd, p["id"], "s_" + sk, pts, (1, (py - p["y"]) / PROC_H),
                                           (0, (ey - st["y"]) / STORE_H))
-                edge(a, b, pp, l, (LBLX[(p["id"], "R", py)], py), ac, bc)
+                edge(a, b, pp, WRAPPED.get((p["id"], "R", py), l), (LBLX[(p["id"], "R", py)], py), ac, bc)
             else:
                 chans.append(dict(p=p, sk=sk, dd=dd, l=l, py=py))
 
@@ -594,7 +666,7 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
         st = stores[sk]
         if lst[0]["mode"] in ("top", "bottom"):
             for r, ch in enumerate(sorted(lst, key=lambda ch: ch["cx"])):
-                ch["ty"] = (st["y"] + STORE_H + 18 + r * 12) if ch["mode"] == "bottom" else (st["y"] - 18 - r * 12)
+                ch["ty"] = (st["y"] + STORE_H + 18 + r * 16) if ch["mode"] == "bottom" else (st["y"] - 18 - r * 16)
                 ch["xe"] = NAME_X + SNAME_W - 22 - r * 37
                 assert ch["xe"] > NAME_X + 8, f"{page_name}: too many entries under {sk}"
     width = CH_X0 + len(chans) * CH_STEP + 40
@@ -610,7 +682,7 @@ def build_page(page_id, page_name, title, spec, pin=None, note=None, above=None,
             bottom = max(bottom, ch["ty"])
         a, b, pp, ac, bc = orient(ch["dd"], p["id"], "s_" + ch["sk"] + "_n", pts,
                                   (1, (ch["py"] - p["y"]) / PROC_H), en)
-        edge(a, b, pp, ch["l"], (LBLX[(p["id"], "R", ch["py"])], ch["py"]), ac, bc)
+        edge(a, b, pp, WRAPPED.get((p["id"], "R", ch["py"]), ch["l"]), (LBLX[(p["id"], "R", ch["py"])], ch["py"]), ac, bc)
 
     # process <-> next process
     for p, q in zip(procs, procs[1:]):
@@ -649,7 +721,7 @@ pages.append(xml_); total += cnt
 for p in LEVEL1:
     pid = "C" + p["num"].replace(".0", "")
     xml_, cnt = build_page(pid, f"{p['num']} {p['name']}", f"Child Diagram of Process {p['num']}: {p['name']}",
-                           CHILDREN[p["num"]], note=SA_NOTE if p["num"] == "6.0" else None,
+                           CHILDREN[p["num"]], note=SA_NOTE if p["num"] == "6.0" else None, free_stores=True,
                            pin={SA: ("6.8", 1)} if p["num"] == "6.0" else None)
     pages.append(xml_); total += cnt
 

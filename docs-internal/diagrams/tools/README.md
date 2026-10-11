@@ -31,6 +31,7 @@ stops with an error if a diagram breaks a layout rule.
 |---|---|---|
 | Level 1 and child diagram flows, processes, tables | `dfd_pages.py` | `LEVEL1` and `CHILDREN` |
 | Context diagram flows | `dfd_context.py` | `ADMIN_*`, `MOBILE_*`, `SUPER_FLOWS` lists |
+| Existing system diagram (first page) | `dfd_existing.py` | `LEFT`, `RIGHT`, `STORE` lists |
 | ERD tables, columns, relationships | `erd.py` | `TABLES`, and the `rel(...)` calls |
 | Text size and arrow thickness of the final DFD | `build.py` | `SCALE` and `ARROW` |
 
@@ -53,6 +54,14 @@ P("2.0", "Browse Word Bank",
 - A `None` in the left-hand list switches that side to the exact row positions you list.
 
 ### Rules the scripts enforce
+
+`check_rules.py` runs at the end of every build and fails it if:
+
+- a process name does not start with a verb
+- a flow label or entity starts with a verb that has no noun form ("Delete", "Clear", "Revert", ...)
+- the context diagram's entity flows differ from Level 1's (balancing)
+
+The layout scripts also enforce:
 
 - At most 9 processes per diagram.
 - Process names and flow labels are 1–3 words.

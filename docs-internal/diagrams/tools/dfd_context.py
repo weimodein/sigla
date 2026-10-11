@@ -1,7 +1,7 @@
 """SIGLA context diagram (Level 0). Sized like the compact school sample: a near-square process and
 small entities, relative to the text. Flows that line up with an entity run straight; the rest leave
 the entity's top or bottom and enter the process's side, top or bottom through nested lanes, so no
-lines cross. Base units match gen_dfd3.py (F = 32) so the same 2.34375 scale applies."""
+lines cross. Base units match gen_dfd3.py (F = 47) so the same 2.34375 scale applies."""
 import sys
 from xml.sax.saxutils import escape
 from PIL import ImageFont
@@ -12,13 +12,13 @@ FONT = "fontFamily=Times New Roman;"
 TB = ImageFont.truetype("C:/Windows/Fonts/timesbd.ttf", F)
 def text_w(t): return TB.getlength(t) + 6
 
-ENT_W, ENT_H, ENT_SH, ENT_EDGE = 270, 110, 6, 24
-ROW = 40                                    # spacing of flow rows
-LANE = 12                                   # spacing of entity lanes
-STEP = 24                                   # spacing of entries along the process top / bottom
+ENT_W, ENT_H, ENT_SH, ENT_EDGE = 420, 150, 6, 24          # same entity size as the other pages
+ROW = 50                                    # spacing of flow rows
+LANE = 18                                   # spacing of entity lanes
+STEP = 18                                   # spacing of entries along the process top / bottom
 HEAD = 48
 NROWS = 7                                   # rows down each side of the process
-PW = 430
+PW = 440
 PH = HEAD + 24 + (NROWS - 1) * ROW + 24
 GAP_PAD = 48
 
@@ -32,15 +32,15 @@ ADMIN_STRAIGHT = [(i, "Account Details"), (i, "Verification Code")]
 ADMIN_BOTTOM_ROWS = [(o, "Verification Email")]
 ADMIN_TOP = [(o, "Account Notice"), (i, "Word Details"), (o, "Word Records"), (i, "Category Details"),
              (o, "Category List")]
-ADMIN_BOTTOM = [(i, "Sign Videos"), (o, "Upload Status"), (i, "Demo Video"), (i, "Training Request"),
-                (o, "Training Progress"), (o, "Accuracy Metrics"), (i, "Selected Version"),
+ADMIN_BOTTOM = [(i, "Email Address"), (i, "Logout Request"), (i, "Sign Videos"), (o, "Upload Status"), (i, "Demo Video"), (i, "Training Request"),
+                (o, "Training Progress"), (o, "Accuracy Metrics"), (i, "Version Selection"),
                 (o, "Deployment Status"), (i, "Report Request"), (o, "System Report"),
                 (o, "Dashboard Statistics"), (i, "Log Filter"), (o, "Activity Logs")]
 # Mobile User, right: rows 0-1 straight, 3-6 from the entity bottom, the rest into the process top.
 MOBILE_STRAIGHT = [(i, "Sign Gesture"), (o, "Translation Result")]
-MOBILE_SIDE = [(i, "Translation Mode"), (i, "SOS Request"), (o, "Emergency Alert"), (i, "Search Keyword")]
+MOBILE_SIDE = [(i, "Translation Mode"), (i, "SOS Request"), (o, "Emergency Alert"), (i, "Keyword")]
 MOBILE_TOP = [(o, "Word Details"), (o, "Demo Video"), (i, "Favorite Word"), (i, "Download Request"),
-              (o, "Update Status"), (o, "History List"), (i, "Delete Selection"), (i, "User Name"),
+              (o, "Model Update Status"), (o, "History List"), (i, "Entry Selection"), (i, "User Name"),
               (i, "Setting Changes"), (o, "Current Settings"), (o, "Onboarding Tutorial")]
 # Super Administrator, right and below: out of the process bottom, straight across.
 SUPER_FLOWS = [(i, "Administrator Details"), (i, "Status Selection"), (o, "Administrator List")]
@@ -96,7 +96,7 @@ def entity(id_, name, x, y):
            f"fontSize={F};" + FONT, x, y, ENT_W, ENT_H)
 
 # ── shapes ──
-vertex("title", "SIGLA Context Diagram", "text;html=1;align=left;verticalAlign=middle;fontSize=40;fontStyle=1;" + FONT,
+vertex("title", "SIGLA Context Diagram", "text;html=1;align=left;verticalAlign=middle;fontSize=60;fontStyle=1;" + FONT,
        10, 10, 2000, 60)
 vertex("p0", "<b>0</b>", f"swimlane;rounded=1;arcSize=14;startSize={HEAD};html=1;fillColor=#ffffff;swimlaneFillColor=#ffffff;"
        f"strokeColor=#000000;fontSize={F};collapsible=0;resizable=0;" + FONT, PX, P_TOP, PW, PH)

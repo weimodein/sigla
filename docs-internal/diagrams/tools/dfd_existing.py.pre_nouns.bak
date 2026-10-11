@@ -1,0 +1,208 @@
+"""DFD of the EXISTING (manual, interpreter-based) system, drawn in the same style as the SigLa pages
+and laid out compactly like the original figure.
+
+    python dfd_existing.py <out.drawio>
+
+- PWD at the top left; its lanes run down its LEFT edge, so Non-Signer can tuck in under it.
+- Non-Signer sits beside process 3.0; its lanes run down its right edge.
+- Interpreter at the top right; its lanes run down its left edge.
+- The paper data store sits beside 4.0 Write Message, right of the Interpreter lanes.
+- A label that has no neighbouring label on its side of the same process may wrap onto two
+  lines, which keeps the gaps between the columns narrow.
+Base units match dfd_pages.py (F = 47), so build.py scales it the same way.
+"""
+import sys
+from xml.sax.saxutils import escape
+from PIL import ImageFont
+
+OUT = sys.argv[1]
+FONT = "fontFamily=Times New Roman;"
+F, TF = 47, 40
+TB = ImageFont.truetype("C:/Windows/Fonts/timesbd.ttf", F)
+def text_w(t): return TB.getlength(t) + 6
+
+# same geometry as dfd_pages.py
+ENT_W, ENT_H, ENT_SH = 420, 150, 6
+SLOT, NSLOT, HEAD = 25, 11, 48
+SLOT0 = HEAD + 22
+PROC_H = SLOT0 + (NSLOT - 1) * SLOT + 16
+PROC_W = round(PROC_H * 1.08)
+SID_W, SNAME_W, STORE_H = 82, 385, 2 * SLOT - 4
+GAP, TOP = 64, 150
+LANE, PAD = 16, 24
+WRAP = 440                                   # widest a wrapped label may be
+
+o, i = "out", "in"
+PWD, NS, INT = "PWD", "Non-Signer", "Interpreter"
+PROCS = [("1", "Convey Message"), ("2", "Translate Gesture"), ("3", "Translate Speech"),
+         ("4", "Write Message"), ("5", "Return Message")]
+
+# (process, row, entity, direction, label, may wrap) — rows are 2 slots apart so stacked labels never touch
+LEFT = [("1", 4, PWD, i, "Sign Gesture Details", True),
+        ("2", 6, NS, o, "Translated Gesture Information", True),
+        ("3", 4, NS, i, "Feedback Message Details", True),
+        ("4", 0, NS, i, "Response Details", False), ("4", 2, NS, o, "Message Information", False),
+        ("4", 6, PWD, i, "Message Details", False), ("4", 8, PWD, o, "Response Information", False),
+        ("5", 6, PWD, o, "Translated Feedback Information", True)]
+RIGHT = [("1", 4, INT, o, "Sign Gesture Information", True),
+         ("2", 4, INT, i, "Translated Gesture Details", True),
+         ("3", 6, INT, o, "Feedback Message Information", True),
+         ("5", 4, INT, i, "Translated Feedback Details", True)]
+STORE = ("4", "paper", [(3, o, "Written Message"), (6, i, "Written Response")])
+
+for *_, l, _ in LEFT + RIGHT:
+    assert 1 <= len(l.split()) <= 3, l
+
+
+def wrap(label, ok):
+    """Greedy word wrap to WRAP; returns (html, width of the widest line)."""
+    if not ok or text_w(label) <= WRAP:
+        return label, text_w(label)
+    lines, cur = [], ""
+    for w in label.split():
+        trial = (cur + " " + w).strip()
+        if cur and text_w(trial) > WRAP:
+            lines.append(cur); cur = w
+        else:
+            cur = trial
+    lines.append(cur)
+    return "<br>".join(lines), max(map(text_w, lines))
+
+
+# ── layout ──
+PY = {n: TOP + k * (PROC_H + GAP) for k, (n, _) in enumerate(PROCS)}
+def row(n, r): return PY[n] + SLOT0 + r * SLOT
+
+PWD_X = 10
+NS_X = PWD_X + 20 + 3 * LANE + 30             # clear of PWD's lanes, tucked in under PWD
+ENT_Y = {PWD: row("1", 4) - ENT_H // 2, NS: row("3", 4) - ENT_H // 2}
+
+def left_start(e, y):
+    """Where a left-side flow's horizontal segment begins (entity edge or its lane)."""
+    if e == PWD:
+        return PWD_X + ENT_W if ENT_Y[PWD] + 24 <= y <= ENT_Y[PWD] + ENT_H - 24 else PWD_X + 20 + 3 * LANE
+    return NS_X + ENT_W if ENT_Y[NS] + 24 <= y <= ENT_Y[NS] + ENT_H - 24 else NS_X + ENT_W - 20
+PX = int(max(left_start(e, row(n, r)) + wrap(l, ok)[1] + 2 * PAD for n, r, e, _, l, ok in LEFT))
+
+right_need = max(wrap(l, ok)[1] + 2 * PAD for *_, l, ok in RIGHT)
+right_need = max(right_need, max(text_w(l) for _, _, l in STORE[2]) + 2 * PAD)
+INT_X = int(PX + PROC_W + right_need)
+ENT_Y[INT] = row("1", 4) - ENT_H // 2
+STORE_X = INT_X + 24 + 3 * LANE + 60
+STORE_R = STORE_X + SID_W + SNAME_W
+ENT_XS = {PWD: PWD_X, NS: NS_X, INT: INT_X}
+EID = {PWD: "ePWD", NS: "eNS", INT: "eINT"}
+
+cells, n = [], [0]
+def esc(t): return escape(t, {'"': "&quot;"})
+def vertex(id_, value, style, x, y, w, h, parent="1"):
+    cells.append(f'<mxCell id="X_{id_}" value="{esc(value)}" style="{style}" vertex="1" '
+                 f'parent="{("X_" + parent) if parent != "1" else "1"}"><mxGeometry x="{x}" y="{y}" '
+                 f'width="{w}" height="{h}" as="geometry"/></mxCell>')
+
+E = ("html=1;rounded=0;endArrow=block;endFill=1;endSize=6;jumpStyle=arc;jumpSize=6;strokeColor=#000000;"
+     f"fontSize={F};fontStyle=1;fontColor=#000000;labelBackgroundColor=#ffffff;" + FONT)
+
+def edge(src, dst, pts, label, label_at, ex, en):
+    n[0] += 1
+    total, before, found = 0.0, 0.0, False
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        if not found and min(x1, x2) - .5 <= label_at[0] <= max(x1, x2) + .5 and min(y1, y2) - .5 <= label_at[1] <= max(y1, y2) + .5:
+            before, found = total + abs(label_at[0] - x1) + abs(label_at[1] - y1), True
+        total += abs(x2 - x1) + abs(y2 - y1)
+    assert found, label
+    rel = 2 * before / total - 1
+    way = "".join(f'<mxPoint x="{x}" y="{y}"/>' for x, y in pts[1:-1])
+    st = E + "exitX={};exitY={};exitDx=0;exitDy=0;entryX={};entryY={};entryDx=0;entryDy=0;".format(*ex, *en)
+    cells.append(f'<mxCell id="X_f{n[0]}" value="{esc(label)}" style="{st}" edge="1" parent="1" '
+                 f'source="X_{src}" target="X_{dst}"><mxGeometry x="{rel:.4f}" relative="1" as="geometry">'
+                 + (f'<Array as="points">{way}</Array>' if way else "") + '</mxGeometry></mxCell>')
+
+def flow(d, proc_pts, pid, other, pc, oc, label, at):
+    """proc_pts runs from the process outwards; flipped when data flows into the process."""
+    if d == o:
+        edge(pid, other, proc_pts, label, at, pc, oc)
+    else:
+        edge(other, pid, proc_pts[::-1], label, at, oc, pc)
+
+# ── shapes ──
+vertex("title", "Existing System Data Flow Diagram",
+       "text;html=1;align=left;verticalAlign=middle;fontSize=60;fontStyle=1;" + FONT, 10, 4, 3000, 80)
+for num, name in PROCS:
+    vertex("p" + num, f"<b>{num}.0</b>",
+           f"swimlane;rounded=1;arcSize=14;startSize={HEAD};html=1;fillColor=#ffffff;swimlaneFillColor=#ffffff;"
+           f"strokeColor=#000000;fontSize={F};collapsible=0;resizable=0;" + FONT, PX, PY[num], PROC_W, PROC_H)
+    vertex("p" + num + "_t", f"<b>{name}</b>",
+           f"text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize={F};" + FONT,
+           0, HEAD, PROC_W, PROC_H - HEAD, parent="p" + num)
+for e in (PWD, NS, INT):
+    x, y = ENT_XS[e], ENT_Y[e]
+    vertex(EID[e] + "_sh", "", "rounded=1;arcSize=6;fillColor=#000000;strokeColor=#000000;", x - ENT_SH, y - ENT_SH, ENT_W, ENT_H)
+    vertex(EID[e], f"<b>{e}</b>", "rounded=1;arcSize=6;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;"
+           f"fontSize={F};" + FONT, x, y, ENT_W, ENT_H)
+s_num, s_name, s_flows = STORE
+s_y = (row(s_num, s_flows[0][0]) + row(s_num, s_flows[1][0])) / 2 - STORE_H / 2
+vertex("s_paper", "<b>T1</b>", f"rounded=0;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize={TF};" + FONT,
+       STORE_X, s_y, SID_W, STORE_H)
+vertex("s_paper_n", f"<b>{s_name}</b>", "shape=partialRectangle;html=1;whiteSpace=wrap;top=1;bottom=1;left=0;right=0;"
+       f"fillColor=#ffffff;strokeColor=#000000;align=left;spacingLeft=6;fontSize={TF};" + FONT,
+       STORE_X + SID_W, s_y, SNAME_W, STORE_H)
+
+def pcl(num, y): return (y - PY[num]) / PROC_H
+
+# ── left side ──
+for e in (PWD, NS):
+    ex, ey = ENT_XS[e], ENT_Y[e]
+    top, bot, right = ey - ENT_SH, ey + ENT_H, ex + ENT_W
+    mine = [f for f in LEFT if f[2] == e]
+    inside = lambda f: ey + 24 <= row(f[0], f[1]) <= bot - 24
+    up = sorted([f for f in mine if not inside(f) and row(f[0], f[1]) < ey], key=lambda f: -row(f[0], f[1]))
+    down = sorted([f for f in mine if not inside(f) and row(f[0], f[1]) > ey], key=lambda f: row(f[0], f[1]))
+    for num, r, _, d, l, ok in [f for f in mine if inside(f)]:
+        y = row(num, r); lab, w = wrap(l, ok)
+        flow(d, [(PX, y), (right, y)], "p" + num, EID[e], (0, pcl(num, y)), (1, (y - ey) / ENT_H), lab,
+             (PX - PAD - w / 2, y))
+    for grp, side in ((up, 0), (down, 1)):
+        for k, (num, r, _, d, l, ok) in enumerate(grp):     # nearest row takes the innermost lane
+            y = row(num, r); lab, w = wrap(l, ok)
+            lx = (ex + 20 + (len(grp) - 1 - k) * LANE) if e == PWD else (right - 20 - k * LANE)
+            if side == 0:
+                pts, tgt, tc = [(PX, y), (lx, y), (lx, top)], EID[e] + "_sh", ((lx - ex + ENT_SH) / ENT_W, 0)
+            else:
+                pts, tgt, tc = [(PX, y), (lx, y), (lx, bot)], EID[e], ((lx - ex) / ENT_W, 1)
+            flow(d, pts, "p" + num, tgt, (0, pcl(num, y)), tc, lab, (PX - PAD - w / 2, y))
+
+# ── right side: Interpreter lanes come down its left edge, nearest row innermost ──
+ix, iy = INT_X, ENT_Y[INT]
+ibot = iy + ENT_H
+inside = lambda f: iy + 24 <= row(f[0], f[1]) <= ibot - 24
+down = sorted([f for f in RIGHT if not inside(f)], key=lambda f: row(f[0], f[1]))
+for num, r, _, d, l, ok in [f for f in RIGHT if inside(f)]:
+    y = row(num, r); lab, w = wrap(l, ok)
+    flow(d, [(PX + PROC_W, y), (ix, y)], "p" + num, EID[INT], (1, pcl(num, y)), (0, (y - iy) / ENT_H), lab,
+         (PX + PROC_W + PAD + w / 2, y))
+for k, (num, r, _, d, l, ok) in enumerate(down):
+    y, lx = row(num, r), ix + 24 + k * LANE
+    lab, w = wrap(l, ok)
+    flow(d, [(PX + PROC_W, y), (lx, y), (lx, ibot)], "p" + num, EID[INT], (1, pcl(num, y)),
+         ((lx - ix) / ENT_W, 1), lab, (PX + PROC_W + PAD + w / 2, y))
+
+# ── paper store: rows 3 and 6, each bending into its own point on the store ──
+for j, (r, d, l) in enumerate(s_flows):
+    y = row(s_num, r)
+    ey = s_y + STORE_H * (j + 1) / 3
+    bx = STORE_X - 40 + j * 20
+    flow(d, [(PX + PROC_W, y), (bx, y), (bx, ey), (STORE_X, ey)], "p" + s_num, "s_paper",
+         (1, pcl(s_num, y)), (0, (ey - s_y) / STORE_H), l, (PX + PROC_W + PAD + text_w(l) / 2, y))
+
+W = max(INT_X + ENT_W, STORE_R) + 40
+H = PY[PROCS[-1][0]] + PROC_H + 60
+xml = ('<mxfile host="app.diagrams.net" type="device">\n'
+       '  <diagram id="X0" name="Existing System">\n'
+       f'    <mxGraphModel dx="{W}" dy="{H}" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" '
+       f'fold="1" page="1" pageScale="1" pageWidth="{W}" pageHeight="{H}" math="0" shadow="0">\n'
+       '      <root>\n        <mxCell id="0"/>\n        <mxCell id="1" parent="0"/>\n'
+       + "".join(f"        {c}\n" for c in cells) +
+       '      </root>\n    </mxGraphModel>\n  </diagram>\n</mxfile>\n')
+open(OUT, "w", encoding="utf-8").write(xml)
+print(f"wrote {OUT}: existing system, {n[0]} flows, {W:.0f} x {H:.0f}")

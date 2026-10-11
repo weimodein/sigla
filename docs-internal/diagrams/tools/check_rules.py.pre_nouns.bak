@@ -1,0 +1,94 @@
+"""Check the built DFD against the school's naming and balancing rules.
+
+    python check_rules.py ../dfd/dataflow.drawio
+
+- Process labels are verb phrases: the first word must be a known verb.
+- Data-flow labels are noun phrases: the first word must not be a verb that has no noun
+  form ("Delete", "Clear", ...). Words that are both, like "Update" or "Download", are fine.
+- External entities are noun phrases.
+- Balancing: every entity flow on the context diagram appears on Level 1 and vice versa.
+
+Exits with status 1 and lists every problem if anything fails.
+"""
+import html
+import re
+import sys
+import xml.etree.ElementTree as ET
+from collections import Counter
+
+PROCESS_VERBS = {
+    "Translate", "Browse", "Update", "Manage", "Generate", "Capture", "Extract", "Classify", "Display",
+    "Play", "Load", "Search", "View", "Download", "Save", "Check", "Verify", "Install", "Delete", "Clear",
+    "Set", "Adjust", "Reset", "Request", "Complete", "Log", "Add", "Edit", "Upload", "Train", "Deploy",
+    "Revert", "Show", "Convey", "Write", "Return",
+}
+# Verbs with no noun use: a flow label starting with one of these reads as a command.
+VERB_ONLY = {
+    "Delete", "Clear", "Add", "Edit", "Remove", "Show", "Get", "Send", "Save", "Verify", "Manage", "Generate",
+    "Create", "Submit", "Enter", "Select", "Choose", "Load", "Search", "Play", "Capture", "Extract", "Classify",
+    "Display", "Browse", "Translate", "Install", "Adjust", "Train", "Deploy", "Revert", "Apply", "Fetch",
+}
+ENTITIES = {"Mobile User", "Administrator", "Super Administrator", "PWD", "Non-Signer", "Interpreter"}
+
+
+def text(v):
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(v or ""))).strip()
+
+
+def main(path):
+    root = ET.parse(path).getroot()
+    problems = []
+    entity_flows = {}
+    for page in root.findall("diagram"):
+        name = page.get("name")
+        cells = {c.get("id"): c for c in page.iter("mxCell")}
+        parents = {c.get("id"): c.get("parent") for c in cells.values()}
+        is_context = name == "Context Diagram"
+        procs = {cid for cid, c in cells.items() if "swimlane" in (c.get("style") or "")}
+        ents = {cid: text(c.get("value")) for cid, c in cells.items()
+                if text(c.get("value")) in ENTITIES and c.get("vertex")}
+        ents.update({cid + "_sh": label for cid, label in list(ents.items()) if cid + "_sh" in cells})
+        # process names live in a text cell inside each process box
+        for cid, c in cells.items():
+            if parents.get(cid) in procs and c.get("vertex"):
+                label = text(c.get("value"))
+                if is_context:
+                    continue                      # the context process is the system name by convention
+                if label.split()[0] not in PROCESS_VERBS:
+                    problems.append(f"[{name}] process '{label}' does not start with a verb")
+        for cid, label in ents.items():
+            if label.split()[0] in VERB_ONLY:
+                problems.append(f"[{name}] entity '{label}' is not a noun phrase")
+        flows = Counter()
+        for c in cells.values():
+            if not c.get("edge"):
+                continue
+            label = text(c.get("value"))
+            if not label:
+                continue
+            if label.split()[0] in VERB_ONLY:
+                problems.append(f"[{name}] flow '{label}' starts with a verb")
+            if not 1 <= len(label.split()) <= 3:
+                problems.append(f"[{name}] flow '{label}' is not 1-3 words")
+            src, dst = c.get("source"), c.get("target")
+            if src in ents or dst in ents:
+                ent = ents.get(src) or ents.get(dst)
+                flows[(ent, "in" if src in ents else "out", label)] += 1
+        if is_context or name == "Level 1 DFD":
+            entity_flows[name] = flows
+    ctx, l1 = entity_flows.get("Context Diagram", Counter()), entity_flows.get("Level 1 DFD", Counter())
+    for f in sorted(set(ctx) - set(l1)):
+        problems.append(f"[balancing] context flow {f} is missing from Level 1")
+    for f in sorted(set(l1) - set(ctx)):
+        problems.append(f"[balancing] Level 1 flow {f} is missing from the context diagram")
+    if problems:
+        print("Rule check FAILED:")
+        for p in problems:
+            print("  -", p)
+        sys.exit(1)
+    print(f"Rule check passed: process names are verb phrases, flow labels and entities are noun phrases, "
+          f"and the context diagram balances with Level 1 ({len(l1)} entity flows).")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])
