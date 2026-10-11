@@ -28,14 +28,39 @@ MOTION_AUG_COPIES = int(os.getenv("LETTERS_MOTION_AUG_COPIES", 3))
 
 # ── models ──────────────────────────────────────────────────────────────────
 
+_IU = np.triu_indices(L.POINTS, 1)
+
+
+def _normalize_hand(p):
+    """[B, 21, 3] -> minus the wrist, divided by the largest 2D wrist distance."""
+    rel = p - p[:, 0:1, :]
+    size = tf.reduce_max(tf.norm(rel[..., :2], axis=-1), axis=-1)
+    return rel / (size[:, None, None] + EPS)
+
+
 @tf.keras.utils.register_keras_serializable(package="sigla")
 class WristNormalize(tf.keras.layers.Layer):
     """[B, 21, 3] -> minus the wrist, divided by the largest 2D wrist distance."""
 
     def call(self, x):
-        rel = x - x[:, 0:1, :]
-        size = tf.reduce_max(tf.norm(rel[..., :2], axis=-1), axis=-1)
-        return rel / (size[:, None, None] + EPS)
+        return _normalize_hand(x)
+
+
+@tf.keras.utils.register_keras_serializable(package="sigla")
+class LetterFeatures(tf.keras.layers.Layer):
+    """[B, 63] raw hand -> [B, 63 + 210]: the wrist-normalised coordinates and
+    every pairwise distance between the 21 points. Distances do not change when
+    the hand is rotated, which is what lets a linear model on them generalise to
+    signers who hold the same letter a little differently (U vs V: a one-number
+    finger gap separates them for every signer, but the network keyed on other
+    things). Experiment: docs-internal/specs/2026-10-11-letters-accuracy-design.md."""
+
+    def call(self, x):
+        p = _normalize_hand(tf.reshape(x, (-1, L.POINTS, 3)))
+        xi = tf.gather(p, _IU[0], axis=1)
+        xj = tf.gather(p, _IU[1], axis=1)
+        d = tf.sqrt(tf.reduce_sum(tf.square(xi - xj), axis=-1) + 1e-8)
+        return tf.concat([tf.reshape(p, (-1, L.FLOATS)), d], axis=1)
 
 
 @tf.keras.utils.register_keras_serializable(package="sigla")
@@ -49,7 +74,7 @@ class SequenceNormalize(tf.keras.layers.Layer):
         return rel / (size0[:, None, None, None] + EPS)
 
 
-def build_static_model(n_classes: int) -> tf.keras.Model:
+def build_static_model(n_classes: int, name: str = "static_mlp") -> tf.keras.Model:
     inp = tf.keras.Input(shape=(L.FLOATS,), name="landmarks")
     x = tf.keras.layers.Reshape((L.POINTS, 3))(inp)
     x = WristNormalize()(x)
@@ -58,7 +83,7 @@ def build_static_model(n_classes: int) -> tf.keras.Model:
     x = tf.keras.layers.Dropout(0.3)(x)
     x = tf.keras.layers.Dense(64, activation="relu")(x)
     out = tf.keras.layers.Dense(n_classes, activation="softmax")(x)
-    return tf.keras.Model(inp, out, name="sigla_letters_static")
+    return tf.keras.Model(inp, out, name=name)
 
 
 def build_motion_model(n_classes: int) -> tf.keras.Model:
@@ -216,6 +241,61 @@ def _balanced(y, n) -> dict:
     return {i: len(y) / (len(present) * counts[i]) for i in present}
 
 
+LINEAR_WEIGHT = float(os.getenv("LETTERS_LINEAR_WEIGHT", 0.7))
+LINEAR_C = float(os.getenv("LETTERS_LINEAR_C", 1.0))
+
+
+def _fit_linear(x, y, n_classes) -> tf.keras.Model:
+    """Softmax regression on LetterFeatures, fitted with scikit-learn (fast and
+    exact) and stored as Keras layers so it exports inside the same .tflite."""
+    from sklearn.linear_model import LogisticRegression
+
+    feats = LetterFeatures()(tf.constant(x, tf.float32)).numpy()
+    mu, sd = feats.mean(0), feats.std(0) + 1e-6
+    lr = LogisticRegression(C=LINEAR_C, max_iter=500).fit((feats - mu) / sd, y)
+    w = np.zeros((feats.shape[1], n_classes), dtype="float32")
+    b = np.full(n_classes, -30.0, dtype="float32")        # a class never seen can never win
+    coef, icpt = lr.coef_, lr.intercept_
+    if len(lr.classes_) == 2:                              # sklearn gives one row for two classes
+        w[:, lr.classes_[1]], b[lr.classes_[1]] = coef[0], icpt[0]
+        w[:, lr.classes_[0]], b[lr.classes_[0]] = 0.0, 0.0
+    else:
+        for k, c in enumerate(lr.classes_):
+            w[:, c], b[c] = coef[k], icpt[k]
+    inp = tf.keras.Input(shape=(L.FLOATS,))
+    h = LetterFeatures()(inp)
+    h = tf.keras.layers.Normalization(mean=mu, variance=sd ** 2)(h)
+    out = tf.keras.layers.Dense(n_classes, activation="softmax")(h)
+    model = tf.keras.Model(inp, out, name="static_linear")
+    model.layers[-1].set_weights([w, b])
+    return model
+
+
+def fit_static(data: LetterData, train, val=None, epochs=None):
+    """The static-letter model: LINEAR_WEIGHT x a linear model on pairwise
+    distances plus (1 - that) x a small network on coordinates. Each is fitted on its own and
+    their probabilities are blended, because the network is strong where the
+    linear model is weak (V, B) and the reverse (U, M, S). Returns
+    (model, network_epochs)."""
+    S, n = data.static, len(data.static_labels)
+    rng = np.random.default_rng(SEED)
+
+    mlp = build_static_model(n)
+    ax, ay = augment_static(S.x[train], S.y[train], rng)
+    sval = (S.x[val], S.y[val]) if val is not None and val.any() else None
+    mlp_epochs = _fit(mlp, ax, ay, sval, epochs or STATIC_EPOCHS)
+
+    lin_x = np.concatenate([S.x[train], mirror(S.x[train])]).astype("float32")
+    linear = _fit_linear(lin_x, np.tile(S.y[train], 2), n)
+
+    inp = tf.keras.Input(shape=(L.FLOATS,), name="landmarks")
+    blend = tf.keras.layers.Add()([
+        tf.keras.layers.Rescaling(LINEAR_WEIGHT)(linear(inp)),
+        tf.keras.layers.Rescaling(1.0 - LINEAR_WEIGHT)(mlp(inp)),
+    ])
+    return tf.keras.Model(inp, blend, name="sigla_letters_static"), mlp_epochs
+
+
 def fit_pair(data: LetterData, train_s, train_m, val_s=None, val_m=None,
              static_epochs=None, motion_epochs=None):
     """Trains the static model (always) and the motion model (when the training
@@ -226,10 +306,7 @@ def fit_pair(data: LetterData, train_s, train_m, val_s=None, val_m=None,
     rng = np.random.default_rng(SEED)
     S, M = data.static, data.motion
 
-    ax, ay = augment_static(S.x[train_s], S.y[train_s], rng)
-    sval = (S.x[val_s], S.y[val_s]) if val_s is not None and val_s.any() else None
-    static_model = build_static_model(len(data.static_labels))
-    s_ep = _fit(static_model, ax, ay, sval, static_epochs)
+    static_model, s_ep = fit_static(data, train_s, val_s, static_epochs)
 
     motion_model, m_ep = None, 0
     if len(data.motion_labels) > 1 and train_m.any() and len(set(M.y[train_m].tolist())) > 1:
