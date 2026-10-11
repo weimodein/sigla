@@ -392,3 +392,23 @@ def test_tap_clip_constants_match_training():
         assert abs(kt_value - float(py_value)) < 1e-9, (
             f"ClipPreparer.{name} = {kt_value} but Python has {py_value}"
         )
+
+
+_LETTER_SEGMENTER = os.path.join(_MOBILE, "LetterSegmenter.kt")
+
+
+def test_letter_segmenter_constants_match_training():
+    from app.utils import letters as L
+    src = _read(_LETTER_SEGMENTER)
+
+    def num(name):
+        return float(_kotlin_const(src, name).rstrip("L"))
+
+    assert num("LETTER_MOTION_FRAMES") == L.MOTION_FRAMES
+    assert num("LETTER_START_SPEED") == L.SEGMENT_CONFIG["start_speed"]
+    assert num("LETTER_STOP_SPEED") == L.SEGMENT_CONFIG["stop_speed"]
+    assert num("LETTER_STOP_HOLD_MS") == L.SEGMENT_CONFIG["stop_hold_ms"]
+    assert num("LETTER_PAD_MS") == L.SEGMENT_CONFIG["pad_ms"]
+    assert num("LETTER_MIN_MS") == L.SEGMENT_CONFIG["min_ms"]
+    assert num("LETTER_MAX_MS") == L.SEGMENT_CONFIG["max_ms"]
+    assert num("LETTER_MAX_MISSING") == L.SEGMENT_CONFIG["max_missing"]
