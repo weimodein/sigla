@@ -58,6 +58,13 @@ const GestureSample = sequelize.define(
       comment:
         "Array of frames, each frame containing 126 landmark coordinates for motion gestures",
     },
+    // Letter words only: {version, frames: [{t_ms, hand: [63] | null}]} from
+    // /extract-landmarks?hand_track=true. Requires migration 008 - Sequelize
+    // selects every declared column.
+    hand_track: {
+      type: DataTypes.JSON,
+      allowNull: true,
+    },
   },
   {
     tableName: "gesture_samples",

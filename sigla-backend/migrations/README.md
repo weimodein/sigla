@@ -22,6 +22,7 @@ psql "$PG_URI" -f migrations/001_model_versions_trained_word_ids.sql
 | `005_model_versions_model_kind.sql` | yes — 2026-09-22 | Words and alphabet deploy as separate models |
 | `006_model_versions_version_unique_per_kind.sql` | yes — 2026-09-22 | One version names a words+letters pair |
 | `007_words_vocabulary.sql` | yes — 2026-09-22 | Word carries its model explicitly, not by label shape |
+| `008_gesture_samples_hand_track.sql` | no | Letter clips keep a one-hand track for the letters models |
 | `008_revoked_auth_tokens.sql` | yes — 2026-09-24 | Make JWT logout enforceable by the backend |
 | `009_upload_jobs_heartbeat.sql` | yes — 2026-09-26 | Fail upload batches orphaned by a backend restart |
 | `010_schema_cleanup.sql` | yes — 2026-09-27 | Drop dead columns, fix indexes, nullability matches usage |

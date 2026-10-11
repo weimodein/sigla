@@ -1,5 +1,6 @@
 const { GestureSample, Word } = require("../models/index.js");
 const { Op } = require("sequelize");
+const { datasetEntry } = require("../utils/mlDataset");
 
 /**
  * GET /api/ml/dataset
@@ -9,6 +10,7 @@ const { Op } = require("sequelize");
  *                        submitted_by }, ... ] }
  */
 const getApprovedDataset = async (req, res) => {
+  const withTrack = req.query.hand_track === "1";
   try {
     // Fetch all training-eligible samples:
     // - "approved" samples (admin-reviewed) for any word
@@ -57,13 +59,7 @@ const getApprovedDataset = async (req, res) => {
         // session_id is the grouping key that comment anticipates. submitted_by turned
         // out to be useless for it in practice — it records the uploading ADMIN, so it
         // is 1 for 1664 of 1726 samples across all four signers.
-        dataset[label].push({
-          sequence: sample.sequence,
-          sample_id: sample.id,
-          file_url: sample.file_url,
-          submitted_by: sample.submitted_by,
-          session_id: sample.session_id,
-        });
+        dataset[label].push(datasetEntry(sample, withTrack));
       } else {
         console.warn(`Sample ${sample.id} has no embedded sequence, skipping`);
       }

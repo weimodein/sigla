@@ -13,6 +13,7 @@ const { logActivity } = require("../utils/activityLogger.js");
 const { validateWordLabel } = require("../utils/validators.js");
 const { sequelize } = require("../config/db.js");
 const { ML_SERVICE_URL } = require("../config/mlService.js");
+const { extractUrl } = require("../utils/mlDataset");
 
 // Resolve a category *name* (what the form and mobile send) to its id, or null
 // when the name is blank or matches no category. Case-insensitive, mirroring the
@@ -285,13 +286,13 @@ const extractAndStoreSample = async (
       process.env.ML_EXTRACT_TIMEOUT_MS || 180000,
     );
 
-    const mlRes = await axios.post(`${ML_SERVICE_URL}/extract-landmarks`, form, {
+    const mlRes = await axios.post(extractUrl(ML_SERVICE_URL, word.vocabulary), form, {
       headers: form.getHeaders(),
       timeout: ML_EXTRACT_TIMEOUT_MS,
       maxBodyLength: Infinity,
     });
 
-    const { sequence } = mlRes.data;
+    const { sequence, hand_track } = mlRes.data;
 
     const sample = await GestureSample.create({
       word_id: word.id,
@@ -300,6 +301,7 @@ const extractAndStoreSample = async (
       session_id: sessionId,
       status: "approved",
       sequence: sequence,
+      hand_track: hand_track ?? null,
     });
 
     return { file: filename, status: "ok", type: "video", sample_id: sample.id };
