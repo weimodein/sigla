@@ -64,4 +64,16 @@ class PredictionPolicyTest {
         assertEquals(0.10f, topPredictionMargin(floatArrayOf(0.80f, 0.70f, 0.10f), 0), 1e-6f)
         assertEquals(0.55f, topPredictionMargin(floatArrayOf(0.20f, 0.75f, 0.10f), 1), 1e-6f)
     }
+
+    @Test
+    fun letterCommitMapsToResult() {
+        val r = letterResult(LetterCommit("J", 0.91f, isMotion = true, replacesPrevious = true))
+        assertEquals("J", r.label)
+        assertEquals(0.91f, r.confidence, 0f)
+        assertTrue(r.isMotion)
+        assertTrue(r.replacesPrevious)
+        val s = letterResult(LetterCommit("A", 0.8f, isMotion = false, replacesPrevious = false))
+        assertFalse(s.isMotion)
+        assertFalse(s.replacesPrevious)
+    }
 }

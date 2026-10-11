@@ -130,3 +130,18 @@ def test_train_letters_refuses_thin_coverage():
     with pytest.raises(ValueError, match="A"):
         LT.train_letters("x-letters", 1, ["A", "B", "J"], lambda *a, **k: None,
                          fetch=lambda: ds, upload=lambda *a: "u")
+
+
+def test_export_signature_contract_matches_the_app(trained):
+    """LetterTfliteClassifier.kt hardcodes these names and shapes."""
+    data, s, m = trained
+    interp = tf.lite.Interpreter(model_content=LT.export_tflite(data, s, m))
+    n = len(data.labels)
+    want = {"static": ("landmarks", [1, L.FLOATS], [1, n]),
+            "motion": ("frames", [1, L.MOTION_FRAMES, L.FLOATS], [1, n + 1])}
+    for sig, (in_name, in_shape, out_shape) in want.items():
+        runner = interp.get_signature_runner(sig)
+        ins, outs = runner.get_input_details(), runner.get_output_details()
+        assert list(ins) == [in_name] and list(outs) == ["probabilities"]
+        assert ins[in_name]["shape"].tolist() == in_shape
+        assert outs["probabilities"]["shape"].tolist() == out_shape

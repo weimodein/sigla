@@ -252,8 +252,13 @@ data class PredictionResult(
     val label: String,
     val confidence: Float,
     val isMotion: Boolean = true,
-    val earlyExit: Boolean = false
+    val earlyExit: Boolean = false,
+    // Letters: this J replaces the I just shown (it was J's start shape).
+    val replacesPrevious: Boolean = false,
 )
+
+internal fun letterResult(c: LetterCommit): PredictionResult =
+    PredictionResult(c.label, c.confidence, isMotion = c.isMotion, replacesPrevious = c.replacesPrevious)
 
 /**
  * A result decided under the lock but not yet delivered. Inference runs while
@@ -417,6 +422,8 @@ class PredictionService(private val context: Context) {
         val interp: Interpreter,
         val labels: List<String>,
         val outputArr: Array<FloatArray>,
+        // Set for the two-signature letters model (hand shape + J/Z); null for the LSTM.
+        val letters: LetterTfliteClassifier? = null,
     )
 
     /**
@@ -491,6 +498,12 @@ class PredictionService(private val context: Context) {
     private var motionEarlyStreak = 0
     private var motionEarlyLabel  = -1
     private val probabilityHistory = ArrayDeque<FloatArray>()
+
+    // Letters mode with a two-signature model. Rebuilt when the classifier
+    // changes (model update); only touched under [lock].
+    private var letterEngine: LetterEngine? = null
+    private var letterEngineFor: LetterTfliteClassifier? = null
+    private var letterHandFrames = 0
 
     // Cooldown between detections
     private var lastDetectionTime = 0L
@@ -610,6 +623,20 @@ class PredictionService(private val context: Context) {
             return null
         }
 
+        // The two-signature letters file (static hand shape + J/Z motion) runs
+        // through LetterEngine instead of the LSTM. Any other letters file falls
+        // through to the checks below unchanged.
+        if (kind == "letters" && LetterTfliteClassifier.isLetterModel(interp)) {
+            val problem = LetterTfliteClassifier.validate(interp, labels.size)
+            if (problem != null) {
+                Log.e(TAG, "Letters model rejected: $problem")
+                interp.close()
+                return null
+            }
+            return LoadedModel(interp, labels, arrayOf(FloatArray(labels.size)),
+                letters = LetterTfliteClassifier(interp, labels))
+        }
+
         // The model is the authority on how many classes exist. Sizing the
         // output buffer from the label list instead meant a labels/model
         // mismatch either threw into a silent catch or — when the counts
@@ -702,6 +729,7 @@ class PredictionService(private val context: Context) {
         synchronized(lock) {
             if (!isReady) return null
             pinnedModel = if (vocabulary == Vocabulary.LETTERS) lettersModel else wordsModel
+            if (pinnedModel?.letters != null) return null   // letters tap goes through classifyLetterClip
             if (runOnWindow(window) < 0) return null
             val probs = motionOutputArr[0]
             val idx = acceptSingleWindow(probs)
@@ -709,6 +737,54 @@ class PredictionService(private val context: Context) {
             val label = motionLabels.getOrNull(idx) ?: return null
             return PredictionResult(label = label, confidence = probs[idx], isMotion = true)
         }
+    }
+
+    /** True when letters mode will use the hand-shape engine (two-signature model). */
+    fun usesLetterEngine(): Boolean =
+        vocabulary == Vocabulary.LETTERS && lettersModel?.letters != null
+
+    /**
+     * Tap mode, letters: replays the recording through a fresh LetterEngine
+     * (no cooldown) and returns the last letter it committed, or null.
+     */
+    fun classifyLetterClip(recording: List<RecordedFrame>): PredictionResult? {
+        synchronized(lock) {
+            if (!isReady || vocabulary != Vocabulary.LETTERS) return null
+            val classifier = lettersModel?.letters ?: return null
+            val engine = LetterEngine(classifier, cooldownMs = 0L)
+            var last: LetterCommit? = null
+            for (f in recording) engine.onFrame(f.timestampMs, f.hand).commit?.let { last = it }
+            // Close a movement still open when recording stopped.
+            val end = (recording.lastOrNull()?.timestampMs ?: 0L) + LETTER_STOP_HOLD_MS + 1
+            engine.onFrame(end, null).commit?.let { last = it }
+            return last?.let { letterResult(it).copy(replacesPrevious = false) }
+        }
+    }
+
+    /** Returns (notifyNoHands, collecting, pending). Caller must hold [lock]. */
+    private fun processLetterFrame(
+        classifier: LetterTfliteClassifier,
+        hand: FloatArray?,
+    ): Triple<Boolean, CollectingState?, PendingFire?> {
+        val engine = letterEngine?.takeIf { letterEngineFor === classifier }
+            ?: LetterEngine(classifier, DETECTION_COOLDOWN_MS).also {
+                letterEngine = it
+                letterEngineFor = classifier
+            }
+        val now = System.currentTimeMillis()
+        val step = engine.onFrame(now, hand)
+        val pending = step.commit?.let { c ->
+            lastDetectionTime = now
+            PendingFire(letterResult(c))
+        }
+        if (hand == null) {
+            noHandFrames++
+            letterHandFrames = 0
+            return Triple(noHandFrames == NO_HAND_TIMEOUT, null, pending)
+        }
+        noHandFrames = 0
+        letterHandFrames++
+        return Triple(false, CollectingState(step.progress, letterHandFrames), pending)
     }
 
     // Load a model buffer from filesDir (downloaded) first, then bundled assets.
@@ -787,7 +863,7 @@ class PredictionService(private val context: Context) {
      * to the main thread and the main thread itself calls reset()/close() — holding the
      * lock across them would risk deadlock.
      */
-    fun processFrame(features: FloatArray, handsDetected: Int) {
+    fun processFrame(features: FloatArray, handsDetected: Int, letterHand: FloatArray? = null) {
         if (!isReady) return
 
         // A hand scaled ~100x by a collapsed MediaPipe detection is correctly
@@ -820,6 +896,18 @@ class PredictionService(private val context: Context) {
                 resetRequested = false
                 resetBuffers()
                 noHandFrames = 0
+            }
+
+            // Letters mode with the two-signature model: hand shape + J/Z engine
+            // instead of the words LSTM. No pose, motion-energy or 36-frame
+            // gates: they describe moving words, not held letters.
+            val letters = pinnedModel?.letters
+            if (letters != null) {
+                val step = processLetterFrame(letters, if (usable == 0) null else letterHand)
+                notifyNoHands = step.first
+                collectingState = step.second
+                pending = step.third
+                return@synchronized
             }
 
             // No hands — count towards a timeout, then notify + reset.
@@ -1128,6 +1216,8 @@ class PredictionService(private val context: Context) {
         motionEarlyStreak    = 0
         motionEarlyLabel     = -1
         probabilityHistory.clear()
+        letterEngine?.reset()
+        letterHandFrames = 0
     }
 
     /**
