@@ -150,7 +150,7 @@ _FALLBACK_XY = [
 ]
 
 
-def fetch_approved_samples() -> dict:
+def fetch_approved_samples(hand_track: bool = False) -> dict:
     """
     Fetch all approved gesture samples from the backend API.
     Returns a dict: { label: [sample_array, ...] }
@@ -160,7 +160,7 @@ def fetch_approved_samples() -> dict:
     if not ML_API_KEY:
         raise ValueError("ML_API_KEY environment variable is not set")
 
-    url = f"{BACKEND_URL}/ml/dataset"
+    url = f"{BACKEND_URL}/ml/dataset" + ("?hand_track=1" if hand_track else "")
     headers = {"X-API-Key": ML_API_KEY}
 
     # The whole dataset arrives as ONE JSON body — every sample's full 30x147 float

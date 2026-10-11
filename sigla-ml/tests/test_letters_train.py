@@ -85,3 +85,48 @@ def test_fit_static_returns_a_blended_softmax_model():
     assert np.allclose(p.sum(1), 1.0, atol=1e-4)
     # the blend is 0.7 linear + 0.3 network, so both branches must be inside it
     assert {l.name for l in model.layers} >= {"static_linear", "static_mlp"}
+
+
+def _fake_dataset():
+    ds = {}
+    for label, kind, seed in (("A", "static", 1), ("B", "static", 2), ("J", "J", 3)):
+        rows = []
+        for g in ("s1", "s2", "s3", "s4"):
+            for k in range(5):
+                rows.append({"sequence": [[0.0] * 147] * 30, "sample_id": len(rows),
+                             "session_id": g, "hand_track": {"version": 1, "frames": synth_track(seed, kind=kind)}})
+        ds[label] = rows
+    ds["HELLO"] = [{"sequence": [[0.0] * 147] * 30, "sample_id": 99, "session_id": "s1"}]
+    return ds
+
+
+def test_train_letters_end_to_end(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(LT, "STATIC_EPOCHS", 4)
+    monkeypatch.setattr(LT, "MOTION_EPOCHS", 4)
+    uploads = {}
+
+    def upload(path_in_bucket, data, content_type):
+        uploads[path_in_bucket] = data
+        return f"https://store/{path_in_bucket}"
+
+    progress = []
+    out = LT.train_letters("9.9.9-letters", 7, ["A", "B", "J"],
+                           lambda *a, **k: progress.append(a), fetch=lambda: _fake_dataset(), upload=upload)
+    assert out["trained_labels"] == ["A", "B", "J"]
+    assert out["total_classes"] == 3
+    assert out["tflite_url"].endswith("9.9.9-letters/sign_model_letters.tflite")
+    assert set(uploads) == {"9.9.9-letters/sign_model_letters.tflite", "9.9.9-letters/labels_motion.json",
+                            "9.9.9-letters/selection_metrics.json", "9.9.9-letters/artifact_manifest.json"}
+    import json
+    assert json.loads(uploads["9.9.9-letters/labels_motion.json"]) == {"0": "A", "1": "B", "2": "J"}
+    metrics = json.loads(uploads["9.9.9-letters/selection_metrics.json"])
+    assert {"accuracy", "precision", "recall", "f1_score"} <= set(metrics)
+
+
+def test_train_letters_refuses_thin_coverage():
+    ds = _fake_dataset()
+    ds["A"] = ds["A"][:3]
+    with pytest.raises(ValueError, match="A"):
+        LT.train_letters("x-letters", 1, ["A", "B", "J"], lambda *a, **k: None,
+                         fetch=lambda: ds, upload=lambda *a: "u")

@@ -469,3 +469,127 @@ def leave_one_signer_out(samples: list, labels: list) -> dict:
         "mean_accuracy": round(float(np.mean([f["accuracy"] for f in folds])), 4),
         "report": letter_report(all_true, all_pred),
     }
+
+
+# ── production training (POST /train with model_kind "letters") ─────────────
+
+def samples_from_dataset(dataset: dict, word_labels) -> list:
+    """/api/ml/dataset?hand_track=1 rows -> LetterSamples. Rows without a hand
+    track (clips imported before it existed) are skipped."""
+    out = []
+    for label, rows in dataset.items():
+        if word_labels is not None and label not in word_labels:
+            continue
+        for r in rows:
+            track = r.get("hand_track") or {}
+            if not track.get("frames"):
+                continue
+            group = r.get("session_id") or f"__unknown_{r.get('sample_id')}"
+            out.append(LetterSample(label, str(group), track["frames"]))
+    return out
+
+
+def check_coverage(samples: list) -> None:
+    """Same bar as the words model (preprocessor.validate_training_coverage):
+    enough clips per letter, from enough signers."""
+    from app.utils.preprocessor import MIN_REAL_SAMPLES_PER_CLASS, MIN_SIGNERS_PER_CLASS
+    by_label: dict = {}
+    for s in samples:
+        by_label.setdefault(s.label, []).append(s.group)
+    problems = []
+    for label, groups in sorted(by_label.items()):
+        signers = {g for g in groups if not g.startswith("__unknown_")}
+        if len(groups) < MIN_REAL_SAMPLES_PER_CLASS or len(signers) < MIN_SIGNERS_PER_CLASS:
+            problems.append(f"{label}: {len(groups)} clips with a hand track from {len(signers)} signers "
+                            f"(needs {MIN_REAL_SAMPLES_PER_CLASS} from {MIN_SIGNERS_PER_CLASS})")
+    if problems:
+        raise ValueError("Not enough letter data: " + "; ".join(problems))
+
+
+def train_letters(version_number: str, model_id: int, word_labels, report_progress,
+                  fetch=None, upload=None) -> dict:
+    import json
+
+    if fetch is None:
+        from app.utils.preprocessor import fetch_approved_samples
+        fetch = lambda: fetch_approved_samples(hand_track=True)  # noqa: E731
+    if upload is None:
+        from app.utils.supabase_client import BUCKET_MODELS, upload_file
+        upload = lambda path, data, ctype: upload_file(BUCKET_MODELS, path, data, ctype)  # noqa: E731
+
+    report_progress("loading_data", 2, "Loading approved letter samples")
+    samples = samples_from_dataset(fetch(), word_labels)
+    check_coverage(samples)
+    labels = sorted({s.label for s in samples})
+    if word_labels is not None:
+        missing = sorted(set(word_labels) - set(labels))
+        if missing:
+            print(f"WARNING: no hand-track samples for {', '.join(missing)} - not in this model")
+    if len(labels) < 2:
+        raise ValueError("At least 2 letters with hand-track samples are required")
+
+    report_progress("preparing_data", 8, "Finding holds and movements")
+    data = build_dataset(samples, labels)
+
+    groups = sorted(set(data.static.group.tolist()) | set(data.motion.group.tolist()))
+    held = groups[SEED % len(groups)]
+    val_s, val_m = data.static.group == held, data.motion.group == held
+    report_progress("training_model", 15, "Choosing epochs on a held-out signer")
+    s_model, m_model, s_ep, m_ep = fit_pair(data, ~val_s, ~val_m, val_s, val_m)
+    t, p = predict_clips(data, s_model, m_model, val_s, val_m)
+    report = letter_report(t, p)
+    report.update({
+        "is_generalization_estimate": False,
+        "held_out_signer": held,
+        "none_false_alarm": none_false_alarm(data, m_model, val_m),
+        "evaluation_note": ("Clip accuracy on one held-out signer, used to choose epochs, before the "
+                            "deployment models were refit on every signer. Run "
+                            "tools/letters_experiment.py for leave-one-signer-out."),
+    })
+
+    report_progress("training_final_model", 55, "Training final letter models")
+    everything_s = np.ones(len(data.static.y), bool)
+    everything_m = np.ones(len(data.motion.y), bool)
+    s_model, m_model, _, _ = fit_pair(data, everything_s, everything_m,
+                                      static_epochs=s_ep, motion_epochs=max(m_ep, 1))
+
+    report_progress("converting_model", 85, "Converting model")
+    tflite = export_tflite(data, s_model, m_model)
+    verify_tflite(tflite, data, s_model, m_model)
+
+    version_dir = os.path.join("models", version_number)
+    os.makedirs(version_dir, exist_ok=True)
+    files = {
+        "sign_model_letters.tflite": (tflite, "application/octet-stream"),
+        "labels_motion.json": (json.dumps({str(i): l for i, l in enumerate(labels)}, indent=2).encode(),
+                               "application/json"),
+        "selection_metrics.json": (json.dumps(report, indent=2).encode(), "application/json"),
+        "artifact_manifest.json": (json.dumps({
+            "schema_version": 1, "kind": "letters-two-signature-v1",
+            "signatures": {"static": [1, L.FLOATS], "motion": [1, L.MOTION_FRAMES, L.FLOATS]},
+            "labels": labels, "motion_letters": [l for l in labels if l in L.MOTION_LETTERS],
+            "hand": "raw image coords, x and z * width/height, largest 2D extent",
+        }, indent=2).encode(), "application/json"),
+    }
+    report_progress("uploading_model", 92, "Uploading model files")
+    urls = {}
+    for name, (blob, ctype) in files.items():
+        with open(os.path.join(version_dir, name), "wb") as f:
+            f.write(blob)
+        urls[name] = upload(f"{version_number}/{name}", blob, ctype)
+    report_progress("completed", 100, "Training complete")
+
+    return {
+        "version_number": version_number,
+        "model_id": model_id,
+        "total_classes": len(labels),
+        "trained_labels": labels,
+        "accuracy": report["accuracy"],
+        "selection_best_accuracy": report["accuracy"],
+        "selected_epoch": s_ep,
+        "deployment_real_samples": len(samples),
+        "deployment_fit_samples": int(len(data.static.y) + len(data.motion.y)),
+        "accuracy_note": "clip accuracy on a held-out signer used for epoch selection",
+        "tflite_url": urls["sign_model_letters.tflite"],
+        "h5_url": None,
+    }
