@@ -19,6 +19,26 @@ import httpx
 MAX_FILES_PER_BATCH = 50
 
 
+def load_done(path: str | None) -> set:
+    """"LETTER/signer" keys of batches a previous run finished (one per line).
+    A forced import cannot tell its own earlier rows from the older ones in the
+    database, so it remembers completed batches here instead; a re-run after an
+    interruption then skips them rather than duplicating. None = feature off."""
+    if not path or not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {line.strip() for line in f if line.strip()}
+
+
+def record_done(path: str | None, letter: str, signer: str) -> None:
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f"{letter}/{signer}\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
 def batch_action(have: int, n_clips: int, force: bool) -> str:
     """What to do with one (letter, signer) batch given how many samples that
     signer already has stored for the word: "import", "skip" or "partial".

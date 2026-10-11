@@ -58,7 +58,7 @@ JOB_TIMEOUT_SECONDS = int(os.getenv("IMPORT_JOB_TIMEOUT", 1200))
 
 CATEGORY = os.getenv("ALPHABET_CATEGORY", "ALPHABET")
 
-from _backend_import import BackendImporter, batch_action  # noqa: E402  (scripts/ is on sys.path when run directly)
+from _backend_import import BackendImporter, batch_action, load_done, record_done  # noqa: E402  (scripts/ is on sys.path when run directly)
 
 IMPORTER = BackendImporter(BACKEND_URL, ADMIN_TOKEN,
                            job_timeout_seconds=JOB_TIMEOUT_SECONDS,
@@ -98,6 +98,9 @@ def main() -> int:
     ap.add_argument("--json", metavar="PATH", help="write a per-batch report")
     ap.add_argument("--dataset-dir", action="append", default=None,
                     help="repeatable; default datasets/Alphabets")
+    ap.add_argument("--done-file", metavar="PATH", default=None,
+                    help="remember finished (letter, signer) batches here and skip them on a re-run. "
+                         "Use with --force: it makes an interrupted import safe to resume.")
     ap.add_argument("--force", action="store_true",
                     help="import even where samples are already stored, keeping them. For letters "
                          "imported before hand tracks existed (F M S T W): adds the new rows next to "
@@ -131,6 +134,7 @@ def main() -> int:
             return 1
 
     report: dict[str, dict] = {}
+    done = load_done(args.done_file)
     with httpx.Client() as client:
         for letter, signers in found.items():
             # vocabulary "letters" is stated explicitly rather than inferred from
@@ -156,6 +160,10 @@ def main() -> int:
                 # complete batch is not always len(clips) rows. Anything within a
                 # couple of rows is treated as done; a badly short one is not,
                 # since that is what a crashed batch looks like.
+                if f"{letter}/{signer}" in done:
+                    print(f"  {signer}: finished in an earlier run (done-file) - skipping")
+                    report[letter]["batches"][signer] = {"status": "skipped", "stored": 0}
+                    continue
                 have = already.get(signer, 0)
                 action = batch_action(have, len(clips), args.force)
                 if action == "skip":
@@ -178,6 +186,8 @@ def main() -> int:
                 result = IMPORTER.upload_batch(client, word_id, letter, signer, clips)
                 report[letter]["batches"][signer] = result
                 status = result.get("status", "?")
+                if status == "completed":
+                    record_done(args.done_file, letter, signer)
                 ok = result.get("success_count", result.get("processed_count", "?"))
                 print(f"    -> {status}  stored={ok}")
                 if status == "conflict":

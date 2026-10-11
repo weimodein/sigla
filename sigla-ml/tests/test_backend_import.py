@@ -93,3 +93,18 @@ def test_batch_action_skips_stored_batches_unless_forced():
     # --force: old rows exist (clips imported before hand tracks) but must still be imported
     assert batch_action(have=10, n_clips=10, force=True) == "import"
     assert batch_action(have=3, n_clips=10, force=True) == "import"
+
+
+def test_done_file_remembers_finished_batches_so_a_forced_rerun_never_duplicates(tmp_path):
+    from scripts._backend_import import load_done, record_done
+    f = str(tmp_path / "done.txt")
+    assert load_done(f) == set()                      # no file yet
+    record_done(f, "A", "signer-01")
+    record_done(f, "A", "signer-02")
+    record_done(f, "B", "signer-01")
+    assert load_done(f) == {"A/signer-01", "A/signer-02", "B/signer-01"}
+    # a later process sees the same set, and tolerates a blank or half-written last line
+    with open(f, "a", encoding="utf-8") as fh:
+        fh.write("\n")
+    assert load_done(f) == {"A/signer-01", "A/signer-02", "B/signer-01"}
+    assert load_done(None) == set()                   # feature off
