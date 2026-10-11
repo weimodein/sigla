@@ -3278,10 +3278,10 @@ Expected: `ALTER TABLE`; `GET /api/ml/dataset?hand_track=1` still answers (with 
 Run: `cd sigla-ml && ADMIN_TOKEN=… BACKEND_URL=… venv/Scripts/python.exe scripts/import_alphabets.py --all --replace --dataset-dir "../datasets/LETTERS(A-L)" --dataset-dir "../datasets/LETTERS(M-S)" --dataset-dir "../datasets/LETTERS(T-Z)" --json letters_import.json`
 Expected: every (letter, signer) batch ends `completed`; spot-check in SQL that letter rows have `hand_track IS NOT NULL` and word rows do not.
 
-- [ ] **Step 10: Train a version in the admin panel, then Test — do not Deploy**
+- [ ] **Step 10: Train a version in the admin panel — do not Deploy yet**
 
-In *Manage Model*, train a new version (words + letters as usual). When both finish, click **Test** on the letters row.
-Expected: the letters row shows 26 classes and the held-out-signer accuracy from `selection_metrics.json`; it should be in line with Task 4's numbers. Note the version number for Task 12.
+In *Manage Model* (it has no Test button; the accuracy shows in the version row), train a new version (words + letters as usual). When both finish, the version is "trained", not deployed.
+Expected: the alphabet column shows 26 classes and the held-out-signer accuracy from `selection_metrics.json`. That figure is flattering (the same signer chose the epoch); the honest estimate is Task 4's 95.8%. Before Deploy, download the letters artifacts from storage and sideload them on the dev app (Task 12 step 4 procedure) to check them. Note the version number for Task 12.
 
 ---
 
