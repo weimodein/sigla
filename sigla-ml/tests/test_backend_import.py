@@ -82,3 +82,14 @@ def test_delete_all_samples_sends_the_confirmation_the_backend_demands():
     with _client(handler) as c:
         assert _importer().delete_all_samples(c, 12, "F") == 40
     assert seen == {"method": "DELETE", "url": f"{BASE}/words/12/samples?confirm=F", "auth": "Bearer tok"}
+
+
+def test_batch_action_skips_stored_batches_unless_forced():
+    from scripts._backend_import import batch_action
+    assert batch_action(have=0, n_clips=10, force=False) == "import"
+    assert batch_action(have=10, n_clips=10, force=False) == "skip"       # already stored
+    assert batch_action(have=8, n_clips=10, force=False) == "skip"        # within two rows of complete
+    assert batch_action(have=3, n_clips=10, force=False) == "partial"     # a crashed earlier batch
+    # --force: old rows exist (clips imported before hand tracks) but must still be imported
+    assert batch_action(have=10, n_clips=10, force=True) == "import"
+    assert batch_action(have=3, n_clips=10, force=True) == "import"

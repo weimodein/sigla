@@ -19,6 +19,24 @@ import httpx
 MAX_FILES_PER_BATCH = 50
 
 
+def batch_action(have: int, n_clips: int, force: bool) -> str:
+    """What to do with one (letter, signer) batch given how many samples that
+    signer already has stored for the word: "import", "skip" or "partial".
+
+    Some clips are legitimately rejected by the quality gates, so a complete batch
+    is not always n_clips rows: within two of it counts as done. Fewer than that
+    but not zero is what a crashed batch looks like, and re-uploading would
+    duplicate those rows. force=True imports regardless: used for letters whose
+    existing rows were stored before hand tracks existed and must be added to,
+    not deleted.
+    """
+    if force:
+        return "import"
+    if have >= n_clips - 2:
+        return "skip"
+    return "partial" if have else "import"
+
+
 class BackendImporter:
     def __init__(self, backend_url: str, admin_token: str, *,
                  job_timeout_seconds: int, upload_timeout_seconds: float,

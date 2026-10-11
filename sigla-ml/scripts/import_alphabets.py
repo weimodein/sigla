@@ -58,7 +58,7 @@ JOB_TIMEOUT_SECONDS = int(os.getenv("IMPORT_JOB_TIMEOUT", 1200))
 
 CATEGORY = os.getenv("ALPHABET_CATEGORY", "ALPHABET")
 
-from _backend_import import BackendImporter  # noqa: E402  (scripts/ is on sys.path when run directly)
+from _backend_import import BackendImporter, batch_action  # noqa: E402  (scripts/ is on sys.path when run directly)
 
 IMPORTER = BackendImporter(BACKEND_URL, ADMIN_TOKEN,
                            job_timeout_seconds=JOB_TIMEOUT_SECONDS,
@@ -98,6 +98,10 @@ def main() -> int:
     ap.add_argument("--json", metavar="PATH", help="write a per-batch report")
     ap.add_argument("--dataset-dir", action="append", default=None,
                     help="repeatable; default datasets/Alphabets")
+    ap.add_argument("--force", action="store_true",
+                    help="import even where samples are already stored, keeping them. For letters "
+                         "imported before hand tracks existed (F M S T W): adds the new rows next to "
+                         "the old ones, deletes nothing. Re-running with --force duplicates.")
     ap.add_argument("--replace", action="store_true",
                     help="delete each selected letter's existing samples first (asks per letter). "
                          "Needed for clips imported before hand tracks existed. NOT reversible.")
@@ -153,13 +157,14 @@ def main() -> int:
                 # couple of rows is treated as done; a badly short one is not,
                 # since that is what a crashed batch looks like.
                 have = already.get(signer, 0)
-                if have >= len(clips) - 2:
+                action = batch_action(have, len(clips), args.force)
+                if action == "skip":
                     print(f"  {signer}: {have} samples already stored — skipping")
                     report[letter]["batches"][signer] = {
                         "status": "skipped", "stored": have,
                     }
                     continue
-                if have:
+                if action == "partial":
                     print(f"  {signer}: only {have}/{len(clips)} stored from an "
                           f"earlier run — re-uploading would duplicate those; "
                           f"skipping, clear them first if you want a clean batch")
@@ -167,6 +172,8 @@ def main() -> int:
                         "status": "partial", "stored": have,
                     }
                     continue
+                if have:
+                    print(f"  {signer}: {have} older samples stay; adding {len(clips)} new ones (--force)")
                 print(f"  {signer}: {len(clips)} clips …")
                 result = IMPORTER.upload_batch(client, word_id, letter, signer, clips)
                 report[letter]["batches"][signer] = result
