@@ -48,6 +48,11 @@ android {
 
     buildTypes {
         debug {
+            // Installs beside the release app (com.example.sigla) instead of
+            // failing with a signature mismatch, so a debug build never needs the
+            // real app uninstalled (which would wipe its settings, history and
+            // downloaded models).
+            applicationIdSuffix = ".dev"
             // Local backend for on-device testing (PC LAN IP, port 8080).
             // Requires the cleartext exception in network_security_config.xml.
             buildConfigField("String", "BASE_URL", "\"https://siglaph.online/api/\"")
