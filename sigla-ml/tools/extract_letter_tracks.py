@@ -2,8 +2,7 @@
 
     venv/Scripts/python.exe tools/extract_letter_tracks.py --workers 4
 
-Reads datasets/LETTERS(A-L), LETTERS(M-S), LETTERS(T-Z) (layout
-<LETTER>/<signer>/<clip>), writes letter_tracks/<LETTER>/<signer>/<clip>.json.
+Reads datasets/Alphabets (layout <LETTER>/<signer>/<clip>), writes letter_tracks/<LETTER>/<signer>/<clip>.json.
 Skips clips already done, so it can be stopped and resumed.
 """
 import argparse
@@ -16,7 +15,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 ML_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ML_ROOT)
 REPO = os.path.dirname(ML_ROOT)
-DEFAULT_DIRS = [os.path.join(REPO, "datasets", d) for d in ("LETTERS(A-L)", "LETTERS(M-S)", "LETTERS(T-Z)")]
+DEFAULT_DIRS = [os.path.join(REPO, "datasets", "Alphabets")]
 
 
 def _one(clip: str, out_path: str) -> tuple[str, str]:

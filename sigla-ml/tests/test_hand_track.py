@@ -6,7 +6,7 @@ import pytest
 from app.utils import letters as L
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-_CLIPS = sorted(glob.glob(os.path.join(_ROOT, "datasets", "LETTERS(A-L)", "A", "*", "*.MOV")))
+_CLIPS = sorted(glob.glob(os.path.join(_ROOT, "datasets", "Alphabets", "A", "*", "*.MOV")))
 
 
 _ANY = sorted(glob.glob(os.path.join(_ROOT, "datasets", "organized_clips", "0", "signer-01", "*.MOV")))
