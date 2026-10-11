@@ -131,6 +131,17 @@ class HandLandmarkHelper(
     // deliberate latency/accuracy trade instead. Zero pose (before the first pose
     // result) is the same absent-pose sentinel training data contains.
     @Volatile private var lastPoseResult: PoseLandmarkerResult? = null
+
+    /**
+     * Off in letters mode: the letter models read one hand only, so pose
+     * detection is pure cost there. Turning it off drops the last pose so a
+     * later switch back to words starts from the absent-pose sentinel.
+     */
+    @Volatile var poseEnabled: Boolean = true
+        set(value) {
+            field = value
+            if (!value) lastPoseResult = null
+        }
     private var poseFrameCounter = 0
 
     /**
@@ -335,7 +346,7 @@ class HandLandmarkHelper(
             lmk.detectAsync(mpImage, frameTimestampMs)
             // Pose only every Nth frame — hands run every frame.
             poseFrameCounter++
-            if (poseFrameCounter >= POSE_DETECT_INTERVAL) {
+            if (poseFrameCounter >= POSE_DETECT_INTERVAL && poseEnabled) {
                 poseFrameCounter = 0
                 poseLandmarker?.detectAsync(mpImage, frameTimestampMs)
             }

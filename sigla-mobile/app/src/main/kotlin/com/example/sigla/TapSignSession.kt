@@ -71,14 +71,14 @@ class TapSignSession(private val clock: () -> Long) {
     }
 
     @Synchronized
-    fun onFrame(features: FloatArray, handsDetected: Int): Event? {
+    fun onFrame(features: FloatArray, handsDetected: Int, letterHand: FloatArray? = null): Event? {
         if (state != State.READY && state != State.RECORDING) return null
         val now = clock()
         val detected = if (handsDetected > 0) features.copyOf() else null
         // Same rule as PredictionService.processFrame: a collapsed detection is
         // not a hand.
         val usable = detected != null && handExtentOk(detected)
-        val frame = RecordedFrame(now, detected)
+        val frame = RecordedFrame(now, detected, if (detected != null) letterHand?.copyOf() else null)
 
         if (state == State.READY) {
             if (usable) {

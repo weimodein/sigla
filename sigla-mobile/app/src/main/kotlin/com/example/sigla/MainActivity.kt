@@ -398,10 +398,15 @@ class MainActivity : AppCompatActivity() {
                         ordered, result.handedness, result.handednessScore, result.handsDetected
                     )
                     val c1 = if (PIPELINE_PROFILING) System.nanoTime() else 0L
+                    // Letters with the two-signature model read one raw hand,
+                    // not the normalised 147-float frame.
+                    val letterHand = if (result.handsDetected > 0 && predictor?.usesLetterEngine() == true) {
+                        LetterHand.select(result.rawHands, result.sourceWidth, result.sourceHeight)
+                    } else null
                     if (tapMode) {
-                        tapSession.onFrame(features, result.handsDetected)?.let { handleTapEvent(it) }
+                        tapSession.onFrame(features, result.handsDetected, letterHand)?.let { handleTapEvent(it) }
                     } else {
-                        predictor?.processFrame(features, result.handsDetected)
+                        predictor?.processFrame(features, result.handsDetected, letterHand)
                     }
                     if (PIPELINE_PROFILING) {
                         val c2 = System.nanoTime()
@@ -552,6 +557,8 @@ class MainActivity : AppCompatActivity() {
 
         modelInitJob?.cancel()
         modelInitJob = null
+        // The cached helper is shared across screens: leave it with pose on.
+        landmarker?.poseEnabled = true
         cameraProvider?.unbindAll()
         cameraProvider = null
 
@@ -770,6 +777,7 @@ class MainActivity : AppCompatActivity() {
                 fresh.setVocabulary(vocabulary)
             }
             updateVocabularyToggleLabel()
+            syncPoseForVocabulary()
             // A gesture half-collected by the old model cannot finish on the new one.
             cancelTap()
             fresh.onNoHands?.invoke()
@@ -836,8 +844,10 @@ class MainActivity : AppCompatActivity() {
         // result card animates in.
         val gestureType = if (result.isMotion) "motion" else "static"
         val label = result.label
+        val replaces = result.replacesPrevious
         lifecycleScope.launch(Dispatchers.IO) {
-            historyManager.add(label, pct, gestureType)
+            if (replaces) historyManager.replaceNewest(label, pct, gestureType)
+            else historyManager.add(label, pct, gestureType)
         }
 
         // Distinguishes "no translation for this label" from "toggle is off" —
@@ -862,8 +872,13 @@ class MainActivity : AppCompatActivity() {
     private fun processCapture(event: TapSignSession.Event.Captured) {
         runOnUiThread { renderTapState() }
         lifecycleScope.launch(Dispatchers.Default) {
-            val outcome = ClipPreparer.prepare(event.frames)
-            val result = (outcome as? ClipOutcome.Window)?.let { predictor?.classifyWindow(it.frames) }
+            val letters = predictor?.usesLetterEngine() == true
+            val outcome = if (letters) null else ClipPreparer.prepare(event.frames)
+            val result = if (letters) {
+                predictor?.classifyLetterClip(event.frames)
+            } else {
+                (outcome as? ClipOutcome.Window)?.let { predictor?.classifyWindow(it.frames) }
+            }
             withContext(Dispatchers.Main) {
                 // Cancelled meanwhile (mode, vocabulary, camera, or screen left):
                 // the result belongs to a setup the user has moved away from.
@@ -922,11 +937,17 @@ class MainActivity : AppCompatActivity() {
         if (predictor.currentVocabulary() == target) return
         predictor.setVocabulary(target)
         updateVocabularyToggleLabel()
+        syncPoseForVocabulary()
         // The partially-collected gesture belongs to the old vocabulary and
         // setVocabulary already dropped it. Clear the on-screen progress the same
         // way the end of a gesture does.
         predictor.onNoHands?.invoke()
         cancelTap()
+    }
+
+    /** Pose only serves the words model; letters with the hand-shape engine skip it. */
+    private fun syncPoseForVocabulary() {
+        landmarker?.poseEnabled = predictor?.usesLetterEngine() != true
     }
 
     /** Draws the tap controls for the current mode and session state. Main thread only. */
