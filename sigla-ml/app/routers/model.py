@@ -161,14 +161,22 @@ async def test_model(request: TestRequest):
 
 
 @router.post("/extract-landmarks")
-async def extract_landmarks(file: UploadFile = File(...), hand_track: bool = False):
+async def extract_landmarks(file: UploadFile = File(...), hand_track: bool = False,
+                            only_hand_track: bool = False):
     """
     Extract the 30x147 motion sequence from an uploaded video, and with
-    ?hand_track=true also the one-hand letter track (letter words only - see
-    docs-internal/specs/2026-10-11-letters-accuracy-design.md).
+    ?hand_track=true also the one-hand letter track. Letter words use
+    ?only_hand_track=true: the track alone, with "sequence": null, because the
+    30-frame window is not used for letters and costs ~34 s per clip against
+    ~7 s for the track (docs-internal/specs/2026-10-11-letters-accuracy-design.md).
     """
     try:
         video_bytes = await file.read()
+        if only_hand_track:
+            track = await run_in_threadpool(extract_hand_track, video_bytes, file.filename)
+            if track is None:
+                raise HTTPException(status_code=422, detail="No hands detected in video")
+            return {"type": "motion", "sequence": None, "hand_track": track}
         sequence = await run_in_threadpool(
             extract_motion_landmarks, video_bytes, file.filename
         )

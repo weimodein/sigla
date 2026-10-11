@@ -16,9 +16,19 @@ function datasetEntry(sample, withTrack) {
   return entry;
 }
 
-// Letter words also need the one-hand track; every other word does not.
+// Letter words need only the one-hand track (the 30-frame window is unused for
+// letters and is the slow part: ~34 s per clip against ~7 s); every other word
+// is extracted exactly as before.
 function extractUrl(baseUrl, vocabulary) {
-  return `${baseUrl}/extract-landmarks${vocabulary === "letters" ? "?hand_track=true" : ""}`;
+  return `${baseUrl}/extract-landmarks${vocabulary === "letters" ? "?only_hand_track=true" : ""}`;
 }
 
-module.exports = { datasetEntry, extractUrl };
+// Whether /api/ml/dataset includes this sample. An ordinary sample needs its
+// 30-frame sequence. A letter sample may have only a hand track, and is exported
+// only when the caller asked for tracks, so the words/LSTM export is unchanged.
+function isExportable(sample, withTrack) {
+  if (Array.isArray(sample.sequence)) return true;
+  return Boolean(withTrack && sample.hand_track);
+}
+
+module.exports = { datasetEntry, extractUrl, isExportable };

@@ -53,3 +53,26 @@ def test_train_passes_model_kind(monkeypatch):
                                              "word_labels": ["A", "B"], "model_kind": "letters"})
     assert r.status_code == 200
     assert seen["model_kind"] == "letters"
+
+
+def test_extract_only_hand_track_skips_the_window_extraction(monkeypatch):
+    """Letters only need the track: the 30-frame window costs ~34 s per clip and is not used."""
+    def must_not_run(b, n):
+        raise AssertionError("extract_motion_landmarks must not run for only_hand_track")
+
+    monkeypatch.setattr(model_router, "extract_motion_landmarks", must_not_run)
+    monkeypatch.setattr(model_router, "extract_hand_track",
+                        lambda b, n: {"version": 1, "frames": [{"t_ms": 0, "hand": [0.0] * 63}]})
+    r = TestClient(app).post("/extract-landmarks?only_hand_track=true",
+                             files={"file": ("a.mp4", b"x", "video/mp4")})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["sequence"] is None
+    assert body["hand_track"]["version"] == 1
+
+
+def test_extract_only_hand_track_without_a_hand_is_422(monkeypatch):
+    monkeypatch.setattr(model_router, "extract_hand_track", lambda b, n: None)
+    r = TestClient(app).post("/extract-landmarks?only_hand_track=true",
+                             files={"file": ("a.mp4", b"x", "video/mp4")})
+    assert r.status_code == 422

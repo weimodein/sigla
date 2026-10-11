@@ -1,6 +1,6 @@
 const { GestureSample, Word } = require("../models/index.js");
 const { Op } = require("sequelize");
-const { datasetEntry } = require("../utils/mlDataset");
+const { datasetEntry, isExportable } = require("../utils/mlDataset");
 
 /**
  * GET /api/ml/dataset
@@ -48,7 +48,7 @@ const getApprovedDataset = async (req, res) => {
       const label = sample.word.label;
       if (!dataset[label]) dataset[label] = [];
 
-      if (sample.sequence && Array.isArray(sample.sequence)) {
+      if (isExportable(sample, withTrack)) {
         // sample_id / file_url identify the source clip. They used to be dropped
         // here, which left the ML service unable to record WHICH samples landed in
         // which split — so a reported metric could not be reproduced or audited,
