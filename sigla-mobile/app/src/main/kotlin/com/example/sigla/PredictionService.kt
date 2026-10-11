@@ -261,6 +261,15 @@ internal fun letterResult(c: LetterCommit): PredictionResult =
     PredictionResult(c.label, c.confidence, isMotion = c.isMotion, replacesPrevious = c.replacesPrevious)
 
 /**
+ * The status card's frame count in letters mode: the frames of the CURRENT
+ * gesture. It restarts after every result and when the hand leaves, and stops at
+ * BUFFER_CAPACITY, exactly like the words buffer it stands in for. Without the
+ * reset and cap, a hand held in view counted 100+ frames.
+ */
+internal fun nextLetterFrameCount(previous: Int, handPresent: Boolean, committed: Boolean): Int =
+    if (!handPresent || committed) 0 else minOf(previous + 1, BUFFER_CAPACITY)
+
+/**
  * A result decided under the lock but not yet delivered. Inference runs while
  * [PredictionService.lock] is held; onResult must be invoked after releasing it,
  * since the callback hops to the UI thread and the UI thread calls reset()/close().
@@ -779,11 +788,11 @@ class PredictionService(private val context: Context) {
         }
         if (hand == null) {
             noHandFrames++
-            letterHandFrames = 0
+            letterHandFrames = nextLetterFrameCount(letterHandFrames, handPresent = false, committed = false)
             return Triple(noHandFrames == NO_HAND_TIMEOUT, null, pending)
         }
         noHandFrames = 0
-        letterHandFrames++
+        letterHandFrames = nextLetterFrameCount(letterHandFrames, handPresent = true, committed = pending != null)
         return Triple(false, CollectingState(step.progress, letterHandFrames), pending)
     }
 

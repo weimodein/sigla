@@ -76,4 +76,20 @@ class PredictionPolicyTest {
         assertFalse(s.isMotion)
         assertFalse(s.replacesPrevious)
     }
+
+    // The status card's frame count is the frames of the CURRENT gesture: words mode resets it
+    // after every result and its buffer stops at 90. Letters must behave the same.
+    @Test
+    fun letterFrameCountCountsUpResetsOnResultOrNoHandAndStopsAtTheBufferSize() {
+        assertEquals(1, nextLetterFrameCount(0, handPresent = true, committed = false))
+        assertEquals(6, nextLetterFrameCount(5, handPresent = true, committed = false))
+        assertEquals(0, nextLetterFrameCount(40, handPresent = true, committed = true))
+        assertEquals(0, nextLetterFrameCount(40, handPresent = false, committed = false))
+        assertEquals(90, nextLetterFrameCount(90, handPresent = true, committed = false))
+        assertEquals(90, nextLetterFrameCount(89, handPresent = true, committed = false))
+        // 100+ frames of one held hand must never reach the screen
+        var n = 0
+        repeat(150) { n = nextLetterFrameCount(n, handPresent = true, committed = false) }
+        assertEquals(90, n)
+    }
 }
