@@ -68,3 +68,17 @@ def test_upload_batch_refuses_more_than_the_server_cap(tmp_path):
     with _client(lambda req: httpx.Response(200, json={"job": None})) as c:
         with pytest.raises(SystemExit):
             _importer().upload_batch(c, 7, "HELLO", "s1", ["x"] * 51)
+
+
+def test_delete_all_samples_sends_the_confirmation_the_backend_demands():
+    seen = {}
+
+    def handler(req):
+        seen["method"] = req.method
+        seen["url"] = str(req.url)
+        seen["auth"] = req.headers["Authorization"]
+        return httpx.Response(200, json={"deleted": 40})
+
+    with _client(handler) as c:
+        assert _importer().delete_all_samples(c, 12, "F") == 40
+    assert seen == {"method": "DELETE", "url": f"{BASE}/words/12/samples?confirm=F", "auth": "Bearer tok"}

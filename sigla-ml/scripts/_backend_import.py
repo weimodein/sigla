@@ -56,6 +56,14 @@ class BackendImporter:
             return int(wid)
         sys.exit(f"creating word {label} failed: {r.status_code} {r.text}")
 
+    def delete_all_samples(self, client: httpx.Client, word_id: int, label: str) -> int:
+        """DELETE /words/:id/samples. The backend demands confirm=<label>.
+        Returns how many rows were deleted. Not reversible."""
+        r = client.delete(f"{self.backend_url}/words/{word_id}/samples",
+                          params={"confirm": label}, headers=self.headers(), timeout=60.0)
+        r.raise_for_status()
+        return int(r.json().get("deleted", 0))
+
     def stored_per_signer(self, client: httpx.Client, word_id: int) -> dict[str, int]:
         """How many samples each session_id already has stored for this word.
 
