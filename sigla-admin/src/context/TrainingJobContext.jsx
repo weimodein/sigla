@@ -4,6 +4,7 @@ import { getAllModels, getModelStatus } from "../api/modelApi.js";
 import { invalidate } from "../utils/apiCache.js";
 import { useToast } from "./ToastContext.jsx";
 import { useAuth } from "./AuthContext.jsx";
+import { isStalled, progressSignature } from "../utils/trainingTracking.js";
 
 // App-wide tracking for a model training run, mirroring UploadJobsContext.jsx —
 // same reason: this used to live inside ManageModel's component state, which
@@ -17,13 +18,10 @@ const TrainingJobContext = createContext(null);
 
 // A row stranded at "training" (server restarted mid-run, so nothing will ever
 // mark it trained/failed) would otherwise poll for the whole session and keep
-// the Train button disabled forever. Give up and say so — set well past the
-// words model's own timeout: training can exceed 20 minutes per the ML
-// service's unlimited client timeout (see runTraining in modelController.js),
-// and the words half runs before the alphabet half in the same run, so the
-// pair together can run long. 90 minutes leaves headroom without leaving a
-// truly stuck run tying up the banner all day.
-const POLL_TIMEOUT_MS = 90 * 60 * 1000;
+// the Train button disabled forever, so the poller gives up on a run that has
+// reported nothing new for a while (see utils/trainingTracking.js). It looks at
+// what the run is doing, not how old it is: a long words+alphabet run keeps being
+// tracked, and a wrong start time from the server (time zones) cannot end it early.
 const POLL_INTERVAL_MS = 5000;
 
 export const TrainingJobsProvider = ({ children }) => {
@@ -46,6 +44,9 @@ export const TrainingJobsProvider = ({ children }) => {
   const [minimized, setMinimized] = useState(false);
 
   const pollRef = useRef(null);
+  // What the last poll saw, and when it last changed, for the give-up rule.
+  const lastSignatureRef = useRef(null);
+  const lastChangeAtRef = useRef(0); // set when a run starts being tracked
   const jobRef = useRef(null);
   useEffect(() => { jobRef.current = job; }, [job]);
   // Only the admin who started a run gets its toast/results modal — everyone
@@ -155,17 +156,19 @@ export const TrainingJobsProvider = ({ children }) => {
   useEffect(() => {
     if (!job) return;
 
-    const startedAt = job.startedAt || Date.now();
+    // A new run being tracked: the clock for "nothing new reported" starts now.
+    lastSignatureRef.current = null;
+    lastChangeAtRef.current = Date.now();
 
     const poll = async () => {
       const tracked = jobRef.current;
       if (!tracked) return;
 
-      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+      if (isStalled(Date.now(), lastChangeAtRef.current)) {
         clearInterval(pollRef.current);
         setJob(null);
         errorToast(
-          "Stopped tracking this training run — it has not reported back. Reload to check its status.",
+          "Stopped tracking this training run — it has reported no progress for 30 minutes. Reload to check its status.",
         );
         invalidate("models:");
         setFinishedCount((n) => n + 1);
@@ -182,6 +185,12 @@ export const TrainingJobsProvider = ({ children }) => {
         const { model, progress: wordsProgress } = wordsResponse;
         const letters = lettersResponse?.model ?? null;
         const lettersProgress = lettersResponse?.progress ?? null;
+
+        const signature = progressSignature(model, wordsProgress, letters, lettersProgress);
+        if (signature !== lastSignatureRef.current) {
+          lastSignatureRef.current = signature;
+          lastChangeAtRef.current = Date.now();
+        }
 
         const updateProgress = (current, prefix, row, progress) => {
           const status = row?.status ?? current[`${prefix}Status`];
@@ -292,7 +301,9 @@ export const TrainingJobsProvider = ({ children }) => {
       lettersTotalEpochs: null,
       lettersBatch: null,
       lettersTotalBatches: null,
-      startedAt: Number.isFinite(Date.parse(model.created_at)) ? Date.parse(model.created_at) : Date.now(),
+      // This tab just started the run: now is its start. (The server's created_at is not used here;
+      // it has been hours off whenever the backend ran outside UTC.)
+      startedAt: Date.now(),
       // This client made the call, so it owns the outcome even before the
       // first poll tick reads trained_by back from the server.
       startedByMe: true,

@@ -269,7 +269,8 @@ def upload_model_to_supabase(local_path: str, version_number: str, model_type: s
 
 def train(version_number: str, model_id: int,
           word_labels: list[str] | None = None,
-          progress_callback=None) -> dict:
+          progress_callback=None,
+          model_kind: str | None = None) -> dict:
     from tensorflow import keras
 
     def report_progress(stage: str, progress: float, stage_label: str,
@@ -338,6 +339,12 @@ def train(version_number: str, model_id: int,
     print(f"\n{'='*50}")
     print(f"Starting training for version: {version_number}")
     print(f"{'='*50}\n")
+    # Letters run their own pipeline: one hand, hold frames and J/Z movements,
+    # two models in one .tflite (docs-internal/specs/2026-10-11-letters-accuracy-design.md).
+    if model_kind == "letters":
+        from app.services.letters_train import train_letters
+        return train_letters(version_number, model_id, word_labels, report_progress)
+
     report_progress("loading_data", 2, "Loading approved samples")
 
     os.makedirs(MODELS_DIR, exist_ok=True)

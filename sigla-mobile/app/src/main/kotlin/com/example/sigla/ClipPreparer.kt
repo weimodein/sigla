@@ -21,8 +21,10 @@ internal const val TAP_TRIM_PAD_FRAMES = 4              // extract.TRIM_PAD_FRAM
 internal const val TAP_DEFAULT_SOURCE_FPS = 30.0        // extract.DEFAULT_SOURCE_FPS
 
 /** One camera frame captured during a tap recording. [features] is the
- * NORMALIZED 147-float vector when MediaPipe detected a hand, null otherwise. */
-class RecordedFrame(val timestampMs: Long, val features: FloatArray?)
+ * NORMALIZED 147-float vector when MediaPipe detected a hand, null otherwise.
+ * [hand] is the letters engine's one-hand input (LetterHand.select), letters
+ * mode only. */
+class RecordedFrame(val timestampMs: Long, val features: FloatArray?, val hand: FloatArray? = null)
 
 /** Why a recording could not be classified. [code] equals clip_prep's REASON_*. */
 enum class ClipRejection(val code: String) {

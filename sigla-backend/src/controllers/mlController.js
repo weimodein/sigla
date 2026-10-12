@@ -1,5 +1,5 @@
 const { GestureSample, Word } = require("../models/index.js");
-const { Op } = require("sequelize");
+const { datasetEntry, isExportable, datasetQueryOptions } = require("../utils/mlDataset");
 
 /**
  * GET /api/ml/dataset
@@ -9,27 +9,27 @@ const { Op } = require("sequelize");
  *                        submitted_by }, ... ] }
  */
 const getApprovedDataset = async (req, res) => {
+  const withTrack = req.query.hand_track === "1";
   try {
     // Fetch all training-eligible samples:
     // - "approved" samples (admin-reviewed) for any word
     // - "pending" samples, but only for words the admin has approved
     //   (status="approved" or is_active=true)
+    //
+    // Each export selects only what its consumer reads (see datasetQueryOptions):
+    // words training never loads a hand track, and ?hand_track=1 returns just the
+    // letter rows that have one.
+    const query = datasetQueryOptions(withTrack);
     const samples = await GestureSample.findAll({
-      where: {
-        [Op.or]: [
-          { status: "approved" },
-          { status: "pending" },
-        ],
-      },
+      attributes: query.attributes,
+      where: query.where,
       include: [
         {
           model: Word,
           as: "word",
           attributes: ["label"],
           required: true,
-          where: {
-            [Op.or]: [{ status: "approved" }, { is_active: true }],
-          },
+          where: query.wordWhere,
         },
       ],
       order: [["created_at", "ASC"]],
@@ -46,7 +46,7 @@ const getApprovedDataset = async (req, res) => {
       const label = sample.word.label;
       if (!dataset[label]) dataset[label] = [];
 
-      if (sample.sequence && Array.isArray(sample.sequence)) {
+      if (isExportable(sample, withTrack)) {
         // sample_id / file_url identify the source clip. They used to be dropped
         // here, which left the ML service unable to record WHICH samples landed in
         // which split — so a reported metric could not be reproduced or audited,
@@ -57,13 +57,7 @@ const getApprovedDataset = async (req, res) => {
         // session_id is the grouping key that comment anticipates. submitted_by turned
         // out to be useless for it in practice — it records the uploading ADMIN, so it
         // is 1 for 1664 of 1726 samples across all four signers.
-        dataset[label].push({
-          sequence: sample.sequence,
-          sample_id: sample.id,
-          file_url: sample.file_url,
-          submitted_by: sample.submitted_by,
-          session_id: sample.session_id,
-        });
+        dataset[label].push(datasetEntry(sample, withTrack));
       } else {
         console.warn(`Sample ${sample.id} has no embedded sequence, skipping`);
       }

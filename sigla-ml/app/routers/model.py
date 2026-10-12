@@ -7,7 +7,7 @@ import secrets
 from threading import Lock
 from app.services.train   import train
 from app.services.test    import test
-from app.services.extract import extract_motion_landmarks
+from app.services.extract import extract_motion_landmarks, extract_hand_track
 
 router = APIRouter(prefix="", tags=["Model"])
 
@@ -59,6 +59,9 @@ class TrainRequest(BaseModel):
     # approved class, which is what this endpoint did before separate
     # vocabularies existed — see train() for why the alphabet needs its own.
     word_labels:    Optional[List[str]] = None
+    # "letters" runs the one-hand letters pipeline (letters_train.py); None or
+    # "words" is the LSTM. Older backends omit it, which keeps the old behaviour.
+    model_kind:     Optional[str] = None
 
 class TestRequest(BaseModel):
     version_number: str
@@ -89,6 +92,7 @@ async def train_model(request: TrainRequest):
             version_number=request.version_number,
             model_id=request.model_id,
             word_labels=request.word_labels,
+            model_kind=request.model_kind,
             progress_callback=report_progress,
         )
         report_progress({
@@ -157,20 +161,34 @@ async def test_model(request: TestRequest):
 
 
 @router.post("/extract-landmarks")
-async def extract_landmarks(file: UploadFile = File(...)):
+async def extract_landmarks(file: UploadFile = File(...), hand_track: bool = False,
+                            only_hand_track: bool = False):
     """
-    Extract a MediaPipe hand-landmark motion sequence (30×126) from an uploaded
-    video. Every gesture is treated as motion. Called by the Node.js backend for
-    each video file uploaded by an admin.
+    Extract the 30x147 motion sequence from an uploaded video, and with
+    ?hand_track=true also the one-hand letter track. Letter words use
+    ?only_hand_track=true: the track alone, with "sequence": null, because the
+    30-frame window is not used for letters and costs ~34 s per clip against
+    ~7 s for the track (docs-internal/specs/2026-10-11-letters-accuracy-design.md).
     """
     try:
         video_bytes = await file.read()
+        if only_hand_track:
+            track = await run_in_threadpool(extract_hand_track, video_bytes, file.filename)
+            if track is None:
+                raise HTTPException(status_code=422, detail="No hands detected in video")
+            return {"type": "motion", "sequence": None, "hand_track": track}
         sequence = await run_in_threadpool(
             extract_motion_landmarks, video_bytes, file.filename
         )
         if sequence is None:
             raise HTTPException(status_code=422, detail="No hands detected in video")
-        return {"type": "motion", "sequence": sequence}
+        body = {"type": "motion", "sequence": sequence}
+        if hand_track:
+            track = await run_in_threadpool(extract_hand_track, video_bytes, file.filename)
+            if track is None:
+                raise HTTPException(status_code=422, detail="No hands detected in video")
+            body["hand_track"] = track
+        return body
     except HTTPException:
         raise
     except ValueError as e:

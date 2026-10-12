@@ -19,6 +19,44 @@ import httpx
 MAX_FILES_PER_BATCH = 50
 
 
+def load_done(path: str | None) -> set:
+    """"LETTER/signer" keys of batches a previous run finished (one per line).
+    A forced import cannot tell its own earlier rows from the older ones in the
+    database, so it remembers completed batches here instead; a re-run after an
+    interruption then skips them rather than duplicating. None = feature off."""
+    if not path or not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        return {line.strip() for line in f if line.strip()}
+
+
+def record_done(path: str | None, letter: str, signer: str) -> None:
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f"{letter}/{signer}\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def batch_action(have: int, n_clips: int, force: bool) -> str:
+    """What to do with one (letter, signer) batch given how many samples that
+    signer already has stored for the word: "import", "skip" or "partial".
+
+    Some clips are legitimately rejected by the quality gates, so a complete batch
+    is not always n_clips rows: within two of it counts as done. Fewer than that
+    but not zero is what a crashed batch looks like, and re-uploading would
+    duplicate those rows. force=True imports regardless: used for letters whose
+    existing rows were stored before hand tracks existed and must be added to,
+    not deleted.
+    """
+    if force:
+        return "import"
+    if have >= n_clips - 2:
+        return "skip"
+    return "partial" if have else "import"
+
+
 class BackendImporter:
     def __init__(self, backend_url: str, admin_token: str, *,
                  job_timeout_seconds: int, upload_timeout_seconds: float,
@@ -55,6 +93,14 @@ class BackendImporter:
                 sys.exit(f"{label} exists but the 409 body carried no word_id: {r.text}")
             return int(wid)
         sys.exit(f"creating word {label} failed: {r.status_code} {r.text}")
+
+    def delete_all_samples(self, client: httpx.Client, word_id: int, label: str) -> int:
+        """DELETE /words/:id/samples. The backend demands confirm=<label>.
+        Returns how many rows were deleted. Not reversible."""
+        r = client.delete(f"{self.backend_url}/words/{word_id}/samples",
+                          params={"confirm": label}, headers=self.headers(), timeout=60.0)
+        r.raise_for_status()
+        return int(r.json().get("deleted", 0))
 
     def stored_per_signer(self, client: httpx.Client, word_id: int) -> dict[str, int]:
         """How many samples each session_id already has stored for this word.

@@ -150,6 +150,22 @@ class TranslationHistoryManager private constructor(context: Context) {
         return seeded
     }
 
+    /**
+     * Letters: J is traced from I, so the I shown a moment earlier was the start
+     * of J, not a letter of its own. Swap the newest entry instead of adding one;
+     * the translated counters already counted it once.
+     */
+    @Synchronized
+    fun replaceNewest(word: String, confidence: Int, gestureType: String) {
+        val list = getAll().toMutableList()
+        if (list.isEmpty()) {
+            add(word, confidence, gestureType)
+            return
+        }
+        list[0] = TranslationEntry(word, confidence, gestureType)
+        saveToPrefs(list)
+    }
+
     @Synchronized
     fun deleteAt(index: Int) {
         val list = getAll().toMutableList()

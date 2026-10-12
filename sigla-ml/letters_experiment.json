@@ -1,0 +1,121 @@
+{
+  "gate": {
+    "subset_mean": 0.9791,
+    "subset_needed": 0.94,
+    "all_mean": 0.9582,
+    "all_needed": 0.9,
+    "worst_letter": "U",
+    "worst_recall": 0.725,
+    "worst_needed": 0.7,
+    "pass": true
+  },
+  "subset": {
+    "folds": [
+      {
+        "signer": "signer-01",
+        "clips": 50,
+        "accuracy": 1.0,
+        "none_false_alarm": null
+      },
+      {
+        "signer": "signer-02",
+        "clips": 49,
+        "accuracy": 0.9592,
+        "none_false_alarm": null
+      },
+      {
+        "signer": "signer-03",
+        "clips": 50,
+        "accuracy": 1.0,
+        "none_false_alarm": null
+      },
+      {
+        "signer": "signer-04",
+        "clips": 47,
+        "accuracy": 0.9574,
+        "none_false_alarm": null
+      }
+    ],
+    "mean_accuracy": 0.9791,
+    "report": {
+      "accuracy": 0.9796,
+      "precision": 0.9806,
+      "recall": 0.9796,
+      "f1_score": 0.9793,
+      "classification_report": "              precision    recall  f1-score   support\n\n           F       0.95      1.00      0.98        40\n           M       1.00      0.89      0.94        37\n           S       0.95      1.00      0.97        39\n           T       1.00      1.00      1.00        40\n           W       1.00      1.00      1.00        40\n\n    accuracy                           0.98       196\n   macro avg       0.98      0.98      0.98       196\nweighted avg       0.98      0.98      0.98       196\n",
+      "top_confusions": "  M -> predicted as S: 2\n  M -> predicted as F: 2",
+      "per_letter": {
+        "F": 1.0,
+        "M": 0.8919,
+        "S": 1.0,
+        "T": 1.0,
+        "W": 1.0
+      }
+    }
+  },
+  "all": {
+    "folds": [
+      {
+        "signer": "signer-01",
+        "clips": 260,
+        "accuracy": 0.9192,
+        "none_false_alarm": 0.0
+      },
+      {
+        "signer": "signer-02",
+        "clips": 253,
+        "accuracy": 0.996,
+        "none_false_alarm": 0.01098901098901099
+      },
+      {
+        "signer": "signer-03",
+        "clips": 259,
+        "accuracy": 0.9807,
+        "none_false_alarm": 0.0
+      },
+      {
+        "signer": "signer-04",
+        "clips": 254,
+        "accuracy": 0.937,
+        "none_false_alarm": 0.0034965034965034965
+      }
+    ],
+    "mean_accuracy": 0.9582,
+    "report": {
+      "accuracy": 0.9581,
+      "precision": 0.9607,
+      "recall": 0.9581,
+      "f1_score": 0.9583,
+      "classification_report": "              precision    recall  f1-score   support\n\n           A       1.00      1.00      1.00        40\n           B       1.00      0.85      0.92        40\n           C       0.98      1.00      0.99        40\n           D       1.00      1.00      1.00        40\n           E       1.00      1.00      1.00        40\n           F       0.87      1.00      0.93        40\n           G       1.00      1.00      1.00        38\n           H       1.00      1.00      1.00        40\n           I       0.87      1.00      0.93        39\n           J       1.00      1.00      1.00        40\n           K       1.00      1.00      1.00        40\n           L       1.00      1.00      1.00        40\n           M       1.00      0.95      0.97        37\n           N       1.00      1.00      1.00        38\n           O       1.00      1.00      1.00        40\n           P       1.00      1.00      1.00        40\n           Q       0.97      1.00      0.99        39\n           R       0.79      0.75      0.77        40\n           S       1.00      0.90      0.95        39\n           T       0.98      1.00      0.99        40\n           U       0.72      0.72      0.72        40\n           V       0.91      0.97      0.94        40\n           W       1.00      1.00      1.00        40\n           X       0.90      0.95      0.93        40\n           Y       1.00      0.85      0.92        39\n           Z       1.00      0.97      0.99        37\n       _none       0.00      0.00      0.00         0\n\n    accuracy                           0.96      1026\n   macro avg       0.93      0.92      0.92      1026\nweighted avg       0.96      0.96      0.96      1026\n",
+      "top_confusions": "  R -> predicted as U: 10\n  U -> predicted as R: 7\n  Y -> predicted as I: 6\n  B -> predicted as F: 6\n  U -> predicted as V: 4\n  S -> predicted as X: 4\n  Z -> predicted as _none: 1\n  X -> predicted as T: 1\n  X -> predicted as R: 1\n  V -> predicted as U: 1",
+      "per_letter": {
+        "A": 1.0,
+        "B": 0.85,
+        "C": 1.0,
+        "D": 1.0,
+        "E": 1.0,
+        "F": 1.0,
+        "G": 1.0,
+        "H": 1.0,
+        "I": 1.0,
+        "J": 1.0,
+        "K": 1.0,
+        "L": 1.0,
+        "M": 0.9459,
+        "N": 1.0,
+        "O": 1.0,
+        "P": 1.0,
+        "Q": 1.0,
+        "R": 0.75,
+        "S": 0.8974,
+        "T": 1.0,
+        "U": 0.725,
+        "V": 0.975,
+        "W": 1.0,
+        "X": 0.95,
+        "Y": 0.8462,
+        "Z": 0.973
+      }
+    }
+  }
+}

@@ -7,6 +7,7 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
 
+from app.utils.letters import select_hand
 from app.utils.preprocessor import (
     center_on_peak_velocity,
     frame_velocity,
@@ -307,3 +308,75 @@ def extract_motion_landmarks(video_bytes: bytes, filename: str | None = None) ->
         # and masks whatever actually went wrong above.
         cap.release()
         os.unlink(tmp_path)
+
+
+# ── Letters: one-hand track (docs-internal/specs/2026-10-11-letters-accuracy-design.md)
+#
+# Separate from extract_motion_landmarks on purpose: letters need EVERY frame of
+# the signing span (the hold and the J/Z path), raw and one-handed, while the
+# words window is 30 normalised frames around the fastest movement. VIDEO mode
+# tracks between frames like the live camera. Called only for letter words.
+HAND_TRACK_FPS = float(os.getenv("HAND_TRACK_FPS", 24.0))
+HAND_TRACK_MAX_SIDE = int(os.getenv("HAND_TRACK_MAX_SIDE", 640))
+
+
+def _make_video_landmarker() -> "vision.HandLandmarker":
+    model_path = os.path.abspath(_MODEL_PATH)
+    if not os.path.isfile(model_path):
+        raise FileNotFoundError(f"HandLandmarker model not found: {model_path}")
+    return vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
+        base_options=mp_python.BaseOptions(model_asset_path=model_path),
+        running_mode=vision.RunningMode.VIDEO,
+        num_hands=2,
+        min_hand_detection_confidence=0.5,
+        min_hand_presence_confidence=0.5,
+        min_tracking_confidence=0.5,
+    ))
+
+
+def _downscale(bgr: np.ndarray) -> np.ndarray:
+    """Landmarks are normalised, so a uniform resize does not change them."""
+    h, w = bgr.shape[:2]
+    scale = HAND_TRACK_MAX_SIDE / max(h, w)
+    if scale >= 1:
+        return bgr
+    return cv2.resize(bgr, (round(w * scale), round(h * scale)), interpolation=cv2.INTER_AREA)
+
+
+def extract_hand_track(video_bytes: bytes, filename: str | None = None) -> dict | None:
+    suffix = (os.path.splitext(filename)[1] if filename else "") or ".mp4"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(video_bytes)
+        tmp_path = tmp.name
+    frames = []
+    cap = cv2.VideoCapture(tmp_path)
+    try:
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        if not np.isfinite(fps) or fps <= 1.0:
+            fps = DEFAULT_SOURCE_FPS
+        every = max(1, round(fps / HAND_TRACK_FPS))
+        with _make_video_landmarker() as lm:
+            i = 0
+            while True:
+                ok, bgr = cap.read()
+                if not ok:
+                    break
+                if i % every == 0:
+                    t_ms = int(round(i * 1000 / fps))
+                    small = _downscale(bgr)
+                    h, w = small.shape[:2]
+                    rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                    res = lm.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), t_ms)
+                    hands = [[c for p in hand for c in (p.x, p.y, p.z)] for hand in res.hand_landmarks]
+                    sel = select_hand(hands, w, h)
+                    frames.append({"t_ms": t_ms,
+                                   "hand": None if sel is None else [round(v, 5) for v in sel]})
+                i += 1
+    finally:
+        cap.release()
+        os.unlink(tmp_path)
+    hits = [k for k, f in enumerate(frames) if f["hand"] is not None]
+    if not hits:
+        return None
+    lo, hi = max(hits[0] - TRIM_PAD_FRAMES, 0), min(hits[-1] + TRIM_PAD_FRAMES, len(frames) - 1)
+    return {"version": 1, "frames": frames[lo:hi + 1]}

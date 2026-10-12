@@ -68,3 +68,43 @@ def test_upload_batch_refuses_more_than_the_server_cap(tmp_path):
     with _client(lambda req: httpx.Response(200, json={"job": None})) as c:
         with pytest.raises(SystemExit):
             _importer().upload_batch(c, 7, "HELLO", "s1", ["x"] * 51)
+
+
+def test_delete_all_samples_sends_the_confirmation_the_backend_demands():
+    seen = {}
+
+    def handler(req):
+        seen["method"] = req.method
+        seen["url"] = str(req.url)
+        seen["auth"] = req.headers["Authorization"]
+        return httpx.Response(200, json={"deleted": 40})
+
+    with _client(handler) as c:
+        assert _importer().delete_all_samples(c, 12, "F") == 40
+    assert seen == {"method": "DELETE", "url": f"{BASE}/words/12/samples?confirm=F", "auth": "Bearer tok"}
+
+
+def test_batch_action_skips_stored_batches_unless_forced():
+    from scripts._backend_import import batch_action
+    assert batch_action(have=0, n_clips=10, force=False) == "import"
+    assert batch_action(have=10, n_clips=10, force=False) == "skip"       # already stored
+    assert batch_action(have=8, n_clips=10, force=False) == "skip"        # within two rows of complete
+    assert batch_action(have=3, n_clips=10, force=False) == "partial"     # a crashed earlier batch
+    # --force: old rows exist (clips imported before hand tracks) but must still be imported
+    assert batch_action(have=10, n_clips=10, force=True) == "import"
+    assert batch_action(have=3, n_clips=10, force=True) == "import"
+
+
+def test_done_file_remembers_finished_batches_so_a_forced_rerun_never_duplicates(tmp_path):
+    from scripts._backend_import import load_done, record_done
+    f = str(tmp_path / "done.txt")
+    assert load_done(f) == set()                      # no file yet
+    record_done(f, "A", "signer-01")
+    record_done(f, "A", "signer-02")
+    record_done(f, "B", "signer-01")
+    assert load_done(f) == {"A/signer-01", "A/signer-02", "B/signer-01"}
+    # a later process sees the same set, and tolerates a blank or half-written last line
+    with open(f, "a", encoding="utf-8") as fh:
+        fh.write("\n")
+    assert load_done(f) == {"A/signer-01", "A/signer-02", "B/signer-01"}
+    assert load_done(None) == set()                   # feature off

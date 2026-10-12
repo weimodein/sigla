@@ -478,6 +478,7 @@ async function runTraining(record, version_number, kind) {
         // this, so the alphabet needs a name of its own.
         version_number: mlVersionName(version_number, kind),
         model_id: record.id,
+        model_kind: kind,
         ...(sendLabels ? { word_labels: wordLabels } : {}),
       },
       {

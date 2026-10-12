@@ -80,6 +80,23 @@ class TapSignSessionTest {
     }
 
     @Test
+    fun recordedFramesCarryTheLetterHand() {
+        val letterHand = FloatArray(LETTER_FLOATS) { 0.5f + 0.001f * it }
+        session.tap()
+        now += 33
+        session.onFrame(hand, 1, letterHand)
+        repeat(10) { now += 33; session.onFrame(hand, 1, letterHand) }
+        var e: TapSignSession.Event? = null
+        while (e == null) { now += 33; e = session.onFrame(empty, 0, null) }
+        val frames = (e as TapSignSession.Event.Captured).frames
+        val withHand = frames.filter { it.features != null }
+        assertTrue(withHand.isNotEmpty())
+        assertTrue(withHand.all { it.hand != null })
+        assertEquals(letterHand[5], withHand.first().hand!![5], 0f)
+        assertTrue(frames.filter { it.features == null }.all { it.hand == null })
+    }
+
+    @Test
     fun tapWhileRecordingStopsNow() {
         session.tap(); feed(true); feed(true)
         assertTrue(session.tap() is TapSignSession.Event.Captured)

@@ -51,6 +51,10 @@ data class LandmarkResult(
     // frame coords, for the on-screen overlay. Flat arrays avoid the ~42 boxed Pair
     // allocations per frame that were feeding the GC. Empty list = no hands.
     val landmarks: List<FloatArray>,
+    // Per detected hand: 63 raw floats (x, y, z per landmark, MediaPipe image
+    // coordinates, detection order). Input to LetterHand.select for letters mode;
+    // the normalised `features` stay the words model's input.
+    val rawHands: List<FloatArray> = emptyList(),
     // Dimensions of the image coordinate system used by MediaPipe after applying
     // ImageProcessingOptions rotation. OverlayView needs this aspect ratio to
     // reproduce PreviewView's FILL_CENTER crop instead of stretching landmarks.
@@ -127,6 +131,17 @@ class HandLandmarkHelper(
     // deliberate latency/accuracy trade instead. Zero pose (before the first pose
     // result) is the same absent-pose sentinel training data contains.
     @Volatile private var lastPoseResult: PoseLandmarkerResult? = null
+
+    /**
+     * Off in letters mode: the letter models read one hand only, so pose
+     * detection is pure cost there. Turning it off drops the last pose so a
+     * later switch back to words starts from the absent-pose sentinel.
+     */
+    @Volatile var poseEnabled: Boolean = true
+        set(value) {
+            field = value
+            if (!value) lastPoseResult = null
+        }
     private var poseFrameCounter = 0
 
     /**
@@ -331,7 +346,7 @@ class HandLandmarkHelper(
             lmk.detectAsync(mpImage, frameTimestampMs)
             // Pose only every Nth frame — hands run every frame.
             poseFrameCounter++
-            if (poseFrameCounter >= POSE_DETECT_INTERVAL) {
+            if (poseFrameCounter >= POSE_DETECT_INTERVAL && poseEnabled) {
                 poseFrameCounter = 0
                 poseLandmarker?.detectAsync(mpImage, frameTimestampMs)
             }
@@ -346,6 +361,7 @@ class HandLandmarkHelper(
 
         val numHands = minOf(result.landmarks().size, 2)
         val drawData    = ArrayList<FloatArray>(numHands)
+        val rawHands    = ArrayList<FloatArray>(numHands)
         val handLabels  = ArrayList<String?>(numHands)
         val handScores  = ArrayList<Float>(numHands)
         for (i in 0 until numHands) {
@@ -360,6 +376,11 @@ class HandLandmarkHelper(
                 pts[j * 2]     = lm.x()
                 pts[j * 2 + 1] = lm.y()
             }
+            val raw = FloatArray(63)
+            for (j in lms.indices) {
+                raw[j * 3] = lms[j].x(); raw[j * 3 + 1] = lms[j].y(); raw[j * 3 + 2] = lms[j].z()
+            }
+            rawHands.add(raw)
             drawData.add(pts)
 
             // Handedness for this slot ("Left"/"Right"), same index as the feature block.
@@ -396,6 +417,7 @@ class HandLandmarkHelper(
             handsDetected = numHands,
             features = features,
             landmarks = drawData,
+            rawHands = rawHands,
             sourceWidth = lastSourceWidth,
             sourceHeight = lastSourceHeight,
             handedness = handLabels,
