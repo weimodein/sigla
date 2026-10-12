@@ -1,0 +1,4323 @@
+{
+ "conv_dist_refit": {
+  "mean_signer_accuracy": 0.7924,
+  "per_signer": {
+   "signer-01": 0.8049,
+   "signer-02": 0.7933,
+   "signer-03": 0.7868,
+   "signer-04": 0.7846
+  },
+  "worst_classes": [
+   [
+    "WAIT",
+    0.3333
+   ],
+   [
+    "ONE",
+    0.4054
+   ],
+   [
+    "FISH",
+    0.4103
+   ],
+   [
+    "MOTHER",
+    0.4737
+   ],
+   [
+    "TOMORROW",
+    0.5152
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "DEAF BLIND",
+    0.525
+   ],
+   [
+    "CARD",
+    0.5385
+   ],
+   [
+    "BLUE",
+    0.5526
+   ],
+   [
+    "FATHER",
+    0.5556
+   ]
+  ],
+  "classes_below_70": 21,
+  "top_confusions": [
+   "21x FISH -> PLEASE",
+   "15x ONE -> FAST",
+   "14x WAIT -> I'M FINE",
+   "10x RICE -> VIOLET",
+   "10x MOTHER -> I'M FINE",
+   "10x HARD OF HEARING -> NICE TO MEET YOU",
+   "10x WOMAN -> DAUGHTER",
+   "9x PLEASE -> FISH",
+   "9x I'M FINE -> FIVE",
+   "9x ORANGE -> GOOD EVENING"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.8378,
+   "BEER": 1.0,
+   "BLACK": 0.7941,
+   "BLIND": 0.9062,
+   "BLUE": 0.5526,
+   "BOY": 0.8,
+   "BREAD": 0.7,
+   "BROWN": 1.0,
+   "CARD": 0.5385,
+   "CHICKEN": 0.5641,
+   "COIN": 0.85,
+   "COUSIN": 0.7143,
+   "DAUGHTER": 0.7632,
+   "DEAF": 0.6667,
+   "DEAF BLIND": 0.525,
+   "DON'T KNOW": 0.9394,
+   "DON'T UNDERSTAND": 1.0,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7812,
+   "FATHER": 0.5556,
+   "FISH": 0.4103,
+   "FIVE": 1.0,
+   "FOUR": 0.9167,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8378,
+   "GOOD AFTERNOON": 0.8889,
+   "GOOD EVENING": 0.7714,
+   "GOOD MORNING": 0.6944,
+   "GRANDFATHER": 0.775,
+   "GRAY": 0.9118,
+   "GREEN": 0.8947,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.697,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.5714,
+   "KNOW": 0.8857,
+   "LIGHT": 0.9,
+   "MAN": 0.7273,
+   "MARRIED": 0.5625,
+   "MEAT": 0.9,
+   "MONDAY": 0.9722,
+   "MOTHER": 0.4737,
+   "NICE TO MEET YOU": 0.6216,
+   "NINE": 0.8485,
+   "NO": 0.8947,
+   "NO SUGAR": 0.925,
+   "ONE": 0.4054,
+   "ORANGE": 0.5897,
+   "PARENTS": 0.697,
+   "PINK": 0.9211,
+   "PLEASE": 0.7632,
+   "PROBLEM": 0.625,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7436,
+   "SATURDAY": 0.7949,
+   "SEE YOU TOMORROW": 0.725,
+   "SEVEN": 0.7647,
+   "SIX": 0.7714,
+   "SON": 0.7895,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.9167,
+   "SUNDAY": 0.9,
+   "TEA": 0.7632,
+   "THANK YOU": 0.9429,
+   "THREE": 0.9167,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.5152,
+   "TUESDAY": 0.8378,
+   "TWO": 0.8205,
+   "UNCLE": 0.7941,
+   "UNDERSTAND": 0.8286,
+   "VIOLET": 0.725,
+   "WAIT": 0.3333,
+   "WEDNESDAY": 0.8421,
+   "WINE": 0.95,
+   "WOMAN": 0.625,
+   "WRONG": 0.973,
+   "YELLOW": 0.9714,
+   "YES": 0.7568,
+   "YESTERDAY": 0.8378,
+   "YOU'RE WELCOME": 0.85
+  }
+ },
+ "conv_dist": {
+  "mean_signer_accuracy": 0.7097,
+  "per_signer": {
+   "signer-01": 0.7313,
+   "signer-02": 0.6731,
+   "signer-03": 0.7298,
+   "signer-04": 0.7048
+  },
+  "worst_classes": [
+   [
+    "WAIT",
+    0.1282
+   ],
+   [
+    "MOTHER",
+    0.2368
+   ],
+   [
+    "ONE",
+    0.2432
+   ],
+   [
+    "SIX",
+    0.2571
+   ],
+   [
+    "AUNTIE",
+    0.2703
+   ],
+   [
+    "WOMAN",
+    0.275
+   ],
+   [
+    "FISH",
+    0.3333
+   ],
+   [
+    "MARRIED",
+    0.3438
+   ],
+   [
+    "PROBLEM",
+    0.35
+   ],
+   [
+    "I'M FINE",
+    0.3571
+   ]
+  ],
+  "classes_below_70": 36,
+  "top_confusions": [
+   "23x FISH -> PLEASE",
+   "23x WAIT -> I'M FINE",
+   "17x SIX -> WEDNESDAY",
+   "17x TUESDAY -> FAST",
+   "16x ONE -> DEAF",
+   "14x MOTHER -> PARENTS",
+   "12x DEAF -> UNDERSTAND",
+   "12x KNOW -> FATHER",
+   "12x PROBLEM -> SUNDAY",
+   "12x LIGHT -> SUNDAY"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.2703,
+   "BEER": 0.973,
+   "BLACK": 0.9118,
+   "BLIND": 0.8125,
+   "BLUE": 0.5,
+   "BOY": 0.8333,
+   "BREAD": 0.825,
+   "BROWN": 0.9744,
+   "CARD": 0.6923,
+   "CHICKEN": 0.6667,
+   "COIN": 1.0,
+   "COUSIN": 0.7714,
+   "DAUGHTER": 0.5526,
+   "DEAF": 0.3846,
+   "DEAF BLIND": 0.5,
+   "DON'T KNOW": 0.7576,
+   "DON'T UNDERSTAND": 1.0,
+   "EGG": 1.0,
+   "EIGHT": 0.8824,
+   "FAST": 0.6875,
+   "FATHER": 0.6389,
+   "FISH": 0.3333,
+   "FIVE": 0.6857,
+   "FOUR": 0.6667,
+   "FRIDAY": 1.0,
+   "GIRL": 0.5135,
+   "GOOD AFTERNOON": 0.7778,
+   "GOOD EVENING": 0.6286,
+   "GOOD MORNING": 0.6667,
+   "GRANDFATHER": 0.675,
+   "GRAY": 0.8824,
+   "GREEN": 0.8684,
+   "HARD OF HEARING": 0.5862,
+   "HELLO": 0.6364,
+   "HOW ARE YOU": 0.975,
+   "I'M FINE": 0.3571,
+   "KNOW": 0.4571,
+   "LIGHT": 0.7,
+   "MAN": 0.6667,
+   "MARRIED": 0.3438,
+   "MEAT": 0.85,
+   "MONDAY": 0.7222,
+   "MOTHER": 0.2368,
+   "NICE TO MEET YOU": 0.5405,
+   "NINE": 0.8485,
+   "NO": 0.9474,
+   "NO SUGAR": 0.775,
+   "ONE": 0.2432,
+   "ORANGE": 0.6154,
+   "PARENTS": 0.4545,
+   "PINK": 0.9737,
+   "PLEASE": 0.8158,
+   "PROBLEM": 0.35,
+   "RECEIPT": 1.0,
+   "RED": 0.925,
+   "RICE": 0.8462,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.775,
+   "SEVEN": 0.7941,
+   "SIX": 0.2571,
+   "SON": 0.8421,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8333,
+   "SUNDAY": 0.65,
+   "TEA": 0.8684,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9167,
+   "TOMORROW": 0.4545,
+   "TUESDAY": 0.4595,
+   "TWO": 0.7692,
+   "UNCLE": 0.5588,
+   "UNDERSTAND": 0.4571,
+   "VIOLET": 0.75,
+   "WAIT": 0.1282,
+   "WEDNESDAY": 0.8947,
+   "WINE": 0.725,
+   "WOMAN": 0.275,
+   "WRONG": 0.7297,
+   "YELLOW": 0.9429,
+   "YES": 0.7297,
+   "YESTERDAY": 0.8919,
+   "YOU'RE WELCOME": 0.825
+  }
+ },
+ "conv_refit": {
+  "mean_signer_accuracy": 0.8077,
+  "per_signer": {
+   "signer-01": 0.8023,
+   "signer-02": 0.7791,
+   "signer-03": 0.8437,
+   "signer-04": 0.8059
+  },
+  "worst_classes": [
+   [
+    "GREEN",
+    0.3684
+   ],
+   [
+    "SIX",
+    0.3714
+   ],
+   [
+    "DEAF BLIND",
+    0.375
+   ],
+   [
+    "FATHER",
+    0.4167
+   ],
+   [
+    "MOTHER",
+    0.4474
+   ],
+   [
+    "WAIT",
+    0.5128
+   ],
+   [
+    "ORANGE",
+    0.5385
+   ],
+   [
+    "BLUE",
+    0.5526
+   ],
+   [
+    "DEAF",
+    0.5897
+   ],
+   [
+    "ONE",
+    0.5946
+   ]
+  ],
+  "classes_below_70": 19,
+  "top_confusions": [
+   "18x SIX -> WEDNESDAY",
+   "14x GOOD EVENING -> GOOD AFTERNOON",
+   "11x MOTHER -> PARENTS",
+   "10x GREEN -> FISH",
+   "10x SEVEN -> FOUR",
+   "9x ORANGE -> WRONG",
+   "9x PLEASE -> FISH",
+   "9x PROBLEM -> SUNDAY",
+   "9x CHICKEN -> UNCLE",
+   "9x DEAF -> ONE"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.9459,
+   "BEER": 1.0,
+   "BLACK": 0.7647,
+   "BLIND": 0.6875,
+   "BLUE": 0.5526,
+   "BOY": 0.9,
+   "BREAD": 0.975,
+   "BROWN": 1.0,
+   "CARD": 0.7179,
+   "CHICKEN": 0.7179,
+   "COIN": 0.95,
+   "COUSIN": 0.7429,
+   "DAUGHTER": 0.7895,
+   "DEAF": 0.5897,
+   "DEAF BLIND": 0.375,
+   "DON'T KNOW": 0.7576,
+   "DON'T UNDERSTAND": 0.8947,
+   "EGG": 1.0,
+   "EIGHT": 0.7647,
+   "FAST": 0.6562,
+   "FATHER": 0.4167,
+   "FISH": 0.7692,
+   "FIVE": 1.0,
+   "FOUR": 0.8611,
+   "FRIDAY": 0.975,
+   "GIRL": 0.9459,
+   "GOOD AFTERNOON": 0.9167,
+   "GOOD EVENING": 0.6,
+   "GOOD MORNING": 0.7778,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.9118,
+   "GREEN": 0.3684,
+   "HARD OF HEARING": 0.6552,
+   "HELLO": 0.8182,
+   "HOW ARE YOU": 0.975,
+   "I'M FINE": 0.7857,
+   "KNOW": 0.7714,
+   "LIGHT": 1.0,
+   "MAN": 0.697,
+   "MARRIED": 0.7812,
+   "MEAT": 0.875,
+   "MONDAY": 0.9167,
+   "MOTHER": 0.4474,
+   "NICE TO MEET YOU": 0.6486,
+   "NINE": 0.9394,
+   "NO": 0.8947,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5946,
+   "ORANGE": 0.5385,
+   "PARENTS": 0.7273,
+   "PINK": 0.9211,
+   "PLEASE": 0.7632,
+   "PROBLEM": 0.6,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7692,
+   "SATURDAY": 0.9231,
+   "SEE YOU TOMORROW": 0.725,
+   "SEVEN": 0.7059,
+   "SIX": 0.3714,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.8,
+   "TEA": 0.9474,
+   "THANK YOU": 1.0,
+   "THREE": 0.9722,
+   "THURSDAY": 0.9167,
+   "TOMORROW": 0.6667,
+   "TUESDAY": 1.0,
+   "TWO": 0.8205,
+   "UNCLE": 0.7353,
+   "UNDERSTAND": 0.9714,
+   "VIOLET": 0.95,
+   "WAIT": 0.5128,
+   "WEDNESDAY": 0.9211,
+   "WINE": 0.95,
+   "WOMAN": 0.675,
+   "WRONG": 0.7568,
+   "YELLOW": 0.9143,
+   "YES": 0.8108,
+   "YESTERDAY": 1.0,
+   "YOU'RE WELCOME": 0.85
+  }
+ },
+ "conv": {
+  "mean_signer_accuracy": 0.7251,
+  "per_signer": {
+   "signer-01": 0.7429,
+   "signer-02": 0.6925,
+   "signer-03": 0.7695,
+   "signer-04": 0.6955
+  },
+  "worst_classes": [
+   [
+    "SIX",
+    0.2286
+   ],
+   [
+    "PROBLEM",
+    0.325
+   ],
+   [
+    "DEAF",
+    0.3333
+   ],
+   [
+    "TOMORROW",
+    0.3333
+   ],
+   [
+    "FISH",
+    0.359
+   ],
+   [
+    "HELLO",
+    0.3636
+   ],
+   [
+    "WRONG",
+    0.4054
+   ],
+   [
+    "DAUGHTER",
+    0.4211
+   ],
+   [
+    "BLUE",
+    0.4474
+   ],
+   [
+    "AUNTIE",
+    0.4595
+   ]
+  ],
+  "classes_below_70": 35,
+  "top_confusions": [
+   "25x FISH -> PLEASE",
+   "19x SIX -> WEDNESDAY",
+   "19x WRONG -> YELLOW",
+   "16x PROBLEM -> SUNDAY",
+   "14x GOOD AFTERNOON -> GOOD EVENING",
+   "13x DEAF -> DEAF BLIND",
+   "13x HELLO -> MAN",
+   "10x ORANGE -> WRONG",
+   "10x AUNTIE -> GOOD MORNING",
+   "10x SATURDAY -> HOW ARE YOU"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.4595,
+   "BEER": 1.0,
+   "BLACK": 0.7647,
+   "BLIND": 0.6875,
+   "BLUE": 0.4474,
+   "BOY": 0.7333,
+   "BREAD": 0.875,
+   "BROWN": 1.0,
+   "CARD": 0.641,
+   "CHICKEN": 0.5385,
+   "COIN": 0.925,
+   "COUSIN": 0.6,
+   "DAUGHTER": 0.4211,
+   "DEAF": 0.3333,
+   "DEAF BLIND": 0.625,
+   "DON'T KNOW": 0.7576,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 0.7941,
+   "FAST": 0.5938,
+   "FATHER": 0.5278,
+   "FISH": 0.359,
+   "FIVE": 1.0,
+   "FOUR": 0.8611,
+   "FRIDAY": 1.0,
+   "GIRL": 0.4865,
+   "GOOD AFTERNOON": 0.6111,
+   "GOOD EVENING": 0.7143,
+   "GOOD MORNING": 0.4722,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.8824,
+   "GREEN": 0.5789,
+   "HARD OF HEARING": 0.5862,
+   "HELLO": 0.3636,
+   "HOW ARE YOU": 0.95,
+   "I'M FINE": 0.7143,
+   "KNOW": 0.5429,
+   "LIGHT": 0.85,
+   "MAN": 0.7879,
+   "MARRIED": 0.4688,
+   "MEAT": 0.9,
+   "MONDAY": 0.9167,
+   "MOTHER": 0.5263,
+   "NICE TO MEET YOU": 0.4595,
+   "NINE": 1.0,
+   "NO": 0.9211,
+   "NO SUGAR": 0.8,
+   "ONE": 0.8108,
+   "ORANGE": 0.5128,
+   "PARENTS": 0.5152,
+   "PINK": 0.9474,
+   "PLEASE": 1.0,
+   "PROBLEM": 0.325,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7436,
+   "SATURDAY": 0.6923,
+   "SEE YOU TOMORROW": 0.575,
+   "SEVEN": 0.7059,
+   "SIX": 0.2286,
+   "SON": 0.8947,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.925,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 0.9444,
+   "THURSDAY": 0.8611,
+   "TOMORROW": 0.3333,
+   "TUESDAY": 0.4595,
+   "TWO": 0.6923,
+   "UNCLE": 0.5,
+   "UNDERSTAND": 0.8571,
+   "VIOLET": 0.725,
+   "WAIT": 0.5385,
+   "WEDNESDAY": 0.9474,
+   "WINE": 0.85,
+   "WOMAN": 0.7,
+   "WRONG": 0.4054,
+   "YELLOW": 0.8857,
+   "YES": 0.5946,
+   "YESTERDAY": 0.9189,
+   "YOU'RE WELCOME": 0.85
+  }
+ },
+ "linear": {
+  "mean_signer_accuracy": 0.8458,
+  "per_signer": {
+   "signer-01": 0.845,
+   "signer-02": 0.8579,
+   "signer-03": 0.8424,
+   "signer-04": 0.8378
+  },
+  "worst_classes": [
+   [
+    "GOOD AFTERNOON",
+    0.3333
+   ],
+   [
+    "I'M FINE",
+    0.4286
+   ],
+   [
+    "ONE",
+    0.5135
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "FATHER",
+    0.5556
+   ],
+   [
+    "GOOD EVENING",
+    0.5714
+   ],
+   [
+    "WOMAN",
+    0.575
+   ],
+   [
+    "BLUE",
+    0.6053
+   ],
+   [
+    "DEAF",
+    0.6154
+   ],
+   [
+    "NICE TO MEET YOU",
+    0.6486
+   ]
+  ],
+  "classes_below_70": 17,
+  "top_confusions": [
+   "24x GOOD AFTERNOON -> GOOD EVENING",
+   "14x GOOD EVENING -> GOOD AFTERNOON",
+   "12x ONE -> DEAF",
+   "10x I'M FINE -> MOTHER",
+   "10x WINE -> CHICKEN",
+   "9x FAST -> TUESDAY",
+   "9x MOTHER -> I'M FINE",
+   "9x DEAF -> ONE",
+   "8x TEA -> MEAT",
+   "8x WOMAN -> TOMORROW"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7027,
+   "BEER": 0.973,
+   "BLACK": 0.8235,
+   "BLIND": 1.0,
+   "BLUE": 0.6053,
+   "BOY": 0.7667,
+   "BREAD": 0.9,
+   "BROWN": 0.8974,
+   "CARD": 0.9487,
+   "CHICKEN": 0.7436,
+   "COIN": 0.925,
+   "COUSIN": 0.8,
+   "DAUGHTER": 0.8158,
+   "DEAF": 0.6154,
+   "DEAF BLIND": 0.7,
+   "DON'T KNOW": 0.6667,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7188,
+   "FATHER": 0.5556,
+   "FISH": 0.9231,
+   "FIVE": 1.0,
+   "FOUR": 0.9722,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8649,
+   "GOOD AFTERNOON": 0.3333,
+   "GOOD EVENING": 0.5714,
+   "GOOD MORNING": 0.7222,
+   "GRANDFATHER": 0.95,
+   "GRAY": 0.9118,
+   "GREEN": 0.8158,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9394,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.4286,
+   "KNOW": 0.7714,
+   "LIGHT": 0.975,
+   "MAN": 0.8788,
+   "MARRIED": 0.75,
+   "MEAT": 0.975,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.6842,
+   "NICE TO MEET YOU": 0.6486,
+   "NINE": 0.9697,
+   "NO": 0.9474,
+   "NO SUGAR": 0.9,
+   "ONE": 0.5135,
+   "ORANGE": 1.0,
+   "PARENTS": 0.8788,
+   "PINK": 0.9474,
+   "PLEASE": 1.0,
+   "PROBLEM": 0.825,
+   "RECEIPT": 0.975,
+   "RED": 0.925,
+   "RICE": 0.8974,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 1.0,
+   "SEVEN": 0.9706,
+   "SIX": 0.6857,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.8333,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.697,
+   "TUESDAY": 0.9459,
+   "TWO": 0.9744,
+   "UNCLE": 0.9118,
+   "UNDERSTAND": 0.6857,
+   "VIOLET": 0.775,
+   "WAIT": 0.6923,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.65,
+   "WOMAN": 0.575,
+   "WRONG": 1.0,
+   "YELLOW": 0.9429,
+   "YES": 0.7838,
+   "YESTERDAY": 0.7838,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "lstm_dist": {
+  "mean_signer_accuracy": 0.7036,
+  "per_signer": {
+   "signer-01": 0.7248,
+   "signer-02": 0.655,
+   "signer-03": 0.7192,
+   "signer-04": 0.7154
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.25
+   ],
+   [
+    "MONDAY",
+    0.25
+   ],
+   [
+    "PROBLEM",
+    0.275
+   ],
+   [
+    "MOTHER",
+    0.2895
+   ],
+   [
+    "UNCLE",
+    0.2941
+   ],
+   [
+    "WAIT",
+    0.3077
+   ],
+   [
+    "COUSIN",
+    0.3143
+   ],
+   [
+    "WOMAN",
+    0.325
+   ],
+   [
+    "DEAF",
+    0.3333
+   ],
+   [
+    "GOOD EVENING",
+    0.3429
+   ]
+  ],
+  "classes_below_70": 35,
+  "top_confusions": [
+   "21x FISH -> PLEASE",
+   "21x GOOD EVENING -> GOOD AFTERNOON",
+   "16x PROBLEM -> SUNDAY",
+   "16x WINE -> UNCLE",
+   "14x TOMORROW -> AUNTIE",
+   "13x WAIT -> I'M FINE",
+   "12x MOTHER -> PARENTS",
+   "11x MONDAY -> TOMORROW",
+   "11x TUESDAY -> FAST",
+   "11x YOU'RE WELCOME -> FISH"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.3784,
+   "BEER": 0.9189,
+   "BLACK": 0.8235,
+   "BLIND": 0.8125,
+   "BLUE": 0.4474,
+   "BOY": 0.7333,
+   "BREAD": 0.8,
+   "BROWN": 0.8974,
+   "CARD": 0.7179,
+   "CHICKEN": 0.5641,
+   "COIN": 0.9,
+   "COUSIN": 0.3143,
+   "DAUGHTER": 0.6842,
+   "DEAF": 0.3333,
+   "DEAF BLIND": 0.4,
+   "DON'T KNOW": 0.6667,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.9706,
+   "FAST": 0.4688,
+   "FATHER": 0.4722,
+   "FISH": 0.4615,
+   "FIVE": 1.0,
+   "FOUR": 0.7222,
+   "FRIDAY": 1.0,
+   "GIRL": 0.4595,
+   "GOOD AFTERNOON": 0.8056,
+   "GOOD EVENING": 0.3429,
+   "GOOD MORNING": 0.8056,
+   "GRANDFATHER": 0.6,
+   "GRAY": 0.8824,
+   "GREEN": 0.7368,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.7879,
+   "HOW ARE YOU": 0.9,
+   "I'M FINE": 0.25,
+   "KNOW": 0.4857,
+   "LIGHT": 0.775,
+   "MAN": 0.7576,
+   "MARRIED": 0.5938,
+   "MEAT": 0.925,
+   "MONDAY": 0.25,
+   "MOTHER": 0.2895,
+   "NICE TO MEET YOU": 0.5405,
+   "NINE": 1.0,
+   "NO": 0.9737,
+   "NO SUGAR": 0.875,
+   "ONE": 0.6216,
+   "ORANGE": 0.5641,
+   "PARENTS": 0.7273,
+   "PINK": 0.8684,
+   "PLEASE": 0.7895,
+   "PROBLEM": 0.275,
+   "RECEIPT": 1.0,
+   "RED": 0.975,
+   "RICE": 0.7949,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.875,
+   "SEVEN": 0.8235,
+   "SIX": 0.6,
+   "SON": 0.8158,
+   "SPAGHETTI": 0.8974,
+   "SUGAR": 0.9167,
+   "SUNDAY": 0.925,
+   "TEA": 0.6842,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9722,
+   "TOMORROW": 0.5152,
+   "TUESDAY": 0.4324,
+   "TWO": 0.7692,
+   "UNCLE": 0.2941,
+   "UNDERSTAND": 0.6857,
+   "VIOLET": 0.525,
+   "WAIT": 0.3077,
+   "WEDNESDAY": 0.8684,
+   "WINE": 0.35,
+   "WOMAN": 0.325,
+   "WRONG": 1.0,
+   "YELLOW": 0.8857,
+   "YES": 0.6757,
+   "YESTERDAY": 0.8108,
+   "YOU'RE WELCOME": 0.7
+  }
+ },
+ "lstm_refit": {
+  "mean_signer_accuracy": 0.766,
+  "per_signer": {
+   "signer-01": 0.792,
+   "signer-02": 0.7339,
+   "signer-03": 0.7444,
+   "signer-04": 0.7939
+  },
+  "worst_classes": [
+   [
+    "GOOD EVENING",
+    0.3143
+   ],
+   [
+    "PROBLEM",
+    0.325
+   ],
+   [
+    "DEAF",
+    0.3846
+   ],
+   [
+    "HELLO",
+    0.3939
+   ],
+   [
+    "DEAF BLIND",
+    0.4
+   ],
+   [
+    "MOTHER",
+    0.4211
+   ],
+   [
+    "ONE",
+    0.4595
+   ],
+   [
+    "ORANGE",
+    0.4615
+   ],
+   [
+    "HARD OF HEARING",
+    0.4828
+   ],
+   [
+    "WAIT",
+    0.5128
+   ]
+  ],
+  "classes_below_70": 25,
+  "top_confusions": [
+   "22x GOOD EVENING -> GOOD AFTERNOON",
+   "10x DEAF -> DEAF BLIND",
+   "10x PROBLEM -> SUNDAY",
+   "10x SIX -> WEDNESDAY",
+   "10x VIOLET -> NICE TO MEET YOU",
+   "9x DEAF -> ONE",
+   "8x FAST -> ONE",
+   "8x MARRIED -> NICE TO MEET YOU",
+   "8x MOTHER -> FATHER",
+   "8x MONDAY -> YES"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.8108,
+   "BEER": 1.0,
+   "BLACK": 0.6765,
+   "BLIND": 0.75,
+   "BLUE": 0.7368,
+   "BOY": 0.8667,
+   "BREAD": 0.85,
+   "BROWN": 0.8718,
+   "CARD": 0.7179,
+   "CHICKEN": 0.7179,
+   "COIN": 0.85,
+   "COUSIN": 0.6571,
+   "DAUGHTER": 0.7632,
+   "DEAF": 0.3846,
+   "DEAF BLIND": 0.4,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.8947,
+   "EGG": 1.0,
+   "EIGHT": 0.7647,
+   "FAST": 0.6562,
+   "FATHER": 0.5556,
+   "FISH": 0.6667,
+   "FIVE": 1.0,
+   "FOUR": 0.8611,
+   "FRIDAY": 0.925,
+   "GIRL": 0.8649,
+   "GOOD AFTERNOON": 0.9167,
+   "GOOD EVENING": 0.3143,
+   "GOOD MORNING": 0.6389,
+   "GRANDFATHER": 0.925,
+   "GRAY": 0.8824,
+   "GREEN": 0.5263,
+   "HARD OF HEARING": 0.4828,
+   "HELLO": 0.3939,
+   "HOW ARE YOU": 0.9,
+   "I'M FINE": 0.75,
+   "KNOW": 0.7429,
+   "LIGHT": 0.975,
+   "MAN": 0.5758,
+   "MARRIED": 0.5312,
+   "MEAT": 0.775,
+   "MONDAY": 0.7778,
+   "MOTHER": 0.4211,
+   "NICE TO MEET YOU": 0.7568,
+   "NINE": 0.9394,
+   "NO": 0.8684,
+   "NO SUGAR": 0.925,
+   "ONE": 0.4595,
+   "ORANGE": 0.4615,
+   "PARENTS": 0.7273,
+   "PINK": 0.8684,
+   "PLEASE": 0.8421,
+   "PROBLEM": 0.325,
+   "RECEIPT": 1.0,
+   "RED": 0.925,
+   "RICE": 0.7692,
+   "SATURDAY": 1.0,
+   "SEE YOU TOMORROW": 0.65,
+   "SEVEN": 0.8824,
+   "SIX": 0.5143,
+   "SON": 0.8947,
+   "SPAGHETTI": 0.8462,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.95,
+   "TEA": 0.7368,
+   "THANK YOU": 0.9714,
+   "THREE": 1.0,
+   "THURSDAY": 0.9444,
+   "TOMORROW": 0.7576,
+   "TUESDAY": 0.6216,
+   "TWO": 0.8974,
+   "UNCLE": 0.6471,
+   "UNDERSTAND": 0.8286,
+   "VIOLET": 0.65,
+   "WAIT": 0.5128,
+   "WEDNESDAY": 0.8421,
+   "WINE": 0.9,
+   "WOMAN": 0.675,
+   "WRONG": 0.7297,
+   "YELLOW": 0.8571,
+   "YES": 0.9459,
+   "YESTERDAY": 0.9459,
+   "YOU'RE WELCOME": 0.975
+  }
+ },
+ "lstm": {
+  "mean_signer_accuracy": 0.6863,
+  "per_signer": {
+   "signer-01": 0.7067,
+   "signer-02": 0.6822,
+   "signer-03": 0.7046,
+   "signer-04": 0.6516
+  },
+  "worst_classes": [
+   [
+    "GOOD EVENING",
+    0.1714
+   ],
+   [
+    "I'M FINE",
+    0.25
+   ],
+   [
+    "PROBLEM",
+    0.275
+   ],
+   [
+    "ORANGE",
+    0.2821
+   ],
+   [
+    "BLUE",
+    0.2895
+   ],
+   [
+    "DAUGHTER",
+    0.2895
+   ],
+   [
+    "AUNTIE",
+    0.3243
+   ],
+   [
+    "WOMAN",
+    0.325
+   ],
+   [
+    "TOMORROW",
+    0.3333
+   ],
+   [
+    "SIX",
+    0.3429
+   ]
+  ],
+  "classes_below_70": 37,
+  "top_confusions": [
+   "24x GOOD EVENING -> GOOD AFTERNOON",
+   "20x FISH -> PLEASE",
+   "16x MONDAY -> YES",
+   "16x PROBLEM -> SUNDAY",
+   "15x HELLO -> MAN",
+   "15x TEA -> MEAT",
+   "14x AUNTIE -> TOMORROW",
+   "13x GREEN -> AUNTIE",
+   "11x ORANGE -> WRONG",
+   "11x SIX -> WEDNESDAY"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.3243,
+   "BEER": 0.7838,
+   "BLACK": 0.7059,
+   "BLIND": 0.9375,
+   "BLUE": 0.2895,
+   "BOY": 0.5333,
+   "BREAD": 0.5,
+   "BROWN": 0.9744,
+   "CARD": 0.5385,
+   "CHICKEN": 0.5385,
+   "COIN": 0.8,
+   "COUSIN": 0.6571,
+   "DAUGHTER": 0.2895,
+   "DEAF": 0.7179,
+   "DEAF BLIND": 0.4,
+   "DON'T KNOW": 0.8182,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 0.9444,
+   "EIGHT": 0.7647,
+   "FAST": 0.5312,
+   "FATHER": 0.5278,
+   "FISH": 0.359,
+   "FIVE": 1.0,
+   "FOUR": 0.9444,
+   "FRIDAY": 1.0,
+   "GIRL": 0.6486,
+   "GOOD AFTERNOON": 0.8889,
+   "GOOD EVENING": 0.1714,
+   "GOOD MORNING": 0.6667,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.8235,
+   "GREEN": 0.4737,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.3636,
+   "HOW ARE YOU": 0.95,
+   "I'M FINE": 0.25,
+   "KNOW": 0.7714,
+   "LIGHT": 0.725,
+   "MAN": 0.7879,
+   "MARRIED": 0.5,
+   "MEAT": 0.8,
+   "MONDAY": 0.5556,
+   "MOTHER": 0.5789,
+   "NICE TO MEET YOU": 0.7027,
+   "NINE": 1.0,
+   "NO": 0.8421,
+   "NO SUGAR": 0.85,
+   "ONE": 0.5135,
+   "ORANGE": 0.2821,
+   "PARENTS": 0.6364,
+   "PINK": 0.8947,
+   "PLEASE": 0.7368,
+   "PROBLEM": 0.275,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7949,
+   "SATURDAY": 0.6667,
+   "SEE YOU TOMORROW": 0.675,
+   "SEVEN": 0.8235,
+   "SIX": 0.3429,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9231,
+   "SUGAR": 0.7778,
+   "SUNDAY": 0.925,
+   "TEA": 0.5263,
+   "THANK YOU": 0.9429,
+   "THREE": 0.8611,
+   "THURSDAY": 0.8611,
+   "TOMORROW": 0.3333,
+   "TUESDAY": 0.4054,
+   "TWO": 0.7949,
+   "UNCLE": 0.5588,
+   "UNDERSTAND": 0.7714,
+   "VIOLET": 0.75,
+   "WAIT": 0.4872,
+   "WEDNESDAY": 0.9211,
+   "WINE": 0.525,
+   "WOMAN": 0.325,
+   "WRONG": 0.6486,
+   "YELLOW": 0.7714,
+   "YES": 0.8378,
+   "YESTERDAY": 0.8108,
+   "YOU'RE WELCOME": 0.75
+  }
+ },
+ "conv_dist_refit+linear@0.3": {
+  "mean_signer_accuracy": 0.8126,
+  "per_signer": {
+   "signer-01": 0.8269,
+   "signer-02": 0.814,
+   "signer-03": 0.8132,
+   "signer-04": 0.7965
+  },
+  "worst_classes": [
+   [
+    "WAIT",
+    0.3846
+   ],
+   [
+    "ONE",
+    0.4324
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "MOTHER",
+    0.5263
+   ],
+   [
+    "BLUE",
+    0.5526
+   ],
+   [
+    "CHICKEN",
+    0.5641
+   ],
+   [
+    "FISH",
+    0.5641
+   ],
+   [
+    "I'M FINE",
+    0.5714
+   ],
+   [
+    "FATHER",
+    0.5833
+   ],
+   [
+    "WOMAN",
+    0.6
+   ]
+  ],
+  "classes_below_70": 17,
+  "top_confusions": [
+   "16x FISH -> PLEASE",
+   "14x ONE -> FAST",
+   "12x WAIT -> I'M FINE",
+   "10x RICE -> VIOLET",
+   "10x MOTHER -> I'M FINE",
+   "10x HARD OF HEARING -> NICE TO MEET YOU",
+   "10x WOMAN -> DAUGHTER",
+   "9x TOMORROW -> AUNTIE",
+   "9x I'M FINE -> FIVE",
+   "9x CARD -> SATURDAY"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.8378,
+   "BEER": 1.0,
+   "BLACK": 0.7941,
+   "BLIND": 0.9375,
+   "BLUE": 0.5526,
+   "BOY": 0.8,
+   "BREAD": 0.725,
+   "BROWN": 1.0,
+   "CARD": 0.6154,
+   "CHICKEN": 0.5641,
+   "COIN": 0.875,
+   "COUSIN": 0.8,
+   "DAUGHTER": 0.8421,
+   "DEAF": 0.7436,
+   "DEAF BLIND": 0.625,
+   "DON'T KNOW": 0.9091,
+   "DON'T UNDERSTAND": 1.0,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7812,
+   "FATHER": 0.5833,
+   "FISH": 0.5641,
+   "FIVE": 1.0,
+   "FOUR": 0.9167,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8649,
+   "GOOD AFTERNOON": 0.7778,
+   "GOOD EVENING": 0.7714,
+   "GOOD MORNING": 0.7222,
+   "GRANDFATHER": 0.8,
+   "GRAY": 0.9118,
+   "GREEN": 0.8947,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.7576,
+   "HOW ARE YOU": 0.95,
+   "I'M FINE": 0.5714,
+   "KNOW": 0.8857,
+   "LIGHT": 0.925,
+   "MAN": 0.7576,
+   "MARRIED": 0.625,
+   "MEAT": 0.925,
+   "MONDAY": 0.9722,
+   "MOTHER": 0.5263,
+   "NICE TO MEET YOU": 0.6486,
+   "NINE": 0.8485,
+   "NO": 0.9211,
+   "NO SUGAR": 0.9,
+   "ONE": 0.4324,
+   "ORANGE": 0.641,
+   "PARENTS": 0.7576,
+   "PINK": 0.9211,
+   "PLEASE": 0.7895,
+   "PROBLEM": 0.675,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7436,
+   "SATURDAY": 0.8462,
+   "SEE YOU TOMORROW": 0.75,
+   "SEVEN": 0.8235,
+   "SIX": 0.7714,
+   "SON": 0.7895,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.9167,
+   "SUNDAY": 0.9,
+   "TEA": 0.7895,
+   "THANK YOU": 0.9429,
+   "THREE": 0.9444,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.6061,
+   "TUESDAY": 0.8649,
+   "TWO": 0.8205,
+   "UNCLE": 0.8235,
+   "UNDERSTAND": 0.8286,
+   "VIOLET": 0.725,
+   "WAIT": 0.3846,
+   "WEDNESDAY": 0.9211,
+   "WINE": 0.95,
+   "WOMAN": 0.6,
+   "WRONG": 0.973,
+   "YELLOW": 0.9714,
+   "YES": 0.7838,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 0.875
+  }
+ },
+ "conv_dist_refit+linear@0.5": {
+  "mean_signer_accuracy": 0.8493,
+  "per_signer": {
+   "signer-01": 0.854,
+   "signer-02": 0.8618,
+   "signer-03": 0.8464,
+   "signer-04": 0.8351
+  },
+  "worst_classes": [
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "BLUE",
+    0.5526
+   ],
+   [
+    "I'M FINE",
+    0.5714
+   ],
+   [
+    "WAIT",
+    0.5897
+   ],
+   [
+    "GOOD EVENING",
+    0.6
+   ],
+   [
+    "WOMAN",
+    0.6
+   ],
+   [
+    "GOOD AFTERNOON",
+    0.6111
+   ],
+   [
+    "ONE",
+    0.6216
+   ],
+   [
+    "FATHER",
+    0.6389
+   ],
+   [
+    "CHICKEN",
+    0.641
+   ]
+  ],
+  "classes_below_70": 13,
+  "top_confusions": [
+   "14x GOOD AFTERNOON -> GOOD EVENING",
+   "12x GOOD EVENING -> GOOD AFTERNOON",
+   "10x RICE -> VIOLET",
+   "10x MOTHER -> I'M FINE",
+   "10x HARD OF HEARING -> NICE TO MEET YOU",
+   "9x DEAF -> ONE",
+   "8x PROBLEM -> SUNDAY",
+   "8x BLUE -> PROBLEM",
+   "8x TEA -> MEAT",
+   "8x WAIT -> COIN"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.8378,
+   "BEER": 1.0,
+   "BLACK": 0.7647,
+   "BLIND": 1.0,
+   "BLUE": 0.5526,
+   "BOY": 0.7667,
+   "BREAD": 0.75,
+   "BROWN": 0.9744,
+   "CARD": 0.8462,
+   "CHICKEN": 0.641,
+   "COIN": 0.9,
+   "COUSIN": 0.8286,
+   "DAUGHTER": 0.8421,
+   "DEAF": 0.7436,
+   "DEAF BLIND": 0.775,
+   "DON'T KNOW": 0.9091,
+   "DON'T UNDERSTAND": 1.0,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7812,
+   "FATHER": 0.6389,
+   "FISH": 0.8718,
+   "FIVE": 1.0,
+   "FOUR": 1.0,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8919,
+   "GOOD AFTERNOON": 0.6111,
+   "GOOD EVENING": 0.6,
+   "GOOD MORNING": 0.7778,
+   "GRANDFATHER": 0.85,
+   "GRAY": 0.9118,
+   "GREEN": 0.8947,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9091,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.5714,
+   "KNOW": 0.8571,
+   "LIGHT": 0.975,
+   "MAN": 0.7576,
+   "MARRIED": 0.7188,
+   "MEAT": 0.95,
+   "MONDAY": 0.9722,
+   "MOTHER": 0.6579,
+   "NICE TO MEET YOU": 0.6757,
+   "NINE": 0.8788,
+   "NO": 0.9474,
+   "NO SUGAR": 0.9,
+   "ONE": 0.6216,
+   "ORANGE": 0.7692,
+   "PARENTS": 0.8485,
+   "PINK": 0.9474,
+   "PLEASE": 0.8158,
+   "PROBLEM": 0.775,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.7436,
+   "SATURDAY": 0.9231,
+   "SEE YOU TOMORROW": 0.825,
+   "SEVEN": 0.9118,
+   "SIX": 0.7429,
+   "SON": 0.7895,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8889,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 0.9714,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.697,
+   "TUESDAY": 0.8919,
+   "TWO": 0.8718,
+   "UNCLE": 0.9118,
+   "UNDERSTAND": 0.8571,
+   "VIOLET": 0.925,
+   "WAIT": 0.5897,
+   "WEDNESDAY": 0.9474,
+   "WINE": 0.975,
+   "WOMAN": 0.6,
+   "WRONG": 1.0,
+   "YELLOW": 0.9714,
+   "YES": 0.7838,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 0.925
+  }
+ },
+ "conv_dist_refit+linear@0.7": {
+  "mean_signer_accuracy": 0.8602,
+  "per_signer": {
+   "signer-01": 0.8566,
+   "signer-02": 0.8734,
+   "signer-03": 0.8556,
+   "signer-04": 0.8551
+  },
+  "worst_classes": [
+   [
+    "GOOD AFTERNOON",
+    0.4444
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "ONE",
+    0.5405
+   ],
+   [
+    "I'M FINE",
+    0.5714
+   ],
+   [
+    "FATHER",
+    0.5833
+   ],
+   [
+    "GOOD EVENING",
+    0.6
+   ],
+   [
+    "WOMAN",
+    0.6
+   ],
+   [
+    "BLUE",
+    0.6053
+   ],
+   [
+    "MOTHER",
+    0.6579
+   ],
+   [
+    "DEAF",
+    0.6667
+   ]
+  ],
+  "classes_below_70": 11,
+  "top_confusions": [
+   "20x GOOD AFTERNOON -> GOOD EVENING",
+   "14x GOOD EVENING -> GOOD AFTERNOON",
+   "10x ONE -> DEAF",
+   "10x MOTHER -> I'M FINE",
+   "10x HARD OF HEARING -> NICE TO MEET YOU",
+   "9x FAST -> TUESDAY",
+   "9x WINE -> CHICKEN",
+   "9x DEAF -> ONE",
+   "8x TEA -> MEAT",
+   "8x WOMAN -> TOMORROW"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7568,
+   "BEER": 0.973,
+   "BLACK": 0.7941,
+   "BLIND": 1.0,
+   "BLUE": 0.6053,
+   "BOY": 0.7667,
+   "BREAD": 0.875,
+   "BROWN": 0.9487,
+   "CARD": 0.9231,
+   "CHICKEN": 0.7436,
+   "COIN": 1.0,
+   "COUSIN": 0.8,
+   "DAUGHTER": 0.8158,
+   "DEAF": 0.6667,
+   "DEAF BLIND": 0.8,
+   "DON'T KNOW": 0.8182,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7188,
+   "FATHER": 0.5833,
+   "FISH": 0.8974,
+   "FIVE": 1.0,
+   "FOUR": 1.0,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8919,
+   "GOOD AFTERNOON": 0.4444,
+   "GOOD EVENING": 0.6,
+   "GOOD MORNING": 0.7222,
+   "GRANDFATHER": 0.95,
+   "GRAY": 0.9118,
+   "GREEN": 0.8684,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9394,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.5714,
+   "KNOW": 0.7714,
+   "LIGHT": 0.975,
+   "MAN": 0.8788,
+   "MARRIED": 0.7188,
+   "MEAT": 0.95,
+   "MONDAY": 0.9722,
+   "MOTHER": 0.6579,
+   "NICE TO MEET YOU": 0.7027,
+   "NINE": 0.9697,
+   "NO": 0.9737,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5405,
+   "ORANGE": 1.0,
+   "PARENTS": 0.8788,
+   "PINK": 0.9474,
+   "PLEASE": 0.9737,
+   "PROBLEM": 0.825,
+   "RECEIPT": 0.975,
+   "RED": 0.975,
+   "RICE": 0.9231,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 1.0,
+   "SEVEN": 1.0,
+   "SIX": 0.7143,
+   "SON": 0.8684,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8889,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.7273,
+   "TUESDAY": 0.973,
+   "TWO": 0.9744,
+   "UNCLE": 0.9118,
+   "UNDERSTAND": 0.8,
+   "VIOLET": 0.8,
+   "WAIT": 0.6667,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.725,
+   "WOMAN": 0.6,
+   "WRONG": 1.0,
+   "YELLOW": 0.9429,
+   "YES": 0.7568,
+   "YESTERDAY": 0.8108,
+   "YOU'RE WELCOME": 0.975
+  }
+ },
+ "conv_dist+linear@0.3": {
+  "mean_signer_accuracy": 0.7403,
+  "per_signer": {
+   "signer-01": 0.7545,
+   "signer-02": 0.6977,
+   "signer-03": 0.7642,
+   "signer-04": 0.7447
+  },
+  "worst_classes": [
+   [
+    "WAIT",
+    0.1795
+   ],
+   [
+    "AUNTIE",
+    0.2703
+   ],
+   [
+    "MOTHER",
+    0.3158
+   ],
+   [
+    "SIX",
+    0.3429
+   ],
+   [
+    "WOMAN",
+    0.35
+   ],
+   [
+    "ONE",
+    0.3514
+   ],
+   [
+    "I'M FINE",
+    0.3571
+   ],
+   [
+    "DEAF",
+    0.3846
+   ],
+   [
+    "PROBLEM",
+    0.4
+   ],
+   [
+    "FISH",
+    0.4103
+   ]
+  ],
+  "classes_below_70": 28,
+  "top_confusions": [
+   "22x WAIT -> I'M FINE",
+   "20x FISH -> PLEASE",
+   "16x ONE -> DEAF",
+   "15x SIX -> WEDNESDAY",
+   "15x TUESDAY -> FAST",
+   "13x GOOD EVENING -> GOOD AFTERNOON",
+   "12x DEAF -> UNDERSTAND",
+   "12x KNOW -> FATHER",
+   "12x LIGHT -> SUNDAY",
+   "11x PROBLEM -> SUNDAY"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.2703,
+   "BEER": 0.973,
+   "BLACK": 0.9118,
+   "BLIND": 0.8438,
+   "BLUE": 0.5,
+   "BOY": 0.8333,
+   "BREAD": 0.9,
+   "BROWN": 0.9744,
+   "CARD": 0.7179,
+   "CHICKEN": 0.7179,
+   "COIN": 1.0,
+   "COUSIN": 0.7714,
+   "DAUGHTER": 0.6842,
+   "DEAF": 0.3846,
+   "DEAF BLIND": 0.55,
+   "DON'T KNOW": 0.7576,
+   "DON'T UNDERSTAND": 1.0,
+   "EGG": 1.0,
+   "EIGHT": 0.8824,
+   "FAST": 0.7188,
+   "FATHER": 0.7222,
+   "FISH": 0.4103,
+   "FIVE": 0.6857,
+   "FOUR": 0.6944,
+   "FRIDAY": 1.0,
+   "GIRL": 0.5135,
+   "GOOD AFTERNOON": 0.7222,
+   "GOOD EVENING": 0.5714,
+   "GOOD MORNING": 0.75,
+   "GRANDFATHER": 0.725,
+   "GRAY": 0.8824,
+   "GREEN": 0.9211,
+   "HARD OF HEARING": 0.5862,
+   "HELLO": 0.7576,
+   "HOW ARE YOU": 1.0,
+   "I'M FINE": 0.3571,
+   "KNOW": 0.4571,
+   "LIGHT": 0.7,
+   "MAN": 0.697,
+   "MARRIED": 0.5,
+   "MEAT": 0.875,
+   "MONDAY": 0.7222,
+   "MOTHER": 0.3158,
+   "NICE TO MEET YOU": 0.5676,
+   "NINE": 0.8485,
+   "NO": 0.9737,
+   "NO SUGAR": 0.825,
+   "ONE": 0.3514,
+   "ORANGE": 0.6154,
+   "PARENTS": 0.6364,
+   "PINK": 0.9737,
+   "PLEASE": 0.8158,
+   "PROBLEM": 0.4,
+   "RECEIPT": 1.0,
+   "RED": 0.925,
+   "RICE": 0.8718,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.85,
+   "SEVEN": 0.8235,
+   "SIX": 0.3429,
+   "SON": 0.8947,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8333,
+   "SUNDAY": 0.7,
+   "TEA": 0.8421,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9167,
+   "TOMORROW": 0.5758,
+   "TUESDAY": 0.5135,
+   "TWO": 0.7692,
+   "UNCLE": 0.6471,
+   "UNDERSTAND": 0.5143,
+   "VIOLET": 0.825,
+   "WAIT": 0.1795,
+   "WEDNESDAY": 0.9474,
+   "WINE": 0.725,
+   "WOMAN": 0.35,
+   "WRONG": 0.7838,
+   "YELLOW": 0.9714,
+   "YES": 0.7297,
+   "YESTERDAY": 0.8919,
+   "YOU'RE WELCOME": 0.875
+  }
+ },
+ "conv_dist+linear@0.5": {
+  "mean_signer_accuracy": 0.8057,
+  "per_signer": {
+   "signer-01": 0.8101,
+   "signer-02": 0.7817,
+   "signer-03": 0.8238,
+   "signer-04": 0.8072
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.3571
+   ],
+   [
+    "SIX",
+    0.3714
+   ],
+   [
+    "WOMAN",
+    0.425
+   ],
+   [
+    "DEAF",
+    0.4359
+   ],
+   [
+    "ONE",
+    0.4595
+   ],
+   [
+    "BLUE",
+    0.5
+   ],
+   [
+    "WAIT",
+    0.5128
+   ],
+   [
+    "MOTHER",
+    0.5263
+   ],
+   [
+    "AUNTIE",
+    0.5676
+   ],
+   [
+    "GIRL",
+    0.5676
+   ]
+  ],
+  "classes_below_70": 19,
+  "top_confusions": [
+   "17x ONE -> DEAF",
+   "13x GOOD EVENING -> GOOD AFTERNOON",
+   "12x FISH -> PLEASE",
+   "12x TUESDAY -> FAST",
+   "12x SIX -> WEDNESDAY",
+   "11x GOOD AFTERNOON -> GOOD EVENING",
+   "10x DEAF -> UNDERSTAND",
+   "10x WAIT -> I'M FINE",
+   "10x MONDAY -> YES",
+   "10x SIX -> TWO"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.5676,
+   "BEER": 0.973,
+   "BLACK": 0.8824,
+   "BLIND": 0.9375,
+   "BLUE": 0.5,
+   "BOY": 0.7667,
+   "BREAD": 0.9,
+   "BROWN": 0.9744,
+   "CARD": 0.8462,
+   "CHICKEN": 0.7179,
+   "COIN": 1.0,
+   "COUSIN": 0.8286,
+   "DAUGHTER": 0.7632,
+   "DEAF": 0.4359,
+   "DEAF BLIND": 0.775,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 0.9118,
+   "FAST": 0.75,
+   "FATHER": 0.75,
+   "FISH": 0.6667,
+   "FIVE": 0.7714,
+   "FOUR": 0.8056,
+   "FRIDAY": 1.0,
+   "GIRL": 0.5676,
+   "GOOD AFTERNOON": 0.6944,
+   "GOOD EVENING": 0.5714,
+   "GOOD MORNING": 0.75,
+   "GRANDFATHER": 0.9,
+   "GRAY": 0.8824,
+   "GREEN": 0.9211,
+   "HARD OF HEARING": 0.5862,
+   "HELLO": 0.8788,
+   "HOW ARE YOU": 0.975,
+   "I'M FINE": 0.3571,
+   "KNOW": 0.5714,
+   "LIGHT": 0.825,
+   "MAN": 0.8182,
+   "MARRIED": 0.625,
+   "MEAT": 0.925,
+   "MONDAY": 0.7222,
+   "MOTHER": 0.5263,
+   "NICE TO MEET YOU": 0.7027,
+   "NINE": 0.9091,
+   "NO": 0.9737,
+   "NO SUGAR": 0.875,
+   "ONE": 0.4595,
+   "ORANGE": 0.7692,
+   "PARENTS": 0.8182,
+   "PINK": 0.9737,
+   "PLEASE": 0.8684,
+   "PROBLEM": 0.7,
+   "RECEIPT": 0.975,
+   "RED": 0.95,
+   "RICE": 0.9231,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.925,
+   "SEVEN": 0.8824,
+   "SIX": 0.3714,
+   "SON": 0.8947,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8333,
+   "SUNDAY": 0.9,
+   "TEA": 0.8158,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9444,
+   "TOMORROW": 0.697,
+   "TUESDAY": 0.6216,
+   "TWO": 0.7949,
+   "UNCLE": 0.8235,
+   "UNDERSTAND": 0.6286,
+   "VIOLET": 0.975,
+   "WAIT": 0.5128,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.775,
+   "WOMAN": 0.425,
+   "WRONG": 0.9459,
+   "YELLOW": 1.0,
+   "YES": 0.7297,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "conv_dist+linear@0.7": {
+  "mean_signer_accuracy": 0.8514,
+  "per_signer": {
+   "signer-01": 0.8411,
+   "signer-02": 0.863,
+   "signer-03": 0.857,
+   "signer-04": 0.8444
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.4286
+   ],
+   [
+    "GOOD AFTERNOON",
+    0.4722
+   ],
+   [
+    "ONE",
+    0.4865
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "DEAF",
+    0.5641
+   ],
+   [
+    "GOOD EVENING",
+    0.5714
+   ],
+   [
+    "WOMAN",
+    0.575
+   ],
+   [
+    "FATHER",
+    0.5833
+   ],
+   [
+    "SIX",
+    0.6
+   ],
+   [
+    "BLUE",
+    0.6053
+   ]
+  ],
+  "classes_below_70": 12,
+  "top_confusions": [
+   "19x GOOD AFTERNOON -> GOOD EVENING",
+   "14x GOOD EVENING -> GOOD AFTERNOON",
+   "14x ONE -> DEAF",
+   "10x WINE -> CHICKEN",
+   "9x FAST -> TUESDAY",
+   "9x I'M FINE -> MOTHER",
+   "9x MOTHER -> I'M FINE",
+   "9x DEAF -> ONE",
+   "8x SIX -> WEDNESDAY",
+   "7x BLUE -> WOMAN"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7027,
+   "BEER": 0.973,
+   "BLACK": 0.8824,
+   "BLIND": 0.9688,
+   "BLUE": 0.6053,
+   "BOY": 0.8,
+   "BREAD": 0.925,
+   "BROWN": 0.9487,
+   "CARD": 0.9231,
+   "CHICKEN": 0.7179,
+   "COIN": 1.0,
+   "COUSIN": 0.8,
+   "DAUGHTER": 0.7895,
+   "DEAF": 0.5641,
+   "DEAF BLIND": 0.775,
+   "DON'T KNOW": 0.7576,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7188,
+   "FATHER": 0.5833,
+   "FISH": 0.8974,
+   "FIVE": 0.9714,
+   "FOUR": 0.8889,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8649,
+   "GOOD AFTERNOON": 0.4722,
+   "GOOD EVENING": 0.5714,
+   "GOOD MORNING": 0.75,
+   "GRANDFATHER": 0.95,
+   "GRAY": 0.8824,
+   "GREEN": 0.8684,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9394,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.4286,
+   "KNOW": 0.7429,
+   "LIGHT": 0.975,
+   "MAN": 0.8788,
+   "MARRIED": 0.7188,
+   "MEAT": 0.975,
+   "MONDAY": 0.9722,
+   "MOTHER": 0.6579,
+   "NICE TO MEET YOU": 0.7297,
+   "NINE": 0.9697,
+   "NO": 0.9737,
+   "NO SUGAR": 0.9,
+   "ONE": 0.4865,
+   "ORANGE": 0.9744,
+   "PARENTS": 0.8788,
+   "PINK": 0.9474,
+   "PLEASE": 0.9737,
+   "PROBLEM": 0.8,
+   "RECEIPT": 0.975,
+   "RED": 0.925,
+   "RICE": 0.9487,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.95,
+   "SEVEN": 0.9706,
+   "SIX": 0.6,
+   "SON": 0.9211,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8333,
+   "SUNDAY": 1.0,
+   "TEA": 0.8158,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.7273,
+   "TUESDAY": 0.8649,
+   "TWO": 1.0,
+   "UNCLE": 0.9118,
+   "UNDERSTAND": 0.7143,
+   "VIOLET": 0.875,
+   "WAIT": 0.7179,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.675,
+   "WOMAN": 0.575,
+   "WRONG": 1.0,
+   "YELLOW": 0.9714,
+   "YES": 0.7297,
+   "YESTERDAY": 0.8378,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "conv_refit+linear@0.3": {
+  "mean_signer_accuracy": 0.8252,
+  "per_signer": {
+   "signer-01": 0.8127,
+   "signer-02": 0.7972,
+   "signer-03": 0.8623,
+   "signer-04": 0.8285
+  },
+  "worst_classes": [
+   [
+    "SIX",
+    0.4
+   ],
+   [
+    "GREEN",
+    0.4211
+   ],
+   [
+    "DEAF BLIND",
+    0.425
+   ],
+   [
+    "FATHER",
+    0.4444
+   ],
+   [
+    "WAIT",
+    0.4872
+   ],
+   [
+    "MOTHER",
+    0.5
+   ],
+   [
+    "ORANGE",
+    0.5385
+   ],
+   [
+    "ONE",
+    0.5676
+   ],
+   [
+    "GOOD EVENING",
+    0.6
+   ],
+   [
+    "BLUE",
+    0.6053
+   ]
+  ],
+  "classes_below_70": 16,
+  "top_confusions": [
+   "18x SIX -> WEDNESDAY",
+   "14x GOOD EVENING -> GOOD AFTERNOON",
+   "10x SEVEN -> FOUR",
+   "9x MOTHER -> PARENTS",
+   "9x ONE -> DEAF",
+   "9x ORANGE -> WRONG",
+   "9x PLEASE -> FISH",
+   "9x PROBLEM -> SUNDAY",
+   "9x GREEN -> FISH",
+   "9x DEAF -> ONE"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.9459,
+   "BEER": 1.0,
+   "BLACK": 0.7647,
+   "BLIND": 0.75,
+   "BLUE": 0.6053,
+   "BOY": 0.9,
+   "BREAD": 0.975,
+   "BROWN": 1.0,
+   "CARD": 0.7692,
+   "CHICKEN": 0.7179,
+   "COIN": 0.95,
+   "COUSIN": 0.7429,
+   "DAUGHTER": 0.7895,
+   "DEAF": 0.6154,
+   "DEAF BLIND": 0.425,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.7941,
+   "FAST": 0.6875,
+   "FATHER": 0.4444,
+   "FISH": 0.8205,
+   "FIVE": 1.0,
+   "FOUR": 0.9167,
+   "FRIDAY": 0.975,
+   "GIRL": 0.9189,
+   "GOOD AFTERNOON": 0.8889,
+   "GOOD EVENING": 0.6,
+   "GOOD MORNING": 0.75,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.9412,
+   "GREEN": 0.4211,
+   "HARD OF HEARING": 0.6552,
+   "HELLO": 0.8788,
+   "HOW ARE YOU": 1.0,
+   "I'M FINE": 0.7857,
+   "KNOW": 0.7714,
+   "LIGHT": 1.0,
+   "MAN": 0.7576,
+   "MARRIED": 0.8125,
+   "MEAT": 0.875,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.5,
+   "NICE TO MEET YOU": 0.6486,
+   "NINE": 0.9697,
+   "NO": 0.8947,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5676,
+   "ORANGE": 0.5385,
+   "PARENTS": 0.7879,
+   "PINK": 0.9211,
+   "PLEASE": 0.7632,
+   "PROBLEM": 0.625,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7692,
+   "SATURDAY": 0.9231,
+   "SEE YOU TOMORROW": 0.8,
+   "SEVEN": 0.7059,
+   "SIX": 0.4,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.825,
+   "TEA": 0.9474,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9722,
+   "TOMORROW": 0.6667,
+   "TUESDAY": 1.0,
+   "TWO": 0.8462,
+   "UNCLE": 0.8235,
+   "UNDERSTAND": 0.9714,
+   "VIOLET": 0.95,
+   "WAIT": 0.4872,
+   "WEDNESDAY": 0.9474,
+   "WINE": 0.95,
+   "WOMAN": 0.7,
+   "WRONG": 0.8378,
+   "YELLOW": 0.9143,
+   "YES": 0.8108,
+   "YESTERDAY": 1.0,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "conv_refit+linear@0.5": {
+  "mean_signer_accuracy": 0.8539,
+  "per_signer": {
+   "signer-01": 0.8307,
+   "signer-02": 0.8385,
+   "signer-03": 0.8808,
+   "signer-04": 0.8657
+  },
+  "worst_classes": [
+   [
+    "SIX",
+    0.4857
+   ],
+   [
+    "FATHER",
+    0.5
+   ],
+   [
+    "DEAF BLIND",
+    0.55
+   ],
+   [
+    "ORANGE",
+    0.5641
+   ],
+   [
+    "WAIT",
+    0.5641
+   ],
+   [
+    "ONE",
+    0.5676
+   ],
+   [
+    "GOOD EVENING",
+    0.5714
+   ],
+   [
+    "MOTHER",
+    0.5789
+   ],
+   [
+    "GREEN",
+    0.6053
+   ],
+   [
+    "BLUE",
+    0.6316
+   ]
+  ],
+  "classes_below_70": 13,
+  "top_confusions": [
+   "15x GOOD EVENING -> GOOD AFTERNOON",
+   "15x SIX -> WEDNESDAY",
+   "9x ONE -> DEAF",
+   "9x ORANGE -> WRONG",
+   "9x DEAF -> ONE",
+   "9x SEVEN -> FOUR",
+   "8x GOOD AFTERNOON -> GOOD EVENING",
+   "8x PLEASE -> FISH",
+   "8x PROBLEM -> SUNDAY",
+   "8x ORANGE -> GOOD EVENING"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.8919,
+   "BEER": 1.0,
+   "BLACK": 0.7647,
+   "BLIND": 0.9375,
+   "BLUE": 0.6316,
+   "BOY": 0.9,
+   "BREAD": 1.0,
+   "BROWN": 1.0,
+   "CARD": 0.9744,
+   "CHICKEN": 0.7179,
+   "COIN": 0.95,
+   "COUSIN": 0.8,
+   "DAUGHTER": 0.8421,
+   "DEAF": 0.6667,
+   "DEAF BLIND": 0.55,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.9706,
+   "FAST": 0.7188,
+   "FATHER": 0.5,
+   "FISH": 0.9231,
+   "FIVE": 1.0,
+   "FOUR": 0.9167,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8919,
+   "GOOD AFTERNOON": 0.7778,
+   "GOOD EVENING": 0.5714,
+   "GOOD MORNING": 0.7778,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.9118,
+   "GREEN": 0.6053,
+   "HARD OF HEARING": 0.6552,
+   "HELLO": 0.9091,
+   "HOW ARE YOU": 0.95,
+   "I'M FINE": 0.7857,
+   "KNOW": 0.8,
+   "LIGHT": 1.0,
+   "MAN": 0.8182,
+   "MARRIED": 0.75,
+   "MEAT": 0.95,
+   "MONDAY": 0.9722,
+   "MOTHER": 0.5789,
+   "NICE TO MEET YOU": 0.7568,
+   "NINE": 1.0,
+   "NO": 0.9211,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5676,
+   "ORANGE": 0.5641,
+   "PARENTS": 0.8485,
+   "PINK": 0.9474,
+   "PLEASE": 0.7895,
+   "PROBLEM": 0.725,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.8974,
+   "SATURDAY": 0.9487,
+   "SEE YOU TOMORROW": 0.825,
+   "SEVEN": 0.7353,
+   "SIX": 0.4857,
+   "SON": 0.9211,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8333,
+   "SUNDAY": 0.925,
+   "TEA": 0.8684,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9722,
+   "TOMORROW": 0.697,
+   "TUESDAY": 1.0,
+   "TWO": 0.8462,
+   "UNCLE": 0.8235,
+   "UNDERSTAND": 0.9714,
+   "VIOLET": 0.975,
+   "WAIT": 0.5641,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.95,
+   "WOMAN": 0.725,
+   "WRONG": 0.973,
+   "YELLOW": 0.9429,
+   "YES": 0.8108,
+   "YESTERDAY": 1.0,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "conv_refit+linear@0.7": {
+  "mean_signer_accuracy": 0.8622,
+  "per_signer": {
+   "signer-01": 0.8566,
+   "signer-02": 0.863,
+   "signer-03": 0.8689,
+   "signer-04": 0.8604
+  },
+  "worst_classes": [
+   [
+    "GOOD AFTERNOON",
+    0.4444
+   ],
+   [
+    "ONE",
+    0.4865
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "FATHER",
+    0.5278
+   ],
+   [
+    "GOOD EVENING",
+    0.5714
+   ],
+   [
+    "WOMAN",
+    0.6
+   ],
+   [
+    "SIX",
+    0.6286
+   ],
+   [
+    "I'M FINE",
+    0.6429
+   ],
+   [
+    "BLUE",
+    0.6579
+   ],
+   [
+    "DEAF",
+    0.6667
+   ]
+  ],
+  "classes_below_70": 13,
+  "top_confusions": [
+   "20x GOOD AFTERNOON -> GOOD EVENING",
+   "15x GOOD EVENING -> GOOD AFTERNOON",
+   "12x ONE -> DEAF",
+   "9x FAST -> TUESDAY",
+   "9x WINE -> CHICKEN",
+   "9x DEAF -> ONE",
+   "8x SIX -> WEDNESDAY",
+   "8x MOTHER -> I'M FINE",
+   "8x HARD OF HEARING -> NICE TO MEET YOU",
+   "8x SEVEN -> FOUR"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7568,
+   "BEER": 0.973,
+   "BLACK": 0.7941,
+   "BLIND": 1.0,
+   "BLUE": 0.6579,
+   "BOY": 0.7667,
+   "BREAD": 1.0,
+   "BROWN": 0.9487,
+   "CARD": 0.9487,
+   "CHICKEN": 0.8205,
+   "COIN": 1.0,
+   "COUSIN": 0.8,
+   "DAUGHTER": 0.8421,
+   "DEAF": 0.6667,
+   "DEAF BLIND": 0.725,
+   "DON'T KNOW": 0.7576,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.9706,
+   "FAST": 0.7188,
+   "FATHER": 0.5278,
+   "FISH": 0.9231,
+   "FIVE": 1.0,
+   "FOUR": 1.0,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8919,
+   "GOOD AFTERNOON": 0.4444,
+   "GOOD EVENING": 0.5714,
+   "GOOD MORNING": 0.75,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.9118,
+   "GREEN": 0.8421,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9394,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.6429,
+   "KNOW": 0.7143,
+   "LIGHT": 0.975,
+   "MAN": 0.8788,
+   "MARRIED": 0.8125,
+   "MEAT": 0.95,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.6842,
+   "NICE TO MEET YOU": 0.7297,
+   "NINE": 1.0,
+   "NO": 0.9737,
+   "NO SUGAR": 0.875,
+   "ONE": 0.4865,
+   "ORANGE": 1.0,
+   "PARENTS": 0.8788,
+   "PINK": 0.9474,
+   "PLEASE": 0.9474,
+   "PROBLEM": 0.8,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.9231,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 1.0,
+   "SEVEN": 0.7647,
+   "SIX": 0.6286,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.8333,
+   "SUNDAY": 1.0,
+   "TEA": 0.8158,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.697,
+   "TUESDAY": 0.973,
+   "TWO": 0.9744,
+   "UNCLE": 0.9118,
+   "UNDERSTAND": 0.8857,
+   "VIOLET": 0.875,
+   "WAIT": 0.6923,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.7,
+   "WOMAN": 0.6,
+   "WRONG": 1.0,
+   "YELLOW": 0.9429,
+   "YES": 0.8378,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "conv+linear@0.3": {
+  "mean_signer_accuracy": 0.7431,
+  "per_signer": {
+   "signer-01": 0.761,
+   "signer-02": 0.7145,
+   "signer-03": 0.7828,
+   "signer-04": 0.7141
+  },
+  "worst_classes": [
+   [
+    "SIX",
+    0.2286
+   ],
+   [
+    "FISH",
+    0.3846
+   ],
+   [
+    "PROBLEM",
+    0.4
+   ],
+   [
+    "WRONG",
+    0.4054
+   ],
+   [
+    "HELLO",
+    0.4242
+   ],
+   [
+    "TOMORROW",
+    0.4848
+   ],
+   [
+    "AUNTIE",
+    0.4865
+   ],
+   [
+    "GIRL",
+    0.4865
+   ],
+   [
+    "NICE TO MEET YOU",
+    0.4865
+   ],
+   [
+    "TUESDAY",
+    0.4865
+   ]
+  ],
+  "classes_below_70": 33,
+  "top_confusions": [
+   "24x FISH -> PLEASE",
+   "19x SIX -> WEDNESDAY",
+   "19x WRONG -> YELLOW",
+   "17x GOOD AFTERNOON -> GOOD EVENING",
+   "14x PROBLEM -> SUNDAY",
+   "11x HELLO -> MAN",
+   "10x GOOD EVENING -> GOOD AFTERNOON",
+   "10x ORANGE -> WRONG",
+   "10x AUNTIE -> GOOD MORNING",
+   "10x SATURDAY -> HOW ARE YOU"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.4865,
+   "BEER": 1.0,
+   "BLACK": 0.7647,
+   "BLIND": 0.7188,
+   "BLUE": 0.5263,
+   "BOY": 0.8,
+   "BREAD": 0.875,
+   "BROWN": 1.0,
+   "CARD": 0.6667,
+   "CHICKEN": 0.5385,
+   "COIN": 0.925,
+   "COUSIN": 0.6286,
+   "DAUGHTER": 0.5,
+   "DEAF": 0.5128,
+   "DEAF BLIND": 0.7,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 0.8235,
+   "FAST": 0.5938,
+   "FATHER": 0.5278,
+   "FISH": 0.3846,
+   "FIVE": 1.0,
+   "FOUR": 0.8611,
+   "FRIDAY": 1.0,
+   "GIRL": 0.4865,
+   "GOOD AFTERNOON": 0.5278,
+   "GOOD EVENING": 0.6571,
+   "GOOD MORNING": 0.5556,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.8824,
+   "GREEN": 0.6842,
+   "HARD OF HEARING": 0.5517,
+   "HELLO": 0.4242,
+   "HOW ARE YOU": 0.975,
+   "I'M FINE": 0.6786,
+   "KNOW": 0.5143,
+   "LIGHT": 0.875,
+   "MAN": 0.7879,
+   "MARRIED": 0.5312,
+   "MEAT": 0.9,
+   "MONDAY": 0.9167,
+   "MOTHER": 0.5263,
+   "NICE TO MEET YOU": 0.4865,
+   "NINE": 1.0,
+   "NO": 0.9211,
+   "NO SUGAR": 0.8,
+   "ONE": 0.7838,
+   "ORANGE": 0.5128,
+   "PARENTS": 0.5758,
+   "PINK": 0.9474,
+   "PLEASE": 1.0,
+   "PROBLEM": 0.4,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7692,
+   "SATURDAY": 0.7179,
+   "SEE YOU TOMORROW": 0.575,
+   "SEVEN": 0.7059,
+   "SIX": 0.2286,
+   "SON": 0.8947,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.95,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 0.9722,
+   "THURSDAY": 0.8611,
+   "TOMORROW": 0.4848,
+   "TUESDAY": 0.4865,
+   "TWO": 0.7436,
+   "UNCLE": 0.5588,
+   "UNDERSTAND": 0.8286,
+   "VIOLET": 0.75,
+   "WAIT": 0.5385,
+   "WEDNESDAY": 0.9474,
+   "WINE": 0.85,
+   "WOMAN": 0.725,
+   "WRONG": 0.4054,
+   "YELLOW": 0.9143,
+   "YES": 0.6216,
+   "YESTERDAY": 0.9459,
+   "YOU'RE WELCOME": 0.9
+  }
+ },
+ "conv+linear@0.5": {
+  "mean_signer_accuracy": 0.8069,
+  "per_signer": {
+   "signer-01": 0.8256,
+   "signer-02": 0.7881,
+   "signer-03": 0.8305,
+   "signer-04": 0.7832
+  },
+  "worst_classes": [
+   [
+    "SIX",
+    0.3143
+   ],
+   [
+    "GOOD AFTERNOON",
+    0.5278
+   ],
+   [
+    "CHICKEN",
+    0.5385
+   ],
+   [
+    "DEAF",
+    0.5385
+   ],
+   [
+    "FISH",
+    0.5385
+   ],
+   [
+    "ORANGE",
+    0.5385
+   ],
+   [
+    "HARD OF HEARING",
+    0.5517
+   ],
+   [
+    "FATHER",
+    0.5556
+   ],
+   [
+    "AUNTIE",
+    0.5676
+   ],
+   [
+    "NICE TO MEET YOU",
+    0.5676
+   ]
+  ],
+  "classes_below_70": 23,
+  "top_confusions": [
+   "18x FISH -> PLEASE",
+   "17x GOOD AFTERNOON -> GOOD EVENING",
+   "15x SIX -> WEDNESDAY",
+   "13x WRONG -> YELLOW",
+   "11x GOOD EVENING -> GOOD AFTERNOON",
+   "10x ORANGE -> WRONG",
+   "10x PROBLEM -> SUNDAY",
+   "9x ONE -> DEAF",
+   "9x SATURDAY -> HOW ARE YOU",
+   "9x MOTHER -> I'M FINE"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.5676,
+   "BEER": 1.0,
+   "BLACK": 0.7941,
+   "BLIND": 0.8125,
+   "BLUE": 0.6316,
+   "BOY": 0.7667,
+   "BREAD": 0.9,
+   "BROWN": 1.0,
+   "CARD": 0.8718,
+   "CHICKEN": 0.5385,
+   "COIN": 0.975,
+   "COUSIN": 0.7143,
+   "DAUGHTER": 0.6842,
+   "DEAF": 0.5385,
+   "DEAF BLIND": 0.775,
+   "DON'T KNOW": 0.8182,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 0.9706,
+   "FAST": 0.6875,
+   "FATHER": 0.5556,
+   "FISH": 0.5385,
+   "FIVE": 1.0,
+   "FOUR": 0.9167,
+   "FRIDAY": 1.0,
+   "GIRL": 0.7027,
+   "GOOD AFTERNOON": 0.5278,
+   "GOOD EVENING": 0.6571,
+   "GOOD MORNING": 0.7222,
+   "GRANDFATHER": 1.0,
+   "GRAY": 0.8824,
+   "GREEN": 0.8421,
+   "HARD OF HEARING": 0.5517,
+   "HELLO": 0.8485,
+   "HOW ARE YOU": 0.95,
+   "I'M FINE": 0.6429,
+   "KNOW": 0.6857,
+   "LIGHT": 0.95,
+   "MAN": 0.7879,
+   "MARRIED": 0.6875,
+   "MEAT": 0.925,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.6316,
+   "NICE TO MEET YOU": 0.5676,
+   "NINE": 1.0,
+   "NO": 0.9474,
+   "NO SUGAR": 0.825,
+   "ONE": 0.6757,
+   "ORANGE": 0.5385,
+   "PARENTS": 0.7273,
+   "PINK": 0.9211,
+   "PLEASE": 1.0,
+   "PROBLEM": 0.65,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.8462,
+   "SATURDAY": 0.7436,
+   "SEE YOU TOMORROW": 0.75,
+   "SEVEN": 0.7059,
+   "SIX": 0.3143,
+   "SON": 0.8947,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8056,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9444,
+   "TOMORROW": 0.6667,
+   "TUESDAY": 0.7027,
+   "TWO": 0.8205,
+   "UNCLE": 0.7647,
+   "UNDERSTAND": 0.9143,
+   "VIOLET": 0.875,
+   "WAIT": 0.641,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.85,
+   "WOMAN": 0.7,
+   "WRONG": 0.6216,
+   "YELLOW": 0.9429,
+   "YES": 0.7297,
+   "YESTERDAY": 0.973,
+   "YOU'RE WELCOME": 0.975
+  }
+ },
+ "conv+linear@0.7": {
+  "mean_signer_accuracy": 0.8533,
+  "per_signer": {
+   "signer-01": 0.8514,
+   "signer-02": 0.8566,
+   "signer-03": 0.8649,
+   "signer-04": 0.8404
+  },
+  "worst_classes": [
+   [
+    "GOOD AFTERNOON",
+    0.3889
+   ],
+   [
+    "ONE",
+    0.5135
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "FATHER",
+    0.5556
+   ],
+   [
+    "GOOD EVENING",
+    0.5714
+   ],
+   [
+    "I'M FINE",
+    0.5714
+   ],
+   [
+    "SIX",
+    0.6
+   ],
+   [
+    "WOMAN",
+    0.6
+   ],
+   [
+    "DEAF",
+    0.6154
+   ],
+   [
+    "BLUE",
+    0.6316
+   ]
+  ],
+  "classes_below_70": 14,
+  "top_confusions": [
+   "22x GOOD AFTERNOON -> GOOD EVENING",
+   "14x GOOD EVENING -> GOOD AFTERNOON",
+   "12x ONE -> DEAF",
+   "9x FAST -> TUESDAY",
+   "9x SIX -> WEDNESDAY",
+   "9x MOTHER -> I'M FINE",
+   "9x WINE -> CHICKEN",
+   "9x DEAF -> ONE",
+   "8x TEA -> MEAT",
+   "8x WOMAN -> TOMORROW"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7297,
+   "BEER": 0.973,
+   "BLACK": 0.7941,
+   "BLIND": 1.0,
+   "BLUE": 0.6316,
+   "BOY": 0.7667,
+   "BREAD": 0.925,
+   "BROWN": 0.9487,
+   "CARD": 0.9487,
+   "CHICKEN": 0.7436,
+   "COIN": 0.975,
+   "COUSIN": 0.8,
+   "DAUGHTER": 0.7632,
+   "DEAF": 0.6154,
+   "DEAF BLIND": 0.8,
+   "DON'T KNOW": 0.7576,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7188,
+   "FATHER": 0.5556,
+   "FISH": 0.8974,
+   "FIVE": 1.0,
+   "FOUR": 0.9722,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8649,
+   "GOOD AFTERNOON": 0.3889,
+   "GOOD EVENING": 0.5714,
+   "GOOD MORNING": 0.75,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.9118,
+   "GREEN": 0.8684,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9394,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.5714,
+   "KNOW": 0.7429,
+   "LIGHT": 0.975,
+   "MAN": 0.9091,
+   "MARRIED": 0.7812,
+   "MEAT": 0.95,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.7105,
+   "NICE TO MEET YOU": 0.6486,
+   "NINE": 1.0,
+   "NO": 0.9737,
+   "NO SUGAR": 0.9,
+   "ONE": 0.5135,
+   "ORANGE": 0.9744,
+   "PARENTS": 0.7879,
+   "PINK": 0.9474,
+   "PLEASE": 1.0,
+   "PROBLEM": 0.8,
+   "RECEIPT": 0.975,
+   "RED": 0.95,
+   "RICE": 0.9231,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.95,
+   "SEVEN": 0.8529,
+   "SIX": 0.6,
+   "SON": 0.9211,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8333,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.697,
+   "TUESDAY": 0.8919,
+   "TWO": 0.9487,
+   "UNCLE": 0.9706,
+   "UNDERSTAND": 0.8571,
+   "VIOLET": 0.85,
+   "WAIT": 0.6667,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.675,
+   "WOMAN": 0.6,
+   "WRONG": 1.0,
+   "YELLOW": 0.9143,
+   "YES": 0.7568,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "lstm_dist+linear@0.3": {
+  "mean_signer_accuracy": 0.7193,
+  "per_signer": {
+   "signer-01": 0.739,
+   "signer-02": 0.6718,
+   "signer-03": 0.7417,
+   "signer-04": 0.7247
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.25
+   ],
+   [
+    "MONDAY",
+    0.25
+   ],
+   [
+    "PROBLEM",
+    0.325
+   ],
+   [
+    "WOMAN",
+    0.325
+   ],
+   [
+    "DEAF",
+    0.3333
+   ],
+   [
+    "MOTHER",
+    0.3421
+   ],
+   [
+    "COUSIN",
+    0.3429
+   ],
+   [
+    "WINE",
+    0.35
+   ],
+   [
+    "UNCLE",
+    0.3529
+   ],
+   [
+    "WAIT",
+    0.3846
+   ]
+  ],
+  "classes_below_70": 33,
+  "top_confusions": [
+   "21x FISH -> PLEASE",
+   "18x GOOD EVENING -> GOOD AFTERNOON",
+   "16x WINE -> UNCLE",
+   "15x PROBLEM -> SUNDAY",
+   "14x TOMORROW -> AUNTIE",
+   "12x WAIT -> I'M FINE",
+   "11x MONDAY -> TOMORROW",
+   "11x MOTHER -> PARENTS",
+   "11x ONE -> DEAF",
+   "11x TUESDAY -> FAST"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.4595,
+   "BEER": 0.9189,
+   "BLACK": 0.8235,
+   "BLIND": 0.8438,
+   "BLUE": 0.4474,
+   "BOY": 0.7333,
+   "BREAD": 0.8,
+   "BROWN": 0.8974,
+   "CARD": 0.7436,
+   "CHICKEN": 0.5641,
+   "COIN": 0.9,
+   "COUSIN": 0.3429,
+   "DAUGHTER": 0.7105,
+   "DEAF": 0.3333,
+   "DEAF BLIND": 0.425,
+   "DON'T KNOW": 0.6364,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.9706,
+   "FAST": 0.5,
+   "FATHER": 0.4722,
+   "FISH": 0.4615,
+   "FIVE": 1.0,
+   "FOUR": 0.7778,
+   "FRIDAY": 1.0,
+   "GIRL": 0.4865,
+   "GOOD AFTERNOON": 0.75,
+   "GOOD EVENING": 0.4286,
+   "GOOD MORNING": 0.8056,
+   "GRANDFATHER": 0.6,
+   "GRAY": 0.8824,
+   "GREEN": 0.7632,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.8788,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.25,
+   "KNOW": 0.5429,
+   "LIGHT": 0.8,
+   "MAN": 0.7576,
+   "MARRIED": 0.5938,
+   "MEAT": 0.975,
+   "MONDAY": 0.25,
+   "MOTHER": 0.3421,
+   "NICE TO MEET YOU": 0.5676,
+   "NINE": 1.0,
+   "NO": 0.9737,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5676,
+   "ORANGE": 0.5641,
+   "PARENTS": 0.7576,
+   "PINK": 0.8684,
+   "PLEASE": 0.7895,
+   "PROBLEM": 0.325,
+   "RECEIPT": 1.0,
+   "RED": 0.975,
+   "RICE": 0.8974,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.925,
+   "SEVEN": 0.8235,
+   "SIX": 0.6286,
+   "SON": 0.8421,
+   "SPAGHETTI": 0.9231,
+   "SUGAR": 0.9167,
+   "SUNDAY": 0.925,
+   "TEA": 0.7368,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.5455,
+   "TUESDAY": 0.4324,
+   "TWO": 0.7692,
+   "UNCLE": 0.3529,
+   "UNDERSTAND": 0.6857,
+   "VIOLET": 0.525,
+   "WAIT": 0.3846,
+   "WEDNESDAY": 0.8684,
+   "WINE": 0.35,
+   "WOMAN": 0.325,
+   "WRONG": 1.0,
+   "YELLOW": 0.8857,
+   "YES": 0.6757,
+   "YESTERDAY": 0.9189,
+   "YOU'RE WELCOME": 0.7
+  }
+ },
+ "lstm_dist+linear@0.5": {
+  "mean_signer_accuracy": 0.7761,
+  "per_signer": {
+   "signer-01": 0.7842,
+   "signer-02": 0.7687,
+   "signer-03": 0.7801,
+   "signer-04": 0.7713
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.2857
+   ],
+   [
+    "DEAF",
+    0.3846
+   ],
+   [
+    "WINE",
+    0.45
+   ],
+   [
+    "AUNTIE",
+    0.4595
+   ],
+   [
+    "TUESDAY",
+    0.4595
+   ],
+   [
+    "BLUE",
+    0.4737
+   ],
+   [
+    "FATHER",
+    0.5
+   ],
+   [
+    "ONE",
+    0.5135
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "DEAF BLIND",
+    0.525
+   ]
+  ],
+  "classes_below_70": 29,
+  "top_confusions": [
+   "17x GOOD AFTERNOON -> GOOD EVENING",
+   "15x FISH -> PLEASE",
+   "14x GOOD EVENING -> GOOD AFTERNOON",
+   "13x TOMORROW -> AUNTIE",
+   "12x WINE -> UNCLE",
+   "11x ONE -> DEAF",
+   "11x PROBLEM -> SUNDAY",
+   "11x TUESDAY -> FAST",
+   "10x DEAF -> UNDERSTAND",
+   "10x SIX -> WEDNESDAY"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.4595,
+   "BEER": 0.9189,
+   "BLACK": 0.8235,
+   "BLIND": 0.9375,
+   "BLUE": 0.4737,
+   "BOY": 0.7333,
+   "BREAD": 0.8,
+   "BROWN": 0.8974,
+   "CARD": 0.7692,
+   "CHICKEN": 0.641,
+   "COIN": 0.9,
+   "COUSIN": 0.5714,
+   "DAUGHTER": 0.7368,
+   "DEAF": 0.3846,
+   "DEAF BLIND": 0.525,
+   "DON'T KNOW": 0.6364,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.9706,
+   "FAST": 0.5312,
+   "FATHER": 0.5,
+   "FISH": 0.6154,
+   "FIVE": 1.0,
+   "FOUR": 0.7778,
+   "FRIDAY": 1.0,
+   "GIRL": 0.7027,
+   "GOOD AFTERNOON": 0.5278,
+   "GOOD EVENING": 0.5429,
+   "GOOD MORNING": 0.7778,
+   "GRANDFATHER": 0.725,
+   "GRAY": 0.8824,
+   "GREEN": 0.8421,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.8788,
+   "HOW ARE YOU": 0.95,
+   "I'M FINE": 0.2857,
+   "KNOW": 0.6857,
+   "LIGHT": 0.9,
+   "MAN": 0.8788,
+   "MARRIED": 0.6562,
+   "MEAT": 0.975,
+   "MONDAY": 0.7778,
+   "MOTHER": 0.5789,
+   "NICE TO MEET YOU": 0.5946,
+   "NINE": 1.0,
+   "NO": 1.0,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5135,
+   "ORANGE": 0.7436,
+   "PARENTS": 0.8485,
+   "PINK": 0.9211,
+   "PLEASE": 0.8158,
+   "PROBLEM": 0.6,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.8974,
+   "SATURDAY": 1.0,
+   "SEE YOU TOMORROW": 0.975,
+   "SEVEN": 0.8824,
+   "SIX": 0.6,
+   "SON": 0.8947,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.9167,
+   "SUNDAY": 0.95,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.5758,
+   "TUESDAY": 0.4595,
+   "TWO": 0.8718,
+   "UNCLE": 0.6471,
+   "UNDERSTAND": 0.7714,
+   "VIOLET": 0.675,
+   "WAIT": 0.5897,
+   "WEDNESDAY": 0.9211,
+   "WINE": 0.45,
+   "WOMAN": 0.55,
+   "WRONG": 1.0,
+   "YELLOW": 0.8857,
+   "YES": 0.6757,
+   "YESTERDAY": 0.973,
+   "YOU'RE WELCOME": 0.75
+  }
+ },
+ "lstm_dist+linear@0.7": {
+  "mean_signer_accuracy": 0.8455,
+  "per_signer": {
+   "signer-01": 0.8424,
+   "signer-02": 0.8501,
+   "signer-03": 0.8517,
+   "signer-04": 0.8378
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.4286
+   ],
+   [
+    "GOOD AFTERNOON",
+    0.4444
+   ],
+   [
+    "ONE",
+    0.5135
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "FATHER",
+    0.5278
+   ],
+   [
+    "GOOD EVENING",
+    0.5429
+   ],
+   [
+    "WOMAN",
+    0.575
+   ],
+   [
+    "BLUE",
+    0.6053
+   ],
+   [
+    "DEAF",
+    0.6154
+   ],
+   [
+    "MOTHER",
+    0.6316
+   ]
+  ],
+  "classes_below_70": 15,
+  "top_confusions": [
+   "20x GOOD AFTERNOON -> GOOD EVENING",
+   "15x GOOD EVENING -> GOOD AFTERNOON",
+   "12x ONE -> DEAF",
+   "10x WINE -> CHICKEN",
+   "9x FAST -> TUESDAY",
+   "9x BLUE -> GRAY",
+   "9x I'M FINE -> MOTHER",
+   "9x MOTHER -> I'M FINE",
+   "9x DEAF -> ONE",
+   "8x TEA -> MEAT"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7027,
+   "BEER": 0.973,
+   "BLACK": 0.8235,
+   "BLIND": 1.0,
+   "BLUE": 0.6053,
+   "BOY": 0.7333,
+   "BREAD": 0.85,
+   "BROWN": 0.8974,
+   "CARD": 0.9231,
+   "CHICKEN": 0.7179,
+   "COIN": 0.925,
+   "COUSIN": 0.7429,
+   "DAUGHTER": 0.7895,
+   "DEAF": 0.6154,
+   "DEAF BLIND": 0.7,
+   "DON'T KNOW": 0.6364,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.6875,
+   "FATHER": 0.5278,
+   "FISH": 0.8974,
+   "FIVE": 1.0,
+   "FOUR": 0.9167,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8919,
+   "GOOD AFTERNOON": 0.4444,
+   "GOOD EVENING": 0.5429,
+   "GOOD MORNING": 0.7778,
+   "GRANDFATHER": 0.95,
+   "GRAY": 0.9412,
+   "GREEN": 0.8421,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9091,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.4286,
+   "KNOW": 0.7143,
+   "LIGHT": 0.975,
+   "MAN": 0.9091,
+   "MARRIED": 0.7188,
+   "MEAT": 0.975,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.6316,
+   "NICE TO MEET YOU": 0.6757,
+   "NINE": 1.0,
+   "NO": 1.0,
+   "NO SUGAR": 0.9,
+   "ONE": 0.5135,
+   "ORANGE": 1.0,
+   "PARENTS": 0.8485,
+   "PINK": 0.9474,
+   "PLEASE": 0.9737,
+   "PROBLEM": 0.825,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.9231,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 1.0,
+   "SEVEN": 0.9118,
+   "SIX": 0.6571,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.9167,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.7273,
+   "TUESDAY": 0.8649,
+   "TWO": 0.9744,
+   "UNCLE": 0.8824,
+   "UNDERSTAND": 0.8,
+   "VIOLET": 0.8,
+   "WAIT": 0.7179,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.65,
+   "WOMAN": 0.575,
+   "WRONG": 1.0,
+   "YELLOW": 0.9143,
+   "YES": 0.7568,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 0.975
+  }
+ },
+ "lstm_refit+linear@0.3": {
+  "mean_signer_accuracy": 0.7785,
+  "per_signer": {
+   "signer-01": 0.7972,
+   "signer-02": 0.7481,
+   "signer-03": 0.7536,
+   "signer-04": 0.8152
+  },
+  "worst_classes": [
+   [
+    "GOOD EVENING",
+    0.2571
+   ],
+   [
+    "DEAF BLIND",
+    0.4
+   ],
+   [
+    "PROBLEM",
+    0.4
+   ],
+   [
+    "HELLO",
+    0.4242
+   ],
+   [
+    "DEAF",
+    0.4359
+   ],
+   [
+    "MOTHER",
+    0.4737
+   ],
+   [
+    "HARD OF HEARING",
+    0.4828
+   ],
+   [
+    "ONE",
+    0.4865
+   ],
+   [
+    "ORANGE",
+    0.4872
+   ],
+   [
+    "GREEN",
+    0.5263
+   ]
+  ],
+  "classes_below_70": 22,
+  "top_confusions": [
+   "24x GOOD EVENING -> GOOD AFTERNOON",
+   "10x PROBLEM -> SUNDAY",
+   "10x SIX -> WEDNESDAY",
+   "10x VIOLET -> NICE TO MEET YOU",
+   "9x DEAF -> ONE",
+   "8x FAST -> ONE",
+   "8x MARRIED -> NICE TO MEET YOU",
+   "8x MOTHER -> FATHER",
+   "8x FATHER -> HELLO",
+   "7x DEAF -> DEAF BLIND"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.8108,
+   "BEER": 1.0,
+   "BLACK": 0.7059,
+   "BLIND": 0.75,
+   "BLUE": 0.7632,
+   "BOY": 0.8667,
+   "BREAD": 0.85,
+   "BROWN": 0.8718,
+   "CARD": 0.7949,
+   "CHICKEN": 0.7179,
+   "COIN": 0.875,
+   "COUSIN": 0.6571,
+   "DAUGHTER": 0.7632,
+   "DEAF": 0.4359,
+   "DEAF BLIND": 0.4,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.8947,
+   "EGG": 1.0,
+   "EIGHT": 0.7647,
+   "FAST": 0.6562,
+   "FATHER": 0.5556,
+   "FISH": 0.6667,
+   "FIVE": 1.0,
+   "FOUR": 0.8611,
+   "FRIDAY": 0.95,
+   "GIRL": 0.8649,
+   "GOOD AFTERNOON": 0.8889,
+   "GOOD EVENING": 0.2571,
+   "GOOD MORNING": 0.7222,
+   "GRANDFATHER": 0.925,
+   "GRAY": 0.8824,
+   "GREEN": 0.5263,
+   "HARD OF HEARING": 0.4828,
+   "HELLO": 0.4242,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.75,
+   "KNOW": 0.7429,
+   "LIGHT": 1.0,
+   "MAN": 0.6061,
+   "MARRIED": 0.5625,
+   "MEAT": 0.8,
+   "MONDAY": 0.8056,
+   "MOTHER": 0.4737,
+   "NICE TO MEET YOU": 0.7568,
+   "NINE": 0.9394,
+   "NO": 0.8947,
+   "NO SUGAR": 0.9,
+   "ONE": 0.4865,
+   "ORANGE": 0.4872,
+   "PARENTS": 0.7273,
+   "PINK": 0.8684,
+   "PLEASE": 0.8421,
+   "PROBLEM": 0.4,
+   "RECEIPT": 1.0,
+   "RED": 0.925,
+   "RICE": 0.7949,
+   "SATURDAY": 1.0,
+   "SEE YOU TOMORROW": 0.7,
+   "SEVEN": 0.9118,
+   "SIX": 0.5429,
+   "SON": 0.8947,
+   "SPAGHETTI": 0.8462,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.95,
+   "TEA": 0.7368,
+   "THANK YOU": 0.9714,
+   "THREE": 1.0,
+   "THURSDAY": 0.9722,
+   "TOMORROW": 0.7576,
+   "TUESDAY": 0.6216,
+   "TWO": 0.8974,
+   "UNCLE": 0.6471,
+   "UNDERSTAND": 0.8571,
+   "VIOLET": 0.65,
+   "WAIT": 0.5385,
+   "WEDNESDAY": 0.8684,
+   "WINE": 0.925,
+   "WOMAN": 0.675,
+   "WRONG": 0.8108,
+   "YELLOW": 0.8571,
+   "YES": 0.9459,
+   "YESTERDAY": 0.973,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "lstm_refit+linear@0.5": {
+  "mean_signer_accuracy": 0.8207,
+  "per_signer": {
+   "signer-01": 0.8411,
+   "signer-02": 0.7946,
+   "signer-03": 0.8066,
+   "signer-04": 0.8404
+  },
+  "worst_classes": [
+   [
+    "GOOD EVENING",
+    0.4571
+   ],
+   [
+    "DEAF BLIND",
+    0.475
+   ],
+   [
+    "HELLO",
+    0.5152
+   ],
+   [
+    "DEAF",
+    0.5385
+   ],
+   [
+    "PROBLEM",
+    0.575
+   ],
+   [
+    "FATHER",
+    0.5833
+   ],
+   [
+    "HARD OF HEARING",
+    0.5862
+   ],
+   [
+    "ONE",
+    0.5946
+   ],
+   [
+    "GREEN",
+    0.6053
+   ],
+   [
+    "MOTHER",
+    0.6316
+   ]
+  ],
+  "classes_below_70": 17,
+  "top_confusions": [
+   "18x GOOD EVENING -> GOOD AFTERNOON",
+   "10x PROBLEM -> SUNDAY",
+   "10x VIOLET -> NICE TO MEET YOU",
+   "9x GOOD AFTERNOON -> GOOD EVENING",
+   "9x DEAF -> ONE",
+   "8x ONE -> DEAF",
+   "8x SIX -> WEDNESDAY",
+   "8x MOTHER -> I'M FINE",
+   "8x HARD OF HEARING -> NICE TO MEET YOU",
+   "7x FAST -> ONE"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.8378,
+   "BEER": 1.0,
+   "BLACK": 0.7941,
+   "BLIND": 0.9062,
+   "BLUE": 0.7368,
+   "BOY": 0.8,
+   "BREAD": 0.925,
+   "BROWN": 0.8718,
+   "CARD": 0.8205,
+   "CHICKEN": 0.7436,
+   "COIN": 0.875,
+   "COUSIN": 0.7143,
+   "DAUGHTER": 0.7895,
+   "DEAF": 0.5385,
+   "DEAF BLIND": 0.475,
+   "DON'T KNOW": 0.8182,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.8235,
+   "FAST": 0.6875,
+   "FATHER": 0.5833,
+   "FISH": 0.8205,
+   "FIVE": 1.0,
+   "FOUR": 0.8611,
+   "FRIDAY": 0.95,
+   "GIRL": 0.8649,
+   "GOOD AFTERNOON": 0.75,
+   "GOOD EVENING": 0.4571,
+   "GOOD MORNING": 0.8056,
+   "GRANDFATHER": 0.95,
+   "GRAY": 0.8824,
+   "GREEN": 0.6053,
+   "HARD OF HEARING": 0.5862,
+   "HELLO": 0.5152,
+   "HOW ARE YOU": 0.95,
+   "I'M FINE": 0.75,
+   "KNOW": 0.7429,
+   "LIGHT": 1.0,
+   "MAN": 0.7273,
+   "MARRIED": 0.6875,
+   "MEAT": 0.925,
+   "MONDAY": 0.8611,
+   "MOTHER": 0.6316,
+   "NICE TO MEET YOU": 0.7297,
+   "NINE": 0.9697,
+   "NO": 0.9211,
+   "NO SUGAR": 0.9,
+   "ONE": 0.5946,
+   "ORANGE": 0.6923,
+   "PARENTS": 0.7879,
+   "PINK": 0.8684,
+   "PLEASE": 0.8684,
+   "PROBLEM": 0.575,
+   "RECEIPT": 0.975,
+   "RED": 0.95,
+   "RICE": 0.7949,
+   "SATURDAY": 1.0,
+   "SEE YOU TOMORROW": 0.875,
+   "SEVEN": 0.9412,
+   "SIX": 0.6571,
+   "SON": 0.8947,
+   "SPAGHETTI": 0.8718,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.975,
+   "TEA": 0.7632,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 0.9722,
+   "TOMORROW": 0.7576,
+   "TUESDAY": 0.7568,
+   "TWO": 0.9231,
+   "UNCLE": 0.7059,
+   "UNDERSTAND": 0.8571,
+   "VIOLET": 0.65,
+   "WAIT": 0.641,
+   "WEDNESDAY": 0.9474,
+   "WINE": 0.9,
+   "WOMAN": 0.675,
+   "WRONG": 0.8649,
+   "YELLOW": 0.9143,
+   "YES": 0.973,
+   "YESTERDAY": 0.973,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "lstm_refit+linear@0.7": {
+  "mean_signer_accuracy": 0.8523,
+  "per_signer": {
+   "signer-01": 0.8566,
+   "signer-02": 0.8514,
+   "signer-03": 0.845,
+   "signer-04": 0.8564
+  },
+  "worst_classes": [
+   [
+    "GOOD AFTERNOON",
+    0.4444
+   ],
+   [
+    "ONE",
+    0.4865
+   ],
+   [
+    "FATHER",
+    0.5
+   ],
+   [
+    "GOOD EVENING",
+    0.5143
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "DEAF",
+    0.5897
+   ],
+   [
+    "WOMAN",
+    0.6
+   ],
+   [
+    "I'M FINE",
+    0.6071
+   ],
+   [
+    "DEAF BLIND",
+    0.625
+   ],
+   [
+    "BLUE",
+    0.6316
+   ]
+  ],
+  "classes_below_70": 12,
+  "top_confusions": [
+   "20x GOOD AFTERNOON -> GOOD EVENING",
+   "17x GOOD EVENING -> GOOD AFTERNOON",
+   "13x ONE -> DEAF",
+   "9x MOTHER -> I'M FINE",
+   "9x WINE -> CHICKEN",
+   "9x DEAF -> ONE",
+   "8x FAST -> TUESDAY",
+   "8x TEA -> MEAT",
+   "8x HARD OF HEARING -> NICE TO MEET YOU",
+   "7x BLUE -> WOMAN"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7297,
+   "BEER": 0.973,
+   "BLACK": 0.7941,
+   "BLIND": 0.9688,
+   "BLUE": 0.6316,
+   "BOY": 0.7667,
+   "BREAD": 0.95,
+   "BROWN": 0.8974,
+   "CARD": 0.9231,
+   "CHICKEN": 0.7949,
+   "COIN": 0.875,
+   "COUSIN": 0.7714,
+   "DAUGHTER": 0.8158,
+   "DEAF": 0.5897,
+   "DEAF BLIND": 0.625,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.9474,
+   "EGG": 1.0,
+   "EIGHT": 0.9706,
+   "FAST": 0.7188,
+   "FATHER": 0.5,
+   "FISH": 0.8974,
+   "FIVE": 1.0,
+   "FOUR": 0.9167,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8919,
+   "GOOD AFTERNOON": 0.4444,
+   "GOOD EVENING": 0.5143,
+   "GOOD MORNING": 0.7778,
+   "GRANDFATHER": 0.95,
+   "GRAY": 0.9118,
+   "GREEN": 0.8158,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9394,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.6071,
+   "KNOW": 0.7143,
+   "LIGHT": 0.975,
+   "MAN": 0.9091,
+   "MARRIED": 0.7812,
+   "MEAT": 0.975,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.7105,
+   "NICE TO MEET YOU": 0.7297,
+   "NINE": 1.0,
+   "NO": 0.9474,
+   "NO SUGAR": 0.9,
+   "ONE": 0.4865,
+   "ORANGE": 0.9744,
+   "PARENTS": 0.9091,
+   "PINK": 0.9474,
+   "PLEASE": 0.9474,
+   "PROBLEM": 0.8,
+   "RECEIPT": 0.975,
+   "RED": 0.95,
+   "RICE": 0.8974,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.95,
+   "SEVEN": 0.9412,
+   "SIX": 0.6857,
+   "SON": 0.8947,
+   "SPAGHETTI": 0.9487,
+   "SUGAR": 0.8333,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 1.0,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.7273,
+   "TUESDAY": 0.9459,
+   "TWO": 0.9744,
+   "UNCLE": 0.9118,
+   "UNDERSTAND": 0.8286,
+   "VIOLET": 0.85,
+   "WAIT": 0.6923,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.7,
+   "WOMAN": 0.6,
+   "WRONG": 1.0,
+   "YELLOW": 0.9429,
+   "YES": 0.8919,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 1.0
+  }
+ },
+ "lstm+linear@0.3": {
+  "mean_signer_accuracy": 0.7046,
+  "per_signer": {
+   "signer-01": 0.7158,
+   "signer-02": 0.7067,
+   "signer-03": 0.7298,
+   "signer-04": 0.6662
+  },
+  "worst_classes": [
+   [
+    "GOOD EVENING",
+    0.1714
+   ],
+   [
+    "PROBLEM",
+    0.275
+   ],
+   [
+    "I'M FINE",
+    0.2857
+   ],
+   [
+    "ORANGE",
+    0.3077
+   ],
+   [
+    "BLUE",
+    0.3421
+   ],
+   [
+    "SIX",
+    0.3429
+   ],
+   [
+    "WOMAN",
+    0.35
+   ],
+   [
+    "AUNTIE",
+    0.3514
+   ],
+   [
+    "TOMORROW",
+    0.3636
+   ],
+   [
+    "DAUGHTER",
+    0.3684
+   ]
+  ],
+  "classes_below_70": 35,
+  "top_confusions": [
+   "25x GOOD EVENING -> GOOD AFTERNOON",
+   "19x FISH -> PLEASE",
+   "16x PROBLEM -> SUNDAY",
+   "15x TEA -> MEAT",
+   "14x HELLO -> MAN",
+   "13x GREEN -> AUNTIE",
+   "13x MONDAY -> YES",
+   "13x AUNTIE -> TOMORROW",
+   "11x ORANGE -> WRONG",
+   "11x SIX -> WEDNESDAY"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.3514,
+   "BEER": 0.8108,
+   "BLACK": 0.7353,
+   "BLIND": 0.9375,
+   "BLUE": 0.3421,
+   "BOY": 0.5667,
+   "BREAD": 0.525,
+   "BROWN": 0.9744,
+   "CARD": 0.5897,
+   "CHICKEN": 0.5385,
+   "COIN": 0.875,
+   "COUSIN": 0.6857,
+   "DAUGHTER": 0.3684,
+   "DEAF": 0.7179,
+   "DEAF BLIND": 0.4,
+   "DON'T KNOW": 0.8182,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 0.9722,
+   "EIGHT": 0.7647,
+   "FAST": 0.5312,
+   "FATHER": 0.5556,
+   "FISH": 0.3846,
+   "FIVE": 1.0,
+   "FOUR": 0.9444,
+   "FRIDAY": 1.0,
+   "GIRL": 0.6486,
+   "GOOD AFTERNOON": 0.8889,
+   "GOOD EVENING": 0.1714,
+   "GOOD MORNING": 0.6667,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.8235,
+   "GREEN": 0.5263,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.3939,
+   "HOW ARE YOU": 0.975,
+   "I'M FINE": 0.2857,
+   "KNOW": 0.7714,
+   "LIGHT": 0.8,
+   "MAN": 0.7879,
+   "MARRIED": 0.5312,
+   "MEAT": 0.85,
+   "MONDAY": 0.6389,
+   "MOTHER": 0.5789,
+   "NICE TO MEET YOU": 0.7027,
+   "NINE": 1.0,
+   "NO": 0.8684,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5135,
+   "ORANGE": 0.3077,
+   "PARENTS": 0.697,
+   "PINK": 0.9474,
+   "PLEASE": 0.7368,
+   "PROBLEM": 0.275,
+   "RECEIPT": 1.0,
+   "RED": 1.0,
+   "RICE": 0.7949,
+   "SATURDAY": 0.6667,
+   "SEE YOU TOMORROW": 0.75,
+   "SEVEN": 0.8235,
+   "SIX": 0.3429,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9487,
+   "SUGAR": 0.7778,
+   "SUNDAY": 0.925,
+   "TEA": 0.5263,
+   "THANK YOU": 0.9429,
+   "THREE": 0.8889,
+   "THURSDAY": 0.8611,
+   "TOMORROW": 0.3636,
+   "TUESDAY": 0.4595,
+   "TWO": 0.7949,
+   "UNCLE": 0.5588,
+   "UNDERSTAND": 0.7714,
+   "VIOLET": 0.75,
+   "WAIT": 0.5128,
+   "WEDNESDAY": 0.9474,
+   "WINE": 0.525,
+   "WOMAN": 0.35,
+   "WRONG": 0.7297,
+   "YELLOW": 0.7714,
+   "YES": 0.8378,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 0.75
+  }
+ },
+ "lstm+linear@0.5": {
+  "mean_signer_accuracy": 0.7804,
+  "per_signer": {
+   "signer-01": 0.7778,
+   "signer-02": 0.7778,
+   "signer-03": 0.8252,
+   "signer-04": 0.7407
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.3571
+   ],
+   [
+    "DEAF BLIND",
+    0.425
+   ],
+   [
+    "SIX",
+    0.4286
+   ],
+   [
+    "GOOD EVENING",
+    0.4571
+   ],
+   [
+    "BLUE",
+    0.4737
+   ],
+   [
+    "PROBLEM",
+    0.475
+   ],
+   [
+    "HELLO",
+    0.5152
+   ],
+   [
+    "WINE",
+    0.525
+   ],
+   [
+    "AUNTIE",
+    0.5405
+   ],
+   [
+    "TOMORROW",
+    0.5455
+   ]
+  ],
+  "classes_below_70": 27,
+  "top_confusions": [
+   "18x GOOD EVENING -> GOOD AFTERNOON",
+   "16x PROBLEM -> SUNDAY",
+   "12x GOOD AFTERNOON -> GOOD EVENING",
+   "12x GREEN -> AUNTIE",
+   "12x HELLO -> MAN",
+   "12x MONDAY -> YES",
+   "11x AUNTIE -> TOMORROW",
+   "10x PLEASE -> FISH",
+   "10x TEA -> MEAT",
+   "9x WINE -> DEAF BLIND"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.5405,
+   "BEER": 0.9189,
+   "BLACK": 0.7647,
+   "BLIND": 1.0,
+   "BLUE": 0.4737,
+   "BOY": 0.7333,
+   "BREAD": 0.65,
+   "BROWN": 0.9744,
+   "CARD": 0.8462,
+   "CHICKEN": 0.5641,
+   "COIN": 0.925,
+   "COUSIN": 0.7143,
+   "DAUGHTER": 0.5526,
+   "DEAF": 0.7692,
+   "DEAF BLIND": 0.425,
+   "DON'T KNOW": 0.8182,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 0.8824,
+   "FAST": 0.6875,
+   "FATHER": 0.5556,
+   "FISH": 0.8462,
+   "FIVE": 1.0,
+   "FOUR": 0.9444,
+   "FRIDAY": 1.0,
+   "GIRL": 0.7568,
+   "GOOD AFTERNOON": 0.6667,
+   "GOOD EVENING": 0.4571,
+   "GOOD MORNING": 0.75,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.8529,
+   "GREEN": 0.5526,
+   "HARD OF HEARING": 0.5517,
+   "HELLO": 0.5152,
+   "HOW ARE YOU": 0.975,
+   "I'M FINE": 0.3571,
+   "KNOW": 0.8,
+   "LIGHT": 0.85,
+   "MAN": 0.8182,
+   "MARRIED": 0.6562,
+   "MEAT": 0.925,
+   "MONDAY": 0.6667,
+   "MOTHER": 0.6316,
+   "NICE TO MEET YOU": 0.7027,
+   "NINE": 1.0,
+   "NO": 0.9474,
+   "NO SUGAR": 0.875,
+   "ONE": 0.6486,
+   "ORANGE": 0.6667,
+   "PARENTS": 0.8485,
+   "PINK": 1.0,
+   "PLEASE": 0.7368,
+   "PROBLEM": 0.475,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.8462,
+   "SATURDAY": 0.8205,
+   "SEE YOU TOMORROW": 0.825,
+   "SEVEN": 0.8529,
+   "SIX": 0.4286,
+   "SON": 0.9211,
+   "SPAGHETTI": 0.9744,
+   "SUGAR": 0.8056,
+   "SUNDAY": 0.975,
+   "TEA": 0.7368,
+   "THANK YOU": 1.0,
+   "THREE": 0.9444,
+   "THURSDAY": 0.9444,
+   "TOMORROW": 0.5455,
+   "TUESDAY": 0.6757,
+   "TWO": 0.8462,
+   "UNCLE": 0.6471,
+   "UNDERSTAND": 0.8286,
+   "VIOLET": 0.75,
+   "WAIT": 0.5897,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.525,
+   "WOMAN": 0.55,
+   "WRONG": 0.8378,
+   "YELLOW": 0.8286,
+   "YES": 0.8649,
+   "YESTERDAY": 0.9189,
+   "YOU'RE WELCOME": 0.9
+  }
+ },
+ "lstm+linear@0.7": {
+  "mean_signer_accuracy": 0.8486,
+  "per_signer": {
+   "signer-01": 0.8527,
+   "signer-02": 0.863,
+   "signer-03": 0.853,
+   "signer-04": 0.8258
+  },
+  "worst_classes": [
+   [
+    "I'M FINE",
+    0.3929
+   ],
+   [
+    "GOOD AFTERNOON",
+    0.4444
+   ],
+   [
+    "GOOD EVENING",
+    0.5143
+   ],
+   [
+    "HARD OF HEARING",
+    0.5172
+   ],
+   [
+    "FATHER",
+    0.5278
+   ],
+   [
+    "ONE",
+    0.5676
+   ],
+   [
+    "WOMAN",
+    0.575
+   ],
+   [
+    "BLUE",
+    0.5789
+   ],
+   [
+    "DEAF BLIND",
+    0.6
+   ],
+   [
+    "SIX",
+    0.6
+   ]
+  ],
+  "classes_below_70": 14,
+  "top_confusions": [
+   "20x GOOD AFTERNOON -> GOOD EVENING",
+   "16x GOOD EVENING -> GOOD AFTERNOON",
+   "10x ONE -> DEAF",
+   "10x I'M FINE -> MOTHER",
+   "10x WINE -> CHICKEN",
+   "9x DEAF -> ONE",
+   "9x DEAF BLIND -> NO SUGAR",
+   "8x FAST -> TUESDAY",
+   "8x TEA -> MEAT",
+   "8x WOMAN -> TOMORROW"
+  ],
+  "per_class_recall": {
+   "AUNTIE": 0.7297,
+   "BEER": 0.973,
+   "BLACK": 0.8235,
+   "BLIND": 1.0,
+   "BLUE": 0.5789,
+   "BOY": 0.7667,
+   "BREAD": 0.9,
+   "BROWN": 0.9487,
+   "CARD": 0.9231,
+   "CHICKEN": 0.6923,
+   "COIN": 0.95,
+   "COUSIN": 0.7714,
+   "DAUGHTER": 0.7632,
+   "DEAF": 0.7179,
+   "DEAF BLIND": 0.6,
+   "DON'T KNOW": 0.7879,
+   "DON'T UNDERSTAND": 0.9737,
+   "EGG": 1.0,
+   "EIGHT": 1.0,
+   "FAST": 0.7188,
+   "FATHER": 0.5278,
+   "FISH": 0.9231,
+   "FIVE": 1.0,
+   "FOUR": 0.9722,
+   "FRIDAY": 1.0,
+   "GIRL": 0.8919,
+   "GOOD AFTERNOON": 0.4444,
+   "GOOD EVENING": 0.5143,
+   "GOOD MORNING": 0.7222,
+   "GRANDFATHER": 0.975,
+   "GRAY": 0.8824,
+   "GREEN": 0.8158,
+   "HARD OF HEARING": 0.5172,
+   "HELLO": 0.9091,
+   "HOW ARE YOU": 0.925,
+   "I'M FINE": 0.3929,
+   "KNOW": 0.7429,
+   "LIGHT": 0.975,
+   "MAN": 0.9091,
+   "MARRIED": 0.6875,
+   "MEAT": 0.975,
+   "MONDAY": 0.9444,
+   "MOTHER": 0.7368,
+   "NICE TO MEET YOU": 0.6757,
+   "NINE": 1.0,
+   "NO": 0.9474,
+   "NO SUGAR": 0.875,
+   "ONE": 0.5676,
+   "ORANGE": 1.0,
+   "PARENTS": 0.8788,
+   "PINK": 0.9474,
+   "PLEASE": 0.9737,
+   "PROBLEM": 0.8,
+   "RECEIPT": 0.975,
+   "RED": 1.0,
+   "RICE": 0.9487,
+   "SATURDAY": 0.9744,
+   "SEE YOU TOMORROW": 0.975,
+   "SEVEN": 0.8529,
+   "SIX": 0.6,
+   "SON": 0.8947,
+   "SPAGHETTI": 1.0,
+   "SUGAR": 0.8333,
+   "SUNDAY": 1.0,
+   "TEA": 0.7895,
+   "THANK YOU": 1.0,
+   "THREE": 0.9722,
+   "THURSDAY": 1.0,
+   "TOMORROW": 0.7273,
+   "TUESDAY": 0.8378,
+   "TWO": 0.9744,
+   "UNCLE": 0.9118,
+   "UNDERSTAND": 0.8286,
+   "VIOLET": 0.825,
+   "WAIT": 0.6923,
+   "WEDNESDAY": 0.9737,
+   "WINE": 0.7,
+   "WOMAN": 0.575,
+   "WRONG": 1.0,
+   "YELLOW": 0.9143,
+   "YES": 0.8378,
+   "YESTERDAY": 0.8649,
+   "YOU'RE WELCOME": 1.0
+  }
+ }
+}
