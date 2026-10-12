@@ -68,8 +68,14 @@ TFLITE_FLOAT16_MAX_DRIFT = float(os.getenv("TFLITE_FLOAT16_MAX_DRIFT", 0.02))
 # Bidirectionality is legitimate here because inference is NOT streaming-causal —
 # PredictionService always evaluates a complete 30-frame window, so the "future"
 # frames a backward pass reads are already in hand.
-MODEL_ARCH = os.getenv("MODEL_ARCH", "lstm").strip().lower()
-_VALID_ARCHS = ("lstm", "bilstm_half", "bilstm_full")
+#
+#   conv_linear — DEFAULT since 2026-10-13. Conv1D blended with a linear model on
+#                 hand-distance summaries, in one model with the LSTM's exact
+#                 input/output contract (app/services/words_blend.py). New-signer
+#                 accuracy 86.2% vs the LSTM's 76.6% (tools/words_experiment.py).
+#                 MODEL_ARCH=lstm restores the previous model exactly.
+MODEL_ARCH = os.getenv("MODEL_ARCH", "conv_linear").strip().lower()
+_VALID_ARCHS = ("lstm", "bilstm_half", "bilstm_full", "conv_linear")
 
 # Select the deployment epoch on a completely held-out signer. A random clip split
 # puts every signer on both sides and produced the near-100% number that did not
@@ -106,6 +112,10 @@ def build_motion_model(num_classes: int, arch: str | None = None):
         raise ValueError(
             f"Unknown MODEL_ARCH '{arch}'. Expected one of: {', '.join(_VALID_ARCHS)}"
         )
+    if arch == "conv_linear":
+        # Only the network part; train() adds the linear model and the blend.
+        from app.services.words_blend import build_conv
+        return build_conv(num_classes)
 
     reg = keras.regularizers.l2(2e-4)
 
@@ -472,6 +482,21 @@ def train(version_number: str, model_id: int,
     # scores every sample while held out. Nothing in this function can produce an
     # unbiased estimate: the split it evaluates is the split it selected on.
     selection_best = max(history.history["val_accuracy"])
+    blend_C = None
+    if MODEL_ARCH == "conv_linear":
+        # Score what ships: the blend, with a linear model that also never saw the
+        # held-out signer. C is chosen on that signer too, which is the same
+        # optimism the epoch choice already has (see the note below).
+        from app.services import words_blend
+        real_x, real_y, real_g = words_blend.real_arrays(motion_dataset, motion_label_map)
+        signers = sorted({g for g in real_g if not g.startswith("__unknown_")})
+        held_out = signers[MODEL_SELECTION_SIGNER_FOLD % len(signers)]
+        blend_C, _ = words_blend.choose_C(real_x, real_y, real_g, held_out,
+                                          len(motion_label_map))
+        seen = real_g != held_out
+        selection_model = words_blend.compose(
+            words_blend.fit_linear(real_x[seen], real_y[seen], len(motion_label_map), blend_C),
+            selection_model)
     selection_predictions = (
         np.argmax(selection_model.predict(X_val, verbose=0), axis=1)
         if len(X_val) else np.array([], dtype=np.int64)
@@ -559,12 +584,21 @@ def train(version_number: str, model_id: int,
         )],
         verbose=1,
     )
+    if MODEL_ARCH == "conv_linear":
+        # The linear part sees every real clip (plus mirrors), like the network.
+        model = words_blend.compose(
+            words_blend.fit_linear(real_x, real_y, len(motion_label_map), blend_C), model)
 
     # ── Step 3: Save + convert + upload ───────────────────────
     report_progress("converting_model", 87, "Converting model")
     h5_path = os.path.join(version_dir, "sign_model_motion.h5")
     model.save(h5_path)
     tflite_path = convert_to_tflite(model, h5_path)
+    if MODEL_ARCH == "conv_linear":
+        # No Flex ops, so the plain interpreter can prove the export matches.
+        probe = real_x[np.random.default_rng(TRAIN_SEED).choice(
+            len(real_x), size=min(64, len(real_x)), replace=False)]
+        words_blend.verify_tflite(tflite_path, model, probe)
 
     label_map_path = os.path.join(version_dir, "labels_motion.json")
     save_label_map(motion_label_map, label_map_path)
