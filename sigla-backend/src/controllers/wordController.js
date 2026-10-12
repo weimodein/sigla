@@ -755,7 +755,10 @@ const getSamples = async (req, res) => {
       return res.status(404).json({ message: "Word not found" });
     }
 
+    // hand_track (~36 KB per letter clip) is training data, not something the admin
+    // list shows; leave it out of the response.
     const samples = await GestureSample.findAll({
+      attributes: { exclude: ["hand_track"] },
       where: { word_id: word.id },
       include: [
         { model: Administrator, as: "submitter", attributes: ["id", "username"] },

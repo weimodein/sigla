@@ -1,6 +1,5 @@
 const { GestureSample, Word } = require("../models/index.js");
-const { Op } = require("sequelize");
-const { datasetEntry, isExportable } = require("../utils/mlDataset");
+const { datasetEntry, isExportable, datasetQueryOptions } = require("../utils/mlDataset");
 
 /**
  * GET /api/ml/dataset
@@ -16,22 +15,21 @@ const getApprovedDataset = async (req, res) => {
     // - "approved" samples (admin-reviewed) for any word
     // - "pending" samples, but only for words the admin has approved
     //   (status="approved" or is_active=true)
+    //
+    // Each export selects only what its consumer reads (see datasetQueryOptions):
+    // words training never loads a hand track, and ?hand_track=1 returns just the
+    // letter rows that have one.
+    const query = datasetQueryOptions(withTrack);
     const samples = await GestureSample.findAll({
-      where: {
-        [Op.or]: [
-          { status: "approved" },
-          { status: "pending" },
-        ],
-      },
+      attributes: query.attributes,
+      where: query.where,
       include: [
         {
           model: Word,
           as: "word",
           attributes: ["label"],
           required: true,
-          where: {
-            [Op.or]: [{ status: "approved" }, { is_active: true }],
-          },
+          where: query.wordWhere,
         },
       ],
       order: [["created_at", "ASC"]],

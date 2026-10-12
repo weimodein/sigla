@@ -14,7 +14,9 @@ internal data class LetterStep(val progress: Float, val commit: LetterCommit?)
 /**
  * Letters mode, one frame at a time: hold voting for static letters, the
  * segmenter + motion model for J/Z. [cooldownMs] keeps the existing gap
- * between results; a motion letter replacing its start shape is exempt.
+ * between HELD-letter results. A traced J/Z is exempt: it is one movement, so it
+ * cannot repeat the way a held hand can, and dropping it would also leave the
+ * stabilizer's state (repeat-block, last letter) changed by a result nobody saw.
  * Not thread-safe — PredictionService calls it under its lock.
  */
 internal class LetterEngine(private val classifier: LetterClassifier, private val cooldownMs: Long) {
@@ -27,7 +29,7 @@ internal class LetterEngine(private val classifier: LetterClassifier, private va
         var commit: LetterCommit? = null
         seg.segment?.let { s ->
             val c = stabilizer.onMotion(tMs, s.startMs, motionGuess(classifier.classifyMotion(s.frames)))
-            if (c != null && (c.replacesPrevious || !coolingDown(tMs))) commit = c
+            if (c != null) commit = c
         }
         val guess = hand?.let { staticGuess(classifier.classifyStatic(it)) }
         val held = stabilizer.onFrame(
