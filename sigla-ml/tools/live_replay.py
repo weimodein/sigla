@@ -240,7 +240,7 @@ def sharpen(p, t):
 
 
 def main() -> int:
-    global FPS
+    global FPS, MOTION_SLIDE_INTERVAL, MOTION_EARLY_STREAK, EARLY_EXIT_STREAK
     import argparse
     import glob
     import json
@@ -263,7 +263,13 @@ def main() -> int:
     ap.add_argument("--variants", nargs="*", help="only these variants")
     ap.add_argument("--upsample", action="store_true",
                     help="apply the proposed app fix: rebuild dropped frames back to 24 fps")
+    ap.add_argument("--slide", type=int, default=MOTION_SLIDE_INTERVAL,
+                    help="run the model every N buffer frames (app: MOTION_SLIDE_INTERVAL)")
+    ap.add_argument("--early-streak", type=int, default=MOTION_EARLY_STREAK)
+    ap.add_argument("--exit-streak", type=int, default=EARLY_EXIT_STREAK)
     args = ap.parse_args()
+    MOTION_SLIDE_INTERVAL, MOTION_EARLY_STREAK, EARLY_EXIT_STREAK = (
+        args.slide, args.early_streak, args.exit_streak)
     keep_ratio = min(args.fps / FPS, 1.0)
     src_fps = min(args.fps, FPS)
     if not args.upsample:

@@ -33,7 +33,14 @@ private const val MIN_MOTION_FRAMES      = 12     // begin inference once this m
 // part of the sign. Inference may run earlier to build a consistency streak, but
 // only END_OF_GESTURE may bypass this evidence gate for a completed fast sign.
 private const val MIN_COMPLETE_GESTURE_FRAMES = 36
-private const val MOTION_SLIDE_INTERVAL  = 2      // re-run the model every N frames
+// Every 4 buffer frames since FrameRateBridge (2026-10-14; was 2). The bridge fills
+// the buffer to 24 fps, so at 2 the model ran 12x/s on a phone that only delivers
+// ~12 real frames/s — ~35 ms each on MediaPipe's callback thread, which then dropped
+// frames (visible stutter). 4 keeps the old ~6 runs/s. MOTION_EARLY_STREAK and
+// EARLY_EXIT_STREAK are halved with it so a word fires after the same time; live
+// replay at 12 fps: 71.6% right at 2 / 10 / 4, 71.0% at 4 / 5 / 2.
+// FRAME_RATE_BRIDGE_ENABLED = false must restore all three to 2 / 10 / 4.
+private const val MOTION_SLIDE_INTERVAL  = 4      // re-run the model every N frames
 // Restored to the deployment values 2026-09-15 (had been lowered to 0.40 / 0.40 /
 // 0.08 on 2026-09-12 for a one-off evaluation of the v1.0.0-greetings model's weak
 // classes — IM FINE 15% recall, GOOD AFTERNOON 30%, NICE TO MEET YOU 50%).
@@ -81,7 +88,9 @@ private const val MIN_SEQUENCE_MOTION    = 0.50f
 // every one of those (94.3% -> 99.3% simulated early-fire accuracy across all 13 words) with
 // no regression on any word that was already firing correctly. See PredictionService's
 // runAndMaybeFire() for how this streak is counted.
-private const val MOTION_EARLY_STREAK    = 10     // consistent frames before firing early
+// Counts inferences, so it is halved to 5 with MOTION_SLIDE_INTERVAL = 4: still 20
+// buffer frames (~0.83 s at 24 fps) of agreement, exactly the old 10 x 2.
+private const val MOTION_EARLY_STREAK    = 5      // consistent inferences before firing early
 // Lowered 0.95 -> 0.90 (2026-09-12). With 10 classes at ~73-82% accuracy the softmax
 // almost never reaches 0.95, so this tier never fired and every prediction took the
 // full 10-frame path — the fast route was dead weight and results felt slower than
@@ -98,7 +107,9 @@ private const val EARLY_EXIT_THRESHOLD   = 0.90f  // very-high confidence needs 
 // that is checked in the same pass. The high-confidence branch therefore never fired on
 // its own merit — only via `force`. 4 keeps a real consistency requirement (4 agreeing
 // inferences at >=0.95) while actually arriving sooner than the normal path.
-private const val EARLY_EXIT_STREAK      = 4
+//
+// Halved to 2 with MOTION_SLIDE_INTERVAL = 4 (same 8 buffer frames as the old 4 x 2).
+private const val EARLY_EXIT_STREAK      = 2
 private const val BUFFER_CAPACITY        = 90     // rolling frame buffer size
 // TFLite interpreter thread count for the motion LSTM. See init().
 private const val INTERPRETER_THREADS     = 4
