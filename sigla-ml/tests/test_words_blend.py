@@ -94,6 +94,7 @@ def test_none_samples_are_spread_over_signers(tmp_path):
     np.savez(p, windows=np.zeros((40, 30, 147), np.float32), signer=signer)
     got = W.load_none_samples(str(p), max_n=20)
     sessions = [s["session_id"] for s in got]
+    assert isinstance(got[0]["sequence"], list)   # what _load_real_sequences expects
     assert sessions.count("s1") == 10 and sessions.count("s2") == 10
 
 

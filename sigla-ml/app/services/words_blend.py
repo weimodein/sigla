@@ -99,8 +99,10 @@ def load_none_samples(path: str, max_n: int, seed: int = 42) -> list:
         picked += rng.choice(idx, size=min(per, len(idx)), replace=False).tolist()
     print(f"[train] none class: {len(picked)} of {len(windows)} windows from {path} "
           f"({', '.join(f'{g}={min(per, int((signers == g).sum()))}' for g in groups)})")
-    return [{"sequence": windows[i], "session_id": str(signers[i]), "sample_id": f"none-{i}"}
-            for i in picked]
+    # Plain lists, like samples from /api/ml/dataset: _load_real_sequences tests
+    # `if not sequence`, which a numpy array cannot answer.
+    return [{"sequence": windows[i].tolist(), "session_id": str(signers[i]),
+             "sample_id": f"none-{i}"} for i in picked]
 
 
 @tf.keras.utils.register_keras_serializable(package="sigla")
