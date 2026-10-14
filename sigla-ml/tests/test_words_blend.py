@@ -73,6 +73,30 @@ def test_blend_keeps_the_lstm_contract_and_exports_without_flex(tmp_path):
     W.verify_tflite(path, model, x[:8])
 
 
+def test_dropping_the_none_class_keeps_word_probabilities_unrenormalised(tmp_path):
+    x, y = _clips(40)
+    model = W.compose(W.fit_linear(x, y, N_CLASSES, C=0.1), W.build_conv(N_CLASSES))
+    full = model.predict(x[:4], verbose=0)
+    shipped = W.drop_none(model)
+    out = shipped.predict(x[:4], verbose=0)
+    assert out.shape == (4, N_CLASSES - 1)
+    np.testing.assert_allclose(out, full[:, :-1], atol=1e-6)   # same values, last one gone
+
+    h5 = str(tmp_path / "m.h5")
+    shipped.save(h5)
+    from app.services.train import convert_to_tflite
+    W.verify_tflite(convert_to_tflite(shipped, h5), shipped, x[:8])
+
+
+def test_none_samples_are_spread_over_signers(tmp_path):
+    p = tmp_path / "none.npz"
+    signer = np.array(["s1"] * 30 + ["s2"] * 10)
+    np.savez(p, windows=np.zeros((40, 30, 147), np.float32), signer=signer)
+    got = W.load_none_samples(str(p), max_n=20)
+    sessions = [s["session_id"] for s in got]
+    assert sessions.count("s1") == 10 and sessions.count("s2") == 10
+
+
 def test_linear_model_learns_and_unseen_class_never_wins():
     x, y = _clips(40)
     keep = y != 3                          # class 3 never seen

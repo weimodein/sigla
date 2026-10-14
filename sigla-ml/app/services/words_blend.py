@@ -72,6 +72,51 @@ class Sharpen(tf.keras.layers.Layer):
         return {**super().get_config(), "temperature": self.temperature}
 
 
+# ── "Not a sign" class (tools/build_none_windows.py) ─────────────────────────
+#
+# Trained as one more class, then DROPPED from the exported model's output: the
+# app keeps its exact contract (one probability per word, words-only labels
+# file), and when a window is "not a sign" every word's probability is low, so
+# the app's existing 0.80 bar shows nothing. Any app version runs it.
+#
+# Off unless WORDS_NONE_WINDOWS points at a local .npz — the windows never go
+# into the shared database.
+NONE_LABEL = "_none"
+NONE_WINDOWS = os.getenv("WORDS_NONE_WINDOWS", "").strip()
+NONE_PER_WORD = float(os.getenv("WORDS_NONE_PER_WORD", 3.0))  # cap, in average-word sizes
+
+
+def load_none_samples(path: str, max_n: int, seed: int = 42) -> list:
+    """Up to max_n none windows as dataset samples, spread evenly over signers."""
+    z = np.load(path, allow_pickle=True)
+    windows, signers = z["windows"], z["signer"]
+    rng = np.random.default_rng(seed)
+    groups = sorted(set(signers.tolist()))
+    per = max(1, max_n // max(len(groups), 1))
+    picked = []
+    for g in groups:
+        idx = np.where(signers == g)[0]
+        picked += rng.choice(idx, size=min(per, len(idx)), replace=False).tolist()
+    print(f"[train] none class: {len(picked)} of {len(windows)} windows from {path} "
+          f"({', '.join(f'{g}={min(per, int((signers == g).sum()))}' for g in groups)})")
+    return [{"sequence": windows[i], "session_id": str(signers[i]), "sample_id": f"none-{i}"}
+            for i in picked]
+
+
+@tf.keras.utils.register_keras_serializable(package="sigla")
+class DropLastClass(tf.keras.layers.Layer):
+    """[B, n+1] -> [B, n]: removes the trailing none-class probability WITHOUT
+    renormalising, so a confident "not a sign" leaves every word low."""
+
+    def call(self, p):
+        return p[:, :-1]
+
+
+def drop_none(model: tf.keras.Model) -> tf.keras.Model:
+    inp = tf.keras.Input(shape=(SEQUENCE_LENGTH, FEATURE_SIZE), name="frames")
+    return tf.keras.Model(inp, DropLastClass()(model(inp)), name="sigla_motion_model")
+
+
 def build_conv(n_classes: int) -> tf.keras.Model:
     """Conv1D like the letters J/Z model: plain TFLite builtins, no Flex ops."""
     keras = tf.keras

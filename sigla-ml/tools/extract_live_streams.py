@@ -104,10 +104,20 @@ def main() -> int:
     ap.add_argument("--words-from", required=True, help="pickle of fetch_approved_samples()")
     ap.add_argument("--out", required=True)
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--every", type=int, default=1, help="only every Nth clip of each word")
     args = ap.parse_args()
 
     words = sorted(k for k in pickle.load(open(args.words_from, "rb")) if len(k) > 1)
     jobs = clip_jobs(args.clips, args.signers, words)
+    if args.every > 1:
+        seen = {}
+        kept = []
+        for j in jobs:
+            k = (j[2], j[1])
+            seen[k] = seen.get(k, -1) + 1
+            if seen[k] % args.every == 0:
+                kept.append(j)
+        jobs = kept
     os.makedirs(args.out, exist_ok=True)
     print(f"[streams] {len(jobs)} clips, {len({j[1] for j in jobs})} words", flush=True)
     done = 0

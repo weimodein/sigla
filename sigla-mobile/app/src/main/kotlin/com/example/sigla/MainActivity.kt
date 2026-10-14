@@ -1328,6 +1328,12 @@ class MainActivity : AppCompatActivity() {
             .setTargetResolution(android.util.Size(480, 360))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            // Let CameraX rotate while it converts YUV to RGBA, so frames arrive
+            // upright and rotationDegrees is 0 — prepareBitmap then passes them
+            // through. Rotating the finished Bitmap on the CPU cost 22-44 ms per
+            // frame (measured 2026-10-14 on a Xiaomi 25078RA3EA) and dropped the
+            // camera to 11-15 fps when the phone was warm.
+            .setOutputImageRotationEnabled(true)
             .build()
 
         analysis.setAnalyzer(executor) { imageProxy ->

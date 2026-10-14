@@ -408,6 +408,15 @@ def train(version_number: str, model_id: int,
     # Refuse a flattering but non-generalizing model before spending minutes on
     # TensorFlow. Defaults require 20 unique clips from four signers per word.
     validate_training_coverage(motion_dataset)
+
+    # Optional "not a sign" class from local windows (words_blend.NONE_WINDOWS).
+    # Added after the coverage check, which is about recorded words.
+    from app.services import words_blend
+    if words_blend.NONE_WINDOWS:
+        mean_per_word = sum(map(len, motion_dataset.values())) / max(len(motion_dataset), 1)
+        motion_dataset[words_blend.NONE_LABEL] = words_blend.load_none_samples(
+            words_blend.NONE_WINDOWS, int(words_blend.NONE_PER_WORD * mean_per_word),
+            seed=TRAIN_SEED)
     report_progress("preparing_data", 10, "Building training batches")
 
     # ── Step 2: Train motion model (LSTM) ─────────────────────
@@ -589,6 +598,17 @@ def train(version_number: str, model_id: int,
         model = words_blend.compose(
             words_blend.fit_linear(real_x, real_y, len(motion_label_map), blend_C), model)
 
+    # The none class is trained, never shipped: drop its output and its label so
+    # the app sees exactly one probability per word, as before.
+    export_label_map = motion_label_map
+    if words_blend.NONE_LABEL in motion_label_map.values():
+        last = len(motion_label_map) - 1
+        if motion_label_map[last] != words_blend.NONE_LABEL:
+            raise ValueError("none class must sort last to be dropped from the output")
+        model = words_blend.drop_none(model)
+        export_label_map = {i: motion_label_map[i] for i in range(last)}
+        total_classes = last
+
     # ── Step 3: Save + convert + upload ───────────────────────
     report_progress("converting_model", 87, "Converting model")
     h5_path = os.path.join(version_dir, "sign_model_motion.h5")
@@ -601,7 +621,7 @@ def train(version_number: str, model_id: int,
         words_blend.verify_tflite(tflite_path, model, probe)
 
     label_map_path = os.path.join(version_dir, "labels_motion.json")
-    save_label_map(motion_label_map, label_map_path)
+    save_label_map(export_label_map, label_map_path)
 
     # Preserve the only honest pre-deployment evaluation. test.py must not load the
     # final all-data model and score rows that model trained on, which was the source
@@ -654,8 +674,8 @@ def train(version_number: str, model_id: int,
         # re-deriving the list from the dataset afterwards, which would credit a
         # subset-trained model with every approved word and let it hide or show
         # words it was never trained on.
-        "trained_labels":     [motion_label_map[i]
-                               for i in range(len(motion_label_map))],
+        "trained_labels":     [export_label_map[i]
+                               for i in range(len(export_label_map))],
         # Restored-weights score on the epoch-selection split. It is held out by
         # signer by default, but still selected the epoch; grouped cross-validation
         # remains the trustworthy multi-signer number.
