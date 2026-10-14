@@ -384,6 +384,14 @@ def train(version_number: str, model_id: int,
     }
     motion_dataset = { k: v for k, v in motion_dataset.items() if v }
 
+    # Local override: leave words out of this run without touching the shared
+    # database (e.g. newly approved words that do not pass the coverage gate yet).
+    # The returned trained_labels reflect it, so clients know they are absent.
+    excluded = {w.strip() for w in os.getenv("WORDS_EXCLUDE", "").split(",") if w.strip()}
+    if excluded and word_labels is not None:
+        word_labels = [w for w in word_labels if w not in excluded]
+        print(f"[train] WORDS_EXCLUDE: leaving out {', '.join(sorted(excluded))}")
+
     if word_labels is not None:
         wanted = set(word_labels)
         missing = sorted(wanted - set(motion_dataset))
