@@ -111,6 +111,10 @@ private const val DETECTION_COOLDOWN_MS  = 2000L  // wait before accepting the n
 // (the expensive LSTM runs were already happening).
 private const val PROBABILITY_CONSENSUS_WINDOWS = 3
 
+// Rebuild frames dropped by detection so the words buffer runs at 24 fps — see
+// FrameRateBridge. false restores the previous behaviour exactly.
+internal const val FRAME_RATE_BRIDGE_ENABLED = true
+
 // Latency instrumentation. Tied to BuildConfig.DEBUG so release builds skip the timing
 // calls entirely. (`val`, not `const val` — BuildConfig.DEBUG is a generated field, not
 // a compile-time constant.)
@@ -555,6 +559,9 @@ class PredictionService(private val context: Context) {
      */
     private val frameSnapshot = ArrayList<FloatArray>(BUFFER_CAPACITY)
 
+    // Touched only from processFrame, i.e. MediaPipe's single callback thread.
+    private val frameRateBridge = FrameRateBridge()
+
     // ── Init ──────────────────────────────────────────────────────────────────
     // Reads the live vocabulary rather than the pinned one: callers are on the
     // UI thread and expect this to follow a toggle immediately, not from the
@@ -872,7 +879,12 @@ class PredictionService(private val context: Context) {
      * to the main thread and the main thread itself calls reset()/close() — holding the
      * lock across them would risk deadlock.
      */
-    fun processFrame(features: FloatArray, handsDetected: Int, letterHand: FloatArray? = null) {
+    fun processFrame(
+        features: FloatArray,
+        handsDetected: Int,
+        letterHand: FloatArray? = null,
+        timeMs: Long = android.os.SystemClock.elapsedRealtime(),
+    ) {
         if (!isReady) return
 
         // A hand scaled ~100x by a collapsed MediaPipe detection is correctly
@@ -883,6 +895,21 @@ class PredictionService(private val context: Context) {
         // keeps the two pipelines seeing the same thing.
         val usable = if (handsDetected > 0 && !handExtentOk(features)) 0 else handsDetected
 
+        // Words only: rebuild the frames detection dropped so the buffer runs at
+        // the 24 fps every frame count below assumes — see FrameRateBridge. The
+        // letters engine is time-based and reads raw frames, so it is untouched.
+        if (!FRAME_RATE_BRIDGE_ENABLED || vocabulary == Vocabulary.LETTERS) {
+            frameRateBridge.reset()
+            processSingleFrame(features, usable, letterHand)
+            return
+        }
+        for (f in frameRateBridge.expand(features, usable, timeMs)) {
+            processSingleFrame(f.features, f.hands, letterHand)
+        }
+    }
+
+    /** The per-frame words/letters logic; [usable] already excludes implausible hands. */
+    private fun processSingleFrame(features: FloatArray, usable: Int, letterHand: FloatArray?) {
         var notifyNoHands  = false
         var collectingState: CollectingState? = null
         var pending: PendingFire? = null

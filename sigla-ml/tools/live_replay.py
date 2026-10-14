@@ -177,6 +177,45 @@ def replay_clip(frames: np.ndarray, hands: np.ndarray, predict) -> dict:
     return {"pred": None, "conf": 0.0, "frame": None, "how": "none", "runs": runs}
 
 
+def _blend_frames(a: np.ndarray, b: np.ndarray, w: float) -> np.ndarray:
+    """A frame a fraction w of the way from a to b. Each hand block and the pose
+    block are interpolated only when present in BOTH frames; otherwise the later
+    frame's block is used, so a hand never fades in from the zero sentinel."""
+    out = b.copy()
+    for lo, hi in ((0, 63), (63, 126), (126, 147)):
+        if np.any(a[lo:hi]) and np.any(b[lo:hi]):
+            out[lo:hi] = a[lo:hi] + (b[lo:hi] - a[lo:hi]) * w
+    return out
+
+
+def upsample_stream(frames: np.ndarray, hands: np.ndarray, src_fps: float,
+                    dst_fps: float = 24.0, max_fill: int = 3):
+    """The proposed app fix, applied offline: rebuild the frames the phone
+    dropped so the buffer runs at the training rate. Between two consecutive
+    hand frames, insert in-between frames; a hands-down frame stands for as many
+    hands-down slots as the gap covers. At most `max_fill` frames are added per
+    gap, so a long stall is not invented into motion."""
+    slots = dst_fps / src_fps
+    out_f, out_h = [], []
+    acc = 0.0
+    for i in range(len(hands)):
+        acc += slots
+        n = max(1, int(round(acc)))
+        acc -= n
+        fill = min(n - 1, max_fill)
+        if hands[i] > 0 and i > 0 and hands[i - 1] > 0:
+            for k in range(1, fill + 1):
+                out_f.append(_blend_frames(frames[i - 1], frames[i], k / (fill + 1)))
+                out_h.append(hands[i])
+        else:
+            for _ in range(fill):
+                out_f.append(np.zeros_like(frames[i]) if hands[i] == 0 else frames[i])
+                out_h.append(hands[i])
+        out_f.append(frames[i])
+        out_h.append(hands[i])
+    return np.stack(out_f).astype(np.float32), np.array(out_h, hands.dtype)
+
+
 # ── evaluation ──────────────────────────────────────────────────────────────
 
 def clip_windows(frames, hands) -> dict:
@@ -222,9 +261,13 @@ def main() -> int:
                     help="replay as if the phone processed this many frames per second "
                          "(streams are extracted at 24; lower drops frames evenly)")
     ap.add_argument("--variants", nargs="*", help="only these variants")
+    ap.add_argument("--upsample", action="store_true",
+                    help="apply the proposed app fix: rebuild dropped frames back to 24 fps")
     args = ap.parse_args()
     keep_ratio = min(args.fps / FPS, 1.0)
-    FPS = min(args.fps, FPS)
+    src_fps = min(args.fps, FPS)
+    if not args.upsample:
+        FPS = src_fps
 
     labels = open(os.path.join(args.models, "labels.txt")).read().split("\n")
     comps = {os.path.basename(p)[:-6]: tf.keras.models.load_model(p, compile=False)
@@ -256,6 +299,8 @@ def main() -> int:
         if keep_ratio < 1.0:
             keep = np.unique(np.floor(np.arange(0, len(hands), 1.0 / keep_ratio)).astype(int))
             frames, hands = frames[keep], hands[keep]
+            if args.upsample:
+                frames, hands = upsample_stream(frames, hands, src_fps, FPS)
         wins = clip_windows(frames, hands)
         cache = {}
         if wins:
